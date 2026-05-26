@@ -15,6 +15,7 @@
 - Field helper and error text should live outside `<label>` elements so accessible names stay predictable in browser automation and component tests.
 - Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; keep persisted log lines and emitted event payloads aligned so reconnecting clients can replay prior progress cleanly.
 - Vitest is configured via `vite.config.ts`, so use `bun run test`; plain `bun test` invokes Bun's runner and skips the repo's jsdom-backed test setup.
+- The logs page should read install history from `installs.log` and action history from finished `server.action.*` audit rows; a clear-logs action needs to wipe both sources so the page stays empty after refresh.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -198,4 +199,16 @@
   - Action history derived from `audit_logs` works well but requires client-side server ID filtering since the JSONB `details` column is not directly filterable via Drizzle's `eq` or `inArray` checks.
   - Rollback without explicit version-tracking history needs a fallback chain: `targetVersion` from the request -> `installs.version` -> `"latest"`.
   - Inline confirmation cards keep destructive-action safety consistent without depending on a `ui/alert-dialog.tsx` primitive; if that component is added later, switch to it for better accessibility.
+---
+
+## 2026-05-26 11:53:23 +0800 - US-016
+[Session: https://opncd.ai/s/]
+- Replaced the logs placeholder with a real viewer that preloads install logs and operational action history, renders both in read-only monospace panels, and supports copy-to-clipboard plus confirmed clear-log actions.
+- Added `GET /api/logs` and `POST /api/logs/clear` handlers backed by a shared `getLogsSnapshot()` helper; install output comes from `installs.log`, while restart/update/rollback history comes from finished `server.action.*` audit rows.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3000/logs`, which redirected to `/login?redirect=%2Flogs` in the current no-session environment; captured `scripts/ralph/us-016-logs-route.jpeg`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/logs.ts`, `server/logs.test.ts`, `src/lib/logs.ts`, `src/routes/logs.tsx`, `src/features/logs/logs-viewer.tsx`, `src/features/logs/logs-viewer.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-016-logs-route.jpeg`
+- **Learnings for future iterations:**
+  - The logs page can follow the same route-level preload pattern as the integration pages, then keep the client component focused on copy/clear interaction state.
+  - Install log clearing is not just a UI concern here; it must null persisted `installs.log` values and remove the finished server-action audit rows to survive a refresh.
+  - Protected-page browser verification still works without local auth by checking the login redirect target, but full in-app log rendering needs a working Better Auth session backed by `DATABASE_URL`.
 ---

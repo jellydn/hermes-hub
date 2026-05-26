@@ -10,6 +10,8 @@ const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
 const getDashboardStatus = vi.fn();
+const getLogs = vi.fn();
+const clearLogs = vi.fn();
 const saveProviderConfig = vi.fn();
 const testProviderConfig = vi.fn();
 const connectTelegram = vi.fn();
@@ -31,6 +33,11 @@ vi.mock("./install", () => ({
 
 vi.mock("./dashboard", () => ({
 	getDashboardStatus,
+}));
+
+vi.mock("./logs", () => ({
+	getLogs,
+	clearLogs,
 }));
 
 vi.mock("./providers", () => ({
@@ -257,6 +264,41 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(getDashboardStatus).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes logs requests through the logs handler", async () => {
+		getLogs.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ logs: { installLogs: [], actionLogs: [] } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request("http://localhost/api/logs");
+
+		expect(response.status).toBe(200);
+		expect(getLogs).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes clear log requests through the logs handler", async () => {
+		clearLogs.mockResolvedValueOnce(
+			new Response(JSON.stringify({ status: "cleared" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request("http://localhost/api/logs/clear", {
+			method: "POST",
+		});
+
+		expect(response.status).toBe(200);
+		expect(clearLogs).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes provider save requests through the provider handler", async () => {
