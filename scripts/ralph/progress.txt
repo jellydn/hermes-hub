@@ -1,0 +1,15 @@
+## Codebase Patterns
+- TanStack Start route types come from the generated `src/routeTree.gen.ts`; run a build or dev server after adding routes so typecheck can see the generated tree.
+- This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
+
+## 2026-05-26 09:41:15 +08 - US-001
+[Session: https://opncd.ai/s/]
+- Scaffolded the HermesHub app with TanStack Start, TailwindCSS v4, and the default starter routes/components.
+- Added a `typecheck` script, kept the repo on Bun with `bun.lock`, and updated root docs/agent notes to match the generated `src/` layout.
+- Verified `npm run dev`, `npm run build`, `npm run typecheck`, and `npm test` all pass for the scaffold.
+- Files changed: `AGENTS.md`, `README.md`, `package.json`, `bun.lock`, `.gitignore`, `.cta.json`, `.pre-commit-config.yaml`, `.vscode/settings.json`, `vite.config.ts`, `tsconfig.json`, `src/**`, `public/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - TanStack Start route typing depends on the generated `src/routeTree.gen.ts`; if route imports look broken, regenerate by running build or dev.
+  - The project standard is Bun even if an upstream scaffold uses npm defaults, so normalize lockfiles immediately.
+  - The scaffold already added `opencode.json` with Chrome DevTools MCP config, so future frontend stories can use browser verification.
+---

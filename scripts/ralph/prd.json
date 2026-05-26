@@ -1,0 +1,314 @@
+{
+	"project": "HermesHub",
+	"branchName": "ralph/hermes-hub-mvp",
+	"description": "HermesHub - Web app for non-technical users to deploy and manage a self-hosted Hermes AI Agent on a VPS without using the terminal, Docker, or Linux commands.",
+	"userStories": [
+		{
+			"id": "US-001",
+			"title": "Scaffold TanStack Start project",
+			"description": "As a developer, I want to initialize a TanStack Start project with TypeScript so I have a working app scaffold.",
+			"acceptanceCriteria": [
+				"Run `npm create tanstack-start@latest` to scaffold the project",
+				"TypeScript is configured with strict mode",
+				"`npm run dev` starts the dev server without errors",
+				"Default index page renders in browser",
+				"Typecheck passes"
+			],
+			"priority": 1,
+			"passes": true,
+			"notes": ""
+		},
+		{
+			"id": "US-002",
+			"title": "Add TailwindCSS and shadcn/ui",
+			"description": "As a developer, I want TailwindCSS and shadcn/ui configured so I can build consistent UI components.",
+			"acceptanceCriteria": [
+				"Install and configure tailwindcss, postcss, autoprefixer",
+				"Run `npx shadcn@latest init` with default configuration",
+				"Add a shadcn Button component and verify it renders",
+				"Tailwind utility classes work in components",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 2,
+			"passes": false,
+			"notes": ""
+		},
+		{
+			"id": "US-003",
+			"title": "Set up Drizzle ORM with PostgreSQL and Hono API",
+			"description": "As a developer, I want Drizzle ORM connected to PostgreSQL and a Hono API route so I have a database and API layer.",
+			"acceptanceCriteria": [
+				"Install drizzle-orm, drizzle-kit, postgres.js, hono, @hono/tanstack-start",
+				"Configure drizzle.config.ts with PostgreSQL connection string from env",
+				"Create a test migration that runs successfully",
+				"Mount Hono app in TanStack Start server entry",
+				"GET /api/health returns 200 with JSON response",
+				"Typecheck passes"
+			],
+			"priority": 3,
+			"passes": false,
+			"notes": "Database URL comes from DATABASE_URL env var"
+		},
+		{
+			"id": "US-004",
+			"title": "Configure Better Auth server with magic link",
+			"description": "As a developer, I want Better Auth configured server-side with magic link authentication so users can sign in with email.",
+			"acceptanceCriteria": [
+				"Install better-auth, @better-auth/hono-adapter, and email provider SDK",
+				"Create auth config with Drizzle adapter and magic link provider",
+				"Mount auth endpoints on Hono router",
+				"POST /api/auth/send-magic-link sends email with login link (log to console if no email service)",
+				"GET /api/auth/verify-magic-link authenticates user and returns session",
+				"Auth tables are created via Drizzle migration",
+				"Typecheck passes"
+			],
+			"priority": 4,
+			"passes": false,
+			"notes": "Use console-log email transport for MVP, configurable to real email service later"
+		},
+		{
+			"id": "US-005",
+			"title": "Add login page and route protection",
+			"description": "As a user, I want a login page where I enter my email and receive a magic link so I can sign in without a password.",
+			"acceptanceCriteria": [
+				"Login page at /login with email input and submit button",
+				"After submit, show success message: 'Check your email for the magic link'",
+				"Magic link page at /api/auth/callback that verifies and redirects to /dashboard",
+				"Protected routes redirect unauthenticated users to /login",
+				"Logout button clears session and redirects to /login",
+				"User email displayed in header when logged in",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 5,
+			"passes": false,
+			"notes": ""
+		},
+		{
+			"id": "US-006",
+			"title": "Create database schema for all MVP entities",
+			"description": "As a developer, I want the database schema defined for servers, installs, AI providers, Telegram configs, and audit logs.",
+			"acceptanceCriteria": [
+				"servers table: id, user_id, label, host, port, username, auth_method, encrypted_credential, store_credential, status, os_info, created_at, updated_at",
+				"installs table: id, server_id, status, step, log, version, created_at, updated_at",
+				"ai_providers table: id, user_id, provider, encrypted_api_key, model, label, is_active, created_at",
+				"telegram_configs table: id, user_id, bot_token, chat_id, is_active, created_at",
+				"audit_logs table: id, user_id, action, details, ip_address, created_at",
+				"Run Drizzle migration successfully",
+				"Typecheck passes"
+			],
+			"priority": 6,
+			"passes": false,
+			"notes": "All timestamps use default now()"
+		},
+		{
+			"id": "US-007",
+			"title": "Build dashboard layout with sidebar navigation",
+			"description": "As a user, I want a dashboard layout with sidebar navigation so I can access all features.",
+			"acceptanceCriteria": [
+				"Sidebar with nav links: Dashboard, Servers, AI Provider, Telegram, Logs, Settings",
+				"Active route highlighted in sidebar",
+				"Header shows user email and logout button",
+				"Main content area renders the active page",
+				"> Empty state on Dashboard: 'Connect your first VPS to get started' with CTA button",
+				"Responsive layout works on desktop 1024px+",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 7,
+			"passes": false,
+			"notes": ""
+		},
+		{
+			"id": "US-008",
+			"title": "Build VPS connection wizard UI",
+			"description": "As a user, I want a step-by-step wizard to enter my VPS connection details so I can connect my server.",
+			"acceptanceCriteria": [
+				"3-step wizard: (1) Server label and host, (2) Authentication, (3) Review and Connect",
+				"Step 1: label input, host input, port input (default 22)",
+				"Step 2: radio for auth method (password or SSH key), conditional inputs",
+				"SSH key: paste private key textarea",
+				"Password: password input",
+				"Toggle: 'Save credentials for future operations' (default on)",
+				"Step 3: summary of all entered info, 'Connect' button",
+				"Back and Next buttons navigate between steps",
+				"Form validation: required fields, valid host format, port 1-65535",
+				"Step indicator at top shows current step",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 8,
+			"passes": false,
+			"notes": "Form data passed to parent component, not stored until submission"
+		},
+		{
+			"id": "US-009",
+			"title": "Build VPS connection backend with SSH verification",
+			"description": "As a system, I want to verify VPS access via SSH and check OS compatibility so the user knows their server is ready.",
+			"acceptanceCriteria": [
+				"POST /api/servers/connect receives connection details",
+				"If store_credential is true, AES-256-GCM encrypt credential before storing",
+				"If store_credential is false, keep credential in memory only (do not persist)",
+				"SSH into server using node-ssh or ssh2 with provided credentials",
+				"Run `cat /etc/os-release` to detect OS and version",
+				"Validate OS is Ubuntu 22.04+ or Debian 12+",
+				"Return server info: host, os name, os version, architecture",
+				"On SSH failure: return 400 with error message ('invalid credentials' or 'host unreachable')",
+				"On OS mismatch: return 400 with 'Unsupported OS: [name]. Requires Ubuntu 22.04+ or Debian 12+'",
+				"Create server record with status 'connected' on success",
+				"Write audit log entry for connect attempt",
+				"Typecheck passes"
+			],
+			"priority": 9,
+			"passes": false,
+			"notes": "ENCRYPTION_KEY env var used for AES-256. Ephemeral credentials stored in in-memory Map keyed by serverId:sessionId."
+		},
+		{
+			"id": "US-010",
+			"title": "Build one-click install backend with SSE progress",
+			"description": "As a system, I want to install Docker, Docker Compose, and Hermes on the VPS and stream progress via SSE so the user sees real-time results.",
+			"acceptanceCriteria": [
+				"POST /api/servers/:id/install initiates the install workflow",
+				"Install steps executed sequentially via SSH: install Docker, install Docker Compose, create Hermes directory, generate docker-compose.yml, pull image, start containers",
+				"GET /api/servers/:id/install/events streams SSE events: { step, progress, message }",
+				"Each step emits progress event with percentage",
+				"On failure: emit { status: 'failed', error: 'message' } and stop",
+				"Install record created with status tracking",
+				"Retry: POST /api/servers/:id/install resets and starts from step 1",
+				"Credentials retrieved from DB (if stored) or from in-memory store",
+				"Write audit log on install start, success, and failure",
+				"Typecheck passes"
+			],
+			"priority": 10,
+			"passes": false,
+			"notes": "Use Hono SSE helper. docker-compose.yml generated programmatically."
+		},
+		{
+			"id": "US-011",
+			"title": "Build install progress UI",
+			"description": "As a user, I want to see real-time install progress with a progress bar and live logs so I know what is happening.",
+			"acceptanceCriteria": [
+				"After clicking 'Install', navigate to install progress page",
+				"Progress bar advances per step (25% increments)",
+				"Live log pane streams step messages with timestamps",
+				"On completion: green success banner with 'Go to Dashboard' button",
+				"On failure: red error banner with error message and 'Retry Install' button",
+				"Loading spinner during install",
+				"User can leave and return - install continues in background",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 11,
+			"passes": false,
+			"notes": "Uses EventSource to consume SSE from /api/servers/:id/install/events"
+		},
+		{
+			"id": "US-012",
+			"title": "Build AI provider setup",
+			"description": "As a user, I want to select my AI provider, paste my API key, and choose a model so my agent can respond to messages.",
+			"acceptanceCriteria": [
+				"AI Provider page accessible from sidebar nav",
+				"Provider selection: OpenAI, Anthropic, OpenRouter (radio buttons)",
+				"API key input (masked input type)",
+				"Model dropdown populated based on provider selection",
+				"OpenAI defaults: gpt-4o, gpt-4o-mini, gpt-4-turbo",
+				"Anthropic defaults: claude-sonnet-4-20250514, claude-haiku-3-5",
+				"OpenRouter: text input for custom model ID",
+				"Recommended default model pre-selected per provider",
+				"POST /api/providers saves provider config with encrypted API key",
+				"'Test Connection' button calls provider API to verify key",
+				"Success state: green checkmark with 'Provider connected'",
+				"Error state: 'Invalid API key' or 'Connection failed'",
+				"Edit flow: existing key masked (show last 4 chars), can replace",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 12,
+			"passes": false,
+			"notes": "API key encrypted with AES-256-GCM before storage"
+		},
+		{
+			"id": "US-013",
+			"title": "Build Telegram integration",
+			"description": "As a user, I want to connect my Telegram bot so I can chat with my Hermes agent from Telegram.",
+			"acceptanceCriteria": [
+				"Telegram page accessible from sidebar nav",
+				"Step 1: instructions to create bot via BotFather and get token",
+				"Step 2: bot token input field (masked)",
+				"'Connect' button sends POST /api/telegram/connect with token",
+				"Backend validates token via Telegram getMe API",
+				"On success: green banner 'Telegram bot connected' with bot username",
+				"On failure: clear error message",
+				"Connected state shows bot username and 'Disconnect' button",
+				"POST /api/telegram/disconnect stops the bot",
+				"Write audit log on connect and disconnect",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 13,
+			"passes": false,
+			"notes": ""
+		},
+		{
+			"id": "US-014",
+			"title": "Build dashboard status cards",
+			"description": "As a user, I want my dashboard to show agent status, VPS health, and provider/Telegram status at a glance.",
+			"acceptanceCriteria": [
+				"Dashboard is home page after login",
+				"Agent status card: green 'Online' or red 'Offline' with timestamp",
+				"VPS health card: CPU, memory, disk usage percentages",
+				"AI provider card: provider name, model, status (Connected/Disconnected)",
+				"Telegram card: bot username, status (Connected/Disconnected)",
+				"Data refreshes every 30 seconds via polling",
+				"Loading skeleton while fetching",
+				"Error state with retry button for each card",
+				"Empty state when no server: prompt to connect first VPS",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 14,
+			"passes": false,
+			"notes": "VPS metrics fetched via SSH (free, df, uptime)"
+		},
+		{
+			"id": "US-015",
+			"title": "Build update and restart controls",
+			"description": "As a user, I want to update, restart, or rollback my Hermes agent with one click so I can maintain it easily.",
+			"acceptanceCriteria": [
+				"Server detail page shows server info and action buttons",
+				"'Restart Agent' runs docker compose restart via SSH, shows spinner, success/error result",
+				"'Update Hermes' runs docker compose pull && up -d via SSH, shows progress, success/error result",
+				"'Rollback' re-pulls previous Docker image tag via SSH, success/error result",
+				"Confirmation AlertDialog before each action: 'Are you sure?'",
+				"Action history section shows last 5 actions with timestamp and result",
+				"On SSH failure: show 'Action failed: [reason]' with retry button",
+				"Write audit log for each action",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 15,
+			"passes": false,
+			"notes": ""
+		},
+		{
+			"id": "US-016",
+			"title": "Build logs viewer page",
+			"description": "As a user, I want to view install and action logs so I can understand what happened.",
+			"acceptanceCriteria": [
+				"Logs page accessible from sidebar nav",
+				"Shows install log with timestamps and step labels",
+				"Shows action history (restart, update, rollback) with timestamps and results",
+				"Logs displayed in monospace scrolling container, read-only",
+				"'Copy logs' button copies all log text to clipboard",
+				"'Clear logs' button with confirmation clears displayed logs",
+				"Empty state: 'No logs yet' message",
+				"Typecheck passes",
+				"Verify in browser using dev-browser skill"
+			],
+			"priority": 16,
+			"passes": false,
+			"notes": ""
+		}
+	]
+}

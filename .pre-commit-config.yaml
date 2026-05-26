@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-json
+
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v0.6.1
+    hooks:
+      - id: biome-check
+        additional_dependencies:
+          - '@biomejs/biome'
+
+  - repo: local
+    hooks:
+      - id: typecheck
+        name: TypeScript typecheck
+        entry: bun run typecheck
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx)$
