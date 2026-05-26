@@ -74,6 +74,10 @@ Both work. Prefer `@/` for readability.
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
 - Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; when changing install steps, keep the DB log format and emitted event payloads in sync so reconnecting clients can replay prior progress.
 - Vitest is configured through `vite.config.ts`, so run tests with `bun run test`; plain `bun test` uses Bun's runner and skips the repo's jsdom-backed setup.
+- Server detail pages at `src/routes/servers.$id.tsx` can mount a feature component that fetches its snapshot from `GET /api/servers/:id` instead of using a `createServerFn` route loader, keeping the route thin and the data-fetching lifecycle local to the component.
+- Action history for a server is derived from `audit_logs` entries with `server.action.*.succeeded` and `server.action.*.failed` action names; the `details.serverId` JSONB field is filtered client-side in JS after the DB query.
+- Destructive server actions (restart/update/rollback) use an inline confirmation card (`ConfirmationCard`) in the feature component rather than `window.confirm` or an external `AlertDialog` primitive; if a `ui/alert-dialog.tsx` is later added, migrate to it.
+- Rollback image tag resolution follows the chain: `targetVersion` request parameter → `installs.version` → `"latest"`.
 - All destructive actions require confirmation dialog
 - Supports Ubuntu 22.04+ / Debian 12+ VPS targets
 - `routeTree.gen.ts` is auto-generated — do not edit

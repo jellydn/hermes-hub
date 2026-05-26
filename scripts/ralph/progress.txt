@@ -183,3 +183,19 @@
   - Live VPS metrics should reuse the same stored-or-ephemeral SSH credential resolution as installs so users who declined persistence still get health data during the active session.
   - Protected-page browser verification can still confirm route wiring and capture the current redirect target even when local auth/database env vars are missing.
 ---
+
+## 2026-05-26 11:36:53 +0800 - US-015
+[Session: https://opncd.ai/s/]
+- Built the server detail page at `/servers/$id` with server info summary, install status, and three action buttons (Restart Agent, Update Hermes, Rollback) that require an inline confirmation card before executing.
+- Added backend endpoints `GET /api/servers/:id` for detail snapshots and `POST /api/servers/:id/actions` to run restart/update/rollback commands over SSH with audit logging on start/success/failure.
+- Rollback uses `sed` to replace the Hermes image tag in the remote `docker-compose.yml`, then runs `docker compose up -d`; the target image tag is derived from the latest install record version or the last successful action's `imageRef`.
+- Action history shows the last 5 finished actions (succeeded/failed) from `audit_logs`, filtered by `server.action.*.succeeded` and `server.action.*.failed` action names scoped to the server ID.
+- Added Vitest coverage for the new route wiring in `server/app.test.ts`, action execution and credential handling in `server/server-actions.test.ts`, and confirmation/action flow in `src/features/servers/server-detail.test.tsx`.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3000/servers/server_123`, which redirected to `/login?redirect=%2Fservers%2Fserver_123` in the current no-session environment; captured `scripts/ralph/us-015-server-detail-route.png`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/server-actions.ts`, `server/server-actions.test.ts`, `src/lib/server-detail.ts`, `src/routes/servers.$id.tsx`, `src/routes/servers.tsx`, `src/features/servers/server-detail.tsx`, `src/features/servers/server-detail.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-015-server-detail-route.png`
+- **Learnings for future iterations:**
+  - Server detail pages can ship data through a simple `GET /api/servers/:id` endpoint fetched on mount instead of a `createServerFn` route loader, keeping SSR preload optional for authenticated pages where the main content is interactive anyway.
+  - Action history derived from `audit_logs` works well but requires client-side server ID filtering since the JSONB `details` column is not directly filterable via Drizzle's `eq` or `inArray` checks.
+  - Rollback without explicit version-tracking history needs a fallback chain: `targetVersion` from the request -> `installs.version` -> `"latest"`.
+  - Inline confirmation cards keep destructive-action safety consistent without depending on a `ui/alert-dialog.tsx` primitive; if that component is added later, switch to it for better accessibility.
+---

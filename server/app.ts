@@ -4,6 +4,7 @@ import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
 import { startServerInstall, streamServerInstallEvents } from "./install";
 import { saveProviderConfig, testProviderConfig } from "./providers";
+import { getServerDetail, runServerAction } from "./server-actions";
 import { connectServer } from "./servers";
 import { connectTelegram, disconnectTelegram } from "./telegram";
 
@@ -85,8 +86,10 @@ apiApp.get("/health", async (context) => {
 });
 
 apiApp.post("/servers/connect", connectServer);
+apiApp.get("/servers/:id", getServerDetail);
 apiApp.post("/servers/:id/install", startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
+apiApp.post("/servers/:id/actions", runServerAction);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.post("/providers", saveProviderConfig);
 apiApp.post("/providers/test", testProviderConfig);

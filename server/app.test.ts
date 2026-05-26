@@ -5,6 +5,8 @@ vi.mock("./db/health", () => ({
 }));
 
 const connectServer = vi.fn();
+const getServerDetail = vi.fn();
+const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
 const getDashboardStatus = vi.fn();
@@ -15,6 +17,11 @@ const disconnectTelegram = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
+}));
+
+vi.mock("./server-actions", () => ({
+	getServerDetail,
+	runServerAction,
 }));
 
 vi.mock("./install", () => ({
@@ -174,6 +181,48 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(202);
 		expect(startServerInstall).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes server detail requests through the detail handler", async () => {
+		getServerDetail.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ serverDetail: { server: { id: "server_123" } } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123",
+		);
+
+		expect(response.status).toBe(200);
+		expect(getServerDetail).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes server action requests through the action handler", async () => {
+		runServerAction.mockResolvedValueOnce(
+			new Response(JSON.stringify({ status: "succeeded", action: "restart" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/actions",
+			{
+				method: "POST",
+				body: JSON.stringify({ action: "restart" }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(runServerAction).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes install event requests through the install stream handler", async () => {

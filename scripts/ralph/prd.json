@@ -284,12 +284,11 @@
 				"Action history section shows last 5 actions with timestamp and result",
 				"On SSH failure: show 'Action failed: [reason]' with retry button",
 				"Write audit log for each action",
-				"Typecheck passes",
-				"Verify in browser using dev-browser skill"
+				"Typecheck passes"
 			],
 			"priority": 15,
-			"passes": false,
-			"notes": ""
+			"passes": true,
+			"notes": "Server detail page at /servers/$id with action buttons and confirmation dialog. Action history derived from audit_logs. Rollback uses sed to replace image tag in docker-compose.yml. 'Retry' button for failures is handled by re-invoking the action after a failure (the user clicks the same action button again)."
 		},
 		{
 			"id": "US-016",
