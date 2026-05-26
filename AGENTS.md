@@ -59,7 +59,9 @@ Both work. Prefer `@/` for readability.
 ## Conventions
 
 - Add new routes under `src/routes/`; the scaffold is file-based and `routeTree.gen.ts` is auto-generated.
+- Custom request branching belongs in `src/server.ts`; keep `/api/*` handling there and let the default TanStack Start handler serve everything else.
 - Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
+- Drizzle schema files live under `server/db/`, and `drizzle.config.ts` reads `DATABASE_URL` eagerly, so set that env var before running `drizzle-kit` commands.
 - Auth: Better Auth magic link only (no passwords, no OAuth) — **not yet installed**
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
 - All destructive actions require confirmation dialog

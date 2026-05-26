@@ -47,7 +47,7 @@
 				"Typecheck passes"
 			],
 			"priority": 3,
-			"passes": false,
+			"passes": true,
 			"notes": "Database URL comes from DATABASE_URL env var"
 		},
 		{

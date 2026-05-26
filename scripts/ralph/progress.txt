@@ -2,6 +2,8 @@
 - TanStack Start route types come from the generated `src/routeTree.gen.ts`; run a build or dev server after adding routes so typecheck can see the generated tree.
 - This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
 - Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
+- Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
+- `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -25,4 +27,16 @@
   - The `shadcn init` CLI can still prompt interactively in this TanStack Start setup, so keeping the generated config files checked in avoids repeated manual setup.
   - Keep reusable UI primitives in `src/components/ui/` and point feature pages at those components instead of duplicating Tailwind class strings.
   - Browser verification can reuse the already running app on port `3000`; the scaffold's `opencode.json` Chrome MCP setup works as expected.
+---
+
+## 2026-05-26 09:55:00 +0800 - US-003
+[Session: https://opncd.ai/s/]
+- Added Drizzle ORM and PostgreSQL wiring with `drizzle.config.ts`, a minimal `server/db/` module, and an initial generated SQL migration under `drizzle/`.
+- Added a custom `src/server.ts` entry that routes `/api/*` requests into a Hono app while preserving the default TanStack Start handler for everything else.
+- Implemented `GET /api/health` JSON status reporting plus a Vitest coverage check for the Hono app, and verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check AGENTS.md README.md package.json drizzle.config.ts server src scripts/ralph`, and `DATABASE_URL=postgres://postgres:postgres@localhost:5432/hermeshub bunx drizzle-kit generate`.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `drizzle.config.ts`, `drizzle/**`, `server/**`, `src/server.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - TanStack Start custom server logic should stay in `src/server.ts`; branch API paths there instead of trying to mix API routing into file-based page routes.
+  - The published `@hono/tanstack-start` package was not available from npm during setup, so plain `hono` plus the TanStack Start server entry is the working integration path here.
+  - `GET /api/health` can report database degradation in the JSON body without failing the route itself, which keeps a stable monitoring endpoint while DB setup is still in progress.
 ---
