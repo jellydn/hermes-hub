@@ -63,6 +63,7 @@ Both work. Prefer `@/` for readability.
 - Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
 - Cross-layer provider metadata should live in `src/lib/ai-providers.ts` so the UI model pickers and server-side validation/test handlers stay in sync.
 - Authenticated integration pages like AI Provider and Telegram should load their current summary through a route-level `createServerFn`, then let a feature component own the client-side form and action state.
+- Dashboard status should preload an initial summary through the route and then let the client feature poll `/api/dashboard/status` for 30-second refreshes, so SSR stays fast while the cards can retry without rerunning route loaders.
 - Form fields should keep helper and error copy outside the `<label>` element so accessible names stay stable for browser automation and Testing Library queries.
 - Authenticated pages should reuse the shared `AppShell` exported from `src/routes/dashboard.tsx` so sidebar navigation, user header actions, and responsive layout stay consistent across dashboard sections.
 - Nested dashboard pages should live under the parent route filename (for example `src/routes/servers.$id.install.tsx`) so TanStack Router generates child paths like `/servers/$id/install` automatically.

@@ -268,7 +268,7 @@
 				"Verify in browser using dev-browser skill"
 			],
 			"priority": 14,
-			"passes": false,
+			"passes": true,
 			"notes": "VPS metrics fetched via SSH (free, df, uptime)"
 		},
 		{

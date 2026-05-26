@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 import {
 	Bot,
 	LayoutDashboard,
@@ -7,19 +9,38 @@ import {
 	Menu,
 	Server,
 	Settings,
-	ShieldCheck,
 	Sparkles,
 	X,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DashboardStatusOverview } from "@/features/dashboard/status-overview";
 import { authClient } from "@/lib/auth-client";
 import { requireSession } from "@/lib/session";
+import { getAuthSession } from "../../server/auth";
+import { getDashboardStatusSnapshot } from "../../server/dashboard";
+
+const loadDashboardStatus = createServerFn({ method: "GET" }).handler(
+	async () => {
+		const session = await getAuthSession(getRequestHeaders());
+		if (!session) {
+			return null;
+		}
+
+		return getDashboardStatusSnapshot({
+			userId: session.user.id,
+			sessionId: session.session.id,
+		});
+	},
+);
 
 export const Route = createFileRoute("/dashboard")({
 	beforeLoad: async ({ location }) => {
-		return { session: await requireSession(location.href) };
+		const session = await requireSession(location.href);
+		const dashboardStatus = await loadDashboardStatus();
+
+		return { session, dashboardStatus };
 	},
 	component: DashboardPage,
 });
@@ -159,75 +180,16 @@ export function AppShell({
 }
 
 function DashboardPage() {
-	const { session } = Route.useRouteContext();
+	const { dashboardStatus, session } = Route.useRouteContext();
 
 	return (
 		<AppShell
 			userEmail={session.user.email}
-			title="Welcome back"
-			description="Your authenticated workspace is ready. Connect your first VPS to unlock installs, provider setup, and Telegram control from one place."
+			title="Mission control"
+			description="Track Hermes health, confirm the VPS is still responsive, and see whether provider and Telegram integrations are ready without leaving the dashboard."
 			kicker="Dashboard"
 		>
-			<section className="island-shell relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8">
-				<div className="pointer-events-none absolute -left-16 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.24),transparent_70%)]" />
-				<div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-					<div>
-						<p className="island-kicker mb-3">Authenticated Session</p>
-						<h3 className="display-title mb-3 text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-4xl">
-							{session.user.email}
-						</h3>
-						<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-							This dashboard will become the command center for your Hermes
-							deployment. Right now the next milestone is connecting the first
-							VPS.
-						</p>
-					</div>
-					<Button asChild>
-						<Link to="/servers">Connect your first VPS</Link>
-					</Button>
-				</div>
-			</section>
-
-			<section className="grid gap-4 md:grid-cols-3">
-				{[
-					{
-						title: "Session Active",
-						description:
-							"Magic-link authentication is working for this account.",
-						icon: ShieldCheck,
-					},
-					{
-						title: "First Server Pending",
-						description: "No VPS connected yet. Start by verifying SSH access.",
-						icon: Server,
-					},
-					{
-						title: "Next Up",
-						description:
-							"AI provider, Telegram, and install flow land in later stories.",
-						icon: Sparkles,
-					},
-				].map(({ description, icon: Icon, title }) => (
-					<article key={title} className="island-shell rounded-2xl p-5">
-						<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-[var(--chip-bg)] p-3 text-[var(--sea-ink)]">
-							<Icon className="h-5 w-5" />
-						</div>
-						<h3 className="mb-2 text-base font-semibold text-[var(--sea-ink)]">
-							{title}
-						</h3>
-						<p className="m-0 text-sm text-[var(--sea-ink-soft)]">
-							{description}
-						</p>
-					</article>
-				))}
-			</section>
-
-			<section className="island-shell rounded-2xl p-6">
-				<p className="island-kicker mb-2">Empty State</p>
-				<p className="m-0 text-base text-[var(--sea-ink-soft)]">
-					Connect your first VPS to get started.
-				</p>
-			</section>
+			<DashboardStatusOverview initialStatus={dashboardStatus ?? null} />
 		</AppShell>
 	);
 }

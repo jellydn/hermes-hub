@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getAuth, hasDatabaseUrl } from "./auth";
+import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
 import { startServerInstall, streamServerInstallEvents } from "./install";
 import { saveProviderConfig, testProviderConfig } from "./providers";
@@ -86,6 +87,7 @@ apiApp.get("/health", async (context) => {
 apiApp.post("/servers/connect", connectServer);
 apiApp.post("/servers/:id/install", startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
+apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.post("/providers", saveProviderConfig);
 apiApp.post("/providers/test", testProviderConfig);
 apiApp.post("/telegram/connect", connectTelegram);
