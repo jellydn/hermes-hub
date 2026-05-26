@@ -1,32 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 
+import { TelegramSettings } from "@/features/telegram/telegram-settings";
 import { requireSession } from "@/lib/session";
+import { getAuthSession } from "../../server/auth";
+import { getCurrentTelegramConfig } from "../../server/telegram";
 import { AppShell } from "./dashboard";
+
+const loadCurrentTelegramConfig = createServerFn({ method: "GET" }).handler(
+	async () => {
+		const session = await getAuthSession(getRequestHeaders());
+		if (!session) {
+			return null;
+		}
+
+		return getCurrentTelegramConfig(session.user.id);
+	},
+);
 
 export const Route = createFileRoute("/telegram")({
 	beforeLoad: async ({ location }) => {
-		return { session: await requireSession(location.href) };
+		const session = await requireSession(location.href);
+		const telegramConfig = await loadCurrentTelegramConfig();
+
+		return { session, telegramConfig };
 	},
 	component: TelegramPage,
 });
 
 function TelegramPage() {
-	const { session } = Route.useRouteContext();
+	const { session, telegramConfig } = Route.useRouteContext();
 
 	return (
 		<AppShell
 			userEmail={session.user.email}
 			title="Telegram"
-			description="Telegram bot onboarding will plug into this protected page in a later story."
+			description="Connect your Telegram bot, verify the token with Telegram, and keep the dashboard ready for chat-channel status."
 			kicker="Chat Channels"
 		>
-			<section className="island-shell rounded-[2rem] p-6 sm:p-8">
-				<p className="island-kicker mb-2">Protected Route Ready</p>
-				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					Navigation, auth guard, and main content framing are already in place
-					for the Telegram connection flow.
-				</p>
-			</section>
+			<TelegramSettings initialConfig={telegramConfig ?? null} />
 		</AppShell>
 	);
 }

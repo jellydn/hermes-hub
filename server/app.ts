@@ -4,6 +4,7 @@ import { checkDatabaseConnection } from "./db/health";
 import { startServerInstall, streamServerInstallEvents } from "./install";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { connectServer } from "./servers";
+import { connectTelegram, disconnectTelegram } from "./telegram";
 
 export const apiApp = new Hono().basePath("/api");
 
@@ -87,3 +88,5 @@ apiApp.post("/servers/:id/install", startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.post("/providers", saveProviderConfig);
 apiApp.post("/providers/test", testProviderConfig);
+apiApp.post("/telegram/connect", connectTelegram);
+apiApp.post("/telegram/disconnect", disconnectTelegram);

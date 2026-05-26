@@ -9,6 +9,8 @@ const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
 const saveProviderConfig = vi.fn();
 const testProviderConfig = vi.fn();
+const connectTelegram = vi.fn();
+const disconnectTelegram = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
@@ -22,6 +24,11 @@ vi.mock("./install", () => ({
 vi.mock("./providers", () => ({
 	saveProviderConfig,
 	testProviderConfig,
+}));
+
+vi.mock("./telegram", () => ({
+	connectTelegram,
+	disconnectTelegram,
 }));
 
 const authHandler = vi.fn();
@@ -220,5 +227,50 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(testProviderConfig).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes Telegram connect requests through the Telegram handler", async () => {
+		connectTelegram.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ telegram: { botUsername: "hermes_helper_bot" } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/telegram/connect",
+			{
+				method: "POST",
+				body: JSON.stringify({ botToken: "123456:secret-token" }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(connectTelegram).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes Telegram disconnect requests through the Telegram handler", async () => {
+		disconnectTelegram.mockResolvedValueOnce(
+			new Response(JSON.stringify({ status: "disconnected" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/telegram/disconnect",
+			{
+				method: "POST",
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(disconnectTelegram).toHaveBeenCalledTimes(1);
 	});
 });

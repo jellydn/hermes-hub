@@ -3,6 +3,7 @@
 - This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
 - Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
 - Shared provider/model catalogs belong in `src/lib/ai-providers.ts` so both the route UI and server-side validation/test handlers read the same defaults and allowed models.
+- Authenticated integration pages should fetch their saved summary in a route-level `createServerFn`, then hand that snapshot to a client feature component that owns connect/disconnect form state and follow-up fetch calls.
 - Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
 - `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
 - Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
@@ -156,4 +157,16 @@
   - The install page can rely on the backend's persisted `installs.log` replay, so the UI only needs to dedupe repeated SSE events instead of storing a second client-side history.
   - A tiny `useMountEffect()` escape hatch is enough for mount-only browser integrations like `EventSource` in this codebase; keep the helper explicit instead of sprinkling raw `useEffect` around feature components.
   - Local browser verification may land on `localhost:3001` if another dev session already owns port `3000`, so trust the running Vite output before assuming the app is down.
+---
+
+## 2026-05-26 11:05:39 +0800 - US-013
+[Session: https://opncd.ai/s/]
+- Built the Telegram integration page with BotFather onboarding copy, masked token input, connect/disconnect actions, and a connected-state summary card inside the authenticated dashboard shell.
+- Added `/api/telegram/connect` and `/api/telegram/disconnect` handlers that validate the bot token against Telegram `getMe`, persist the latest active config, and write audit log entries for connect/disconnect events.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3001/telegram`, which redirected to `/login?redirect=%2Ftelegram` in the current no-session environment; captured `scripts/ralph/us-013-telegram-route.jpeg`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/telegram.ts`, `server/telegram.test.ts`, `src/routes/telegram.tsx`, `src/features/telegram/telegram-settings.tsx`, `src/features/telegram/telegram-settings.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-013-telegram-route.jpeg`
+- **Learnings for future iterations:**
+  - Telegram connectivity is cheap to verify via the `getMe` endpoint, so treat it as the canonical validation step before persisting bot state.
+  - Store the verified bot username alongside the token so protected route loaders can render stable connected-state summaries without re-calling Telegram on every page load.
+  - Protected dashboard browser checks remain useful without local auth, but full in-app interaction on integration pages still depends on a working Better Auth session and `DATABASE_URL`.
 ---
