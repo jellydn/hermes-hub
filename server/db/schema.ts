@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	index,
+	integer,
+	jsonb,
+	pgTable,
+	text,
+	timestamp,
+} from "drizzle-orm/pg-core";
 
 export const healthChecks = pgTable("health_checks", {
 	id: text("id").primaryKey(),
@@ -92,4 +100,104 @@ export const verifications = pgTable(
 			.notNull(),
 	},
 	(table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+export const servers = pgTable(
+	"servers",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		label: text("label").notNull(),
+		host: text("host").notNull(),
+		port: integer("port").notNull(),
+		username: text("username").notNull(),
+		authMethod: text("auth_method").notNull(),
+		encryptedCredential: text("encrypted_credential"),
+		storeCredential: boolean("store_credential").default(true).notNull(),
+		status: text("status").notNull(),
+		osInfo: jsonb("os_info").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("servers_user_id_idx").on(table.userId)],
+);
+
+export const installs = pgTable(
+	"installs",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		serverId: text("server_id")
+			.notNull()
+			.references(() => servers.id, { onDelete: "cascade" }),
+		status: text("status").notNull(),
+		step: text("step").notNull(),
+		log: text("log"),
+		version: text("version"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("installs_server_id_idx").on(table.serverId)],
+);
+
+export const aiProviders = pgTable(
+	"ai_providers",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		provider: text("provider").notNull(),
+		encryptedApiKey: text("encrypted_api_key").notNull(),
+		model: text("model").notNull(),
+		label: text("label"),
+		isActive: boolean("is_active").default(false).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [index("ai_providers_user_id_idx").on(table.userId)],
+);
+
+export const telegramConfigs = pgTable(
+	"telegram_configs",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		botToken: text("bot_token").notNull(),
+		chatId: text("chat_id"),
+		isActive: boolean("is_active").default(false).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [index("telegram_configs_user_id_idx").on(table.userId)],
+);
+
+export const auditLogs = pgTable(
+	"audit_logs",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+		action: text("action").notNull(),
+		details: jsonb("details"),
+		ipAddress: text("ip_address"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [index("audit_logs_user_id_idx").on(table.userId)],
 );

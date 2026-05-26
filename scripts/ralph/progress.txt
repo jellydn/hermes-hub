@@ -6,6 +6,7 @@
 - `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
 - Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
 - Better Auth setup must stay lazy in this app: construct it through a getter, not at module load, so SSR routes can still render without `DATABASE_URL`, and give the client an absolute auth base URL because Better Auth rejects relative `baseURL` values during SSR.
+- Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -65,4 +66,16 @@
   - Better Auth's React client needs an absolute `baseURL` during SSR; a relative `/api/auth` base breaks route rendering in TanStack Start.
   - Route guards can reuse a small `createServerFn` wrapper around `auth.api.getSession`, which keeps redirects server-backed instead of duplicating cookie parsing in routes.
   - Local browser verification can still cover login UI and protected-route redirects without a database, but end-to-end magic-link success needs `DATABASE_URL` configured.
+---
+
+## 2026-05-26 10:15:31 +0800 - US-006
+[Session: https://opncd.ai/s/]
+- Added the MVP persistence schema for `servers`, `installs`, `ai_providers`, `telegram_configs`, and `audit_logs` in the shared Drizzle schema module.
+- Generated a new Drizzle migration and snapshot metadata for the new tables, including foreign keys back to `user` and `servers` plus relation indexes.
+- Updated root agent notes to reflect the live stack and the schema convention for new persisted entities.
+- Files changed: `AGENTS.md`, `server/db/schema.ts`, `drizzle/0002_cuddly_xavin.sql`, `drizzle/meta/0002_snapshot.json`, `drizzle/meta/_journal.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - App-owned persisted tables in this repo should follow the same text UUID primary-key shape as auth tables to keep joins and API payload types consistent.
+  - Drizzle metadata JSON is checked by Biome here, so format generated snapshot and journal files before committing.
+  - `audit_logs.user_id` can stay nullable so system-originated events are recordable even when there is no authenticated user context.
 ---

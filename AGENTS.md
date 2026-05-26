@@ -4,7 +4,7 @@ Web app for non-technical users to deploy and manage a self-hosted Hermes AI Age
 
 ## State
 
-**Scaffolded via CTA** — TanStack Start with file-based router, TailwindCSS v4, and example components (`Header`, `Footer`, `ThemeToggle`). No Drizzle, Hono, or Better Auth installed yet. Full PRD and Ralph plan exist.
+**Scaffolded via CTA** — TanStack Start with file-based routing, TailwindCSS v4, shadcn-style UI primitives, Drizzle ORM, Hono API routing, and Better Auth magic-link auth are wired in. The Hermes-specific product flows are still being built story by story from the PRD and Ralph plan.
 
 ## Key Commands
 
@@ -48,11 +48,11 @@ Both work. Prefer `@/` for readability.
 - Progress tracked in `scripts/ralph/progress.txt`
 - Prompt templates: `scripts/ralph/prompt-{opencode,amp,pi}.md`
 
-## Planned Architecture (not yet built)
+## Architecture
 
 - `app/` or `src/routes/` — TanStack Start routes (file-based)
-- `server/` — Hono API routes (not yet installed)
-- `server/db/` — Drizzle ORM schema and migrations (not yet installed)
+- `server/` — Hono API routes and auth/server helpers
+- `server/db/` — Drizzle ORM schema and migrations
 - `server/ssh/` — SSH utilities (node-ssh or ssh2)
 - `server/install/` — Hermes install orchestration with SSE events
 
@@ -62,6 +62,7 @@ Both work. Prefer `@/` for readability.
 - Custom request branching belongs in `src/server.ts`; keep `/api/*` handling there and let the default TanStack Start handler serve everything else.
 - Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
 - Drizzle schema files live under `server/db/`, and `drizzle.config.ts` reads `DATABASE_URL` eagerly, so set that env var before running `drizzle-kit` commands.
+- Persisted app entities in `server/db/schema.ts` use text primary keys with `gen_random_uuid()::text`; keep new tables aligned with that pattern unless an external integration requires a different key shape.
 - Auth: Better Auth magic link only (no passwords, no OAuth); mount Better Auth directly in `server/app.ts` and keep any custom `/api/auth/*` aliases as thin request rewrites to the library's built-in routes.
 - Better Auth wiring should stay lazy: create the auth instance inside a getter instead of at module load so page routes can still render when `DATABASE_URL` is missing, and use an absolute `baseURL` in `src/lib/auth-client.ts` because Better Auth rejects relative URLs during SSR.
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
