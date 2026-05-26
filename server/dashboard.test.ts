@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	getAuthSession,
-	getEphemeralCredential,
+	getSessionCredential,
 	decryptSecret,
 	withSshConnection,
 	dbSelect,
@@ -12,7 +12,7 @@ const {
 	selectLimit,
 } = vi.hoisted(() => ({
 	getAuthSession: vi.fn(),
-	getEphemeralCredential: vi.fn(),
+	getSessionCredential: vi.fn(),
 	decryptSecret: vi.fn(),
 	withSshConnection: vi.fn(),
 	dbSelect: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock("./auth", () => ({
 }));
 
 vi.mock("./credentials", () => ({
-	getEphemeralCredential,
+	getSessionCredential,
 }));
 
 vi.mock("./crypto", () => ({
@@ -83,7 +83,7 @@ describe("dashboard helpers", () => {
 
 		expect(
 			toTelegramSummary({
-				chatId: "hermes_helper_bot",
+				botUsername: "hermes_helper_bot",
 				isActive: true,
 			}),
 		).toMatchObject({
@@ -135,8 +135,10 @@ describe("dashboard helpers", () => {
 		});
 	});
 
-	it("reports Telegram disconnected when chatId is null", () => {
-		expect(toTelegramSummary({ chatId: null, isActive: true })).toMatchObject({
+	it("reports Telegram disconnected when botUsername is null", () => {
+		expect(
+			toTelegramSummary({ botUsername: null, isActive: true }),
+		).toMatchObject({
 			status: "disconnected",
 		});
 	});
@@ -196,7 +198,7 @@ describe("dashboard snapshot integration", () => {
 				},
 			])
 			// getLatestTelegram
-			.mockResolvedValueOnce([{ chatId: "hermes_bot", isActive: true }]);
+			.mockResolvedValueOnce([{ botUsername: "hermes_bot", isActive: true }]);
 
 		decryptSecret.mockReturnValue("ssh-key-secret");
 		withSshConnection.mockImplementation(async (_config, run) => {

@@ -12,6 +12,7 @@ import { getAuthSession } from "./auth";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, auditLogs } from "./db/schema";
+import { getClientIp } from "./lib/get-client-ip";
 
 type ProviderRequest = {
 	provider: string;
@@ -82,7 +83,7 @@ export async function saveProviderConfig(context: Context) {
 	}
 
 	const db = getDb();
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 
 	try {
 		await db

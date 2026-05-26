@@ -102,7 +102,7 @@ describe("apiApp", () => {
 		);
 	});
 
-	it("routes verify magic link requests through Better Auth", async () => {
+	it("catch-all auth route handles verify magic link requests", async () => {
 		authHandler.mockResolvedValueOnce(
 			new Response(JSON.stringify({ session: {}, user: {} }), {
 				status: 200,
@@ -121,11 +121,11 @@ describe("apiApp", () => {
 		const [request] = authHandler.mock.calls[1] ?? [];
 		expect(request).toBeInstanceOf(Request);
 		expect((request as Request).url).toBe(
-			"http://localhost/api/auth/magic-link/verify?token=abc&callbackURL=%2Fdashboard",
+			"http://localhost/api/auth/verify-magic-link?token=abc&callbackURL=%2Fdashboard",
 		);
 	});
 
-	it("routes auth callback requests through Better Auth", async () => {
+	it("catch-all auth route handles auth callback requests", async () => {
 		authHandler.mockResolvedValueOnce(
 			new Response(JSON.stringify({ session: {}, user: {} }), {
 				status: 200,
@@ -144,7 +144,7 @@ describe("apiApp", () => {
 		const [request] = authHandler.mock.calls[2] ?? [];
 		expect(request).toBeInstanceOf(Request);
 		expect((request as Request).url).toBe(
-			"http://localhost/api/auth/magic-link/verify?token=abc&callbackURL=%2Fdashboard",
+			"http://localhost/api/auth/callback?token=abc&callbackURL=%2Fdashboard",
 		);
 	});
 

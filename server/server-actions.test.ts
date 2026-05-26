@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthSession = vi.fn();
-const getEphemeralCredential = vi.fn();
+const getSessionCredential = vi.fn();
 const decryptSecret = vi.fn();
 const withSshConnection = vi.fn();
 const dbInsert = vi.fn();
@@ -20,7 +20,7 @@ vi.mock("./auth", () => ({
 }));
 
 vi.mock("./credentials", () => ({
-	getEphemeralCredential,
+	getSessionCredential,
 }));
 
 vi.mock("./crypto", () => ({
@@ -146,7 +146,7 @@ describe("server actions", () => {
 				osInfo: {},
 			},
 		]);
-		getEphemeralCredential.mockReturnValue(null);
+		getSessionCredential.mockReturnValue(null);
 
 		const { runServerAction } = await import("./server-actions");
 		const response = await runServerAction(createContext({ action: "update" }));

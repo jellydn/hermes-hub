@@ -8,7 +8,7 @@ const insertServerReturning = vi.fn();
 const dbInsert = vi.fn();
 const verifyServerConnection = vi.fn();
 const encryptSecret = vi.fn();
-const storeEphemeralCredential = vi.fn();
+const storeSessionCredential = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -26,7 +26,7 @@ vi.mock("./crypto", () => ({
 }));
 
 vi.mock("./credentials", () => ({
-	storeEphemeralCredential,
+	storeSessionCredential,
 }));
 
 vi.mock("./ssh", () => {
@@ -134,7 +134,7 @@ describe("connectServer", () => {
 			credential: "secret",
 		});
 		expect(encryptSecret).toHaveBeenCalledWith("secret");
-		expect(storeEphemeralCredential).not.toHaveBeenCalled();
+		expect(storeSessionCredential).not.toHaveBeenCalled();
 	});
 
 	it("keeps credentials ephemeral when requested", async () => {
@@ -153,7 +153,7 @@ describe("connectServer", () => {
 
 		expect(response.status).toBe(200);
 		expect(encryptSecret).not.toHaveBeenCalled();
-		expect(storeEphemeralCredential).toHaveBeenCalledWith({
+		expect(storeSessionCredential).toHaveBeenCalledWith({
 			serverId: "server_123",
 			sessionId: "session_123",
 			authMethod: "ssh-key",

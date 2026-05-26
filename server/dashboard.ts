@@ -10,7 +10,7 @@ import type {
 	DashboardVpsSummary,
 } from "../src/lib/dashboard-status";
 import { getAuthSession } from "./auth";
-import { getEphemeralCredential } from "./credentials";
+import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, installs, servers, telegramConfigs } from "./db/schema";
@@ -42,7 +42,7 @@ type ProviderRecord = {
 };
 
 type TelegramRecord = {
-	chatId: string | null;
+	botUsername: string | null;
 	isActive: boolean;
 };
 
@@ -73,11 +73,12 @@ export async function getDashboardStatusSnapshot(input: {
 	sessionId?: string | null;
 }): Promise<DashboardStatusSnapshot> {
 	const serverRecord = await getLatestServer(input.userId);
-	const installRecord = serverRecord
-		? await getLatestInstall(serverRecord.id)
-		: null;
-	const providerRecord = await getLatestProvider(input.userId);
-	const telegramRecord = await getLatestTelegram(input.userId);
+
+	const [installRecord, providerRecord, telegramRecord] = await Promise.all([
+		serverRecord ? getLatestInstall(serverRecord.id) : Promise.resolve(null),
+		getLatestProvider(input.userId),
+		getLatestTelegram(input.userId),
+	]);
 
 	const serverSummary = serverRecord ? toServerSummary(serverRecord) : null;
 
@@ -166,7 +167,7 @@ export function toProviderSummary(
 export function toTelegramSummary(
 	telegramRecord: TelegramRecord | null,
 ): DashboardTelegramSummary {
-	if (!telegramRecord?.isActive || !telegramRecord.chatId) {
+	if (!telegramRecord?.isActive || !telegramRecord.botUsername) {
 		return {
 			status: "disconnected",
 			botUsername: null,
@@ -176,8 +177,8 @@ export function toTelegramSummary(
 
 	return {
 		status: "connected",
-		botUsername: telegramRecord.chatId,
-		detail: `@${telegramRecord.chatId} is ready for chat delivery.`,
+		botUsername: telegramRecord.botUsername,
+		detail: `@${telegramRecord.botUsername} is ready for chat delivery.`,
 	};
 }
 
@@ -309,7 +310,7 @@ async function getLatestProvider(userId: string) {
 async function getLatestTelegram(userId: string) {
 	const [telegramRecord] = await getDb()
 		.select({
-			chatId: telegramConfigs.chatId,
+			botUsername: telegramConfigs.botUsername,
 			isActive: telegramConfigs.isActive,
 		})
 		.from(telegramConfigs)
@@ -360,10 +361,7 @@ function getServerCredential(
 		);
 	}
 
-	const ephemeralCredential = getEphemeralCredential(
-		serverRecord.id,
-		sessionId,
-	);
+	const ephemeralCredential = getSessionCredential(serverRecord.id, sessionId);
 	if (!ephemeralCredential) {
 		throw new Error(
 			"Temporary credential expired. Reconnect the server first.",

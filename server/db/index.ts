@@ -11,7 +11,7 @@ export function getDb() {
 
 	if (!database) {
 		const client = postgres(process.env.DATABASE_URL, {
-			max: 1,
+			max: parseInt(process.env.DB_POOL_MAX ?? "5", 10),
 			prepare: false,
 		});
 

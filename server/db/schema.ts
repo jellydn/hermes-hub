@@ -178,7 +178,7 @@ export const telegramConfigs = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
 		botToken: text("bot_token").notNull(),
-		chatId: text("chat_id"),
+		botUsername: text("bot_username"),
 		isActive: boolean("is_active").default(false).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()

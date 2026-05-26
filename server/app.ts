@@ -34,26 +34,6 @@ apiApp.post("/auth/send-magic-link", (context) => {
 	);
 });
 
-apiApp.get("/auth/verify-magic-link", (context) => {
-	if (!hasDatabaseUrl()) {
-		return handleAuthUnavailable(context);
-	}
-
-	return getAuth().handler(
-		rewriteAuthRequest(context.req.raw, "/api/auth/magic-link/verify"),
-	);
-});
-
-apiApp.get("/auth/callback", (context) => {
-	if (!hasDatabaseUrl()) {
-		return handleAuthUnavailable(context);
-	}
-
-	return getAuth().handler(
-		rewriteAuthRequest(context.req.raw, "/api/auth/magic-link/verify"),
-	);
-});
-
 apiApp.on(["GET", "POST"], "/auth/*", (context) => {
 	if (!hasDatabaseUrl()) {
 		return handleAuthUnavailable(context);

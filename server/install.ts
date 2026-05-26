@@ -3,10 +3,11 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
-import { getEphemeralCredential } from "./credentials";
+import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
+import { getClientIp } from "./lib/get-client-ip";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 type InstallStatus = "pending" | "running" | "succeeded" | "failed";
@@ -49,6 +50,9 @@ type ServerCredentialRecord = {
 };
 
 const defaultHermesImage = "ghcr.io/hermes-agent/hermes:latest";
+
+const IDLE_TIMEOUT_MS = 90_000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
 
 const installSteps: InstallStep[] = [
 	{
@@ -140,7 +144,7 @@ export async function startServerInstall(context: Context) {
 
 	const installRecord = await upsertInstallRecord(serverId);
 	const state = resetInstallStream(serverId, installRecord.id);
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 
 	await db.insert(auditLogs).values({
 		userId: session.user.id,
@@ -200,6 +204,7 @@ export async function streamServerInstallEvents(context: Context) {
 	const state = await ensureInstallStream(serverId);
 
 	return streamSSE(context, async (stream) => {
+		// Replay past events
 		for (const event of state.events) {
 			await stream.writeSSE({
 				event: "install-progress",
@@ -211,14 +216,57 @@ export async function streamServerInstallEvents(context: Context) {
 			return;
 		}
 
+		// 90-second idle timeout: close the stream if no event is written
+		let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+		function resetIdleTimer() {
+			if (idleTimer) {
+				clearTimeout(idleTimer);
+			}
+			idleTimer = setTimeout(() => {
+				stream.close();
+				resolvePending();
+			}, IDLE_TIMEOUT_MS);
+		}
+
+		// 30-second heartbeat: keep the connection alive with SSE comments
+		const heartbeat = setInterval(async () => {
+			try {
+				await stream.writeSSE({
+					data: ": heartbeat",
+				});
+			} catch {
+				// Stream may be closed; clean up
+				clearInterval(heartbeat);
+			}
+		}, HEARTBEAT_INTERVAL_MS);
+
+		let pendingResolve: (() => void) | null = null;
+
+		function resolvePending() {
+			if (pendingResolve) {
+				pendingResolve();
+				pendingResolve = null;
+			}
+		}
+
 		await new Promise<void>((resolve) => {
+			pendingResolve = resolve;
+			resetIdleTimer();
+
 			const listener = async (event: InstallEvent) => {
+				resetIdleTimer();
+
 				await stream.writeSSE({
 					event: "install-progress",
 					data: JSON.stringify(event),
 				});
 
 				if (event.status === "succeeded" || event.status === "failed") {
+					clearInterval(heartbeat);
+					if (idleTimer) {
+						clearTimeout(idleTimer);
+					}
 					state.listeners.delete(listener);
 					resolve();
 				}
@@ -226,10 +274,19 @@ export async function streamServerInstallEvents(context: Context) {
 
 			state.listeners.add(listener);
 			stream.onAbort(() => {
+				clearInterval(heartbeat);
+				if (idleTimer) {
+					clearTimeout(idleTimer);
+				}
 				state.listeners.delete(listener);
 				resolve();
 			});
 		});
+
+		clearInterval(heartbeat);
+		if (idleTimer) {
+			clearTimeout(idleTimer);
+		}
 	});
 }
 
@@ -504,7 +561,7 @@ function getInstallCredential(input: {
 		throw new Error("Session is required for ephemeral credentials");
 	}
 
-	const ephemeral = getEphemeralCredential(input.server.id, input.sessionId);
+	const ephemeral = getSessionCredential(input.server.id, input.sessionId);
 	if (!ephemeral) {
 		throw new Error(
 			"Temporary credential expired. Reconnect the server first.",

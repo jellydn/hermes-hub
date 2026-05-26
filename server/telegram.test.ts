@@ -26,7 +26,7 @@ vi.mock("./db/schema", () => ({
 	telegramConfigs: {
 		userId: Symbol("telegramConfigs.userId"),
 		botToken: Symbol("telegramConfigs.botToken"),
-		chatId: Symbol("telegramConfigs.chatId"),
+		botUsername: Symbol("telegramConfigs.botUsername"),
 		isActive: Symbol("telegramConfigs.isActive"),
 		createdAt: Symbol("telegramConfigs.createdAt"),
 	},
@@ -125,7 +125,7 @@ describe("telegram handlers", () => {
 		selectLimit.mockResolvedValueOnce([
 			{
 				botToken: "123456:secret-token",
-				chatId: "hermes_helper_bot",
+				botUsername: "hermes_helper_bot",
 				isActive: true,
 			},
 		]);

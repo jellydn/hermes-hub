@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, telegramConfigs } from "./db/schema";
+import { getClientIp } from "./lib/get-client-ip";
 
 type TelegramConnectRequest = {
 	botToken?: string;
@@ -42,7 +43,7 @@ export async function getCurrentTelegramConfig(userId: string) {
 	}
 
 	return {
-		botUsername: record.chatId || "Connected bot",
+		botUsername: record.botUsername || "Connected bot",
 		botTokenLast4: getTokenLast4(record.botToken),
 		isActive: true,
 	} satisfies TelegramConfigSummary;
@@ -83,7 +84,7 @@ export async function connectTelegram(context: Context) {
 	}
 
 	const db = getDb();
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 
 	try {
 		await db
@@ -94,7 +95,7 @@ export async function connectTelegram(context: Context) {
 		await db.insert(telegramConfigs).values({
 			userId: session.user.id,
 			botToken,
-			chatId: bot.username,
+			botUsername: bot.username,
 			isActive: true,
 		});
 
@@ -132,7 +133,7 @@ export async function disconnectTelegram(context: Context) {
 	}
 
 	const db = getDb();
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 	const record = await getLatestTelegramRecord(session.user.id);
 
 	if (!record?.isActive) {
@@ -149,7 +150,7 @@ export async function disconnectTelegram(context: Context) {
 			userId: session.user.id,
 			action: "telegram.disconnected",
 			details: {
-				botUsername: record.chatId,
+				botUsername: record.botUsername,
 			},
 			ipAddress,
 		});
@@ -167,7 +168,7 @@ async function getLatestTelegramRecord(userId: string) {
 	const [record] = await getDb()
 		.select({
 			botToken: telegramConfigs.botToken,
-			chatId: telegramConfigs.chatId,
+			botUsername: telegramConfigs.botUsername,
 			isActive: telegramConfigs.isActive,
 		})
 		.from(telegramConfigs)

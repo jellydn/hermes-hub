@@ -4,14 +4,41 @@ import { magicLink } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getDb } from "./db";
 import * as schema from "./db/schema";
-
-const defaultBaseUrl = "http://localhost:3000";
-const defaultSecret = "dev-only-better-auth-secret";
+import { sendMagicLinkEmail } from "./lib/send-magic-link-email";
 
 function createAuth() {
+	const baseURL = process.env.BETTER_AUTH_URL;
+	const secret = process.env.BETTER_AUTH_SECRET;
+
+	if (!baseURL || !secret) {
+		if (process.env.NODE_ENV !== "development") {
+			throw new Error(
+				"BETTER_AUTH_URL and BETTER_AUTH_SECRET are required in production. " +
+					"Set both environment variables before starting the server.",
+			);
+		}
+
+		return betterAuth({
+			baseURL: baseURL ?? "http://localhost:3000",
+			secret: secret ?? "dev-only-better-auth-secret",
+			database: drizzleAdapter(getDb(), {
+				provider: "pg",
+				schema,
+			}),
+			plugins: [
+				tanstackStartCookies(),
+				magicLink({
+					sendMagicLink: async ({ email, url }) => {
+						await sendMagicLinkEmail({ email, url });
+					},
+				}),
+			],
+		});
+	}
+
 	return betterAuth({
-		baseURL: process.env.BETTER_AUTH_URL ?? defaultBaseUrl,
-		secret: process.env.BETTER_AUTH_SECRET ?? defaultSecret,
+		baseURL,
+		secret,
 		database: drizzleAdapter(getDb(), {
 			provider: "pg",
 			schema,
@@ -20,7 +47,7 @@ function createAuth() {
 			tanstackStartCookies(),
 			magicLink({
 				sendMagicLink: async ({ email, url }) => {
-					console.log(`Magic link for ${email}: ${url}`);
+					await sendMagicLinkEmail({ email, url });
 				},
 			}),
 		],

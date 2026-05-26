@@ -8,10 +8,11 @@ import type {
 	ServerDetailSnapshot,
 } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
-import { getEphemeralCredential } from "./credentials";
+import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
+import { getClientIp } from "./lib/get-client-ip";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 const actionCommands: Record<
@@ -131,7 +132,7 @@ export async function runServerAction(context: Context) {
 				(await getRollbackTarget(serverId)) ||
 				"latest"
 			: null;
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 	const startedActionName = `server.action.${action}.started`;
 
 	await db.insert(auditLogs).values({
@@ -413,10 +414,7 @@ function resolveServerCredential(
 		);
 	}
 
-	const ephemeralCredential = getEphemeralCredential(
-		serverRecord.id,
-		sessionId,
-	);
+	const ephemeralCredential = getSessionCredential(serverRecord.id, sessionId);
 	if (!ephemeralCredential) {
 		throw new Error(
 			"Temporary credential expired. Reconnect the server first.",

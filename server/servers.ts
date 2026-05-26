@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { getAuthSession } from "./auth";
-import { storeEphemeralCredential } from "./credentials";
+import { storeSessionCredential } from "./credentials";
 import { encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, servers } from "./db/schema";
+import { getClientIp } from "./lib/get-client-ip";
 import {
 	type SshAuthMethod,
 	SshConnectError,
@@ -46,7 +47,7 @@ export async function connectServer(context: Context) {
 	}
 
 	const db = getDb();
-	const ipAddress = context.req.header("x-forwarded-for") ?? null;
+	const ipAddress = getClientIp(context);
 	let verified: VerifiedServerInfo;
 
 	try {
@@ -110,7 +111,7 @@ export async function connectServer(context: Context) {
 
 		const sessionId = getSessionKey(session.session.id);
 		if (!parsed.storeCredential) {
-			storeEphemeralCredential({
+			storeSessionCredential({
 				serverId: serverRecord.id,
 				sessionId,
 				authMethod: parsed.authMethod,
