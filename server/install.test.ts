@@ -194,6 +194,100 @@ describe("server install", () => {
 		expect(body).toContain("install-progress");
 		expect(body).toContain("Installing Docker");
 	});
+
+	it("returns an error when stored credential data is missing", async () => {
+		selectLimit.mockReset();
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_123",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: true,
+			},
+		]);
+
+		const { startServerInstall } = await import("./install");
+		const response = await startServerInstall(createContext("POST"));
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Stored credential is missing",
+		});
+		expect(withSshConnection).not.toHaveBeenCalled();
+	});
+
+	it("returns an error for unsupported authentication methods", async () => {
+		selectLimit.mockReset();
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_123",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "invalid-key",
+				encryptedCredential: null,
+				storeCredential: false,
+			},
+		]);
+
+		const { startServerInstall } = await import("./install");
+		const response = await startServerInstall(createContext("POST"));
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Unsupported authentication method",
+		});
+		expect(withSshConnection).not.toHaveBeenCalled();
+	});
+
+	it("writes a failed audit log when an SSH command returns a non-zero exit code", async () => {
+		withSshConnection.mockImplementation(async (_input, run) => {
+			const execCommand = vi.fn().mockResolvedValue({
+				code: 1,
+				stdout: "",
+				stderr: "Docker not available",
+			});
+			return run({ execCommand });
+		});
+
+		const { startServerInstall } = await import("./install");
+		const response = await startServerInstall(createContext("POST"));
+
+		expect(response.status).toBe(202);
+
+		// flush microtasks so runInstallWorkflow completes
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "server.install.failed",
+			}),
+		);
+	});
+
+	it("writes a failed audit log when SSH connection itself errors", async () => {
+		const { SshConnectError } = await import("./ssh");
+		withSshConnection.mockRejectedValue(
+			new SshConnectError("Connection refused"),
+		);
+
+		const { startServerInstall } = await import("./install");
+		const response = await startServerInstall(createContext("POST"));
+
+		expect(response.status).toBe(202);
+
+		// flush microtasks so runInstallWorkflow completes
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "server.install.failed",
+			}),
+		);
+	});
 });
 
 function createContext(method: "GET" | "POST") {

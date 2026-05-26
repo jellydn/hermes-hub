@@ -66,6 +66,8 @@ describe("server actions", () => {
 		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
 		selectOrderBy.mockReturnValue({ limit: selectLimit });
 
+		// reset to clear stale _onceImpl chains from prior tests
+		selectLimit.mockReset();
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -233,6 +235,157 @@ describe("server actions", () => {
 				},
 			],
 		});
+	});
+
+	it("runs update actions over SSH and records audit history", async () => {
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(createContext({ action: "update" }));
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "update",
+		});
+		expect(insertAuditValues).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				action: "server.action.update.started",
+			}),
+		);
+		expect(insertAuditValues).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				action: "server.action.update.succeeded",
+			}),
+		);
+	});
+
+	it("runs rollback with an explicit target version", async () => {
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "rollback", targetVersion: "v1.2.3" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "rollback",
+			imageRef: "v1.2.3",
+		});
+		expect(insertAuditValues).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				action: "server.action.rollback.started",
+				details: expect.objectContaining({ imageRef: "v1.2.3" }),
+			}),
+		);
+	});
+
+	it("rollback auto-resolves the version from the installs table when no target is given", async () => {
+		// selectLimit returns: [server], [install version], [install id for update]
+		selectLimit.mockReset();
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Prod VPS",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+					status: "connected",
+					osInfo: {},
+				},
+			])
+			.mockResolvedValueOnce([{ version: "v1.0.0" }])
+			.mockResolvedValueOnce([{ id: "install_123" }]);
+
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "rollback" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "rollback",
+			imageRef: "v1.0.0",
+		});
+	});
+
+	it("rejects an unknown action type", async () => {
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(createContext({ action: "reboot" }));
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Action must be restart, update, or rollback",
+		});
+		expect(withSshConnection).not.toHaveBeenCalled();
+	});
+
+	it("records a failed audit log when an SSH command fails", async () => {
+		withSshConnection.mockImplementation(async (_input, run) => {
+			const execCommand = vi
+				.fn()
+				.mockResolvedValue({ code: 1, stdout: "", stderr: "Container error" });
+			return run({ execCommand });
+		});
+
+		insertAuditValues.mockClear();
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "restart" }),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("Container error"),
+		});
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "server.action.restart.failed",
+			}),
+		);
+	});
+
+	it("serves server detail through the HTTP endpoint", async () => {
+		selectLimit.mockReset();
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Prod VPS",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+					status: "connected",
+					osInfo: { name: "Ubuntu" },
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					status: "succeeded",
+					version: "latest",
+					updatedAt: new Date(),
+				},
+			])
+			.mockResolvedValueOnce([]);
+
+		const { getServerDetail } = await import("./server-actions");
+		const response = await getServerDetail(
+			createContext({ action: "restart" }),
+		);
+
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body).toHaveProperty("serverDetail");
+		expect(body.serverDetail.server.label).toBe("Prod VPS");
 	});
 });
 
