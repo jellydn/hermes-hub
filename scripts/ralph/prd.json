@@ -200,7 +200,7 @@
 				"Verify in browser using dev-browser skill"
 			],
 			"priority": 11,
-			"passes": false,
+			"passes": true,
 			"notes": "Uses EventSource to consume SSE from /api/servers/:id/install/events"
 		},
 		{

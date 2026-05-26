@@ -28,7 +28,8 @@ type ConnectionDraft = {
 type ValidationErrors = Partial<Record<keyof ConnectionDraft, string>>;
 
 type ConnectionWizardProps = {
-	onSubmit: (draft: ConnectionDraft) => void;
+	onSubmit: (draft: ConnectionDraft) => void | Promise<void>;
+	isSubmitting?: boolean;
 };
 
 const wizardSteps = [
@@ -65,7 +66,10 @@ const initialDraft: ConnectionDraft = {
 	storeCredential: true,
 };
 
-export function ConnectionWizard({ onSubmit }: ConnectionWizardProps) {
+export function ConnectionWizard({
+	onSubmit,
+	isSubmitting = false,
+}: ConnectionWizardProps) {
 	const [currentStep, setCurrentStep] = useState(1);
 	const [draft, setDraft] = useState<ConnectionDraft>(initialDraft);
 	const [errors, setErrors] = useState<ValidationErrors>({});
@@ -122,7 +126,7 @@ export function ConnectionWizard({ onSubmit }: ConnectionWizardProps) {
 		setCurrentStep((step) => Math.max(step - 1, 1));
 	}
 
-	function handleSubmit() {
+	async function handleSubmit() {
 		const nextErrors = validateStep(draft, currentStep);
 		if (Object.keys(nextErrors).length > 0) {
 			setErrors(nextErrors);
@@ -130,7 +134,7 @@ export function ConnectionWizard({ onSubmit }: ConnectionWizardProps) {
 		}
 
 		setErrors({});
-		onSubmit(draft);
+		await onSubmit(draft);
 	}
 
 	return (
@@ -406,20 +410,30 @@ export function ConnectionWizard({ onSubmit }: ConnectionWizardProps) {
 						type="button"
 						variant="secondary"
 						onClick={goToPreviousStep}
-						disabled={currentStep === 1}
+						disabled={currentStep === 1 || isSubmitting}
 					>
 						<ChevronLeft className="h-4 w-4" />
 						<span>Back</span>
 					</Button>
 
 					{currentStep < wizardSteps.length ? (
-						<Button type="button" onClick={goToNextStep}>
+						<Button
+							type="button"
+							onClick={goToNextStep}
+							disabled={isSubmitting}
+						>
 							<span>Next</span>
 							<ChevronRight className="h-4 w-4" />
 						</Button>
 					) : (
-						<Button type="button" onClick={handleSubmit}>
-							<span>Connect</span>
+						<Button
+							type="button"
+							onClick={() => {
+								void handleSubmit();
+							}}
+							disabled={isSubmitting}
+						>
+							<span>{isSubmitting ? "Connecting..." : "Connect"}</span>
 							<CheckCircle2 className="h-4 w-4" />
 						</Button>
 					)}

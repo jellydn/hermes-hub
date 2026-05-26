@@ -18,6 +18,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AiProviderRouteImport } from './routes/ai-provider'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ServersIdInstallRouteImport } from './routes/servers.$id.install'
 
 const TelegramRoute = TelegramRouteImport.update({
   id: '/telegram',
@@ -64,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServersIdInstallRoute = ServersIdInstallRouteImport.update({
+  id: '/$id/install',
+  path: '/$id/install',
+  getParentRoute: () => ServersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,9 +78,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRoute
+  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,9 +90,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRoute
+  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,9 +103,10 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRoute
+  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/telegram'
+    | '/servers/$id/install'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/telegram'
+    | '/servers/$id/install'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/telegram'
+    | '/servers/$id/install'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -142,7 +154,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
-  ServersRoute: typeof ServersRoute
+  ServersRoute: typeof ServersRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   TelegramRoute: typeof TelegramRoute
 }
@@ -212,8 +224,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/servers/$id/install': {
+      id: '/servers/$id/install'
+      path: '/$id/install'
+      fullPath: '/servers/$id/install'
+      preLoaderRoute: typeof ServersIdInstallRouteImport
+      parentRoute: typeof ServersRoute
+    }
   }
 }
+
+interface ServersRouteChildren {
+  ServersIdInstallRoute: typeof ServersIdInstallRoute
+}
+
+const ServersRouteChildren: ServersRouteChildren = {
+  ServersIdInstallRoute: ServersIdInstallRoute,
+}
+
+const ServersRouteWithChildren =
+  ServersRoute._addFileChildren(ServersRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -222,7 +252,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
-  ServersRoute: ServersRoute,
+  ServersRoute: ServersRouteWithChildren,
   SettingsRoute: SettingsRoute,
   TelegramRoute: TelegramRoute,
 }

@@ -8,6 +8,7 @@
 - Better Auth setup must stay lazy in this app: construct it through a getter, not at module load, so SSR routes can still render without `DATABASE_URL`, and give the client an absolute auth base URL because Better Auth rejects relative `baseURL` values during SSR.
 - Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
 - Authenticated dashboard sections should share the `AppShell` from `src/routes/dashboard.tsx` and use `requireSession()` so new pages inherit the same sidebar, header actions, and redirect behavior.
+- Nested dashboard routes should follow TanStack's dotted file naming (`src/routes/servers.$id.install.tsx`) so child URLs stay attached to the parent section without hand-written router wiring.
 - Field helper and error text should live outside `<label>` elements so accessible names stay predictable in browser automation and component tests.
 - Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; keep persisted log lines and emitted event payloads aligned so reconnecting clients can replay prior progress cleanly.
 - Vitest is configured via `vite.config.ts`, so use `bun run test`; plain `bun test` invokes Bun's runner and skips the repo's jsdom-backed test setup.
@@ -130,4 +131,16 @@
   - Install retries should reset the latest `installs` row for a server instead of creating parallel active installs, so the UI and SSE endpoint have a single source of truth.
   - The install SSE endpoint can recover after a page refresh by hydrating events from `installs.log`, which means any future log format changes must stay parseable.
   - A shared `withSshConnection()` helper keeps SSH setup/teardown centralized so backend stories can add more remote commands without duplicating connection lifecycle code.
+---
+
+## 2026-05-26 10:49:31 +0800 - US-011
+[Session: https://opncd.ai/s/]
+- Connected the `Servers` flow to the existing backend so a verified VPS can immediately start the Hermes install and navigate into a dedicated `/servers/$id/install` progress route.
+- Built the install progress UI with a quarter-step progress bar, resumable EventSource log streaming, terminal success/failure banners, and retry/dashboard actions backed by the existing install API.
+- Verified `bun run build`, `bun run typecheck`, `bun run test`, `bunx @biomejs/biome check src AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3001/servers/server_123/install` redirecting to `/login?redirect=%2Fservers%2Fserver_123%2Finstall` in the current no-session environment; captured `scripts/ralph/us-011-install-route.jpeg`.
+- Files changed: `AGENTS.md`, `src/features/servers/connection-wizard.tsx`, `src/features/servers/install-progress.tsx`, `src/features/servers/install-progress.test.tsx`, `src/lib/use-mount-effect.ts`, `src/routes/servers.tsx`, `src/routes/servers.$id.install.tsx`, `src/routeTree.gen.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-011-install-route.jpeg`
+- **Learnings for future iterations:**
+  - The install page can rely on the backend's persisted `installs.log` replay, so the UI only needs to dedupe repeated SSE events instead of storing a second client-side history.
+  - A tiny `useMountEffect()` escape hatch is enough for mount-only browser integrations like `EventSource` in this codebase; keep the helper explicit instead of sprinkling raw `useEffect` around feature components.
+  - Local browser verification may land on `localhost:3001` if another dev session already owns port `3000`, so trust the running Vite output before assuming the app is down.
 ---
