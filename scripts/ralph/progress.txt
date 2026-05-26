@@ -1,6 +1,7 @@
 ## Codebase Patterns
 - TanStack Start route types come from the generated `src/routeTree.gen.ts`; run a build or dev server after adding routes so typecheck can see the generated tree.
 - This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
+- Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -12,4 +13,16 @@
   - TanStack Start route typing depends on the generated `src/routeTree.gen.ts`; if route imports look broken, regenerate by running build or dev.
   - The project standard is Bun even if an upstream scaffold uses npm defaults, so normalize lockfiles immediately.
   - The scaffold already added `opencode.json` with Chrome DevTools MCP config, so future frontend stories can use browser verification.
+---
+
+## 2026-05-26 09:50:06 +0800 - US-002
+[Session: https://opncd.ai/s/]
+- Added shadcn-style project configuration (`components.json`), supporting dependencies, a shared `cn()` utility, and a reusable `Button` component under `src/components/ui/`.
+- Updated the home page CTA to render the new `Button` component variants so Tailwind utilities and the shadcn primitive are visible in the default route.
+- Verified `bun run typecheck`, `bun run build`, and `bun run test` pass, then confirmed the button renders in the browser at `http://localhost:3000/`.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `components.json`, `postcss.config.mjs`, `src/lib/utils.ts`, `src/components/ui/button.tsx`, `src/routes/index.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The `shadcn init` CLI can still prompt interactively in this TanStack Start setup, so keeping the generated config files checked in avoids repeated manual setup.
+  - Keep reusable UI primitives in `src/components/ui/` and point feature pages at those components instead of duplicating Tailwind class strings.
+  - Browser verification can reuse the already running app on port `3000`; the scaffold's `opencode.json` Chrome MCP setup works as expected.
 ---

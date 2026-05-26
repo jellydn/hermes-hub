@@ -59,6 +59,7 @@ Both work. Prefer `@/` for readability.
 ## Conventions
 
 - Add new routes under `src/routes/`; the scaffold is file-based and `routeTree.gen.ts` is auto-generated.
+- Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
 - Auth: Better Auth magic link only (no passwords, no OAuth) — **not yet installed**
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
 - All destructive actions require confirmation dialog
