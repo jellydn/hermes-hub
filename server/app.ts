@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { auth } from "./auth";
+import { getAuth, hasDatabaseUrl } from "./auth";
 import { checkDatabaseConnection } from "./db/health";
 
 export const apiApp = new Hono().basePath("/api");
@@ -11,20 +11,48 @@ function rewriteAuthRequest(request: Request, pathname: string) {
 	return new Request(url.toString(), request);
 }
 
+function handleAuthUnavailable(context: {
+	json: (obj: unknown, status?: number) => Response;
+}) {
+	return context.json({ error: "DATABASE_URL is required" }, 503);
+}
+
 apiApp.post("/auth/send-magic-link", (context) => {
-	return auth.handler(
+	if (!hasDatabaseUrl()) {
+		return handleAuthUnavailable(context);
+	}
+
+	return getAuth().handler(
 		rewriteAuthRequest(context.req.raw, "/api/auth/sign-in/magic-link"),
 	);
 });
 
 apiApp.get("/auth/verify-magic-link", (context) => {
-	return auth.handler(
+	if (!hasDatabaseUrl()) {
+		return handleAuthUnavailable(context);
+	}
+
+	return getAuth().handler(
+		rewriteAuthRequest(context.req.raw, "/api/auth/magic-link/verify"),
+	);
+});
+
+apiApp.get("/auth/callback", (context) => {
+	if (!hasDatabaseUrl()) {
+		return handleAuthUnavailable(context);
+	}
+
+	return getAuth().handler(
 		rewriteAuthRequest(context.req.raw, "/api/auth/magic-link/verify"),
 	);
 });
 
 apiApp.on(["GET", "POST"], "/auth/*", (context) => {
-	return auth.handler(context.req.raw);
+	if (!hasDatabaseUrl()) {
+		return handleAuthUnavailable(context);
+	}
+
+	return getAuth().handler(context.req.raw);
 });
 
 apiApp.get("/health", async (context) => {

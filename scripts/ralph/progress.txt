@@ -5,6 +5,7 @@
 - Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
 - `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
 - Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
+- Better Auth setup must stay lazy in this app: construct it through a getter, not at module load, so SSR routes can still render without `DATABASE_URL`, and give the client an absolute auth base URL because Better Auth rejects relative `baseURL` values during SSR.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -52,4 +53,16 @@
   - Better Auth's current Hono integration is just `auth.handler()` on a Hono route; the older `@better-auth/hono-adapter` package name in the PRD is no longer published.
   - Route order matters in Hono: register specific auth aliases before the catch-all `/auth/*` handler or the aliases will never run.
   - Let `drizzle-kit generate` author the migration snapshot/journal files after schema changes instead of hand-editing Drizzle metadata.
+---
+
+## 2026-05-26 10:12:10 +0800 - US-005
+[Session: https://opncd.ai/s/]
+- Added passwordless auth UI and route protection with new `/login` and `/dashboard` routes, redirecting unauthenticated dashboard visits back to login with a redirect target.
+- Added a shared Better Auth client/session bridge, wired the header to show login/logout state and the authenticated email, and added `/api/auth/callback` as a friendly verify alias.
+- Made auth initialization lazy so SSR routes still render without `DATABASE_URL`; in that state the login form now fails gracefully instead of crashing the page, and browser verification confirmed `/login`, `/dashboard` redirect behavior, and the callback alias response.
+- Files changed: `AGENTS.md`, `server/auth.ts`, `server/app.ts`, `server/app.test.ts`, `src/components/Header.tsx`, `src/lib/auth-client.ts`, `src/lib/session.ts`, `src/routes/index.tsx`, `src/routes/login.tsx`, `src/routes/dashboard.tsx`, `src/routeTree.gen.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-005-login.png`
+- **Learnings for future iterations:**
+  - Better Auth's React client needs an absolute `baseURL` during SSR; a relative `/api/auth` base breaks route rendering in TanStack Start.
+  - Route guards can reuse a small `createServerFn` wrapper around `auth.api.getSession`, which keeps redirects server-backed instead of duplicating cookie parsing in routes.
+  - Local browser verification can still cover login UI and protected-route redirects without a database, but end-to-end magic-link success needs `DATABASE_URL` configured.
 ---

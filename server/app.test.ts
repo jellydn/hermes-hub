@@ -7,9 +7,10 @@ vi.mock("./db/health", () => ({
 const authHandler = vi.fn();
 
 vi.mock("./auth", () => ({
-	auth: {
+	getAuth: () => ({
 		handler: authHandler,
-	},
+	}),
+	hasDatabaseUrl: () => true,
 }));
 
 describe("apiApp", () => {
@@ -72,6 +73,29 @@ describe("apiApp", () => {
 		expect(authHandler).toHaveBeenCalledTimes(2);
 
 		const [request] = authHandler.mock.calls[1] ?? [];
+		expect(request).toBeInstanceOf(Request);
+		expect((request as Request).url).toBe(
+			"http://localhost/api/auth/magic-link/verify?token=abc&callbackURL=%2Fdashboard",
+		);
+	});
+
+	it("routes auth callback requests through Better Auth", async () => {
+		authHandler.mockResolvedValueOnce(
+			new Response(JSON.stringify({ session: {}, user: {} }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/auth/callback?token=abc&callbackURL=%2Fdashboard",
+		);
+
+		expect(response.status).toBe(200);
+		expect(authHandler).toHaveBeenCalledTimes(3);
+
+		const [request] = authHandler.mock.calls[2] ?? [];
 		expect(request).toBeInstanceOf(Request);
 		expect((request as Request).url).toBe(
 			"http://localhost/api/auth/magic-link/verify?token=abc&callbackURL=%2Fdashboard",

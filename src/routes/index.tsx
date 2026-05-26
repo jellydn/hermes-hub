@@ -1,9 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getCurrentSession } from "@/lib/session";
 
-export const Route = createFileRoute("/")({ component: App });
+export const Route = createFileRoute("/")({
+	beforeLoad: async () => {
+		const session = await getCurrentSession();
+
+		if (session) {
+			throw redirect({ to: "/dashboard" });
+		}
+	},
+	component: App,
+});
 
 function App() {
 	return (
