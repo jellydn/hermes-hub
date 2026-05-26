@@ -139,7 +139,7 @@
 				"Verify in browser using dev-browser skill"
 			],
 			"priority": 8,
-			"passes": false,
+			"passes": true,
 			"notes": "Form data passed to parent component, not stored until submission"
 		},
 		{
