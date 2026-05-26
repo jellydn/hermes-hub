@@ -61,6 +61,7 @@ Both work. Prefer `@/` for readability.
 - Add new routes under `src/routes/`; the scaffold is file-based and `routeTree.gen.ts` is auto-generated.
 - Custom request branching belongs in `src/server.ts`; keep `/api/*` handling there and let the default TanStack Start handler serve everything else.
 - Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
+- Authenticated pages should reuse the shared `AppShell` exported from `src/routes/dashboard.tsx` so sidebar navigation, user header actions, and responsive layout stay consistent across dashboard sections.
 - Drizzle schema files live under `server/db/`, and `drizzle.config.ts` reads `DATABASE_URL` eagerly, so set that env var before running `drizzle-kit` commands.
 - Persisted app entities in `server/db/schema.ts` use text primary keys with `gen_random_uuid()::text`; keep new tables aligned with that pattern unless an external integration requires a different key shape.
 - Auth: Better Auth magic link only (no passwords, no OAuth); mount Better Auth directly in `server/app.ts` and keep any custom `/api/auth/*` aliases as thin request rewrites to the library's built-in routes.

@@ -7,6 +7,7 @@
 - Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
 - Better Auth setup must stay lazy in this app: construct it through a getter, not at module load, so SSR routes can still render without `DATABASE_URL`, and give the client an absolute auth base URL because Better Auth rejects relative `baseURL` values during SSR.
 - Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
+- Authenticated dashboard sections should share the `AppShell` from `src/routes/dashboard.tsx` and use `requireSession()` so new pages inherit the same sidebar, header actions, and redirect behavior.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -78,4 +79,16 @@
   - App-owned persisted tables in this repo should follow the same text UUID primary-key shape as auth tables to keep joins and API payload types consistent.
   - Drizzle metadata JSON is checked by Biome here, so format generated snapshot and journal files before committing.
   - `audit_logs.user_id` can stay nullable so system-originated events are recordable even when there is no authenticated user context.
+---
+
+## 2026-05-26 10:22:24 +0800 - US-007
+[Session: https://opncd.ai/s/]
+- Built a shared authenticated dashboard shell with responsive sidebar navigation, page-level header actions, and the required nav destinations for Dashboard, Servers, AI Provider, Telegram, Logs, and Settings.
+- Added protected route stubs for the non-dashboard sections so later stories can drop content into stable URLs without rebuilding auth guards or layout chrome.
+- Rebranded the global header/footer away from the starter template, added a reusable `requireSession()` helper, and verified `bun run typecheck`, `bun test`, `bun run build`, `bunx @biomejs/biome check src AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, plus browser route-protection behavior at `/dashboard` redirecting to `/login` when unauthenticated.
+- Files changed: `AGENTS.md`, `src/components/Footer.tsx`, `src/components/Header.tsx`, `src/lib/session.ts`, `src/routeTree.gen.ts`, `src/routes/dashboard.tsx`, `src/routes/servers.tsx`, `src/routes/ai-provider.tsx`, `src/routes/telegram.tsx`, `src/routes/logs.tsx`, `src/routes/settings.tsx`, `src/styles.css`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - New authenticated dashboard pages should export their own `Route` but delegate layout to `AppShell` and session gating to `requireSession()` to keep the shell behavior uniform.
+  - Browser verification can confirm public chrome updates and protected-route redirects without a database, but full logged-in dashboard rendering still requires `DATABASE_URL` so Better Auth can create a session.
+  - Adding file-based routes automatically updates `src/routeTree.gen.ts`; treat it as generated output and include it in focused route commits.
 ---
