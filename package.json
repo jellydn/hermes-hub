@@ -8,11 +8,13 @@
 	"scripts": {
 		"dev": "vite dev --port 3000",
 		"build": "vite build",
+		"db:generate": "drizzle-kit generate",
 		"preview": "vite preview",
 		"test": "vitest run --passWithNoTests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@better-auth/drizzle-adapter": "^1.6.11",
 		"@radix-ui/react-slot": "^1.2.4",
 		"@tailwindcss/vite": "^4.1.18",
 		"@tanstack/react-devtools": "latest",
@@ -21,6 +23,7 @@
 		"@tanstack/react-router-ssr-query": "latest",
 		"@tanstack/react-start": "latest",
 		"@tanstack/router-plugin": "^1.132.0",
+		"better-auth": "^1.6.11",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"drizzle-orm": "^0.45.2",

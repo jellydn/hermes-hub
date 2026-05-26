@@ -64,7 +64,7 @@
 				"Typecheck passes"
 			],
 			"priority": 4,
-			"passes": false,
+			"passes": true,
 			"notes": "Use console-log email transport for MVP, configurable to real email service later"
 		},
 		{

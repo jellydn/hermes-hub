@@ -4,6 +4,7 @@
 - Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
 - Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
 - `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
+- Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -37,6 +38,18 @@
 - Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `drizzle.config.ts`, `drizzle/**`, `server/**`, `src/server.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
 - **Learnings for future iterations:**
   - TanStack Start custom server logic should stay in `src/server.ts`; branch API paths there instead of trying to mix API routing into file-based page routes.
-  - The published `@hono/tanstack-start` package was not available from npm during setup, so plain `hono` plus the TanStack Start server entry is the working integration path here.
-  - `GET /api/health` can report database degradation in the JSON body without failing the route itself, which keeps a stable monitoring endpoint while DB setup is still in progress.
+- The published `@hono/tanstack-start` package was not available from npm during setup, so plain `hono` plus the TanStack Start server entry is the working integration path here.
+- `GET /api/health` can report database degradation in the JSON body without failing the route itself, which keeps a stable monitoring endpoint while DB setup is still in progress.
+---
+
+## 2026-05-26 10:02:28 +0800 - US-004
+[Session: https://opncd.ai/s/]
+- Added Better Auth server configuration with the Drizzle adapter and magic-link plugin, using console logging as the MVP email transport.
+- Mounted Better Auth on the Hono API app and added `/api/auth/send-magic-link` and `/api/auth/verify-magic-link` aliases that rewrite into Better Auth's built-in magic-link endpoints.
+- Extended the Drizzle schema with Better Auth tables, generated the auth migration under `drizzle/`, and added tests that verify the auth aliases route through the Better Auth handler.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `server/auth.ts`, `server/app.ts`, `server/app.test.ts`, `server/db/schema.ts`, `drizzle/0002_perfect_caretaker.sql`, `drizzle/meta/_journal.json`, `drizzle/meta/0002_snapshot.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Better Auth's current Hono integration is just `auth.handler()` on a Hono route; the older `@better-auth/hono-adapter` package name in the PRD is no longer published.
+  - Route order matters in Hono: register specific auth aliases before the catch-all `/auth/*` handler or the aliases will never run.
+  - Let `drizzle-kit generate` author the migration snapshot/journal files after schema changes instead of hand-editing Drizzle metadata.
 ---
