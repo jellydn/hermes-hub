@@ -2,6 +2,7 @@
 - TanStack Start route types come from the generated `src/routeTree.gen.ts`; run a build or dev server after adding routes so typecheck can see the generated tree.
 - This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
 - Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
+- Shared provider/model catalogs belong in `src/lib/ai-providers.ts` so both the route UI and server-side validation/test handlers read the same defaults and allowed models.
 - Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
 - `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
 - Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
@@ -23,6 +24,18 @@
   - TanStack Start route typing depends on the generated `src/routeTree.gen.ts`; if route imports look broken, regenerate by running build or dev.
   - The project standard is Bun even if an upstream scaffold uses npm defaults, so normalize lockfiles immediately.
   - The scaffold already added `opencode.json` with Chrome DevTools MCP config, so future frontend stories can use browser verification.
+---
+
+## 2026-05-26 11:00:52 +0800 - US-012
+[Session: https://opncd.ai/s/]
+- Built the AI provider setup flow with provider selection, provider-specific model inputs, masked stored-key edit behavior, save/test actions, and green/red connection feedback inside the authenticated dashboard page.
+- Added `/api/providers` and `/api/providers/test` handlers that validate provider/model pairs against a shared catalog, encrypt saved API keys, reuse existing keys on edit, and persist audit log entries.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, and browser protection behavior at `http://localhost:3001/ai-provider`, which redirected to `/login?redirect=%2Fai-provider` in the current no-session environment; captured `scripts/ralph/us-012-ai-provider-route.jpeg`. Full logged-in browser verification is still blocked locally because `DATABASE_URL` and `ENCRYPTION_KEY` are unset.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/providers.ts`, `server/providers.test.ts`, `src/lib/ai-providers.ts`, `src/routes/ai-provider.tsx`, `src/features/providers/provider-settings.tsx`, `src/features/providers/provider-settings.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-012-ai-provider-route.jpeg`
+- **Learnings for future iterations:**
+  - Keep provider/model definitions in one shared module so form defaults, server validation, and connection tests cannot drift.
+  - Provider edit flows can preserve the stored secret by accepting a blank API key only when the provider stays the same; switching providers should require a fresh key.
+  - Protected-page browser verification is still useful without local auth/database env, but stories that need in-app interaction require `DATABASE_URL` and any matching secret env vars to be set before the dev server starts.
 ---
 
 ## 2026-05-26 09:50:06 +0800 - US-002

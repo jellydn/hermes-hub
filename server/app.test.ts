@@ -7,6 +7,8 @@ vi.mock("./db/health", () => ({
 const connectServer = vi.fn();
 const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
+const saveProviderConfig = vi.fn();
+const testProviderConfig = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
@@ -15,6 +17,11 @@ vi.mock("./servers", () => ({
 vi.mock("./install", () => ({
 	startServerInstall,
 	streamServerInstallEvents,
+}));
+
+vi.mock("./providers", () => ({
+	saveProviderConfig,
+	testProviderConfig,
 }));
 
 const authHandler = vi.fn();
@@ -172,5 +179,46 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(streamServerInstallEvents).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes provider save requests through the provider handler", async () => {
+		saveProviderConfig.mockResolvedValueOnce(
+			new Response(JSON.stringify({ provider: { provider: "openai" } }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request("http://localhost/api/providers", {
+			method: "POST",
+			body: JSON.stringify({ provider: "openai", model: "gpt-4o-mini" }),
+			headers: { "content-type": "application/json" },
+		});
+
+		expect(response.status).toBe(200);
+		expect(saveProviderConfig).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes provider test requests through the provider test handler", async () => {
+		testProviderConfig.mockResolvedValueOnce(
+			new Response(JSON.stringify({ status: "connected" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/providers/test",
+			{
+				method: "POST",
+				body: JSON.stringify({ provider: "openai", model: "gpt-4o-mini" }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(testProviderConfig).toHaveBeenCalledTimes(1);
 	});
 });

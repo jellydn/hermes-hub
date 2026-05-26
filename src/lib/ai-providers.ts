@@ -1,0 +1,72 @@
+export type AiProviderId = "openai" | "anthropic" | "openrouter";
+
+type AiProviderOption = {
+	id: AiProviderId;
+	label: string;
+	description: string;
+	models: readonly string[];
+	defaultModel: string;
+	requiresCustomModel?: boolean;
+};
+
+export const aiProviderOptions: readonly AiProviderOption[] = [
+	{
+		id: "openai",
+		label: "OpenAI",
+		description:
+			"Best-fit defaults for Hermes agents running on OpenAI models.",
+		models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+		defaultModel: "gpt-4o-mini",
+	},
+	{
+		id: "anthropic",
+		label: "Anthropic",
+		description:
+			"Claude models tuned for long-form, tool-friendly conversations.",
+		models: ["claude-sonnet-4-20250514", "claude-haiku-3-5"],
+		defaultModel: "claude-sonnet-4-20250514",
+	},
+	{
+		id: "openrouter",
+		label: "OpenRouter",
+		description:
+			"Bring your own routed model ID when you need a custom catalog.",
+		models: [],
+		defaultModel: "openai/gpt-4o-mini",
+		requiresCustomModel: true,
+	},
+] as const;
+
+export function isAiProviderId(value: string): value is AiProviderId {
+	return aiProviderOptions.some((option) => option.id === value);
+}
+
+export function getAiProviderOption(provider: AiProviderId) {
+	return aiProviderOptions.find((option) => option.id === provider) ?? null;
+}
+
+export function getDefaultAiModel(provider: AiProviderId) {
+	return getAiProviderOption(provider)?.defaultModel ?? "";
+}
+
+export function isValidAiModel(provider: AiProviderId, model: string) {
+	const option = getAiProviderOption(provider);
+	if (!option) {
+		return false;
+	}
+
+	const trimmedModel = model.trim();
+	if (!trimmedModel) {
+		return false;
+	}
+
+	if (option.requiresCustomModel) {
+		return true;
+	}
+
+	return option.models.includes(trimmedModel);
+}
+
+export function formatAiProviderLabel(provider: AiProviderId) {
+	return getAiProviderOption(provider)?.label ?? provider;
+}

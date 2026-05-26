@@ -1,0 +1,79 @@
+// @vitest-environment jsdom
+
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ProviderSettings } from "./provider-settings";
+
+const fetchMock = vi.fn();
+
+vi.stubGlobal("fetch", fetchMock);
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
+
+beforeEach(() => {
+	fetchMock.mockResolvedValue(
+		new Response(JSON.stringify({ status: "connected" }), {
+			status: 200,
+			headers: { "content-type": "application/json" },
+		}),
+	);
+});
+
+describe("ProviderSettings", () => {
+	it("shows a masked stored key and keeps the saved provider visible", () => {
+		render(
+			<ProviderSettings
+				initialConfig={{
+					provider: "openai",
+					model: "gpt-4o-mini",
+					keyLast4: "1234",
+					hasStoredKey: true,
+				}}
+			/>,
+		);
+
+		expect(screen.getByText(/^stored key ending in 1234$/i)).toBeTruthy();
+		expect(screen.queryByText(/no provider connected/i)).toBeNull();
+		expect(screen.getByDisplayValue("gpt-4o-mini")).toBeTruthy();
+	});
+
+	it("switches to a custom model field for OpenRouter", () => {
+		render(<ProviderSettings initialConfig={null} />);
+
+		fireEvent.click(screen.getByRole("radio", { name: /openrouter/i }));
+
+		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(screen.queryByLabelText(/^model$/i)).toBeNull();
+		expect(screen.getByDisplayValue("openai/gpt-4o-mini")).toBeTruthy();
+	});
+
+	it("tests the provider connection and shows the connected state", async () => {
+		render(<ProviderSettings initialConfig={null} />);
+
+		fireEvent.change(screen.getByLabelText(/api key/i), {
+			target: { value: "sk-live-secret" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+
+		await waitFor(() => {
+			expect(screen.getByText(/provider connected/i)).toBeTruthy();
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/providers/test",
+			expect.objectContaining({
+				method: "POST",
+			}),
+		);
+	});
+});

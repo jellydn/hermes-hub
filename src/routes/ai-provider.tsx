@@ -1,32 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 
+import { ProviderSettings } from "@/features/providers/provider-settings";
 import { requireSession } from "@/lib/session";
+import { getAuthSession } from "../../server/auth";
+import { getCurrentProviderConfig } from "../../server/providers";
 import { AppShell } from "./dashboard";
+
+const loadCurrentProviderConfig = createServerFn({ method: "GET" }).handler(
+	async () => {
+		const session = await getAuthSession(getRequestHeaders());
+		if (!session) {
+			return null;
+		}
+
+		return getCurrentProviderConfig(session.user.id);
+	},
+);
 
 export const Route = createFileRoute("/ai-provider")({
 	beforeLoad: async ({ location }) => {
-		return { session: await requireSession(location.href) };
+		const session = await requireSession(location.href);
+		const providerConfig = await loadCurrentProviderConfig();
+
+		return { session, providerConfig };
 	},
 	component: AiProviderPage,
 });
 
 function AiProviderPage() {
-	const { session } = Route.useRouteContext();
+	const { providerConfig, session } = Route.useRouteContext();
 
 	return (
 		<AppShell
 			userEmail={session.user.email}
 			title="AI Provider"
-			description="OpenAI, Anthropic, and OpenRouter setup will live here once provider configuration is implemented."
+			description="Choose where Hermes should run, encrypt the API key, and verify the provider before you connect downstream channels."
 			kicker="Model Access"
 		>
-			<section className="island-shell rounded-[2rem] p-6 sm:p-8">
-				<p className="island-kicker mb-2">Reserved Space</p>
-				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					The dashboard shell already supports this page, so the provider form
-					can drop in without rebuilding navigation later.
-				</p>
-			</section>
+			<ProviderSettings initialConfig={providerConfig ?? null} />
 		</AppShell>
 	);
 }
