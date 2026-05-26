@@ -9,6 +9,7 @@
 - Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
 - Authenticated dashboard sections should share the `AppShell` from `src/routes/dashboard.tsx` and use `requireSession()` so new pages inherit the same sidebar, header actions, and redirect behavior.
 - Field helper and error text should live outside `<label>` elements so accessible names stay predictable in browser automation and component tests.
+- Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; keep persisted log lines and emitted event payloads aligned so reconnecting clients can replay prior progress cleanly.
 - Vitest is configured via `vite.config.ts`, so use `bun run test`; plain `bun test` invokes Bun's runner and skips the repo's jsdom-backed test setup.
 
 ## 2026-05-26 09:41:15 +08 - US-001
@@ -117,4 +118,16 @@
   - The server connection flow should treat SSH verification failures as user-facing `400`s, but keep persistence/configuration failures out of that bucket so the wrong error is not surfaced.
   - Storing ephemeral credentials by `serverId:sessionId` keeps the install story aligned with the PRD without forcing temporary secrets into the database.
   - `os_info` is persisted as a structured JSON object with `name`, `version`, `architecture`, and raw `/etc/os-release` fields, which is the shape future dashboard/install features should reuse.
+---
+
+## 2026-05-26 10:41:48 +0800 - US-010
+[Session: https://opncd.ai/s/]
+- Added the one-click install backend with `POST /api/servers/:id/install` to queue or retry the latest install record, resolve stored or ephemeral SSH credentials, and audit install start/success/failure events.
+- Added `GET /api/servers/:id/install/events` with Hono SSE streaming that replays persisted install logs for reconnecting clients and pushes live progress events from the background SSH workflow.
+- Reused the SSH stack with a shared connection helper, generated the Hermes `docker-compose.yml` remotely, and added focused tests for route wiring, install credential handling, retry state reset, and SSE replay behavior.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/install.ts`, `server/install.test.ts`, `server/ssh.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Install retries should reset the latest `installs` row for a server instead of creating parallel active installs, so the UI and SSE endpoint have a single source of truth.
+  - The install SSE endpoint can recover after a page refresh by hydrating events from `installs.log`, which means any future log format changes must stay parseable.
+  - A shared `withSshConnection()` helper keeps SSH setup/teardown centralized so backend stories can add more remote commands without duplicating connection lifecycle code.
 ---

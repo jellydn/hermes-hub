@@ -39,6 +39,18 @@ export class SshConnectError extends Error {
 export async function verifyServerConnection(
 	input: SshConnectionInput,
 ): Promise<VerifiedServerInfo> {
+	return withSshConnection(input, async (ssh) => {
+		const osRelease = await execStrict(ssh, "cat /etc/os-release");
+		const architecture = await execStrict(ssh, "uname -m");
+
+		return parseAndValidateOs(osRelease.stdout, architecture.stdout);
+	});
+}
+
+export async function withSshConnection<T>(
+	input: SshConnectionInput,
+	run: (ssh: NodeSSH) => Promise<T>,
+) {
 	const ssh = new NodeSSH();
 
 	try {
@@ -50,10 +62,8 @@ export async function verifyServerConnection(
 			privateKey: input.authMethod === "ssh-key" ? input.credential : undefined,
 			readyTimeout: 15_000,
 		});
-		const osRelease = await execStrict(ssh, "cat /etc/os-release");
-		const architecture = await execStrict(ssh, "uname -m");
 
-		return parseAndValidateOs(osRelease.stdout, architecture.stdout);
+		return await run(ssh);
 	} catch (error) {
 		throw normalizeSshError(error);
 	} finally {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getAuth, hasDatabaseUrl } from "./auth";
 import { checkDatabaseConnection } from "./db/health";
+import { startServerInstall, streamServerInstallEvents } from "./install";
 import { connectServer } from "./servers";
 
 export const apiApp = new Hono().basePath("/api");
@@ -81,3 +82,5 @@ apiApp.get("/health", async (context) => {
 });
 
 apiApp.post("/servers/connect", connectServer);
+apiApp.post("/servers/:id/install", startServerInstall);
+apiApp.get("/servers/:id/install/events", streamServerInstallEvents);

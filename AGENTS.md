@@ -68,6 +68,7 @@ Both work. Prefer `@/` for readability.
 - Auth: Better Auth magic link only (no passwords, no OAuth); mount Better Auth directly in `server/app.ts` and keep any custom `/api/auth/*` aliases as thin request rewrites to the library's built-in routes.
 - Better Auth wiring should stay lazy: create the auth instance inside a getter instead of at module load so page routes can still render when `DATABASE_URL` is missing, and use an absolute `baseURL` in `src/lib/auth-client.ts` because Better Auth rejects relative URLs during SSR.
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
+- Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; when changing install steps, keep the DB log format and emitted event payloads in sync so reconnecting clients can replay prior progress.
 - Vitest is configured through `vite.config.ts`, so run tests with `bun run test`; plain `bun test` uses Bun's runner and skips the repo's jsdom-backed setup.
 - All destructive actions require confirmation dialog
 - Supports Ubuntu 22.04+ / Debian 12+ VPS targets

@@ -5,9 +5,16 @@ vi.mock("./db/health", () => ({
 }));
 
 const connectServer = vi.fn();
+const startServerInstall = vi.fn();
+const streamServerInstallEvents = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
+}));
+
+vi.mock("./install", () => ({
+	startServerInstall,
+	streamServerInstallEvents,
 }));
 
 const authHandler = vi.fn();
@@ -128,5 +135,42 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(connectServer).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes install start requests through the install handler", async () => {
+		startServerInstall.mockResolvedValueOnce(
+			new Response(JSON.stringify({ install: { id: "install_123" } }), {
+				status: 202,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/install",
+			{
+				method: "POST",
+			},
+		);
+
+		expect(response.status).toBe(202);
+		expect(startServerInstall).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes install event requests through the install stream handler", async () => {
+		streamServerInstallEvents.mockResolvedValueOnce(
+			new Response("event: install-progress\ndata: {}\n\n", {
+				status: 200,
+				headers: { "content-type": "text/event-stream" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/install/events",
+		);
+
+		expect(response.status).toBe(200);
+		expect(streamServerInstallEvents).toHaveBeenCalledTimes(1);
 	});
 });
