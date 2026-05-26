@@ -29,6 +29,7 @@
 		"drizzle-orm": "^0.45.2",
 		"hono": "^4.12.23",
 		"lucide-react": "^1.16.0",
+		"node-ssh": "^13.2.1",
 		"postgres": "^3.4.9",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",

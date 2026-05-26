@@ -4,6 +4,12 @@ vi.mock("./db/health", () => ({
 	checkDatabaseConnection: vi.fn(),
 }));
 
+const connectServer = vi.fn();
+
+vi.mock("./servers", () => ({
+	connectServer,
+}));
+
 const authHandler = vi.fn();
 
 vi.mock("./auth", () => ({
@@ -100,5 +106,27 @@ describe("apiApp", () => {
 		expect((request as Request).url).toBe(
 			"http://localhost/api/auth/magic-link/verify?token=abc&callbackURL=%2Fdashboard",
 		);
+	});
+
+	it("routes server connect requests through the server connection handler", async () => {
+		connectServer.mockResolvedValueOnce(
+			new Response(JSON.stringify({ server: { id: "server_123" } }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/connect",
+			{
+				method: "POST",
+				body: JSON.stringify({ label: "Prod", host: "203.0.113.10" }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(connectServer).toHaveBeenCalledTimes(1);
 	});
 });

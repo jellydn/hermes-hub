@@ -12,8 +12,8 @@ Web app for non-technical users to deploy and manage a self-hosted Hermes AI Age
 bun run dev       # starts Vite dev server on port 3000
 bun run build     # production build
 bun run preview   # preview production build
-bun test          # vitest
-npm run typecheck # TypeScript typecheck
+bun run test      # vitest
+bun run typecheck # TypeScript typecheck
 ```
 
 ## Package Manager
@@ -68,6 +68,7 @@ Both work. Prefer `@/` for readability.
 - Auth: Better Auth magic link only (no passwords, no OAuth); mount Better Auth directly in `server/app.ts` and keep any custom `/api/auth/*` aliases as thin request rewrites to the library's built-in routes.
 - Better Auth wiring should stay lazy: create the auth instance inside a getter instead of at module load so page routes can still render when `DATABASE_URL` is missing, and use an absolute `baseURL` in `src/lib/auth-client.ts` because Better Auth rejects relative URLs during SSR.
 - Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
+- Vitest is configured through `vite.config.ts`, so run tests with `bun run test`; plain `bun test` uses Bun's runner and skips the repo's jsdom-backed setup.
 - All destructive actions require confirmation dialog
 - Supports Ubuntu 22.04+ / Debian 12+ VPS targets
 - `routeTree.gen.ts` is auto-generated — do not edit

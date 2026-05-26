@@ -9,6 +9,7 @@
 - Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
 - Authenticated dashboard sections should share the `AppShell` from `src/routes/dashboard.tsx` and use `requireSession()` so new pages inherit the same sidebar, header actions, and redirect behavior.
 - Field helper and error text should live outside `<label>` elements so accessible names stay predictable in browser automation and component tests.
+- Vitest is configured via `vite.config.ts`, so use `bun run test`; plain `bun test` invokes Bun's runner and skips the repo's jsdom-backed test setup.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -104,4 +105,16 @@
   - Keep wizard state local in feature components and pass the full draft upward on submit so backend stories can attach transport logic without reworking the UI flow.
   - Route-level browser verification for authenticated pages can still confirm redirect behavior when no local session exists; full in-app rendering needs a working Better Auth session backed by `DATABASE_URL`.
   - Testing Library queries stay more stable when visible help text is not nested inside the label node for the input.
+---
+
+## 2026-05-26 10:36:52 +0800 - US-009
+[Session: https://opncd.ai/s/]
+- Implemented `POST /api/servers/connect` with authenticated request parsing, SSH verification, OS compatibility checks for Ubuntu 22.04+ and Debian 12+, server persistence, and audit logging for both success and failure paths.
+- Added AES-256-GCM credential encryption for stored secrets plus an in-memory ephemeral credential store keyed by `serverId:sessionId` when the user opts out of persistence.
+- Added focused Vitest coverage for the new route wiring, SSH OS parsing, and server connection handler behavior; updated Vitest config and project instructions so `bun run test` uses the intended jsdom-backed runner.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `vite.config.ts`, `server/app.ts`, `server/app.test.ts`, `server/servers.ts`, `server/servers.test.ts`, `server/ssh.ts`, `server/ssh.test.ts`, `server/crypto.ts`, `server/credentials.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The server connection flow should treat SSH verification failures as user-facing `400`s, but keep persistence/configuration failures out of that bucket so the wrong error is not surfaced.
+  - Storing ephemeral credentials by `serverId:sessionId` keeps the install story aligned with the PRD without forcing temporary secrets into the database.
+  - `os_info` is persisted as a structured JSON object with `name`, `version`, `architecture`, and raw `/etc/os-release` fields, which is the shape future dashboard/install features should reuse.
 ---

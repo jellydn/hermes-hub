@@ -161,7 +161,7 @@
 				"Typecheck passes"
 			],
 			"priority": 9,
-			"passes": false,
+			"passes": true,
 			"notes": "ENCRYPTION_KEY env var used for AES-256. Ephemeral credentials stored in in-memory Map keyed by serverId:sessionId."
 		},
 		{
