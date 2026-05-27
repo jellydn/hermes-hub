@@ -121,10 +121,7 @@ export function ServerDetail({ initialDetail }: ServerDetailProps) {
 						<SummaryCard label="Host" value={initialDetail.server.host} />
 						<SummaryCard label="User" value={initialDetail.server.username} />
 						<SummaryCard label="Status" value={initialDetail.server.status} />
-						<SummaryCard
-							label="OS"
-							value={formatOsSummary(initialDetail)}
-						/>
+						<SummaryCard label="OS" value={formatOsSummary(initialDetail)} />
 					</div>
 
 					{initialDetail.server.supportLevel === "untested" ? (

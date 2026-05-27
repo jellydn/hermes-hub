@@ -248,10 +248,10 @@ export async function getServerDetailSnapshot(input: {
 			osName: readOsInfoValue(serverRecord.osInfo, "name"),
 			osVersion: readOsInfoValue(serverRecord.osInfo, "version"),
 			architecture: readOsInfoValue(serverRecord.osInfo, "architecture"),
-			supportLevel: readOsInfoValue(
-				serverRecord.osInfo,
-				"supportLevel",
-			) as "supported" | "untested" | null,
+			supportLevel: readOsInfoValue(serverRecord.osInfo, "supportLevel") as
+				| "supported"
+				| "untested"
+				| null,
 		},
 		install: installRecord
 			? {
