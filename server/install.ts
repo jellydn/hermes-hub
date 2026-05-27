@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -7,36 +6,23 @@ import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
+import {
+	emitInstallEvent,
+	ensureInstallStream,
+	HEARTBEAT_INTERVAL_MS,
+	IDLE_TIMEOUT_MS,
+	type InstallEvent,
+	installStreams,
+	resetInstallStream,
+} from "./install/sse-stream";
 import { getClientIp } from "./lib/get-client-ip";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
-
-type InstallStatus = "pending" | "running" | "succeeded" | "failed";
-
-type InstallEvent = {
-	installId: string;
-	serverId: string;
-	step: string;
-	progress: number;
-	message: string;
-	status: InstallStatus;
-	timestamp: string;
-	error?: string;
-};
 
 type InstallStep = {
 	id: string;
 	progress: number;
 	message: string;
 	command: string;
-};
-
-type InstallStreamState = {
-	installId: string;
-	serverId: string;
-	events: InstallEvent[];
-	listeners: Set<(event: InstallEvent) => void>;
-	status: InstallStatus;
-	runId: string;
 };
 
 type ServerCredentialRecord = {
@@ -50,9 +36,6 @@ type ServerCredentialRecord = {
 };
 
 const defaultHermesImage = "ghcr.io/hermes-agent/hermes:latest";
-
-const IDLE_TIMEOUT_MS = 90_000;
-const HEARTBEAT_INTERVAL_MS = 30_000;
 
 const installSteps: InstallStep[] = [
 	{
@@ -94,8 +77,6 @@ const installSteps: InstallStep[] = [
 		command: "cd ~/hermes && sudo docker compose up -d",
 	},
 ];
-
-const installStreams = new Map<string, InstallStreamState>();
 
 export async function startServerInstall(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
@@ -386,103 +367,6 @@ async function runInstallWorkflow(input: {
 	}
 }
 
-async function emitInstallEvent(input: {
-	installId: string;
-	serverId: string;
-	runId: string;
-	step: string;
-	progress: number;
-	message: string;
-	status: InstallStatus;
-	error?: string;
-	logLines: string[];
-}) {
-	const state = installStreams.get(input.serverId);
-	if (!state || state.runId !== input.runId) {
-		return;
-	}
-
-	const timestamp = new Date().toISOString();
-	const logLine = `${timestamp} [${input.step}] ${
-		input.error ? `${input.message}: ${input.error}` : input.message
-	}`;
-	input.logLines.push(logLine);
-
-	const event: InstallEvent = {
-		installId: input.installId,
-		serverId: input.serverId,
-		step: input.step,
-		progress: input.progress,
-		message: input.message,
-		status: input.status,
-		timestamp,
-		...(input.error ? { error: input.error } : {}),
-	};
-
-	state.events.push(event);
-	state.status = input.status;
-
-	await getDb()
-		.update(installs)
-		.set({
-			status: input.status,
-			step: input.step,
-			log: input.logLines.join("\n"),
-			version: "latest",
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, input.installId));
-
-	for (const listener of state.listeners) {
-		listener(event);
-	}
-}
-
-async function ensureInstallStream(serverId: string) {
-	const existing = installStreams.get(serverId);
-	if (existing) {
-		return existing;
-	}
-
-	const [installRecord] = await getDb()
-		.select({
-			id: installs.id,
-			status: installs.status,
-			step: installs.step,
-			log: installs.log,
-		})
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	const state: InstallStreamState = {
-		installId: installRecord?.id ?? randomUUID(),
-		serverId,
-		events: installRecord ? hydrateInstallEvents(serverId, installRecord) : [],
-		listeners: new Set(),
-		status: normalizeInstallStatus(installRecord?.status),
-		runId: randomUUID(),
-	};
-
-	installStreams.set(serverId, state);
-	return state;
-}
-
-function resetInstallStream(serverId: string, installId: string) {
-	const state: InstallStreamState = {
-		installId,
-		serverId,
-		events: [],
-		listeners: new Set(),
-		status: "pending",
-		runId: randomUUID(),
-	};
-
-	installStreams.set(serverId, state);
-	return state;
-}
-
 async function upsertInstallRecord(serverId: string) {
 	const db = getDb();
 	const [existingInstall] = await db
@@ -577,54 +461,6 @@ function normalizeAuthMethod(authMethod: string): SshAuthMethod | null {
 	}
 
 	return null;
-}
-
-function normalizeInstallStatus(status?: string | null): InstallStatus {
-	if (
-		status === "pending" ||
-		status === "running" ||
-		status === "succeeded" ||
-		status === "failed"
-	) {
-		return status;
-	}
-
-	return "pending";
-}
-
-function hydrateInstallEvents(
-	serverId: string,
-	installRecord: {
-		id: string;
-		status: string;
-		step: string;
-		log: string | null;
-	},
-) {
-	if (!installRecord.log) {
-		return [];
-	}
-
-	const lines = installRecord.log.split("\n").filter(Boolean);
-	if (lines.length === 0) {
-		return [];
-	}
-
-	return lines.map((line, index) => {
-		const timestamp = line.slice(0, 24);
-		const stepMatch = line.match(/\[(.+?)\]/);
-		const messageIndex = line.indexOf("] ");
-
-		return {
-			installId: installRecord.id,
-			serverId,
-			step: stepMatch?.[1] ?? installRecord.step,
-			progress: Math.round(((index + 1) / lines.length) * 100),
-			message: messageIndex >= 0 ? line.slice(messageIndex + 2) : line,
-			status: normalizeInstallStatus(installRecord.status),
-			timestamp,
-		};
-	});
 }
 
 function normalizeInstallError(error: unknown) {
