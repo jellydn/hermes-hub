@@ -8,11 +8,11 @@
         "@better-auth/drizzle-adapter": "^1.6.11",
         "@radix-ui/react-slot": "^1.2.4",
         "@tailwindcss/vite": "^4.1.18",
-        "@tanstack/react-devtools": "latest",
-        "@tanstack/react-router": "latest",
-        "@tanstack/react-router-devtools": "latest",
-        "@tanstack/react-router-ssr-query": "latest",
-        "@tanstack/react-start": "latest",
+        "@tanstack/react-devtools": "^0.10.5",
+        "@tanstack/react-router": "^1.170.8",
+        "@tanstack/react-router-devtools": "^1.167.0",
+        "@tanstack/react-router-ssr-query": "^1.167.0",
+        "@tanstack/react-start": "^1.168.13",
         "@tanstack/router-plugin": "^1.132.0",
         "better-auth": "^1.6.11",
         "class-variance-authority": "^0.7.1",
@@ -22,6 +22,7 @@
         "lucide-react": "^1.16.0",
         "node-ssh": "^13.2.1",
         "postgres": "^3.4.9",
+        "rate-limiter-flexible": "^11.1.0",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
         "tailwind-merge": "^3.6.0",
@@ -29,7 +30,7 @@
       },
       "devDependencies": {
         "@tailwindcss/typography": "^0.5.16",
-        "@tanstack/devtools-vite": "latest",
+        "@tanstack/devtools-vite": "^0.7.0",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/react": "^16.3.0",
         "@types/node": "^22.10.2",
@@ -668,6 +669,8 @@
     "pretty-format": ["pretty-format@27.5.1", "", { "dependencies": { "ansi-regex": "^5.0.1", "ansi-styles": "^5.0.0", "react-is": "^17.0.1" } }, "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ=="],
 
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
+
+    "rate-limiter-flexible": ["rate-limiter-flexible@11.1.0", "", {}, "sha512-lyyC0SqKz+dE5JoHZ4JMqdrM3LSZKBxzuAFAyKCYAnmHnPz/Rb6iDquxoL4CMipDXoR0G+QRhOzYWL3JKihbNw=="],
 
     "react": ["react@19.2.6", "", {}, "sha512-sfWGGfavi0xr8Pg0sVsyHMAOziVYKgPLNrS7ig+ivMNb3wbCBw3KxtflsGBAwD3gYQlE/AEZsTLgToRrSCjb0Q=="],
 
