@@ -57,6 +57,7 @@ function createSnapshot(): DashboardStatusSnapshot {
 			status: "connected",
 			osName: "Ubuntu",
 			osVersion: "24.04",
+			supportLevel: "supported",
 		},
 		agent: {
 			status: "online",

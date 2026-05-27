@@ -110,6 +110,15 @@ export function DashboardStatusOverview({
 								? `${snapshot.server.host}${snapshot.server.osName ? ` · ${snapshot.server.osName}${snapshot.server.osVersion ? ` ${snapshot.server.osVersion}` : ""}` : ""}`
 								: "Connect your first VPS to get started."}
 						</p>
+						{snapshot?.server?.supportLevel === "untested" ? (
+							<p className="mt-3 flex items-center gap-2 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-700">
+								<TriangleAlert className="h-4 w-4 shrink-0" />
+								<span>
+									This OS is not officially supported. Hermes runs via Docker
+									but some features may not work.
+								</span>
+							</p>
+						) : null}
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button asChild>

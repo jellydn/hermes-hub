@@ -161,12 +161,10 @@ describe("connectServer", () => {
 		});
 	});
 
-	it("returns unsupported os errors as bad requests and logs the failure", async () => {
-		const { UnsupportedOsError } = await import("./ssh");
+	it("returns SSH connection errors as bad requests and logs the failure", async () => {
+		const { SshConnectError } = await import("./ssh");
 		verifyServerConnection.mockRejectedValueOnce(
-			new UnsupportedOsError(
-				"Unsupported OS: Ubuntu 20.04. Requires Ubuntu 22.04+ or Debian 12+",
-			),
+			new SshConnectError("host unreachable"),
 		);
 
 		const { connectServer } = await import("./servers");
@@ -184,8 +182,7 @@ describe("connectServer", () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error:
-				"Unsupported OS: Ubuntu 20.04. Requires Ubuntu 22.04+ or Debian 12+",
+			error: "host unreachable",
 		});
 		expect(insertAuditValues).toHaveBeenCalled();
 	});

@@ -5,6 +5,7 @@ import {
 	RefreshCw,
 	RotateCcw,
 	ShieldAlert,
+	TriangleAlert,
 	Wrench,
 } from "lucide-react";
 import { useState } from "react";
@@ -120,8 +121,21 @@ export function ServerDetail({ initialDetail }: ServerDetailProps) {
 						<SummaryCard label="Host" value={initialDetail.server.host} />
 						<SummaryCard label="User" value={initialDetail.server.username} />
 						<SummaryCard label="Status" value={initialDetail.server.status} />
-						<SummaryCard label="OS" value={formatOsSummary(initialDetail)} />
+						<SummaryCard
+							label="OS"
+							value={formatOsSummary(initialDetail)}
+						/>
 					</div>
+
+					{initialDetail.server.supportLevel === "untested" ? (
+						<div className="mt-4 flex items-center gap-2 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+							<TriangleAlert className="h-4 w-4 shrink-0" />
+							<span>
+								This OS is not officially supported. Hermes runs via Docker but
+								some features may not work.
+							</span>
+						</div>
+					) : null}
 
 					{initialDetail.install ? (
 						<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">

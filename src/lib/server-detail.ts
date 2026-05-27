@@ -23,6 +23,7 @@ export type ServerDetailSnapshot = {
 		osName: string | null;
 		osVersion: string | null;
 		architecture: string | null;
+		supportLevel: "supported" | "untested" | null;
 	};
 	install: {
 		status: string;

@@ -16,6 +16,31 @@ import { getDb } from "./db";
 import { aiProviders, installs, servers, telegramConfigs } from "./db/schema";
 import { withSshConnection } from "./ssh";
 
+type CacheEntry<T> = {
+	data: T;
+	timestamp: number;
+};
+
+const STATIC_CACHE_TTL_MS = 60_000; // 60 seconds
+const METRICS_CACHE_TTL_MS = 15_000; // 15 seconds
+
+const staticCache = new Map<string, CacheEntry<StaticDashboardData>>();
+const metricsCache = new Map<string, CacheEntry<ServerMetrics>>();
+
+/** Exposed for tests — clears all cached data between test runs. */
+export function clearDashboardCache() {
+	staticCache.clear();
+	metricsCache.clear();
+}
+
+type StaticDashboardData = {
+	serverRecord: ServerRecord | null;
+	installRecord: InstallRecord | null;
+	providerRecord: ProviderRecord | null;
+	telegramRecord: TelegramRecord | null;
+	staticGeneratedAt: string;
+};
+
 type ServerRecord = {
 	id: string;
 	label: string;
@@ -72,13 +97,49 @@ export async function getDashboardStatusSnapshot(input: {
 	userId: string;
 	sessionId?: string | null;
 }): Promise<DashboardStatusSnapshot> {
-	const serverRecord = await getLatestServer(input.userId);
+	const now = Date.now();
 
-	const [installRecord, providerRecord, telegramRecord] = await Promise.all([
-		serverRecord ? getLatestInstall(serverRecord.id) : Promise.resolve(null),
-		getLatestProvider(input.userId),
-		getLatestTelegram(input.userId),
-	]);
+	// Check static cache
+	const staticCacheKey = `static:${input.userId}`;
+	const cachedStatic = staticCache.get(staticCacheKey);
+
+	let serverRecord: ServerRecord | null;
+	let installRecord: InstallRecord | null;
+	let providerRecord: ProviderRecord | null;
+	let telegramRecord: TelegramRecord | null;
+	let staticGeneratedAt: string;
+
+	if (cachedStatic && now - cachedStatic.timestamp < STATIC_CACHE_TTL_MS) {
+		serverRecord = cachedStatic.data.serverRecord;
+		installRecord = cachedStatic.data.installRecord;
+		providerRecord = cachedStatic.data.providerRecord;
+		telegramRecord = cachedStatic.data.telegramRecord;
+		staticGeneratedAt = cachedStatic.data.staticGeneratedAt;
+	} else {
+		serverRecord = await getLatestServer(input.userId);
+
+		const results = await Promise.all([
+			serverRecord ? getLatestInstall(serverRecord.id) : Promise.resolve(null),
+			getLatestProvider(input.userId),
+			getLatestTelegram(input.userId),
+		]);
+
+		installRecord = results[0];
+		providerRecord = results[1];
+		telegramRecord = results[2];
+		staticGeneratedAt = new Date().toISOString();
+
+		staticCache.set(staticCacheKey, {
+			data: {
+				serverRecord,
+				installRecord,
+				providerRecord,
+				telegramRecord,
+				staticGeneratedAt,
+			},
+			timestamp: now,
+		});
+	}
 
 	const serverSummary = serverRecord ? toServerSummary(serverRecord) : null;
 
@@ -220,10 +281,38 @@ async function getVpsSummary(
 		};
 	}
 
+	const metricsCacheKey = `metrics:${serverRecord.id}`;
+	const now = Date.now();
+	const cachedMetrics = metricsCache.get(metricsCacheKey);
+
+	if (cachedMetrics && now - cachedMetrics.timestamp < METRICS_CACHE_TTL_MS) {
+		const metrics = cachedMetrics.data;
+		const status = getHealthTone(metrics);
+
+		return {
+			status,
+			updatedAt: new Date(now).toISOString(),
+			cpu: metrics.cpu,
+			memory: metrics.memory,
+			disk: metrics.disk,
+			uptime: metrics.uptime,
+			detail:
+				status === "warning"
+					? "One or more VPS resources are running hot."
+					: "The connected VPS is responding to live health checks.",
+			error: null,
+		};
+	}
+
 	try {
 		const credential = getServerCredential(serverRecord, sessionId);
 		const metrics = await readServerMetrics(serverRecord, credential);
 		const status = getHealthTone(metrics);
+
+		metricsCache.set(metricsCacheKey, {
+			data: metrics,
+			timestamp: now,
+		});
 
 		return {
 			status,
@@ -324,6 +413,10 @@ async function getLatestTelegram(userId: string) {
 function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
 	const osName = readOsInfoValue(serverRecord.osInfo, "name");
 	const osVersion = readOsInfoValue(serverRecord.osInfo, "version");
+	const supportLevel = readOsInfoValue(
+		serverRecord.osInfo,
+		"supportLevel",
+	) as DashboardServerSummary["supportLevel"];
 
 	return {
 		id: serverRecord.id,
@@ -332,6 +425,7 @@ function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
 		status: serverRecord.status,
 		osName,
 		osVersion,
+		supportLevel,
 	};
 }
 

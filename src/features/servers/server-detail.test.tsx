@@ -107,6 +107,7 @@ function createDetail(): ServerDetailSnapshot {
 			osName: "Ubuntu",
 			osVersion: "24.04",
 			architecture: "x86_64",
+			supportLevel: "supported",
 		},
 		install: {
 			status: "succeeded",

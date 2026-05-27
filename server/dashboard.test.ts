@@ -45,6 +45,7 @@ vi.mock("./db", () => ({
 }));
 
 import {
+	clearDashboardCache,
 	getDashboardStatusSnapshot,
 	getHealthTone,
 	toAgentSummary,
@@ -150,6 +151,7 @@ describe("dashboard snapshot integration", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.setSystemTime(now);
+		clearDashboardCache();
 
 		getAuthSession.mockResolvedValue({
 			session: { id: "session_123" },

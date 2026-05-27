@@ -15,6 +15,7 @@ export type VerifiedServerInfo = {
 	osVersion: string;
 	architecture: string;
 	raw: Record<string, string>;
+	supportLevel: "supported" | "untested";
 };
 
 type ExecResult = {
@@ -107,31 +108,36 @@ export function parseAndValidateOs(
 	const versionId = raw.VERSION_ID ?? "unknown";
 	const architecture = architectureOutput.trim();
 
-	if (osId === "ubuntu") {
-		const major = Number.parseInt(versionId.split(".")[0] ?? "0", 10);
-		if (major < 22) {
-			throw new UnsupportedOsError(
-				`Unsupported OS: ${prettyName}. Requires Ubuntu 22.04+ or Debian 12+`,
-			);
-		}
-	} else if (osId === "debian") {
-		const major = Number.parseInt(versionId.split(".")[0] ?? "0", 10);
-		if (major < 12) {
-			throw new UnsupportedOsError(
-				`Unsupported OS: ${prettyName}. Requires Ubuntu 22.04+ or Debian 12+`,
-			);
-		}
-	} else {
+	// Non-Linux or missing os-release: throw
+	if (!osId || osId === "unknown") {
 		throw new UnsupportedOsError(
-			`Unsupported OS: ${prettyName}. Requires Ubuntu 22.04+ or Debian 12+`,
+			`Unsupported OS: ${prettyName}. This server does not appear to run a Linux distribution with /etc/os-release.`,
 		);
 	}
 
+	// Ubuntu 22.04+ and Debian 12+ are officially supported
+	if (
+		(osId === "ubuntu" &&
+			Number.parseInt(versionId.split(".")[0] ?? "0", 10) >= 22) ||
+		(osId === "debian" &&
+			Number.parseInt(versionId.split(".")[0] ?? "0", 10) >= 12)
+	) {
+		return {
+			osName: prettyName,
+			osVersion: versionId,
+			architecture,
+			raw,
+			supportLevel: "supported",
+		};
+	}
+
+	// Ubuntu < 22, Debian < 12, or any other Linux distro → warn-and-proceed
 	return {
 		osName: prettyName,
 		osVersion: versionId,
 		architecture,
 		raw,
+		supportLevel: "untested",
 	};
 }
 

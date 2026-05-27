@@ -10,7 +10,6 @@ import { getClientIp } from "./lib/get-client-ip";
 import {
 	type SshAuthMethod,
 	SshConnectError,
-	UnsupportedOsError,
 	type VerifiedServerInfo,
 	verifyServerConnection,
 } from "./ssh";
@@ -60,7 +59,7 @@ export async function connectServer(context: Context) {
 		});
 	} catch (error) {
 		const message =
-			error instanceof UnsupportedOsError || error instanceof SshConnectError
+			error instanceof SshConnectError
 				? error.message
 				: "SSH verification failed";
 
@@ -96,6 +95,7 @@ export async function connectServer(context: Context) {
 					name: verified.osName,
 					version: verified.osVersion,
 					architecture: verified.architecture,
+					supportLevel: verified.supportLevel,
 					raw: verified.raw,
 				},
 			})
@@ -128,6 +128,7 @@ export async function connectServer(context: Context) {
 				osName: verified.osName,
 				osVersion: verified.osVersion,
 				architecture: verified.architecture,
+				supportLevel: verified.supportLevel,
 			},
 			ipAddress,
 		});
@@ -139,6 +140,7 @@ export async function connectServer(context: Context) {
 				osName: verified.osName,
 				osVersion: verified.osVersion,
 				architecture: verified.architecture,
+				supportLevel: verified.supportLevel,
 			},
 		});
 	} catch (error) {

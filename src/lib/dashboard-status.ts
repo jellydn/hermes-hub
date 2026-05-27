@@ -7,6 +7,7 @@ export type DashboardServerSummary = {
 	status: string;
 	osName: string | null;
 	osVersion: string | null;
+	supportLevel: "supported" | "untested" | null;
 };
 
 export type DashboardAgentSummary = {
