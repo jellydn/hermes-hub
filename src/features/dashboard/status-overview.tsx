@@ -26,6 +26,10 @@ type DashboardStatusOverviewProps = {
 
 type FetchState = "idle" | "loading" | "refreshing" | "error";
 
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
+const MAX_POLL_INTERVAL_MS = 120_000;
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export function DashboardStatusOverview({
 	initialStatus,
 }: DashboardStatusOverviewProps) {
@@ -34,13 +38,45 @@ export function DashboardStatusOverview({
 		initialStatus ? "idle" : "loading",
 	);
 	const [fetchError, setFetchError] = useState<string | null>(null);
+	const [pollingPaused, setPollingPaused] = useState(false);
 	const requestCounterRef = useRef(0);
+	const snapshotRef = useRef(initialStatus);
+	const pollTimeoutRef = useRef<number | null>(null);
+	const nextPollDelayRef = useRef(DEFAULT_POLL_INTERVAL_MS);
+	const consecutiveFailureCountRef = useRef(0);
+	const pollingPausedRef = useRef(false);
 
-	async function refreshStatus(options?: { background?: boolean }) {
+	function clearScheduledPoll() {
+		if (pollTimeoutRef.current !== null) {
+			window.clearTimeout(pollTimeoutRef.current);
+			pollTimeoutRef.current = null;
+		}
+	}
+
+	function scheduleNextPoll(delayMs: number) {
+		if (pollingPausedRef.current) {
+			return;
+		}
+
+		clearScheduledPoll();
+		pollTimeoutRef.current = window.setTimeout(() => {
+			void refreshStatus({ background: true });
+		}, delayMs);
+	}
+
+	async function refreshStatus(options?: {
+		background?: boolean;
+		manualRetry?: boolean;
+	}) {
 		const requestId = requestCounterRef.current + 1;
+		const isBackgroundRefresh = options?.background ?? false;
+		const isManualRetry = options?.manualRetry ?? false;
+		const wasPollingPaused = pollingPausedRef.current;
 		requestCounterRef.current = requestId;
 		setFetchError(null);
-		setFetchState(options?.background && snapshot ? "refreshing" : "loading");
+		setFetchState(
+			isBackgroundRefresh && snapshotRef.current ? "refreshing" : "loading",
+		);
 
 		try {
 			const response = await fetch("/api/dashboard/status", {
@@ -62,33 +98,64 @@ export function DashboardStatusOverview({
 				return;
 			}
 
+			snapshotRef.current = payload.dashboard;
 			setSnapshot(payload.dashboard);
 			setFetchState("idle");
+			consecutiveFailureCountRef.current = 0;
+			nextPollDelayRef.current = DEFAULT_POLL_INTERVAL_MS;
+			pollingPausedRef.current = false;
+			setPollingPaused(false);
+			scheduleNextPoll(DEFAULT_POLL_INTERVAL_MS);
 		} catch (error) {
 			if (requestCounterRef.current !== requestId) {
 				return;
 			}
 
-			setFetchError(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Unable to refresh dashboard status.",
-			);
+					: "Unable to refresh dashboard status.";
+
+			setFetchError(message);
 			setFetchState("error");
+
+			if (wasPollingPaused || isManualRetry) {
+				pollingPausedRef.current = true;
+				setPollingPaused(true);
+				clearScheduledPoll();
+				return;
+			}
+
+			consecutiveFailureCountRef.current += 1;
+			if (consecutiveFailureCountRef.current >= MAX_CONSECUTIVE_FAILURES) {
+				pollingPausedRef.current = true;
+				setPollingPaused(true);
+				clearScheduledPoll();
+				return;
+			}
+
+			nextPollDelayRef.current = Math.min(
+				nextPollDelayRef.current * 2,
+				MAX_POLL_INTERVAL_MS,
+			);
+			scheduleNextPoll(nextPollDelayRef.current);
 		}
 	}
 
+	function handleManualRetry() {
+		clearScheduledPoll();
+		void refreshStatus({ manualRetry: true });
+	}
+
 	useMountEffect(() => {
-		if (!initialStatus) {
+		if (initialStatus) {
+			scheduleNextPoll(DEFAULT_POLL_INTERVAL_MS);
+		} else {
 			void refreshStatus();
 		}
 
-		const pollId = window.setInterval(() => {
-			void refreshStatus({ background: true });
-		}, 30_000);
-
 		return () => {
-			window.clearInterval(pollId);
+			clearScheduledPoll();
 		};
 	});
 
@@ -130,6 +197,11 @@ export function DashboardStatusOverview({
 							type="button"
 							variant="secondary"
 							onClick={() => {
+								if (pollingPaused) {
+									handleManualRetry();
+									return;
+								}
+
 								void refreshStatus();
 							}}
 							disabled={fetchState === "loading" || fetchState === "refreshing"}
@@ -144,6 +216,20 @@ export function DashboardStatusOverview({
 					</div>
 				</div>
 			</section>
+
+			{pollingPaused ? (
+				<section className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+					<div className="flex items-center gap-2 text-red-700">
+						<TriangleAlert className="h-4 w-4 shrink-0" />
+						<span>
+							Connection lost. Automatic updates are paused until you retry.
+						</span>
+					</div>
+					<Button type="button" variant="secondary" onClick={handleManualRetry}>
+						Retry
+					</Button>
+				</section>
+			) : null}
 
 			{snapshot?.server ? null : (
 				<section className="island-shell rounded-[2rem] p-6">
@@ -202,8 +288,9 @@ export function DashboardStatusOverview({
 								Latest dashboard refresh
 							</h3>
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								The dashboard refreshes every 30 seconds while this page stays
-								open so the cards keep up with VPS health and integration state.
+								The dashboard polls every 30 seconds, backs off to 60 then 120
+								seconds if refreshes fail, and pauses automatic updates after
+								three consecutive failures until you retry.
 							</p>
 						</section>
 						<section className="island-shell rounded-[2rem] p-6">

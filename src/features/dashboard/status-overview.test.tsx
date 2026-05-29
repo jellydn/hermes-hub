@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardStatusSnapshot } from "@/lib/dashboard-status";
@@ -45,9 +52,106 @@ describe("DashboardStatusOverview", () => {
 
 		expect(screen.getAllByRole("button", { name: /retry/i })).toHaveLength(4);
 	});
+
+	it("backs off polling after failures and resets to 30 seconds after success", async () => {
+		vi.useFakeTimers();
+		fetchMock
+			.mockResolvedValueOnce(createErrorResponse("Temporary outage"))
+			.mockResolvedValueOnce(createStatusResponse(createSnapshot()))
+			.mockResolvedValueOnce(createStatusResponse(createSnapshot()));
+
+		render(<DashboardStatusOverview initialStatus={createSnapshot()} />);
+
+		expect(fetchMock).toHaveBeenCalledTimes(0);
+
+		await advancePollingTime(30_000);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(
+			screen.getByText(/latest refresh failed, so these cards may be stale/i),
+		).toBeTruthy();
+
+		await advancePollingTime(59_000);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		await advancePollingTime(1_000);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(
+			screen.queryByText(/latest refresh failed, so these cards may be stale/i),
+		).toBeNull();
+
+		await advancePollingTime(29_000);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		await advancePollingTime(1_000);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it("stops polling after three failures and resumes after manual retry", async () => {
+		vi.useFakeTimers();
+		fetchMock
+			.mockResolvedValueOnce(createErrorResponse("Failure one"))
+			.mockResolvedValueOnce(createErrorResponse("Failure two"))
+			.mockResolvedValueOnce(createErrorResponse("Failure three"))
+			.mockResolvedValueOnce(createStatusResponse(createSnapshot()))
+			.mockResolvedValueOnce(createStatusResponse(createSnapshot()));
+
+		render(<DashboardStatusOverview initialStatus={createSnapshot()} />);
+
+		await advancePollingTime(30_000);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		await advancePollingTime(60_000);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		await advancePollingTime(120_000);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(screen.getByText(/connection lost/i)).toBeTruthy();
+
+		await advancePollingTime(5 * 60_000);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+
+		fireEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		await flushAsyncWork();
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(screen.queryByText(/connection lost/i)).toBeNull();
+
+		await advancePollingTime(30_000);
+		expect(fetchMock).toHaveBeenCalledTimes(5);
+	});
 });
 
-function createSnapshot(): DashboardStatusSnapshot {
+async function advancePollingTime(ms: number) {
+	await act(async () => {
+		vi.advanceTimersByTime(ms);
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
+
+async function flushAsyncWork() {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
+
+function createStatusResponse(snapshot: DashboardStatusSnapshot) {
+	return new Response(JSON.stringify({ dashboard: snapshot }), {
+		status: 200,
+		headers: { "content-type": "application/json" },
+	});
+}
+
+function createErrorResponse(error: string) {
+	return new Response(JSON.stringify({ error }), {
+		status: 502,
+		headers: { "content-type": "application/json" },
+	});
+}
+
+function createSnapshot(
+	overrides?: Partial<DashboardStatusSnapshot>,
+): DashboardStatusSnapshot {
 	return {
 		generatedAt: "2026-05-26T03:00:00.000Z",
 		server: {
@@ -85,5 +189,6 @@ function createSnapshot(): DashboardStatusSnapshot {
 			botUsername: "hermes_helper_bot",
 			detail: "@hermes_helper_bot is ready for chat delivery.",
 		},
+		...overrides,
 	};
 }
