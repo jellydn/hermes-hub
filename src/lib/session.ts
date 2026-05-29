@@ -9,8 +9,15 @@ export const getCurrentSession = createServerFn({ method: "GET" }).handler(
 	},
 );
 
-export async function requireSession(locationHref?: string) {
-	const session = await getCurrentSession();
+type SessionLoader = () => Promise<
+	Awaited<ReturnType<typeof getCurrentSession>>
+>;
+
+export async function requireSession(
+	locationHref?: string,
+	loadSession: SessionLoader = () => getCurrentSession(),
+) {
+	const session = await loadSession();
 
 	if (!session) {
 		throw redirect({

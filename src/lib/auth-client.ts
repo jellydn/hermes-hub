@@ -3,7 +3,7 @@ import { createAuthClient } from "better-auth/react";
 
 const authBaseUrl =
 	typeof window === "undefined"
-		? (process.env.BETTER_AUTH_URL ?? "http://localhost:3000") + "/api/auth"
+		? `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/auth`
 		: new URL("/api/auth", window.location.origin).toString();
 
 export const authClient = createAuthClient({
