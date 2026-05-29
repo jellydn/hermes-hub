@@ -14,14 +14,8 @@ import type { LogsSnapshot } from "@/lib/logs";
 import { LogsViewer } from "./logs-viewer";
 
 const fetchMock = vi.fn();
-const writeText = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
-
-Object.defineProperty(navigator, "clipboard", {
-	value: { writeText },
-	configurable: true,
-});
 
 afterEach(() => {
 	cleanup();
@@ -35,7 +29,6 @@ beforeEach(() => {
 			headers: { "content-type": "application/json" },
 		}),
 	);
-	writeText.mockResolvedValue(undefined);
 });
 
 describe("LogsViewer", () => {
@@ -45,19 +38,6 @@ describe("LogsViewer", () => {
 		expect(screen.getByRole("heading", { name: /install log/i })).toBeTruthy();
 		expect(screen.getAllByText(/production vps/i)).toHaveLength(2);
 		expect(screen.getByText(/action failed: host unreachable/i)).toBeTruthy();
-	});
-
-	it("copies the current logs to the clipboard", async () => {
-		render(<LogsViewer initialLogs={createLogs()} />);
-
-		fireEvent.click(screen.getByRole("button", { name: /copy logs/i }));
-
-		await waitFor(() => {
-			expect(writeText).toHaveBeenCalledTimes(1);
-		});
-
-		expect(writeText.mock.calls[0]?.[0]).toContain("Install log");
-		expect(screen.getByText(/logs copied to clipboard/i)).toBeTruthy();
 	});
 
 	it("confirms before clearing logs and then shows the empty state", async () => {

@@ -1,10 +1,4 @@
-import {
-	AlertCircle,
-	CheckCircle2,
-	Copy,
-	LoaderCircle,
-	Trash2,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, LoaderCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +10,6 @@ type LogsViewerProps = {
 
 type ActionState = {
 	isClearing: boolean;
-	copyMessage: string | null;
 	error: string | null;
 	showConfirmation: boolean;
 	logs: LogsSnapshot;
@@ -25,7 +18,6 @@ type ActionState = {
 export function LogsViewer({ initialLogs }: LogsViewerProps) {
 	const [state, setState] = useState<ActionState>({
 		isClearing: false,
-		copyMessage: null,
 		error: null,
 		showConfirmation: false,
 		logs: initialLogs,
@@ -34,28 +26,10 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 	const hasLogs =
 		state.logs.installLogs.length > 0 || state.logs.actionLogs.length > 0;
 
-	async function handleCopy() {
-		try {
-			await navigator.clipboard.writeText(buildCopyText(state.logs));
-			setState((current) => ({
-				...current,
-				copyMessage: "Logs copied to clipboard.",
-				error: null,
-			}));
-		} catch {
-			setState((current) => ({
-				...current,
-				copyMessage: null,
-				error: "Unable to copy logs.",
-			}));
-		}
-	}
-
 	async function handleClear() {
 		setState((current) => ({
 			...current,
 			isClearing: true,
-			copyMessage: null,
 			error: null,
 		}));
 
@@ -74,7 +48,6 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 
 			setState({
 				isClearing: false,
-				copyMessage: null,
 				error: null,
 				showConfirmation: false,
 				logs: { installLogs: [], actionLogs: [] },
@@ -100,18 +73,10 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 						</h3>
 						<p className="mt-3 mb-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
 							Review install output, inspect restart/update/rollback results,
-							and export the current snapshot when you need to share it.
+							and select text to copy when you need to share it.
 						</p>
 					</div>
 					<div className="flex flex-wrap gap-3">
-						<Button
-							type="button"
-							variant="secondary"
-							onClick={() => void handleCopy()}
-						>
-							<Copy className="h-4 w-4" />
-							<span>Copy logs</span>
-						</Button>
 						<Button
 							type="button"
 							variant="secondary"
@@ -119,7 +84,6 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 								setState((current) => ({
 									...current,
 									showConfirmation: true,
-									copyMessage: null,
 									error: null,
 								}));
 							}}
@@ -134,10 +98,6 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 						</Button>
 					</div>
 				</div>
-
-				{state.copyMessage ? (
-					<Banner kind="success" message={state.copyMessage} />
-				) : null}
 
 				{state.error ? <Banner kind="error" message={state.error} /> : null}
 
@@ -277,16 +237,4 @@ function formatActionLabel(action: ActionLogEntry["action"]) {
 	}
 
 	return "Restart Agent";
-}
-
-function buildCopyText(logs: LogsSnapshot) {
-	return [
-		"Install log",
-		...flattenInstallLogLines(logs.installLogs),
-		"",
-		"Action history",
-		...flattenActionLogLines(logs.actionLogs),
-	]
-		.join("\n")
-		.trim();
 }
