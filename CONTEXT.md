@@ -28,6 +28,14 @@
 
 **SSR Auth Base URL**: During server-side rendering, `src/lib/auth-client.ts` reads `BETTER_AUTH_URL` from env vars instead of hardcoding `localhost:3000`. On the client, it uses `window.location.origin`. The env var is already enforced in production by the lazy failure pattern, so the SSR branch always has a real URL.
 
+**Credential TTL Testing**: Read-time expiry is the real safety net, but the periodic cleanup timer is also tested. The cleanup interval is injectable (configurable via parameter or env var) so tests can set it to ~100ms and verify cleanup actually deletes expired entries — no fake timers needed.
+
+**SSH Test Strategy**: Focus on `normalizeSshError` and credential resolution as pure unit tests, then one integration test per caller (connect, restart, dashboard metrics) mocking only `withSshConnection`. This extends the existing test pattern. No Docker-based SSH server in CI.
+
+**SSE Test Strategy**: Test pure logic layer in `sse-stream.ts` (event emission, hydration, stream reset, status normalization) as unit tests. Add one focused integration test for idle timeout behavior using `vi.useFakeTimers()`. Heartbeat and replay are Hono's responsibility — skip those.
+
+**Dashboard Polling**: The real bug is that 30-second polling never backs off — a dead server gets hammered indefinitely. Fix first (add exponential backoff or max-retry limit), then test both the server error responses and the client retry/backoff behavior.
+
 **Magic Link Email**: Delivered via Resend when `RESEND_API_KEY` is set. In development (no API key), the magic link URL is logged to console. The `sendMagicLink` callback delegates to a `sendMagicLinkEmail()` function that resolves the transport at call time — no provider is wired at module load, consistent with lazy failure.
 
 **Auth Route Handling**: Better Auth requests are handled entirely by the catch-all `GET/POST /api/auth/*` route with a `hasDatabaseUrl()` guard. No explicit per-endpoint rewrites are needed — the library routes its own paths internally.
