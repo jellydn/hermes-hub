@@ -196,7 +196,13 @@ export function DashboardStatusOverview({
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button asChild>
-							<a href="/servers">
+							<a
+								href={
+									snapshot?.server
+										? `/servers/${snapshot.server.id}`
+										: "/servers"
+								}
+							>
 								{snapshot?.server ? "Manage servers" : "Connect your first VPS"}
 							</a>
 						</Button>
