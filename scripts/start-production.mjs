@@ -1,9 +1,29 @@
+import { execSync } from "node:child_process";
 import http from "node:http";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import app from "../dist/server/server.js";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
+
+// Run database migrations before starting the server
+if (process.env.DATABASE_URL) {
+	console.log("Running database migrations...");
+	try {
+		execSync("node ./node_modules/.bin/drizzle-kit migrate", {
+			cwd: join(import.meta.dirname, ".."),
+			stdio: "inherit",
+			env: process.env,
+		});
+		console.log("Migrations complete.");
+	} catch (err) {
+		console.error("Migration failed:", err.message);
+		process.exit(1);
+	}
+} else {
+	console.log("DATABASE_URL not set, skipping database migrations.");
+}
 
 const server = http.createServer(async (req, res) => {
 	const headers = req.headers.host
