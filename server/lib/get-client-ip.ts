@@ -3,14 +3,14 @@ import type { Context } from "hono";
 /**
  * Extract the client IP address from a Hono request context.
  *
- * Reads the rightmost IP from `x-forwarded-for` when behind one or more
- * trusted reverse proxies.  The number of trusted proxies is configured
- * via the `TRUSTED_PROXY_COUNT` env var (default 1).
+ * `X-Forwarded-For` is appended to left-to-right by each proxy in the
+ * chain, so the *leftmost* entry is the original client and each entry
+ * to its right is a proxy hop. We trust the rightmost `TRUSTED_PROXY_COUNT`
+ * entries (added by our own infrastructure) and treat the entry just to
+ * the left of them as the client. Anything further left can be forged by
+ * an upstream untrusted proxy, so we never look past that boundary.
  *
- * When `x-forwarded-for` is missing or the request is not behind a proxy,
- * falls back to `context.req.header("x-forwarded-for") ?? context.req.raw`
- * remote address (already populated by Hono from the TCP socket or a
- * platform-provided header like `x-real-ip`).
+ * When `x-forwarded-for` is missing falls back to `x-real-ip`.
  */
 export function getClientIp(context: Context): string | null {
 	const forwarded = context.req.header("x-forwarded-for");
@@ -35,7 +35,9 @@ export function getClientIp(context: Context): string | null {
 		return null;
 	}
 
-	// Rightmost IP is the client when behind proxies
-	const clientIndex = Math.max(0, ips.length - proxyCount);
-	return ips[clientIndex] ?? ips[ips.length - 1] ?? null;
+	// Skip the `proxyCount` rightmost entries (trusted proxy hops). The
+	// next entry to the left is the client. If the chain is shorter than
+	// expected, fall back to the leftmost (client-most) entry.
+	const clientIndex = Math.max(0, ips.length - 1 - proxyCount);
+	return ips[clientIndex] ?? null;
 }
