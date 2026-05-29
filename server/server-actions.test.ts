@@ -315,6 +315,23 @@ describe("server actions", () => {
 		});
 	});
 
+	it("rejects rollback with a shell-injectable target version", async () => {
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({
+				action: "rollback",
+				targetVersion: "v1.0.0; rm -rf /",
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("Invalid target version"),
+		});
+		expect(withSshConnection).not.toHaveBeenCalled();
+		expect(insertAuditValues).not.toHaveBeenCalled();
+	});
+
 	it("rejects an unknown action type", async () => {
 		const { runServerAction } = await import("./server-actions");
 		const response = await runServerAction(createContext({ action: "reboot" }));

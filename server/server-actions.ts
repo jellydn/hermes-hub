@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Context } from "hono";
 
 import type {
@@ -15,6 +15,16 @@ import { auditLogs, installs, servers } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
+// Docker image tag reference grammar:
+// first char must be alphanumeric or underscore; subsequent chars may
+// additionally include `.` and `-`; max 128 chars total.
+// See https://docs.docker.com/reference/cli/docker/image/tag/#description
+const DOCKER_TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
+
+function isValidDockerTag(tag: string): boolean {
+	return DOCKER_TAG_PATTERN.test(tag);
+}
+
 const actionCommands: Record<
 	ServerActionType,
 	(targetVersion?: string) => string
@@ -24,6 +34,11 @@ const actionCommands: Record<
 		"cd ~/hermes && sudo docker compose pull && sudo docker compose up -d",
 	rollback: (targetVersion) => {
 		const imageTag = targetVersion?.trim() || "latest";
+		// Defense in depth: caller must validate, but reject malformed tags
+		// here so we never interpolate untrusted input into a remote shell.
+		if (!isValidDockerTag(imageTag)) {
+			throw new Error(`Invalid image tag: ${imageTag}`);
+		}
 		return [
 			"cd ~/hermes",
 			`sudo docker pull ghcr.io/hermes-agent/hermes:${imageTag}`,
@@ -32,12 +47,6 @@ const actionCommands: Record<
 		].join(" && ");
 	},
 };
-
-const startedActionNames = new Set([
-	"server.action.restart.started",
-	"server.action.update.started",
-	"server.action.rollback.started",
-]);
 
 const finishedActionNames = new Set([
 	"server.action.restart.succeeded",
@@ -98,6 +107,19 @@ export async function runServerAction(context: Context) {
 			{ error: "Action must be restart, update, or rollback" },
 			400,
 		);
+	}
+
+	if (action === "rollback") {
+		const requestedTag = payload.targetVersion?.trim();
+		if (requestedTag && !isValidDockerTag(requestedTag)) {
+			return context.json(
+				{
+					error:
+						"Invalid target version. Use a Docker image tag of up to 128 alphanumeric, '.', '_' or '-' characters.",
+				},
+				400,
+			);
+		}
 	}
 
 	const db = getDb();
@@ -329,6 +351,9 @@ async function getLatestInstallRecord(serverId: string) {
 }
 
 async function getServerActionHistory(serverId: string) {
+	// Filter by `details ->> 'serverId'` at the database level so older rows
+	// for this server are not dropped by a global LIMIT when other servers
+	// have generated many recent audit rows.
 	const records = await getDb()
 		.select({
 			id: auditLogs.id,
@@ -338,19 +363,15 @@ async function getServerActionHistory(serverId: string) {
 		})
 		.from(auditLogs)
 		.where(
-			inArray(auditLogs.action, [
-				...startedActionNames,
-				...finishedActionNames,
-			]),
+			and(
+				inArray(auditLogs.action, [...finishedActionNames]),
+				sql`${auditLogs.details} ->> 'serverId' = ${serverId}`,
+			),
 		)
 		.orderBy(desc(auditLogs.createdAt))
-		.limit(20);
+		.limit(5);
 
-	return records
-		.filter((record) => readServerId(record.details) === serverId)
-		.filter((record) => !startedActionNames.has(record.action))
-		.slice(0, 5)
-		.map((record) => toActionHistoryItem(record as AuditRecord));
+	return records.map((record) => toActionHistoryItem(record as AuditRecord));
 }
 
 function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
@@ -474,10 +495,6 @@ function actionSuccessMessage(
 function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
 	const value = osInfo[key];
 	return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function readServerId(details: unknown) {
-	return readStringValue(isRecord(details) ? details : {}, "serverId");
 }
 
 function readStringValue(details: Record<string, unknown>, key: string) {
