@@ -12,7 +12,7 @@ const buttonVariants = cva(
 				default:
 					"border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.16)] text-[var(--lagoon-deep)] shadow-[0_10px_30px_rgba(50,143,151,0.12)] hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]",
 				secondary:
-					"border border-[rgba(23,58,64,0.18)] bg-white/70 text-[var(--sea-ink)] hover:-translate-y-0.5 hover:border-[rgba(23,58,64,0.32)]",
+					"border border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--sea-ink)_20%,transparent)]",
 				ghost:
 					"text-[var(--sea-ink-soft)] hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)]",
 				link: "px-0 text-[var(--lagoon-deep)] underline-offset-4 hover:underline",
