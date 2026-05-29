@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import http from "node:http";
-import path from "node:path";
+import path, { join } from "node:path";
 import { Readable } from "node:stream";
 import app from "../dist/server/server.js";
 
