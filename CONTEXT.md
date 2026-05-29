@@ -34,7 +34,7 @@
 
 **SSE Test Strategy**: Test pure logic layer in `sse-stream.ts` (event emission, hydration, stream reset, status normalization) as unit tests. Add one focused integration test for idle timeout behavior using `vi.useFakeTimers()`. Heartbeat and replay are Hono's responsibility — skip those.
 
-**Dashboard Polling**: The real bug is that 30-second polling never backs off — a dead server gets hammered indefinitely. Fix first (add exponential backoff or max-retry limit), then test both the server error responses and the client retry/backoff behavior.
+**Dashboard Polling**: The real bug is that 30-second polling never backs off — a dead server gets hammered indefinitely. Fix: exponential backoff (30s → 60s → 120s) with a hard cap at 3 consecutive failures, then stop polling and show a "connection lost" state with a manual retry button. Resets to 30s on successful response. Test both server error responses and client retry/backoff behavior.
 
 **Magic Link Email**: Delivered via Resend when `RESEND_API_KEY` is set. In development (no API key), the magic link URL is logged to console. The `sendMagicLink` callback delegates to a `sendMagicLinkEmail()` function that resolves the transport at call time — no provider is wired at module load, consistent with lazy failure.
 
