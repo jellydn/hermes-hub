@@ -46,7 +46,10 @@ export async function getOwnedServerRecord(input: {
 }
 
 export function resolveServerCredential(
-	serverRecord: Pick<OwnedServerRecord, "id" | "encryptedCredential" | "storeCredential">,
+	serverRecord: Pick<
+		OwnedServerRecord,
+		"id" | "encryptedCredential" | "storeCredential"
+	>,
 	sessionId?: string | null,
 ) {
 	if (serverRecord.storeCredential) {

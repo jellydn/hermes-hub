@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import { getAuthSession } from "./auth";
@@ -6,8 +7,8 @@ import { storeSessionCredential } from "./credentials";
 import { encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, servers } from "./db/schema";
-import { getServerDetailSnapshot } from "./server-detail-snapshot";
 import { getClientIp } from "./lib/get-client-ip";
+import { getServerDetailSnapshot } from "./server-detail-snapshot";
 import {
 	buildOsInfo,
 	getOwnedServerRecord,
@@ -265,7 +266,7 @@ export async function updateServer(context: Context) {
 			status: nextStatus,
 			osInfo: nextOsInfo,
 		})
-		.where(eq(servers.id, serverId));
+		.where(and(eq(servers.id, serverId), eq(servers.userId, session.user.id)));
 
 	await db.insert(auditLogs).values({
 		userId: session.user.id,
@@ -293,7 +294,9 @@ export async function getStoredServerCredential(input: {
 			storeCredential: servers.storeCredential,
 		})
 		.from(servers)
-		.where(eq(servers.id, input.serverId))
+		.where(
+			and(eq(servers.id, input.serverId), eq(servers.userId, input.userId)),
+		)
 		.limit(1);
 
 	return serverRecord ?? null;

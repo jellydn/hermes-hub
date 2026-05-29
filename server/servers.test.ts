@@ -42,7 +42,7 @@ vi.mock("./credentials", () => ({
 	storeSessionCredential,
 }));
 
-vi.mock("./server-actions", () => ({
+vi.mock("./server-detail-snapshot", () => ({
 	getServerDetailSnapshot,
 }));
 
@@ -70,7 +70,7 @@ vi.mock("./ssh", () => {
 
 describe("server handlers", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 
 		dbInsert.mockImplementation((table) => {
 			if (table === servers) {
@@ -248,6 +248,29 @@ describe("server handlers", () => {
 				osInfo: {},
 			},
 		]);
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_123",
+				label: "Primary VPS",
+				host: "198.51.100.25",
+				port: 2222,
+				username: "deploy",
+				authMethod: "password",
+				encryptedCredential: "encrypted-secret",
+				storeCredential: true,
+				status: "connected",
+				osInfo: {},
+			},
+		]);
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "install_123",
+				status: "pending",
+				version: "latest",
+				updatedAt: new Date("2026-05-26T03:00:00.000Z"),
+			},
+		]);
+		selectLimit.mockResolvedValueOnce([]);
 
 		const { updateServer } = await import("./servers");
 		const response = await updateServer(

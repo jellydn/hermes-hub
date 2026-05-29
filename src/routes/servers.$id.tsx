@@ -86,7 +86,7 @@ function ServerDetailPage() {
 				</section>
 			) : serverDetail ? (
 				<ServerDetail
-					initialDetail={serverDetail}
+					detail={serverDetail}
 					onDetailChange={setServerDetail}
 					onGoToInstall={(serverId) =>
 						navigate({

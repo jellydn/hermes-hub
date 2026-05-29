@@ -41,7 +41,11 @@ beforeEach(() => {
 describe("ServerDetail", () => {
 	it("renders the last five action results", () => {
 		render(
-			<ServerDetail initialDetail={createDetail()} onGoToInstall={vi.fn()} />,
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getAllByText(/restart agent/i).length).toBeGreaterThanOrEqual(
@@ -55,7 +59,11 @@ describe("ServerDetail", () => {
 
 	it("requires confirmation before running a server action", async () => {
 		render(
-			<ServerDetail initialDetail={createDetail()} onGoToInstall={vi.fn()} />,
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: /restart agent/i }));
@@ -88,7 +96,11 @@ describe("ServerDetail", () => {
 		);
 
 		render(
-			<ServerDetail initialDetail={createDetail()} onGoToInstall={vi.fn()} />,
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: /update hermes/i }));
@@ -117,7 +129,7 @@ describe("ServerDetail", () => {
 		const handleDetailChange = vi.fn();
 		render(
 			<ServerDetail
-				initialDetail={createDetail()}
+				detail={createDetail()}
 				onDetailChange={handleDetailChange}
 				onGoToInstall={vi.fn()}
 			/>,
@@ -155,7 +167,8 @@ describe("ServerDetail", () => {
 		const handleGoToInstall = vi.fn();
 		render(
 			<ServerDetail
-				initialDetail={createDetail({ install: null })}
+				detail={createDetail({ install: null })}
+				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
 			/>,
 		);
@@ -178,13 +191,14 @@ describe("ServerDetail", () => {
 		const handleGoToInstall = vi.fn();
 		render(
 			<ServerDetail
-				initialDetail={createDetail({
+				detail={createDetail({
 					install: {
 						status: "failed",
 						version: "latest",
 						updatedAt: "2026-05-26T03:00:00.000Z",
 					},
 				})}
+				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
 			/>,
 		);

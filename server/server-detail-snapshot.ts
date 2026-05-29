@@ -8,10 +8,7 @@ import type {
 } from "../src/lib/server-detail";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
-import {
-	getOwnedServerRecord,
-	type OwnedServerRecord,
-} from "./server-records";
+import { getOwnedServerRecord, type OwnedServerRecord } from "./server-records";
 
 type AuditRecord = {
 	id: string;

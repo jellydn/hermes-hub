@@ -5,13 +5,16 @@ import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
-import { getRollbackTargetFromHistory, getServerDetailSnapshot } from "./server-detail-snapshot";
 import { getClientIp } from "./lib/get-client-ip";
+import {
+	getRollbackTargetFromHistory,
+	getServerDetailSnapshot,
+} from "./server-detail-snapshot";
 import {
 	getOwnedServerRecord,
 	normalizeAuthMethod,
-	resolveServerCredential,
 	type OwnedServerRecord,
+	resolveServerCredential,
 } from "./server-records";
 import { SshConnectError, withSshConnection } from "./ssh";
 
@@ -120,7 +123,9 @@ export async function runServerAction(context: Context) {
 
 	const versionTarget =
 		action === "rollback"
-			? payload.targetVersion?.trim() || (await getRollbackTarget(serverId)) || "latest"
+			? payload.targetVersion?.trim() ||
+				(await getRollbackTarget(serverId)) ||
+				"latest"
 			: null;
 	const ipAddress = getClientIp(context);
 
