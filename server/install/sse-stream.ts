@@ -92,6 +92,39 @@ export function resetInstallStream(serverId: string, installId: string) {
 	return state;
 }
 
+/**
+ * Atomically claims the in-process install slot for `serverId`. Returns the
+ * placeholder state on success, or `null` if an install is already running.
+ * The caller must populate `installId` once the DB row exists and release
+ * the slot (`releaseInstallStream`) if subsequent setup fails.
+ */
+export function tryClaimInstallStream(
+	serverId: string,
+): InstallStreamState | null {
+	const existing = installStreams.get(serverId);
+	if (existing?.status === "running" || existing?.status === "pending") {
+		return null;
+	}
+
+	const state: InstallStreamState = {
+		installId: "",
+		serverId,
+		events: [],
+		listeners: new Set(),
+		status: "pending",
+		runId: randomUUID(),
+	};
+	installStreams.set(serverId, state);
+	return state;
+}
+
+export function releaseInstallStream(serverId: string, runId: string) {
+	const existing = installStreams.get(serverId);
+	if (existing?.runId === runId) {
+		installStreams.delete(serverId);
+	}
+}
+
 export async function ensureInstallStream(serverId: string) {
 	const existing = installStreams.get(serverId);
 	if (existing) {

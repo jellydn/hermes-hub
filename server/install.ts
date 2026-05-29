@@ -13,7 +13,8 @@ import {
 	IDLE_TIMEOUT_MS,
 	type InstallEvent,
 	installStreams,
-	resetInstallStream,
+	releaseInstallStream,
+	tryClaimInstallStream,
 } from "./install/sse-stream";
 import { getClientIp } from "./lib/get-client-ip";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
@@ -118,13 +119,33 @@ export async function startServerInstall(context: Context) {
 		return context.json({ error: message }, 400);
 	}
 
-	const existingState = installStreams.get(serverId);
-	if (existingState?.status === "running") {
+	// Claim the in-process install slot synchronously before any await so
+	// two near-simultaneous requests cannot both start an install workflow
+	// against the same server.
+	const claimed = tryClaimInstallStream(serverId);
+	if (!claimed) {
 		return context.json({ error: "Install already in progress" }, 409);
 	}
 
-	const installRecord = await upsertInstallRecord(serverId);
-	const state = resetInstallStream(serverId, installRecord.id);
+	let installRecord: { id: string };
+	try {
+		installRecord = await upsertInstallRecord(serverId);
+	} catch (error) {
+		releaseInstallStream(serverId, claimed.runId);
+		throw error;
+	}
+
+	// Replace the placeholder with the real installId; preserve the runId so
+	// the claim remains valid and emitInstallEvent stays gated.
+	const state = installStreams.get(serverId);
+	if (state && state.runId === claimed.runId) {
+		state.installId = installRecord.id;
+	} else {
+		// Slot was clobbered (should be impossible in single-process flow).
+		releaseInstallStream(serverId, claimed.runId);
+		return context.json({ error: "Install already in progress" }, 409);
+	}
+
 	const ipAddress = getClientIp(context);
 
 	await db.insert(auditLogs).values({
@@ -145,7 +166,7 @@ export async function startServerInstall(context: Context) {
 		userId: session.user.id,
 		installId: installRecord.id,
 		serverId,
-		runId: state.runId,
+		runId: claimed.runId,
 		ipAddress,
 	});
 
@@ -198,44 +219,61 @@ export async function streamServerInstallEvents(context: Context) {
 		}
 
 		// 90-second idle timeout: close the stream if no event is written
+		// and no heartbeat write has succeeded. The heartbeat doubles as a
+		// liveness probe — successful writes prove the connection is still
+		// usable, so they reset the idle timer; install steps such as
+		// `apt-get install` or `docker compose pull` regularly exceed 90s
+		// of silence between progress events.
 		let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
-		function resetIdleTimer() {
-			if (idleTimer) {
-				clearTimeout(idleTimer);
-			}
-			idleTimer = setTimeout(() => {
-				stream.close();
-				resolvePending();
-			}, IDLE_TIMEOUT_MS);
-		}
-
-		// 30-second heartbeat: keep the connection alive with SSE comments
-		const heartbeat = setInterval(async () => {
-			try {
-				await stream.writeSSE({
-					data: ": heartbeat",
-				});
-			} catch {
-				// Stream may be closed; clean up
-				clearInterval(heartbeat);
-			}
-		}, HEARTBEAT_INTERVAL_MS);
-
-		let pendingResolve: (() => void) | null = null;
-
-		function resolvePending() {
-			if (pendingResolve) {
-				pendingResolve();
-				pendingResolve = null;
-			}
-		}
+		let heartbeat: ReturnType<typeof setInterval> | null = null;
 
 		await new Promise<void>((resolve) => {
-			pendingResolve = resolve;
-			resetIdleTimer();
+			let settled = false;
+			let listener: ((event: InstallEvent) => Promise<void>) | null = null;
 
-			const listener = async (event: InstallEvent) => {
+			function cleanup() {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				if (heartbeat) {
+					clearInterval(heartbeat);
+					heartbeat = null;
+				}
+				if (idleTimer) {
+					clearTimeout(idleTimer);
+					idleTimer = null;
+				}
+				if (listener) {
+					state.listeners.delete(listener);
+				}
+				resolve();
+			}
+
+			function resetIdleTimer() {
+				if (settled) {
+					return;
+				}
+				if (idleTimer) {
+					clearTimeout(idleTimer);
+				}
+				idleTimer = setTimeout(() => {
+					stream.close();
+					cleanup();
+				}, IDLE_TIMEOUT_MS);
+			}
+
+			heartbeat = setInterval(async () => {
+				try {
+					await stream.writeSSE({ data: ": heartbeat" });
+					resetIdleTimer();
+				} catch {
+					// Stream is gone; tear everything down.
+					cleanup();
+				}
+			}, HEARTBEAT_INTERVAL_MS);
+
+			listener = async (event: InstallEvent) => {
 				resetIdleTimer();
 
 				await stream.writeSSE({
@@ -244,30 +282,14 @@ export async function streamServerInstallEvents(context: Context) {
 				});
 
 				if (event.status === "succeeded" || event.status === "failed") {
-					clearInterval(heartbeat);
-					if (idleTimer) {
-						clearTimeout(idleTimer);
-					}
-					state.listeners.delete(listener);
-					resolve();
+					cleanup();
 				}
 			};
 
+			resetIdleTimer();
 			state.listeners.add(listener);
-			stream.onAbort(() => {
-				clearInterval(heartbeat);
-				if (idleTimer) {
-					clearTimeout(idleTimer);
-				}
-				state.listeners.delete(listener);
-				resolve();
-			});
+			stream.onAbort(cleanup);
 		});
-
-		clearInterval(heartbeat);
-		if (idleTimer) {
-			clearTimeout(idleTimer);
-		}
 	});
 }
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auditLogs, installs } from "./db/schema";
+import { installStreams } from "./install/sse-stream";
 
 const getAuthSession = vi.fn();
 const getSessionCredential = vi.fn();
@@ -55,6 +56,7 @@ vi.mock("./db", () => ({
 describe("server install", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		installStreams.clear();
 
 		getAuthSession.mockResolvedValue({
 			session: { id: "session_123" },
@@ -266,6 +268,47 @@ describe("server install", () => {
 				action: "server.install.failed",
 			}),
 		);
+	});
+
+	it("rejects a second install request while one is already running", async () => {
+		// Make the first install's upsertInstallRecord block so the slot stays
+		// claimed while the second request runs.
+		let resolveFirstInstall: ((value: unknown) => void) | undefined;
+		insertInstallReturning.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirstInstall = resolve;
+				}),
+		);
+
+		// Second request: server lookup returns the same record again.
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_123",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: "encrypted-secret",
+				storeCredential: true,
+			},
+		]);
+
+		const { startServerInstall } = await import("./install");
+		const firstPromise = startServerInstall(createContext("POST"));
+		// Yield so the first request can claim the slot before the second
+		// request reaches `tryClaimInstallStream`.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const secondResponse = await startServerInstall(createContext("POST"));
+
+		expect(secondResponse.status).toBe(409);
+		expect(await secondResponse.json()).toEqual({
+			error: "Install already in progress",
+		});
+
+		resolveFirstInstall?.([{ id: "install_123" }]);
+		await firstPromise;
 	});
 
 	it("writes a failed audit log when SSH connection itself errors", async () => {
