@@ -18,6 +18,7 @@ export const Route = createFileRoute("/servers/$id")({
 function ServerDetailPage() {
 	const { session } = Route.useRouteContext();
 	const { id } = Route.useParams();
+	const navigate = Route.useNavigate();
 	const [serverDetail, setServerDetail] = useState<ServerDetailSnapshot | null>(
 		null,
 	);
@@ -84,7 +85,16 @@ function ServerDetailPage() {
 					{error}
 				</section>
 			) : serverDetail ? (
-				<ServerDetail initialDetail={serverDetail} />
+				<ServerDetail
+					initialDetail={serverDetail}
+					onDetailChange={setServerDetail}
+					onGoToInstall={(serverId) =>
+						navigate({
+							to: "/servers/$id/install",
+							params: { id: serverId },
+						})
+					}
+				/>
 			) : null}
 		</AppShell>
 	);

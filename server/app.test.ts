@@ -5,6 +5,7 @@ vi.mock("./db/health", () => ({
 }));
 
 const connectServer = vi.fn();
+const updateServer = vi.fn();
 const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
@@ -19,6 +20,7 @@ const disconnectTelegram = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
+	updateServer,
 }));
 
 vi.mock("./server-actions", () => ({
@@ -226,6 +228,31 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(getServerDetail).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes server update requests through the update handler", async () => {
+		updateServer.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ serverDetail: { server: { id: "server_123" } } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123",
+			{
+				method: "PATCH",
+				body: JSON.stringify({ label: "Primary VPS" }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(updateServer).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes server action requests through the action handler", async () => {
