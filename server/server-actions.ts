@@ -506,7 +506,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-function getRollbackTargetFromHistory(history: ServerActionHistoryItem[]) {
+export function getRollbackTargetFromHistory(
+	history: ServerActionHistoryItem[],
+) {
 	for (const item of history) {
 		if (
 			item.action === "rollback" &&

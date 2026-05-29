@@ -406,6 +406,33 @@ describe("server actions", () => {
 	});
 });
 
+it("getRollbackTargetFromHistory returns first successful rollback imageRef or null", async () => {
+	const { getRollbackTargetFromHistory } = await import("./server-actions");
+
+	expect(
+		getRollbackTargetFromHistory([
+			{
+				id: "history_1",
+				action: "rollback",
+				result: "succeeded",
+				imageRef: "v1",
+				message: "Rolled back to v1",
+				createdAt: "2026-05-29T00:00:00.000Z",
+			},
+			{
+				id: "history_2",
+				action: "rollback",
+				result: "succeeded",
+				imageRef: "v2",
+				message: "Rolled back to v2",
+				createdAt: "2026-05-28T00:00:00.000Z",
+			},
+		]),
+	).toBe("v1");
+
+	expect(getRollbackTargetFromHistory([])).toBeNull();
+});
+
 function createContext(payload: Record<string, unknown>) {
 	return {
 		req: {

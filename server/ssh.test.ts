@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseAndValidateOs, UnsupportedOsError } from "./ssh";
+import {
+	normalizeSshError,
+	parseAndValidateOs,
+	SshConnectError,
+	UnsupportedOsError,
+} from "./ssh";
 
 describe("parseAndValidateOs", () => {
 	it("accepts Ubuntu 22.04 and returns normalized server info with supported level", () => {
@@ -75,5 +80,34 @@ describe("parseAndValidateOs", () => {
 		expect(() => parseAndValidateOs("\n", "x86_64\n")).toThrowError(
 			UnsupportedOsError,
 		);
+	});
+});
+
+describe("normalizeSshError", () => {
+	it("maps auth-related messages to invalid credentials", () => {
+		const err = new Error("All configured authentication methods failed");
+		const normalized = normalizeSshError(err);
+		expect(normalized).toBeInstanceOf(SshConnectError);
+		expect(normalized.message).toBe("invalid credentials");
+	});
+
+	it("maps network/timeouts to host unreachable", () => {
+		const err = new Error("Connection timed out");
+		const normalized = normalizeSshError(err);
+		expect(normalized).toBeInstanceOf(SshConnectError);
+		expect(normalized.message).toBe("host unreachable");
+	});
+
+	it("passes through UnsupportedOsError unchanged", () => {
+		const err = new UnsupportedOsError("no /etc/os-release");
+		const normalized = normalizeSshError(err);
+		expect(normalized).toBe(err);
+	});
+
+	it("defaults unknown errors to host unreachable SshConnectError", () => {
+		const err = new Error("something else went wrong");
+		const normalized = normalizeSshError(err);
+		expect(normalized).toBeInstanceOf(SshConnectError);
+		expect(normalized.message).toBe("host unreachable");
 	});
 });

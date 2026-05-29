@@ -6,24 +6,42 @@ type SessionCredentialRecord = {
 };
 
 const CREDENTIAL_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+let CLEANUP_INTERVAL_MS = process.env.CREDENTIAL_CLEANUP_INTERVAL_MS
+	? Number(process.env.CREDENTIAL_CLEANUP_INTERVAL_MS)
+	: 5 * 60 * 1000; // every 5 minutes
 
 const sessionCredentials = new Map<string, SessionCredentialRecord>();
 
-// Periodic cleanup of expired credentials
-const cleanupTimer = setInterval(() => {
-	const now = Date.now();
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-	for (const [key, record] of sessionCredentials) {
-		if (now - record.storedAt > CREDENTIAL_TTL_MS) {
-			sessionCredentials.delete(key);
-		}
+function startCleanupTimer(intervalMs = CLEANUP_INTERVAL_MS) {
+	if (cleanupTimer) {
+		clearInterval(cleanupTimer);
 	}
-}, CLEANUP_INTERVAL_MS);
 
-// Allow the timer to keep the process alive if needed, but don't block shutdown
-if (cleanupTimer.unref) {
-	cleanupTimer.unref();
+	cleanupTimer = setInterval(() => {
+		const now = Date.now();
+
+		for (const [key, record] of sessionCredentials) {
+			if (now - record.storedAt > CREDENTIAL_TTL_MS) {
+				sessionCredentials.delete(key);
+			}
+		}
+	}, intervalMs);
+
+	// Allow the timer to keep the process alive if needed, but don't block shutdown
+	if (typeof cleanupTimer !== "number") {
+		cleanupTimer.unref?.();
+	}
+}
+
+// Start the timer with the default interval. Tests can call setCredentialCleanupIntervalMs
+// to override this and speed up cleanup verification.
+startCleanupTimer();
+
+export function setCredentialCleanupIntervalMs(ms: number) {
+	CLEANUP_INTERVAL_MS = ms;
+	startCleanupTimer(ms);
 }
 
 function getCredentialKey(serverId: string, sessionId: string) {

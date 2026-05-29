@@ -141,7 +141,7 @@ export function parseAndValidateOs(
 	};
 }
 
-function normalizeSshError(error: unknown) {
+export function normalizeSshError(error: unknown) {
 	if (error instanceof UnsupportedOsError) {
 		return error;
 	}
