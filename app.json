@@ -1,5 +1,4 @@
 {
-	"scripts": {},
 	"healthchecks": {
 		"web": [
 			{
