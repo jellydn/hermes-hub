@@ -131,11 +131,31 @@ export function AppShell({
 							))}
 						</nav>
 
-						<div className="mt-6 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4">
-							<p className="island-kicker mb-2">Signed In</p>
-							<p className="m-0 text-sm font-medium text-[var(--sea-ink)]">
-								{userEmail}
-							</p>
+						<div className="mt-6 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4">
+							<div className="flex items-center justify-between gap-3">
+								<div className="min-w-0 flex-1">
+									<p className="island-kicker mb-1">Signed In</p>
+									<p
+										className="truncate text-sm font-medium text-[var(--sea-ink)]"
+										title={userEmail}
+									>
+										{userEmail}
+									</p>
+								</div>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 shrink-0 text-[var(--sea-ink-soft)] hover:bg-[var(--chip-line)] hover:text-[var(--sea-ink)]"
+									onClick={() => {
+										void handleLogout();
+									}}
+									title="Log out"
+									aria-label="Log out"
+								>
+									<LogOut className="h-4 w-4" />
+								</Button>
+							</div>
 						</div>
 					</div>
 				</aside>
