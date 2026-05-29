@@ -204,7 +204,7 @@ export const auditLogs = pgTable(
 
 // Better Auth looks up schema models by singular names (user, session, account, verification).
 // These re-exports provide the expected keys without renaming the primary exports.
-/* #__PURE__ */ export {
+export {
 	accounts as account,
 	sessions as session,
 	users as user,
