@@ -19,7 +19,12 @@ export const Route = createRootRoute({
 				content: "width=device-width, initial-scale=1",
 			},
 			{
-				title: "TanStack Start Starter",
+				title: "HermesHub",
+			},
+			{
+				name: "description",
+				content:
+					"Deploy Hermes Agent to your own VPS with guided install, live progress, and zero terminal setup.",
 			},
 		],
 		links: [

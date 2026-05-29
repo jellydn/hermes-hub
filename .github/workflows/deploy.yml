@@ -1,0 +1,254 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: vps
+        type: choice
+        options:
+          - vps
+          - dokku
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_TARGET == 'vps' || vars.DEPLOY_TARGET == 'dokku' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Biome
+        run: bunx @biomejs/biome check .
+
+      - name: Run typecheck
+        run: bun run typecheck
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Run production build
+        run: bun run build
+
+  build-image:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'vps') || (github.event_name == 'push' && vars.DEPLOY_TARGET == 'vps') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-vps:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'vps') || (github.event_name == 'push' && vars.DEPLOY_TARGET == 'vps') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build-image
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+        run: |
+          : "${VPS_HOST:?VPS_HOST secret is required}"
+          : "${VPS_SSH_PRIVATE_KEY:?VPS_SSH_PRIVATE_KEY secret is required}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${VPS_PORT:-22}" "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS with Docker Compose
+        env:
+          APP_PORT: ${{ vars.APP_PORT }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+          DB_POOL_MAX: ${{ vars.DB_POOL_MAX }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+          TRUSTED_PROXY_COUNT: ${{ vars.TRUSTED_PROXY_COUNT }}
+          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          : "${VPS_HOST:?VPS_HOST secret is required}"
+          : "${VPS_USER:?VPS_USER secret is required}"
+          : "${GHCR_USERNAME:?GHCR_USERNAME secret is required}"
+          : "${GHCR_TOKEN:?GHCR_TOKEN secret is required}"
+          : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD secret is required}"
+          : "${ENCRYPTION_KEY:?ENCRYPTION_KEY secret is required}"
+          : "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET secret is required}"
+          : "${BETTER_AUTH_URL:?BETTER_AUTH_URL secret is required}"
+
+          DEPLOY_PATH="${VPS_DEPLOY_PATH:-/opt/hermes-hub}"
+          SSH_PORT="${VPS_PORT:-22}"
+          APP_PORT="${APP_PORT:-3000}"
+          POSTGRES_DB="${POSTGRES_DB:-hermes_hub}"
+          POSTGRES_USER="${POSTGRES_USER:-hermes}"
+          TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}"
+          DB_POOL_MAX="${DB_POOL_MAX:-5}"
+
+          cat > .deploy.env <<EOF_ENV
+          APP_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          APP_PORT=$APP_PORT
+          POSTGRES_DB=$POSTGRES_DB
+          POSTGRES_USER=$POSTGRES_USER
+          POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+          ENCRYPTION_KEY=$ENCRYPTION_KEY
+          BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
+          BETTER_AUTH_URL=$BETTER_AUTH_URL
+          RESEND_API_KEY=${RESEND_API_KEY:-}
+          RESEND_FROM=${RESEND_FROM:-}
+          TRUSTED_PROXY_COUNT=$TRUSTED_PROXY_COUNT
+          DB_POOL_MAX=$DB_POOL_MAX
+          EOF_ENV
+
+          ssh -p "$SSH_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp -P "$SSH_PORT" ./compose.yaml "$VPS_USER@$VPS_HOST:$DEPLOY_PATH/compose.yaml"
+          scp -P "$SSH_PORT" ./.deploy.env "$VPS_USER@$VPS_HOST:$DEPLOY_PATH/.env"
+          rm -f .deploy.env
+
+          printf '%s' "$GHCR_TOKEN" | ssh -p "$SSH_PORT" "$VPS_USER@$VPS_HOST" "docker login ${{ env.REGISTRY }} -u '$GHCR_USERNAME' --password-stdin"
+          ssh -p "$SSH_PORT" "$VPS_USER@$VPS_HOST" "cd '$DEPLOY_PATH' && docker compose pull app && docker compose up -d postgres && until [ \"\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose ps -q postgres))\" = healthy ]; do sleep 2; done && docker compose run --rm app ./node_modules/.bin/drizzle-kit migrate && docker compose up -d app && docker compose ps"
+
+  deploy-dokku:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'dokku') || (github.event_name == 'push' && vars.DEPLOY_TARGET == 'dokku') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure SSH
+        env:
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+        run: |
+          : "${DOKKU_HOST:?DOKKU_HOST secret is required}"
+          : "${DOKKU_SSH_PRIVATE_KEY:?DOKKU_SSH_PRIVATE_KEY secret is required}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DOKKU_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan "$DOKKU_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync Dokku config
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_POOL_MAX: ${{ vars.DB_POOL_MAX }}
+          DOKKU_APP: ${{ secrets.DOKKU_APP }}
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+          TRUSTED_PROXY_COUNT: ${{ vars.TRUSTED_PROXY_COUNT }}
+        run: |
+          : "${DOKKU_HOST:?DOKKU_HOST secret is required}"
+          : "${DOKKU_APP:?DOKKU_APP secret is required}"
+          : "${DATABASE_URL:?DATABASE_URL secret is required for Dokku deploys}"
+          : "${ENCRYPTION_KEY:?ENCRYPTION_KEY secret is required}"
+          : "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET secret is required}"
+          : "${BETTER_AUTH_URL:?BETTER_AUTH_URL secret is required}"
+
+          TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}"
+          DB_POOL_MAX="${DB_POOL_MAX:-5}"
+
+          ssh "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" || ssh "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
+
+          args=(
+            "NODE_ENV=production"
+            "DATABASE_URL=$DATABASE_URL"
+            "ENCRYPTION_KEY=$ENCRYPTION_KEY"
+            "BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET"
+            "BETTER_AUTH_URL=$BETTER_AUTH_URL"
+            "TRUSTED_PROXY_COUNT=$TRUSTED_PROXY_COUNT"
+            "DB_POOL_MAX=$DB_POOL_MAX"
+          )
+
+          if [ -n "${RESEND_API_KEY:-}" ]; then
+            args+=("RESEND_API_KEY=$RESEND_API_KEY")
+          fi
+
+          if [ -n "${RESEND_FROM:-}" ]; then
+            args+=("RESEND_FROM=$RESEND_FROM")
+          fi
+
+          ssh "dokku@$DOKKU_HOST" config:set --no-restart "$DOKKU_APP" "${args[@]}"
+
+      - name: Deploy to Dokku
+        env:
+          DOKKU_APP: ${{ secrets.DOKKU_APP }}
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+        run: |
+          git remote add dokku "dokku@$DOKKU_HOST:$DOKKU_APP" 2>/dev/null || git remote set-url dokku "dokku@$DOKKU_HOST:$DOKKU_APP"
+          git push dokku HEAD:master

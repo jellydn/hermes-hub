@@ -1,69 +1,85 @@
-# HermesHub
+# Welcome to HermesHub 👋
 
-> Your personal AI agent in 5 minutes. Zero terminal required.
+[![GitHub stars](https://img.shields.io/github/stars/jellydn/hermes-hub)](https://github.com/jellydn/hermes-hub/stargazers)
+[![GitHub license](https://img.shields.io/github/license/jellydn/hermes-hub)](https://github.com/jellydn/hermes-hub/blob/main/LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/jellydn/hermes-hub/pulls)
+[![Twitter: jellydn](https://img.shields.io/twitter/follow/jellydn.svg?style=social)](https://twitter.com/jellydn)
+
+> **Your personal AI agent in 5 minutes. Zero terminal required.**
 
 HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/anomalyco/hermes) on any VPS — no SSH, Docker, or Linux knowledge needed.
 
-## The Problem
+## ✨ Features
 
-Setting up a self-hosted AI agent currently requires SSH access, Linux administration, Docker configuration, environment variable wrangling, and security hardening. This blocks adoption for creators, educators, freelancers, and founders who want a private AI assistant with persistent memory and Telegram-based workflows.
+- 🔑 **Magic Link Auth** — Passwordless email sign-in via Better Auth
+- 🖥️ **VPS Connection** — SSH connection wizard with password or private-key auth
+- 🔒 **Credential Security** — AES-256-GCM encryption at rest; ephemeral in-memory option
+- 🚀 **Hermes Install** — Automated Docker + Compose setup and container launch over SSH
+- 📊 **Live Install Progress** — SSE-based real-time streaming logs with replay
+- 📈 **Dashboard** — Aggregated status cards with live VPS metrics (CPU/memory/disk)
+- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter with encrypted key storage
+- 💬 **Telegram Integration** — Bot token verification via Telegram API; connect/disconnect flow
+- 🔄 **Server Actions** — One-click restart, update, rollback with audit-based history
+- 📋 **Logs Viewer** — Aggregated install logs and operational action history
+- ✅ **20+ tests** — Vitest + Testing Library for components and server integration
 
-## What It Does
+## 📹 Demo
 
-1. **Connect a VPS** — enter IP, username, and password or SSH key
-2. **Click Install** — HermesHub automates Docker, Docker Compose, and Hermes setup
-3. **Add an API key** — OpenAI, Anthropic, or OpenRouter
-4. **Connect Telegram** — paste your BotFather token
-5. **Chat with your agent** — through Telegram or the web dashboard
+[![IT Man Channel](https://img.shields.io/badge/YouTube-IT%20Man%20Channel-red?logo=youtube)](https://github.com/jellydn/itman-channel)
 
-## Planned Stack
+## 🛠️ Prerequisites
 
-| Layer    | Choice                                                                        |
-| -------- | ----------------------------------------------------------------------------- |
-| Frontend | [TanStack Start](https://tanstack.com/start/latest)                           |
-| UI       | [TailwindCSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
-| Backend  | [Hono](https://hono.dev/)                                                     |
-| Database | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                         |
-| Auth     | [Better Auth](https://www.better-auth.com/) (magic link only)                 |
-| SSH      | node-ssh / ssh2                                                               |
-| State    | TanStack Query                                                                |
-| Realtime | Server-Sent Events                                                            |
+- **Node.js >= 20** — JavaScript runtime
+- **Bun** — Fast package manager and runtime (preferred)
+- **PostgreSQL** — Running locally for development
 
-## Status
-
-**Scaffolded** — TanStack Start is in place with file-based routing, TailwindCSS v4, and the default starter pages. MVP feature work is still pending.
-
-- [Full MVP PRD](tasks/prd-hermes-hub-mvp.md) — all user stories, schema, and functional requirements
-- [Ralph build plan](scripts/ralph/prd.json) — executable story queue for the Ralph autonomous agent loop
-
-## Development
+## 🚀 Quick Start
 
 ```bash
-# Prerequisites
-node >= 20
-bun (preferred package manager)
-postgresql running locally
-
-# Clone and install
-git clone <repo-url>
+# Clone the repository
+git clone https://github.com/jellydn/hermes-hub.git
 cd hermes-hub
+
+# Install dependencies
 bun install
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your DATABASE_URL and ENCRYPTION_KEY
+# Edit .env with your DATABASE_URL, ENCRYPTION_KEY, BETTER_AUTH_SECRET, and BETTER_AUTH_URL
 
-# Run database migrations
+# Initialize the database
 bun run db:migrate
 
-# Start dev server
+# Start the dev server
 bun run dev
-
-# Typecheck
-bun run typecheck
 ```
 
-### Environment Variables
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 🧪 Running Tests
+
+```bash
+# Run all tests
+bun run test
+
+# TypeScript type check
+bun run typecheck
+
+# Full CI pipeline (Biome → typecheck → test → build)
+bun run build
+```
+
+## 📦 Scripts
+
+| Command               | Description                       |
+| --------------------- | --------------------------------- |
+| `bun run dev`         | Start Vite dev server on port 3000 |
+| `bun run build`       | Build for production              |
+| `bun run test`        | Run Vitest test suite             |
+| `bun run typecheck`   | Run TypeScript type checking      |
+| `bun run db:generate` | Generate Drizzle migrations       |
+
+## 🔧 Environment Variables
 
 | Variable             | Description                                       |
 | -------------------- | ------------------------------------------------- |
@@ -72,20 +88,84 @@ bun run typecheck
 | `BETTER_AUTH_SECRET` | Secret for Better Auth session signing            |
 | `BETTER_AUTH_URL`    | Public URL of the app for magic link emails       |
 
-## Architecture
+## 🏗️ Architecture
 
 ```
-src/routes/       — TanStack Start file-based routes
-src/components/   — shared UI components
-src/router.tsx    — router setup
-server/           — Hono API routes
-server/db/        — Drizzle schema and migrations
-server/ssh/       — SSH connection utilities
-server/install/   — Hermes install orchestration with SSE
+src/routes/           — TanStack Start file-based routes (11 pages)
+├── __root.tsx         — Root layout (theme init, devtools, header/footer)
+├── index.tsx          — Landing page
+├── login.tsx          — Magic link email login
+├── dashboard.tsx      — Authenticated shell + aggregated status
+├── servers.tsx        — VPS connection wizard + install trigger
+├── servers.$id.tsx    — Server detail, actions, action history
+├── servers.$id.install.tsx  — Live SSE install progress
+├── ai-provider.tsx    — AI provider selection and API key config
+├── telegram.tsx       — Telegram bot connection wizard
+├── logs.tsx           — Install + action log viewer
+└── about.tsx          — About page
+
+server/               — Hono API routes and business logic
+├── app.ts            — Hono router with all API route bindings
+├── auth.ts           — Better Auth instance (lazy, DB-optional)
+├── crypto.ts         — AES-256-GCM encrypt/decrypt
+├── credentials.ts    — In-memory ephemeral credential cache
+├── ssh.ts            — node-ssh wrapper, OS validation, connection verification
+├── servers.ts        — VPS connection (insert, credential handling, audit)
+├── install.ts        — Hermes install pipeline with SSE streaming
+├── server-actions.ts — Restart/update/rollback via SSH
+├── dashboard.ts      — Aggregated status with live VPS metrics
+├── providers.ts      — AI provider save, test, model validation
+├── telegram.ts       — Telegram bot token verification + connect/disconnect
+├── logs.ts           — Install + action log queries and clearing
+└── db/               — Drizzle schema, connection, health check
 ```
 
-Credential security: AES-256-GCM encryption at rest. SSH credentials can be stored encrypted or be ephemeral (in-memory only, discarded after session).
+### Stack
 
-## License
+| Layer      | Choice                                                                  |
+| ---------- | ----------------------------------------------------------------------- |
+| Frontend   | [TanStack Start](https://tanstack.com/start/latest) (file-based routing) |
+| UI         | [TailwindCSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
+| Backend    | [Hono](https://hono.dev/) REST API on `/api/*`                          |
+| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                   |
+| Auth       | [Better Auth](https://www.better-auth.com/) (magic link only)           |
+| SSH        | [node-ssh](https://github.com/steelbrain/node-ssh)                      |
+| Realtime   | Server-Sent Events (Hono `streamSSE`)                                   |
+| Encryption | AES-256-GCM (built-in Node `crypto`)                                    |
+| Tests      | [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/) |
+
+## 📚 API Reference
+
+Complete documentation for all API endpoints is available in [`docs/api-reference.md`](docs/api-reference.md):
+
+- Authentication (magic link flow via Better Auth)
+- Health check
+- VPS connection, install (with SSE streaming), and server actions
+- Dashboard status aggregation
+- Install & action logs
+- AI provider configuration and testing
+- Telegram bot connect/disconnect
+
+## 📄 License
 
 MIT
+
+## 👤 Author
+
+**Dung Huynh Duc**
+
+- Website: [https://productsway.com/](https://productsway.com/)
+- Twitter: [@jellydn](https://twitter.com/jellydn)
+- GitHub: [@jellydn](https://github.com/jellydn)
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/jellydn/hermes-hub/issues).
+
+## 🌟 Show your support
+
+Give a ⭐️ if this project helped you!
+
+---
+
+_This README was generated with ❤️ by [readme-md-generator](https://github.com/kefranabg/readme-md-generator)_

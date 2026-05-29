@@ -9,9 +9,53 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TelegramRouteImport } from './routes/telegram'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ServersRouteImport } from './routes/servers'
+import { Route as LogsRouteImport } from './routes/logs'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AiProviderRouteImport } from './routes/ai-provider'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ServersIdRouteImport } from './routes/servers.$id'
+import { Route as ServersIdInstallRouteImport } from './routes/servers.$id.install'
 
+const TelegramRoute = TelegramRouteImport.update({
+  id: '/telegram',
+  path: '/telegram',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServersRoute = ServersRouteImport.update({
+  id: '/servers',
+  path: '/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiProviderRoute = AiProviderRouteImport.update({
+  id: '/ai-provider',
+  path: '/ai-provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -22,35 +66,162 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServersIdRoute = ServersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ServersRoute,
+} as any)
+const ServersIdInstallRoute = ServersIdInstallRouteImport.update({
+  id: '/install',
+  path: '/install',
+  getParentRoute: () => ServersIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/ai-provider': typeof AiProviderRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/servers': typeof ServersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/telegram': typeof TelegramRoute
+  '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/ai-provider': typeof AiProviderRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/servers': typeof ServersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/telegram': typeof TelegramRoute
+  '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/ai-provider': typeof AiProviderRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/servers': typeof ServersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/telegram': typeof TelegramRoute
+  '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/ai-provider'
+    | '/dashboard'
+    | '/login'
+    | '/logs'
+    | '/servers'
+    | '/settings'
+    | '/telegram'
+    | '/servers/$id'
+    | '/servers/$id/install'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about'
-  id: '__root__' | '/' | '/about'
+  to:
+    | '/'
+    | '/about'
+    | '/ai-provider'
+    | '/dashboard'
+    | '/login'
+    | '/logs'
+    | '/servers'
+    | '/settings'
+    | '/telegram'
+    | '/servers/$id'
+    | '/servers/$id/install'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/ai-provider'
+    | '/dashboard'
+    | '/login'
+    | '/logs'
+    | '/servers'
+    | '/settings'
+    | '/telegram'
+    | '/servers/$id'
+    | '/servers/$id/install'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AiProviderRoute: typeof AiProviderRoute
+  DashboardRoute: typeof DashboardRoute
+  LoginRoute: typeof LoginRoute
+  LogsRoute: typeof LogsRoute
+  ServersRoute: typeof ServersRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
+  TelegramRoute: typeof TelegramRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/telegram': {
+      id: '/telegram'
+      path: '/telegram'
+      fullPath: '/telegram'
+      preLoaderRoute: typeof TelegramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/servers': {
+      id: '/servers'
+      path: '/servers'
+      fullPath: '/servers'
+      preLoaderRoute: typeof ServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-provider': {
+      id: '/ai-provider'
+      path: '/ai-provider'
+      fullPath: '/ai-provider'
+      preLoaderRoute: typeof AiProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about': {
       id: '/about'
       path: '/about'
@@ -65,12 +236,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/servers/$id': {
+      id: '/servers/$id'
+      path: '/$id'
+      fullPath: '/servers/$id'
+      preLoaderRoute: typeof ServersIdRouteImport
+      parentRoute: typeof ServersRoute
+    }
+    '/servers/$id/install': {
+      id: '/servers/$id/install'
+      path: '/install'
+      fullPath: '/servers/$id/install'
+      preLoaderRoute: typeof ServersIdInstallRouteImport
+      parentRoute: typeof ServersIdRoute
+    }
   }
 }
+
+interface ServersIdRouteChildren {
+  ServersIdInstallRoute: typeof ServersIdInstallRoute
+}
+
+const ServersIdRouteChildren: ServersIdRouteChildren = {
+  ServersIdInstallRoute: ServersIdInstallRoute,
+}
+
+const ServersIdRouteWithChildren = ServersIdRoute._addFileChildren(
+  ServersIdRouteChildren,
+)
+
+interface ServersRouteChildren {
+  ServersIdRoute: typeof ServersIdRouteWithChildren
+}
+
+const ServersRouteChildren: ServersRouteChildren = {
+  ServersIdRoute: ServersIdRouteWithChildren,
+}
+
+const ServersRouteWithChildren =
+  ServersRoute._addFileChildren(ServersRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AiProviderRoute: AiProviderRoute,
+  DashboardRoute: DashboardRoute,
+  LoginRoute: LoginRoute,
+  LogsRoute: LogsRoute,
+  ServersRoute: ServersRouteWithChildren,
+  SettingsRoute: SettingsRoute,
+  TelegramRoute: TelegramRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

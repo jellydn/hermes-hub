@@ -1,6 +1,21 @@
 ## Codebase Patterns
 - TanStack Start route types come from the generated `src/routeTree.gen.ts`; run a build or dev server after adding routes so typecheck can see the generated tree.
 - This repo uses Bun as the package manager; keep `bun.lock` and do not add `package-lock.json`.
+- Reusable UI primitives follow the shadcn layout: place components in `src/components/ui/` and compose class names with the shared `cn()` helper from `src/lib/utils.ts`.
+- Shared provider/model catalogs belong in `src/lib/ai-providers.ts` so both the route UI and server-side validation/test handlers read the same defaults and allowed models.
+- Authenticated integration pages should fetch their saved summary in a route-level `createServerFn`, then hand that snapshot to a client feature component that owns connect/disconnect form state and follow-up fetch calls.
+- Dashboard cards should preload one status snapshot through the route and then poll `/api/dashboard/status` from the client feature so refresh/retry logic stays local without losing SSR coverage.
+- Server-side request branching lives in `src/server.ts`; use it to intercept `/api/*` requests and pass all page requests through the default TanStack Start handler.
+- `drizzle.config.ts` throws if `DATABASE_URL` is missing, so export that env var before running `drizzle-kit generate` or migration commands.
+- Better Auth mounts directly on the Hono app in `server/app.ts`; if the product wants friendlier `/api/auth/*` aliases, implement them as thin request rewrites to Better Auth's built-in routes instead of duplicating auth logic.
+- Better Auth setup must stay lazy in this app: construct it through a getter, not at module load, so SSR routes can still render without `DATABASE_URL`, and give the client an absolute auth base URL because Better Auth rejects relative `baseURL` values during SSR.
+- Persisted app tables use text primary keys with `gen_random_uuid()::text`, `timestamp(..., { withTimezone: true }).defaultNow()` for timestamps, and explicit foreign-key indexes on relation columns.
+- Authenticated dashboard sections should share the `AppShell` from `src/routes/dashboard.tsx` and use `requireSession()` so new pages inherit the same sidebar, header actions, and redirect behavior.
+- Nested dashboard routes should follow TanStack's dotted file naming (`src/routes/servers.$id.install.tsx`) so child URLs stay attached to the parent section without hand-written router wiring.
+- Field helper and error text should live outside `<label>` elements so accessible names stay predictable in browser automation and component tests.
+- Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; keep persisted log lines and emitted event payloads aligned so reconnecting clients can replay prior progress cleanly.
+- Vitest is configured via `vite.config.ts`, so use `bun run test`; plain `bun test` invokes Bun's runner and skips the repo's jsdom-backed test setup.
+- The logs page should read install history from `installs.log` and action history from finished `server.action.*` audit rows; a clear-logs action needs to wipe both sources so the page stays empty after refresh.
 
 ## 2026-05-26 09:41:15 +08 - US-001
 [Session: https://opncd.ai/s/]
@@ -12,4 +27,188 @@
   - TanStack Start route typing depends on the generated `src/routeTree.gen.ts`; if route imports look broken, regenerate by running build or dev.
   - The project standard is Bun even if an upstream scaffold uses npm defaults, so normalize lockfiles immediately.
   - The scaffold already added `opencode.json` with Chrome DevTools MCP config, so future frontend stories can use browser verification.
+---
+
+## 2026-05-26 11:00:52 +0800 - US-012
+[Session: https://opncd.ai/s/]
+- Built the AI provider setup flow with provider selection, provider-specific model inputs, masked stored-key edit behavior, save/test actions, and green/red connection feedback inside the authenticated dashboard page.
+- Added `/api/providers` and `/api/providers/test` handlers that validate provider/model pairs against a shared catalog, encrypt saved API keys, reuse existing keys on edit, and persist audit log entries.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, and browser protection behavior at `http://localhost:3001/ai-provider`, which redirected to `/login?redirect=%2Fai-provider` in the current no-session environment; captured `scripts/ralph/us-012-ai-provider-route.jpeg`. Full logged-in browser verification is still blocked locally because `DATABASE_URL` and `ENCRYPTION_KEY` are unset.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/providers.ts`, `server/providers.test.ts`, `src/lib/ai-providers.ts`, `src/routes/ai-provider.tsx`, `src/features/providers/provider-settings.tsx`, `src/features/providers/provider-settings.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-012-ai-provider-route.jpeg`
+- **Learnings for future iterations:**
+  - Keep provider/model definitions in one shared module so form defaults, server validation, and connection tests cannot drift.
+  - Provider edit flows can preserve the stored secret by accepting a blank API key only when the provider stays the same; switching providers should require a fresh key.
+  - Protected-page browser verification is still useful without local auth/database env, but stories that need in-app interaction require `DATABASE_URL` and any matching secret env vars to be set before the dev server starts.
+---
+
+## 2026-05-26 09:50:06 +0800 - US-002
+[Session: https://opncd.ai/s/]
+- Added shadcn-style project configuration (`components.json`), supporting dependencies, a shared `cn()` utility, and a reusable `Button` component under `src/components/ui/`.
+- Updated the home page CTA to render the new `Button` component variants so Tailwind utilities and the shadcn primitive are visible in the default route.
+- Verified `bun run typecheck`, `bun run build`, and `bun run test` pass, then confirmed the button renders in the browser at `http://localhost:3000/`.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `components.json`, `postcss.config.mjs`, `src/lib/utils.ts`, `src/components/ui/button.tsx`, `src/routes/index.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The `shadcn init` CLI can still prompt interactively in this TanStack Start setup, so keeping the generated config files checked in avoids repeated manual setup.
+  - Keep reusable UI primitives in `src/components/ui/` and point feature pages at those components instead of duplicating Tailwind class strings.
+  - Browser verification can reuse the already running app on port `3000`; the scaffold's `opencode.json` Chrome MCP setup works as expected.
+---
+
+## 2026-05-26 09:55:00 +0800 - US-003
+[Session: https://opncd.ai/s/]
+- Added Drizzle ORM and PostgreSQL wiring with `drizzle.config.ts`, a minimal `server/db/` module, and an initial generated SQL migration under `drizzle/`.
+- Added a custom `src/server.ts` entry that routes `/api/*` requests into a Hono app while preserving the default TanStack Start handler for everything else.
+- Implemented `GET /api/health` JSON status reporting plus a Vitest coverage check for the Hono app, and verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check AGENTS.md README.md package.json drizzle.config.ts server src scripts/ralph`, and `DATABASE_URL=postgres://postgres:postgres@localhost:5432/hermeshub bunx drizzle-kit generate`.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `drizzle.config.ts`, `drizzle/**`, `server/**`, `src/server.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - TanStack Start custom server logic should stay in `src/server.ts`; branch API paths there instead of trying to mix API routing into file-based page routes.
+- The published `@hono/tanstack-start` package was not available from npm during setup, so plain `hono` plus the TanStack Start server entry is the working integration path here.
+- `GET /api/health` can report database degradation in the JSON body without failing the route itself, which keeps a stable monitoring endpoint while DB setup is still in progress.
+---
+
+## 2026-05-26 10:02:28 +0800 - US-004
+[Session: https://opncd.ai/s/]
+- Added Better Auth server configuration with the Drizzle adapter and magic-link plugin, using console logging as the MVP email transport.
+- Mounted Better Auth on the Hono API app and added `/api/auth/send-magic-link` and `/api/auth/verify-magic-link` aliases that rewrite into Better Auth's built-in magic-link endpoints.
+- Extended the Drizzle schema with Better Auth tables, generated the auth migration under `drizzle/`, and added tests that verify the auth aliases route through the Better Auth handler.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `server/auth.ts`, `server/app.ts`, `server/app.test.ts`, `server/db/schema.ts`, `drizzle/0002_perfect_caretaker.sql`, `drizzle/meta/_journal.json`, `drizzle/meta/0002_snapshot.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Better Auth's current Hono integration is just `auth.handler()` on a Hono route; the older `@better-auth/hono-adapter` package name in the PRD is no longer published.
+  - Route order matters in Hono: register specific auth aliases before the catch-all `/auth/*` handler or the aliases will never run.
+  - Let `drizzle-kit generate` author the migration snapshot/journal files after schema changes instead of hand-editing Drizzle metadata.
+---
+
+## 2026-05-26 10:12:10 +0800 - US-005
+[Session: https://opncd.ai/s/]
+- Added passwordless auth UI and route protection with new `/login` and `/dashboard` routes, redirecting unauthenticated dashboard visits back to login with a redirect target.
+- Added a shared Better Auth client/session bridge, wired the header to show login/logout state and the authenticated email, and added `/api/auth/callback` as a friendly verify alias.
+- Made auth initialization lazy so SSR routes still render without `DATABASE_URL`; in that state the login form now fails gracefully instead of crashing the page, and browser verification confirmed `/login`, `/dashboard` redirect behavior, and the callback alias response.
+- Files changed: `AGENTS.md`, `server/auth.ts`, `server/app.ts`, `server/app.test.ts`, `src/components/Header.tsx`, `src/lib/auth-client.ts`, `src/lib/session.ts`, `src/routes/index.tsx`, `src/routes/login.tsx`, `src/routes/dashboard.tsx`, `src/routeTree.gen.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-005-login.png`
+- **Learnings for future iterations:**
+  - Better Auth's React client needs an absolute `baseURL` during SSR; a relative `/api/auth` base breaks route rendering in TanStack Start.
+  - Route guards can reuse a small `createServerFn` wrapper around `auth.api.getSession`, which keeps redirects server-backed instead of duplicating cookie parsing in routes.
+  - Local browser verification can still cover login UI and protected-route redirects without a database, but end-to-end magic-link success needs `DATABASE_URL` configured.
+---
+
+## 2026-05-26 10:15:31 +0800 - US-006
+[Session: https://opncd.ai/s/]
+- Added the MVP persistence schema for `servers`, `installs`, `ai_providers`, `telegram_configs`, and `audit_logs` in the shared Drizzle schema module.
+- Generated a new Drizzle migration and snapshot metadata for the new tables, including foreign keys back to `user` and `servers` plus relation indexes.
+- Updated root agent notes to reflect the live stack and the schema convention for new persisted entities.
+- Files changed: `AGENTS.md`, `server/db/schema.ts`, `drizzle/0002_cuddly_xavin.sql`, `drizzle/meta/0002_snapshot.json`, `drizzle/meta/_journal.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - App-owned persisted tables in this repo should follow the same text UUID primary-key shape as auth tables to keep joins and API payload types consistent.
+  - Drizzle metadata JSON is checked by Biome here, so format generated snapshot and journal files before committing.
+  - `audit_logs.user_id` can stay nullable so system-originated events are recordable even when there is no authenticated user context.
+---
+
+## 2026-05-26 10:22:24 +0800 - US-007
+[Session: https://opncd.ai/s/]
+- Built a shared authenticated dashboard shell with responsive sidebar navigation, page-level header actions, and the required nav destinations for Dashboard, Servers, AI Provider, Telegram, Logs, and Settings.
+- Added protected route stubs for the non-dashboard sections so later stories can drop content into stable URLs without rebuilding auth guards or layout chrome.
+- Rebranded the global header/footer away from the starter template, added a reusable `requireSession()` helper, and verified `bun run typecheck`, `bun test`, `bun run build`, `bunx @biomejs/biome check src AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, plus browser route-protection behavior at `/dashboard` redirecting to `/login` when unauthenticated.
+- Files changed: `AGENTS.md`, `src/components/Footer.tsx`, `src/components/Header.tsx`, `src/lib/session.ts`, `src/routeTree.gen.ts`, `src/routes/dashboard.tsx`, `src/routes/servers.tsx`, `src/routes/ai-provider.tsx`, `src/routes/telegram.tsx`, `src/routes/logs.tsx`, `src/routes/settings.tsx`, `src/styles.css`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - New authenticated dashboard pages should export their own `Route` but delegate layout to `AppShell` and session gating to `requireSession()` to keep the shell behavior uniform.
+  - Browser verification can confirm public chrome updates and protected-route redirects without a database, but full logged-in dashboard rendering still requires `DATABASE_URL` so Better Auth can create a session.
+  - Adding file-based routes automatically updates `src/routeTree.gen.ts`; treat it as generated output and include it in focused route commits.
+---
+
+## 2026-05-26 10:30:10 +0800 - US-008
+[Session: https://opncd.ai/s/]
+- Replaced the `Servers` placeholder with a three-step VPS connection wizard that captures server basics, password or SSH-key authentication, and a final review step before submit.
+- Added inline validation for required fields, host format, and SSH port range, while keeping the connection payload local to the route until the user presses `Connect`.
+- Added component tests for validation, auth-method switching, and review-step submission; verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src/routes/servers.tsx src/features/servers/connection-wizard.tsx src/features/servers/connection-wizard.test.tsx`, and browser-protected route behavior at `/servers` redirecting to `/login?redirect=%2Fservers` in the current no-session environment.
+- Files changed: `AGENTS.md`, `src/routes/servers.tsx`, `src/features/servers/connection-wizard.tsx`, `src/features/servers/connection-wizard.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep wizard state local in feature components and pass the full draft upward on submit so backend stories can attach transport logic without reworking the UI flow.
+  - Route-level browser verification for authenticated pages can still confirm redirect behavior when no local session exists; full in-app rendering needs a working Better Auth session backed by `DATABASE_URL`.
+  - Testing Library queries stay more stable when visible help text is not nested inside the label node for the input.
+---
+
+## 2026-05-26 10:36:52 +0800 - US-009
+[Session: https://opncd.ai/s/]
+- Implemented `POST /api/servers/connect` with authenticated request parsing, SSH verification, OS compatibility checks for Ubuntu 22.04+ and Debian 12+, server persistence, and audit logging for both success and failure paths.
+- Added AES-256-GCM credential encryption for stored secrets plus an in-memory ephemeral credential store keyed by `serverId:sessionId` when the user opts out of persistence.
+- Added focused Vitest coverage for the new route wiring, SSH OS parsing, and server connection handler behavior; updated Vitest config and project instructions so `bun run test` uses the intended jsdom-backed runner.
+- Files changed: `AGENTS.md`, `package.json`, `bun.lock`, `vite.config.ts`, `server/app.ts`, `server/app.test.ts`, `server/servers.ts`, `server/servers.test.ts`, `server/ssh.ts`, `server/ssh.test.ts`, `server/crypto.ts`, `server/credentials.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The server connection flow should treat SSH verification failures as user-facing `400`s, but keep persistence/configuration failures out of that bucket so the wrong error is not surfaced.
+  - Storing ephemeral credentials by `serverId:sessionId` keeps the install story aligned with the PRD without forcing temporary secrets into the database.
+  - `os_info` is persisted as a structured JSON object with `name`, `version`, `architecture`, and raw `/etc/os-release` fields, which is the shape future dashboard/install features should reuse.
+---
+
+## 2026-05-26 10:41:48 +0800 - US-010
+[Session: https://opncd.ai/s/]
+- Added the one-click install backend with `POST /api/servers/:id/install` to queue or retry the latest install record, resolve stored or ephemeral SSH credentials, and audit install start/success/failure events.
+- Added `GET /api/servers/:id/install/events` with Hono SSE streaming that replays persisted install logs for reconnecting clients and pushes live progress events from the background SSH workflow.
+- Reused the SSH stack with a shared connection helper, generated the Hermes `docker-compose.yml` remotely, and added focused tests for route wiring, install credential handling, retry state reset, and SSE replay behavior.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/install.ts`, `server/install.test.ts`, `server/ssh.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Install retries should reset the latest `installs` row for a server instead of creating parallel active installs, so the UI and SSE endpoint have a single source of truth.
+  - The install SSE endpoint can recover after a page refresh by hydrating events from `installs.log`, which means any future log format changes must stay parseable.
+  - A shared `withSshConnection()` helper keeps SSH setup/teardown centralized so backend stories can add more remote commands without duplicating connection lifecycle code.
+---
+
+## 2026-05-26 10:49:31 +0800 - US-011
+[Session: https://opncd.ai/s/]
+- Connected the `Servers` flow to the existing backend so a verified VPS can immediately start the Hermes install and navigate into a dedicated `/servers/$id/install` progress route.
+- Built the install progress UI with a quarter-step progress bar, resumable EventSource log streaming, terminal success/failure banners, and retry/dashboard actions backed by the existing install API.
+- Verified `bun run build`, `bun run typecheck`, `bun run test`, `bunx @biomejs/biome check src AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3001/servers/server_123/install` redirecting to `/login?redirect=%2Fservers%2Fserver_123%2Finstall` in the current no-session environment; captured `scripts/ralph/us-011-install-route.jpeg`.
+- Files changed: `AGENTS.md`, `src/features/servers/connection-wizard.tsx`, `src/features/servers/install-progress.tsx`, `src/features/servers/install-progress.test.tsx`, `src/lib/use-mount-effect.ts`, `src/routes/servers.tsx`, `src/routes/servers.$id.install.tsx`, `src/routeTree.gen.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-011-install-route.jpeg`
+- **Learnings for future iterations:**
+  - The install page can rely on the backend's persisted `installs.log` replay, so the UI only needs to dedupe repeated SSE events instead of storing a second client-side history.
+  - A tiny `useMountEffect()` escape hatch is enough for mount-only browser integrations like `EventSource` in this codebase; keep the helper explicit instead of sprinkling raw `useEffect` around feature components.
+  - Local browser verification may land on `localhost:3001` if another dev session already owns port `3000`, so trust the running Vite output before assuming the app is down.
+---
+
+## 2026-05-26 11:05:39 +0800 - US-013
+[Session: https://opncd.ai/s/]
+- Built the Telegram integration page with BotFather onboarding copy, masked token input, connect/disconnect actions, and a connected-state summary card inside the authenticated dashboard shell.
+- Added `/api/telegram/connect` and `/api/telegram/disconnect` handlers that validate the bot token against Telegram `getMe`, persist the latest active config, and write audit log entries for connect/disconnect events.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3001/telegram`, which redirected to `/login?redirect=%2Ftelegram` in the current no-session environment; captured `scripts/ralph/us-013-telegram-route.jpeg`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/telegram.ts`, `server/telegram.test.ts`, `src/routes/telegram.tsx`, `src/features/telegram/telegram-settings.tsx`, `src/features/telegram/telegram-settings.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-013-telegram-route.jpeg`
+- **Learnings for future iterations:**
+  - Telegram connectivity is cheap to verify via the `getMe` endpoint, so treat it as the canonical validation step before persisting bot state.
+  - Store the verified bot username alongside the token so protected route loaders can render stable connected-state summaries without re-calling Telegram on every page load.
+- Protected dashboard browser checks remain useful without local auth, but full in-app interaction on integration pages still depends on a working Better Auth session and `DATABASE_URL`.
+---
+
+## 2026-05-26 11:14:18 +0800 - US-014
+[Session: https://opncd.ai/s/]
+- Replaced the dashboard placeholder with a live status overview that shows agent, VPS, AI provider, and Telegram cards, including empty/loading/error states, retry controls, and 30-second polling from a dedicated client feature.
+- Added `/api/dashboard/status` plus server-side summary helpers that combine the latest server/install/provider/Telegram records and attempt live VPS metrics over SSH using the stored or ephemeral credential path.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3001/dashboard`, which redirected to `/login?redirect=%2Fdashboard` in the current no-session environment; captured `scripts/ralph/us-014-dashboard-route.jpeg`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/dashboard.ts`, `server/dashboard.test.ts`, `src/lib/dashboard-status.ts`, `src/routes/dashboard.tsx`, `src/features/dashboard/status-overview.tsx`, `src/features/dashboard/status-overview.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-014-dashboard-route.jpeg`
+- **Learnings for future iterations:**
+  - Dashboard cards work well as one backend summary endpoint plus client-side polling, which keeps route loaders simple while still supporting per-page retries and stale-state warnings.
+  - Live VPS metrics should reuse the same stored-or-ephemeral SSH credential resolution as installs so users who declined persistence still get health data during the active session.
+  - Protected-page browser verification can still confirm route wiring and capture the current redirect target even when local auth/database env vars are missing.
+---
+
+## 2026-05-26 11:36:53 +0800 - US-015
+[Session: https://opncd.ai/s/]
+- Built the server detail page at `/servers/$id` with server info summary, install status, and three action buttons (Restart Agent, Update Hermes, Rollback) that require an inline confirmation card before executing.
+- Added backend endpoints `GET /api/servers/:id` for detail snapshots and `POST /api/servers/:id/actions` to run restart/update/rollback commands over SSH with audit logging on start/success/failure.
+- Rollback uses `sed` to replace the Hermes image tag in the remote `docker-compose.yml`, then runs `docker compose up -d`; the target image tag is derived from the latest install record version or the last successful action's `imageRef`.
+- Action history shows the last 5 finished actions (succeeded/failed) from `audit_logs`, filtered by `server.action.*.succeeded` and `server.action.*.failed` action names scoped to the server ID.
+- Added Vitest coverage for the new route wiring in `server/app.test.ts`, action execution and credential handling in `server/server-actions.test.ts`, and confirmation/action flow in `src/features/servers/server-detail.test.tsx`.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3000/servers/server_123`, which redirected to `/login?redirect=%2Fservers%2Fserver_123` in the current no-session environment; captured `scripts/ralph/us-015-server-detail-route.png`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/server-actions.ts`, `server/server-actions.test.ts`, `src/lib/server-detail.ts`, `src/routes/servers.$id.tsx`, `src/routes/servers.tsx`, `src/features/servers/server-detail.tsx`, `src/features/servers/server-detail.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-015-server-detail-route.png`
+- **Learnings for future iterations:**
+  - Server detail pages can ship data through a simple `GET /api/servers/:id` endpoint fetched on mount instead of a `createServerFn` route loader, keeping SSR preload optional for authenticated pages where the main content is interactive anyway.
+  - Action history derived from `audit_logs` works well but requires client-side server ID filtering since the JSONB `details` column is not directly filterable via Drizzle's `eq` or `inArray` checks.
+  - Rollback without explicit version-tracking history needs a fallback chain: `targetVersion` from the request -> `installs.version` -> `"latest"`.
+  - Inline confirmation cards keep destructive-action safety consistent without depending on a `ui/alert-dialog.tsx` primitive; if that component is added later, switch to it for better accessibility.
+---
+
+## 2026-05-26 11:53:23 +0800 - US-016
+[Session: https://opncd.ai/s/]
+- Replaced the logs placeholder with a real viewer that preloads install logs and operational action history, renders both in read-only monospace panels, and supports copy-to-clipboard plus confirmed clear-log actions.
+- Added `GET /api/logs` and `POST /api/logs/clear` handlers backed by a shared `getLogsSnapshot()` helper; install output comes from `installs.log`, while restart/update/rollback history comes from finished `server.action.*` audit rows.
+- Verified `bun run typecheck`, `bun run test`, `bun run build`, `bunx @biomejs/biome check src server AGENTS.md scripts/ralph/prd.json scripts/ralph/progress.txt`, and browser-protected route behavior at `http://localhost:3000/logs`, which redirected to `/login?redirect=%2Flogs` in the current no-session environment; captured `scripts/ralph/us-016-logs-route.jpeg`.
+- Files changed: `AGENTS.md`, `server/app.ts`, `server/app.test.ts`, `server/logs.ts`, `server/logs.test.ts`, `src/lib/logs.ts`, `src/routes/logs.tsx`, `src/features/logs/logs-viewer.tsx`, `src/features/logs/logs-viewer.test.tsx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `scripts/ralph/us-016-logs-route.jpeg`
+- **Learnings for future iterations:**
+  - The logs page can follow the same route-level preload pattern as the integration pages, then keep the client component focused on copy/clear interaction state.
+  - Install log clearing is not just a UI concern here; it must null persisted `installs.log` values and remove the finished server-action audit rows to survive a refresh.
+  - Protected-page browser verification still works without local auth by checking the login redirect target, but full in-app log rendering needs a working Better Auth session backed by `DATABASE_URL`.
 ---
