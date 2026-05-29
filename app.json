@@ -1,0 +1,5 @@
+{
+	"scripts": {
+		"postdeploy": "./node_modules/.bin/drizzle-kit migrate"
+	}
+}

@@ -7,6 +7,9 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const config = defineConfig({
+	optimizeDeps: {
+		exclude: ["node-ssh", "ssh2", "cpu-features"],
+	},
 	resolve: { tsconfigPaths: true },
 	plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 	test: {
