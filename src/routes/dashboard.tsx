@@ -78,7 +78,7 @@ export function AppShell({
 	}
 
 	return (
-		<main className="page-wrap px-4 pb-10 pt-8 lg:pt-10">
+		<main className="w-full max-w-none px-4 sm:px-6 lg:px-8 pb-10 pt-8 lg:pt-10">
 			<div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
 				<aside className="space-y-4 lg:sticky lg:top-24">
 					<div className="island-shell flex items-center justify-between rounded-[1.75rem] px-5 py-4 lg:hidden">
@@ -154,9 +154,6 @@ export function AppShell({
 							</div>
 
 							<div className="flex flex-wrap items-center gap-3 lg:justify-end">
-								<div className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-2 text-sm text-[var(--sea-ink)]">
-									{userEmail}
-								</div>
 								<Button
 									type="button"
 									variant="secondary"
