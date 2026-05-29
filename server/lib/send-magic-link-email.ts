@@ -1,9 +1,12 @@
 /**
  * Send a magic-link email to the given address.
  *
- * Uses the Resend SDK when `RESEND_API_KEY` is set.  Falls back to
- * `console.log` otherwise (development-friendly default consistent with the
- * project's lazy-resolution pattern).
+ * Uses the Resend HTTP API when `RESEND_API_KEY` is set. When unset, falls
+ * back to `console.log` in non-production environments so developers can
+ * click the link from terminal output. In production we refuse to log the
+ * token-bearing URL and instead throw, so a misconfiguration causes a loud
+ * 500 rather than silently leaking single-use login links into application
+ * logs.
  */
 export async function sendMagicLinkEmail(input: {
 	email: string;
@@ -12,6 +15,12 @@ export async function sendMagicLinkEmail(input: {
 	const apiKey = process.env.RESEND_API_KEY;
 
 	if (!apiKey) {
+		if (process.env.NODE_ENV === "production") {
+			throw new Error(
+				"RESEND_API_KEY is required to send magic-link emails in production.",
+			);
+		}
+
 		console.log(`Magic link for ${input.email}: ${input.url}`);
 		return;
 	}
@@ -33,8 +42,13 @@ export async function sendMagicLinkEmail(input: {
 
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
-		console.error(
-			`Failed to send magic link email via Resend: ${response.status} ${body}`,
+		const detail = `${response.status} ${body}`.trim();
+		console.error(`Failed to send magic link email via Resend: ${detail}`);
+		// Bubble up so Better Auth treats the send as failed and the auth
+		// endpoint returns an error instead of telling the user to check
+		// their inbox for a message that never arrived.
+		throw new Error(
+			`Failed to send magic-link email via Resend (${response.status}).`,
 		);
 	}
 }
