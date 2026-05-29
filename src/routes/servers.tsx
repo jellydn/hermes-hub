@@ -218,18 +218,6 @@ function ServersPage() {
 									{isStartingInstall ? "Starting install..." : "Install Hermes"}
 								</span>
 							</Button>
-							<Button
-								type="button"
-								variant="secondary"
-								onClick={() => {
-									void navigate({
-										to: "/servers/$id",
-										params: { id: connectedServer.id },
-									});
-								}}
-							>
-								Manage Server
-							</Button>
 						</div>
 					</div>
 
