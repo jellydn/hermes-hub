@@ -36,6 +36,12 @@
 
 **Dashboard Polling**: The real bug is that 30-second polling never backs off — a dead server gets hammered indefinitely. Fix: exponential backoff (30s → 60s → 120s) with a hard cap at 3 consecutive failures, then stop polling and show a "connection lost" state with a manual retry button. Resets to 30s on successful response. Test both server error responses and client retry/backoff behavior.
 
+**Auth Test Scope**: Two focused tests: (1) `requireSession` redirects to `/login` when no session, (2) `hasDatabaseUrl() === false` returns 503 for auth routes. No broader integration test — the 15 existing route tests cover the happy path.
+
+**Rollback Test Scope**: Two unit tests for pure functions: `getRollbackTargetFromHistory` (returns first successful rollback image ref, returns null for empty history) and the fallback chain (mock DB, verify each level: param → history → install version → "latest"). Quick to write, covers the logic.
+
+**Polling Backoff**: Dashboard polling uses exponential backoff with a hard cap. On consecutive errors, the interval doubles (30s → 60s → 120s). After 3 consecutive failures, polling stops entirely and a "connection lost" state is shown with a manual retry button. On a successful response, the interval resets to 30s. This is both a behavior fix and a test requirement.
+
 **Magic Link Email**: Delivered via Resend when `RESEND_API_KEY` is set. In development (no API key), the magic link URL is logged to console. The `sendMagicLink` callback delegates to a `sendMagicLinkEmail()` function that resolves the transport at call time — no provider is wired at module load, consistent with lazy failure.
 
 **Auth Route Handling**: Better Auth requests are handled entirely by the catch-all `GET/POST /api/auth/*` route with a `hasDatabaseUrl()` guard. No explicit per-endpoint rewrites are needed — the library routes its own paths internally.

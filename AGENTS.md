@@ -1,84 +1,54 @@
 # HermesHub
 
-Web app for non-technical users to deploy and manage a self-hosted Hermes AI Agent on a VPS (zero terminal required).
+## Commands
 
-## State
+- Use `bun`, not `npm` or `pnpm`. The lockfile is `bun.lock`.
+- Main local commands are `bun run dev`, `bun run build`, `bun run test`, `bun run typecheck`.
+- `just dev`, `just test`, `just typecheck`, and `just check` are thin wrappers around the Bun scripts.
+- CI runs `bunx @biomejs/biome check .`, then `bun run typecheck`, then `bun run test`, then `bun run build`. Match that order when you touch JS/TS files.
+- Do not use `bun test`; Vitest is configured in `vite.config.ts`, and the repo’s test command is `bun run test`.
 
-**Scaffolded via CTA** — TanStack Start with file-based routing, TailwindCSS v4, shadcn-style UI primitives, Drizzle ORM, Hono API routing, and Better Auth magic-link auth are wired in. The Hermes-specific product flows are still being built story by story from the PRD and Ralph plan.
+## Verified Gotchas
 
-## Key Commands
-
-```bash
-bun run dev       # starts Vite dev server on port 3000
-bun run build     # production build
-bun run preview   # preview production build
-bun run test      # vitest
-bun run typecheck # TypeScript typecheck
-```
-
-## Package Manager
-
-Use **bun** (not npm). Lockfile is `bun.lock`. Do not commit `package-lock.json`.
-
-## Path Aliases
-
-- `#/*` → `./src/*` (package.json `imports`)
-- `@/*` → `./src/*` (tsconfig `paths`)
-
-Both work. Prefer `@/` for readability.
-
-## TypeScript
-
-- `verbatimModuleSyntax: true` — must use `import type` for type-only imports
-- `noUnusedLocals` / `noUnusedParameters` — strict
-- `jsx: "react-jsx"` — no need to import React in JSX files
-
-## Sources of Truth
-
-- `tasks/prd-hermes-hub-mvp.md` — full PRD with user stories, schema, API routes
-- `scripts/ralph/` — Ralph autonomous build agent loop
-
-## Ralph Build System
-
-```bash
-./scripts/ralph/ralph.sh [max_iterations] [cli_tool] [model] [share]
-```
-
-- Iterates through `prd.json` stories one per run
-- Progress tracked in `scripts/ralph/progress.txt`
-- Prompt templates: `scripts/ralph/prompt-{opencode,amp,pi}.md`
+- `bun run dev` serves Vite on port `3000`.
+- `vite.config.ts` excludes `node-ssh`, `ssh2`, and `cpu-features` from `optimizeDeps` because server-only SSH code pulls native `.node` binaries that break Vite dev prebundling if reintroduced into the client scan.
+- `src/routeTree.gen.ts` is generated. Do not edit it by hand.
+- `biome.json` excludes `src/routeTree.gen.ts` from checks.
+- `drizzle.config.ts` throws at import time if `DATABASE_URL` is missing.
+- There is a `db:generate` script, but no local `db:migrate` script in `package.json`. The checked-in migration path is `drizzle-kit migrate` during deploy (`app.json`, `.github/workflows/deploy.yml`). Do not assume `bun run db:migrate` exists just because `README.md` mentions it.
 
 ## Architecture
 
-- `app/` or `src/routes/` — TanStack Start routes (file-based)
-- `server/` — Hono API routes and auth/server helpers
-- `server/db/` — Drizzle ORM schema and migrations
-- `server/ssh/` — SSH utilities (node-ssh or ssh2)
-- `server/install/` — Hermes install orchestration with SSE events
+- `src/server.ts` is the server entrypoint. It sends `/api/*` requests to the Hono app in `server/app.ts` and everything else to TanStack Start.
+- `server/` holds the real backend logic: auth, DB, SSH, install orchestration, dashboard aggregation, providers, Telegram, and logs.
+- `src/routes/` contains file-based TanStack Start routes. Keep route files thin and push UI into `src/features/`.
+- Authenticated dashboard pages reuse `AppShell` from `src/routes/dashboard.tsx`.
 
-## Conventions
+## Data Flow Conventions
 
-- Add new routes under `src/routes/`; the scaffold is file-based and `routeTree.gen.ts` is auto-generated.
-- Custom request branching belongs in `src/server.ts`; keep `/api/*` handling there and let the default TanStack Start handler serve everything else.
-- Shared UI primitives should live in `src/components/ui/` with shadcn-style helpers in `src/lib/utils.ts`; use the shared `cn()` helper instead of ad hoc class string merging.
-- Cross-layer provider metadata should live in `src/lib/ai-providers.ts` so the UI model pickers and server-side validation/test handlers stay in sync.
-- Authenticated integration pages like AI Provider and Telegram should load their current summary through a route-level `createServerFn`, then let a feature component own the client-side form and action state.
-- Dashboard status should preload an initial summary through the route and then let the client feature poll `/api/dashboard/status` for 30-second refreshes, so SSR stays fast while the cards can retry without rerunning route loaders.
-- Form fields should keep helper and error copy outside the `<label>` element so accessible names stay stable for browser automation and Testing Library queries.
-- Authenticated pages should reuse the shared `AppShell` exported from `src/routes/dashboard.tsx` so sidebar navigation, user header actions, and responsive layout stay consistent across dashboard sections.
-- Nested dashboard pages should live under the parent route filename (for example `src/routes/servers.$id.install.tsx`) so TanStack Router generates child paths like `/servers/$id/install` automatically.
-- Drizzle schema files live under `server/db/`, and `drizzle.config.ts` reads `DATABASE_URL` eagerly, so set that env var before running `drizzle-kit` commands.
-- Persisted app entities in `server/db/schema.ts` use text primary keys with `gen_random_uuid()::text`; keep new tables aligned with that pattern unless an external integration requires a different key shape.
-- Auth: Better Auth magic link only (no passwords, no OAuth); mount Better Auth directly in `server/app.ts` and keep any custom `/api/auth/*` aliases as thin request rewrites to the library's built-in routes.
-- Better Auth wiring should stay lazy: create the auth instance inside a getter instead of at module load so page routes can still render when `DATABASE_URL` is missing, and use an absolute `baseURL` in `src/lib/auth-client.ts` because Better Auth rejects relative URLs during SSR.
-- Encryption: AES-256-GCM for stored credentials (`ENCRYPTION_KEY` env var)
-- Install progress is tracked in the latest `installs` row per server and mirrored through the in-memory SSE stream state in `server/install.ts`; when changing install steps, keep the DB log format and emitted event payloads in sync so reconnecting clients can replay prior progress.
-- Vitest is configured through `vite.config.ts`, so run tests with `bun run test`; plain `bun test` uses Bun's runner and skips the repo's jsdom-backed setup.
-- Server detail pages at `src/routes/servers.$id.tsx` can mount a feature component that fetches its snapshot from `GET /api/servers/:id` instead of using a `createServerFn` route loader, keeping the route thin and the data-fetching lifecycle local to the component.
-- Action history for a server is derived from `audit_logs` entries with `server.action.*.succeeded` and `server.action.*.failed` action names; filter by `details ->> 'serverId'` in the SQL `where` clause (alongside `inArray(auditLogs.action, [...])`) so the `LIMIT` applies to that server's rows, not to a global recent-actions window.
-- The logs page aggregates install history from `installs.log` and operational history from finished `server.action.*` audit rows; if you add a "clear logs" flow, update both stores together so refreshes stay empty.
-- Destructive server actions (restart/update/rollback) use an inline confirmation card (`ConfirmationCard`) in the feature component rather than `window.confirm` or an external `AlertDialog` primitive; if a `ui/alert-dialog.tsx` is later added, migrate to it.
-- Rollback image tag resolution follows the chain: `targetVersion` request parameter → `installs.version` → `"latest"`.
-- All destructive actions require confirmation dialog
-- Supports Ubuntu 22.04+ / Debian 12+ VPS targets
-- `routeTree.gen.ts` is auto-generated — do not edit
+- Route-level `createServerFn` loaders are the normal pattern for authenticated page snapshots such as dashboard, logs, AI provider, and Telegram.
+- `src/routes/servers.$id.tsx` is the exception: it fetches `/api/servers/:id` from the component with `useMountEffect` instead of using a route loader. Follow the existing pattern unless you are intentionally reshaping that page.
+- Install progress lives in two places: persisted `installs.log` rows and the in-memory SSE stream in `server/install.ts`. Keep both in sync if you change install events or replay behavior.
+- Server action history is read from `audit_logs` rows named `server.action.*.succeeded|failed`, filtered by `details ->> 'serverId'` in SQL before `LIMIT 5`.
+- Rollback target resolution is `request targetVersion -> latest installs.version -> "latest"`.
+
+## Auth And Runtime Constraints
+
+- Better Auth is intentionally lazy in `server/auth.ts`; avoid moving auth initialization to module scope or pages will crash when `DATABASE_URL` is unset.
+- `src/lib/auth-client.ts` uses an absolute SSR base URL from `BETTER_AUTH_URL` (fallback `http://localhost:3000/api/auth`). Keep it absolute.
+- Mutating API routes in `server/app.ts` call `requireHttps()` in production. Preserve that guard on new credential-bearing endpoints.
+
+## Frontend Conventions
+
+- Prefer the shared `cn()` helper and existing UI primitives in `src/components/ui/`.
+- Keep helper text and validation text outside `<label>` elements so Testing Library queries and browser automation keep stable accessible names.
+- The repo has a deliberate mount-only escape hatch in `src/lib/use-mount-effect.ts`; use it for stable external subscriptions like polling or SSE when that pattern already exists.
+
+## Database Conventions
+
+- Drizzle schema lives in `server/db/schema.ts`.
+- App-owned primary keys generally use `text(...).primaryKey().default(sql\`gen_random_uuid()::text\`)`. Follow that pattern for new app tables unless an external integration forces a different key shape.
+
+## Existing Instruction Chain
+
+- `CLAUDE.md` only points at this file. Keep repo-specific agent guidance here.

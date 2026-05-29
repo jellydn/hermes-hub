@@ -1,7 +1,7 @@
 # Codebase Concerns
 
 **Analysis Date:** 2026-05-26
-**Last Updated:** 2026-05-27 — Second-round implementation complete
+**Last Updated:** 2026-05-29 — Remaining behavior fix + coverage gaps implemented
 
 ---
 
@@ -24,14 +24,23 @@
 
 ## ✅ Resolved (Second-Round Implementation)
 
-These concerns have been implemented:
+- **No rate limiting on magic link sending** → `rate-limiter-flexible` with in-memory store, 3 requests per 5 minutes per email
+- **SSH private keys transmitted in plaintext JSON** → Server-side HTTPS enforcement in production; reject credential-bearing endpoints over plain HTTP
+- **No caching for dashboard status polling** → Two-tier in-memory cache: static data 60s TTL, live metrics 15s TTL
+- **OS validation rejects non-Ubuntu/Debian** → Warn-and-proceed: `supportLevel: "supported" | "untested"` with dashboard warning
+- **Install workflow monolith** → SSE infrastructure extracted into `server/install/sse-stream.ts`
+- **Auth base URL defaults to localhost during SSR** → Read `BETTER_AUTH_URL` from env vars during SSR
 
-- **No rate limiting on magic link sending** → `rate-limiter-flexible` with in-memory store, 3 requests per 5 minutes per email (`server/app.ts`)
-- **SSH private keys transmitted in plaintext JSON** → Server-side HTTPS enforcement in production; reject credential-bearing endpoints over plain HTTP by checking `x-forwarded-proto` (`server/app.ts`)
-- **No caching for dashboard status polling** → Two-tier in-memory cache: static data (server/provider/telegram/install) 60s TTL, live metrics (SSH) 15s TTL (`server/dashboard.ts`)
-- **OS validation rejects non-Ubuntu/Debian** → Warn-and-proceed: Ubuntu/Debian get `supportLevel: "supported"`, other Linux distros get `supportLevel: "untested"` with a dashboard warning (`server/ssh.ts`, `server/dashboard.ts`, `src/`)
-- **Install workflow monolith (647 lines)** → SSE infrastructure extracted into `server/install/sse-stream.ts` (`server/install.ts` imports from it)
-- **Auth base URL defaults to localhost during SSR** → Read `BETTER_AUTH_URL` from env vars during SSR (`src/lib/auth-client.ts`)
+---
+
+## ✅ Resolved (Final Pass — behavior + test coverage)
+
+- **Dashboard polling never backs off on error** → Implemented exponential backoff (30s → 60s → 120s), hard cap at 3 consecutive failures, connection-lost state, and manual retry in `src/features/dashboard/status-overview.tsx`; covered in `src/features/dashboard/status-overview.test.tsx`
+- **Session credential lifecycle coverage** → Added focused tests for store/get, read-time TTL expiry, and periodic cleanup in `server/credentials.test.ts`
+- **SSH normalization coverage** → Added `normalizeSshError` unit tests while preserving `parseAndValidateOs` coverage in `server/ssh.test.ts`; caller integration coverage already exists in `server/server-actions.test.ts`, `server/dashboard.test.ts`, and `server/servers.test.ts`
+- **SSE reconnection/timeout coverage** → Added pure helper coverage in `server/install/sse-stream.test.ts` and focused idle-timeout coverage in `server/install-idle-timeout.test.ts`
+- **Auth route behavior coverage** → Added `hasDatabaseUrl() === false` 503 coverage in `server/app.test.ts` and redirect coverage in `src/lib/session.test.ts`
+- **Rollback target resolution coverage** → Added `getRollbackTargetFromHistory` unit coverage in `server/server-actions.test.ts`
 
 ---
 
@@ -39,20 +48,16 @@ These concerns have been implemented:
 
 ### Dependencies at Risk
 
-**`better-auth` (^1.6.11):** Risk: Relatively new auth library (v1.x) with evolving API. Breaking changes in minor releases possible. The project uses both `@better-auth/drizzle-adapter` and `tanstackStartCookies()`. Action: Pin version, monitor changelogs. No ADR needed (not hard to reverse, just painful to swap).
+**`better-auth` (^1.6.11):** Risk: Relatively new auth library (v1.x) with evolving API. Breaking changes in minor releases possible. Action: Pin version, monitor changelogs. No ADR needed.
 
-**`node-ssh` (^13.2.1):** Risk: May have compatibility issues with newer SSH configs or key formats (ED25519, FIDO/U2F). Key-based auth assumes private key content as string. No fallback to `ssh2` directly. Action: Test with ED25519 keys when adding SSH test coverage. No ADR needed.
+**`node-ssh` (^13.2.1):** Risk: May have compatibility issues with newer SSH configs or key formats (ED25519, FIDO/U2F). Action: Test with ED25519 keys when adding SSH test coverage. No ADR needed.
 
-### Test Coverage Gaps (Priority Order)
+### Test Coverage Gaps
 
-**1. Session credential lifecycle (High)** — `server/credentials.ts` has zero tests. No coverage for `storeSessionCredential`, `getSessionCredential`, or TTL eviction. Highest priority because we just rewrote this module. Files: `server/credentials.ts`
+All previously identified coverage gaps from the 2026-05-29 review are now covered.
 
-**2. Full SSH connection flow (High)** — End-to-end SSH with real credential resolution, OS validation (including new `supportLevel` field), network failures, timeouts, concurrent execution. Files: `server/servers.ts`, `server/ssh.ts`, `server/server-actions.ts`, `server/dashboard.ts`
+---
 
-**3. SSE reconnection and timeout behavior (Medium)** — EventSource reconnection, closeStream/openStream cycle, malformed SSE data, idle timeout + heartbeat. Must be tested before refactoring into `sse-stream.ts`. Files: `src/features/servers/install-progress.tsx`, `server/install.ts`
+### Completed — No Further Action
 
-**4. Dashboard error states (Medium)** — API returns 401/500/malformed JSON, retry/refresh behavior on polling failure. Files: `src/features/dashboard/status-overview.tsx`, `server/dashboard.ts`
-
-**5. Auth callback and route rewrite behavior (Medium)** — `/api/auth/*` catch-all logic, `requireSession` redirect. Simpler now after removing duplicate routes. Files: `server/app.ts`, `src/lib/session.ts`, `src/routes/login.tsx`
-
-**6. Rollback target resolution (Low)** — Fallback chain: `targetVersion` param → `installs.version` → `"latest"`. `getRollbackTargetFromHistory` function. Files: `server/server-actions.ts`
+All original codebase concerns from the initial analysis have either been implemented, covered by tests, or remain watch-only dependency risks.
