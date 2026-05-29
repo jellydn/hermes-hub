@@ -5,15 +5,15 @@
 				"path": "/api/health",
 				"type": "startup",
 				"timeout": 5,
-				"retries": 10,
-				"interval": 5
+				"attempts": 10,
+				"wait": 5
 			},
 			{
 				"path": "/api/health",
 				"type": "liveness",
 				"timeout": 5,
-				"retries": 3,
-				"interval": 10
+				"attempts": 3,
+				"wait": 10
 			}
 		]
 	}

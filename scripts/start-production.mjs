@@ -67,7 +67,12 @@ async function serveStatic(urlPath, res) {
 		}
 
 		if (method === "GET") {
-			createReadStream(filePath).pipe(res);
+			const stream = createReadStream(filePath);
+			stream.on("error", (err) => {
+				console.error(`Failed to stream ${filePath}:`, err);
+				res.destroy(err);
+			});
+			stream.pipe(res);
 		} else {
 			res.end();
 		}
