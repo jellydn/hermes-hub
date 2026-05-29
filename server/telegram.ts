@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import { getAuthSession } from "./auth";
+import { decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -42,9 +43,16 @@ export async function getCurrentTelegramConfig(userId: string) {
 		return null;
 	}
 
+	let decryptedToken: string;
+	try {
+		decryptedToken = decryptSecret(record.botToken);
+	} catch {
+		decryptedToken = "";
+	}
+
 	return {
 		botUsername: record.botUsername || "Connected bot",
-		botTokenLast4: getTokenLast4(record.botToken),
+		botTokenLast4: getTokenLast4(decryptedToken),
 		isActive: true,
 	} satisfies TelegramConfigSummary;
 }
@@ -94,7 +102,7 @@ export async function connectTelegram(context: Context) {
 
 		await db.insert(telegramConfigs).values({
 			userId: session.user.id,
-			botToken,
+			botToken: encryptSecret(botToken),
 			botUsername: bot.username,
 			isActive: true,
 		});

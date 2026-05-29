@@ -2,6 +2,8 @@ import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthSession = vi.fn();
+const encryptSecret = vi.fn();
+const decryptSecret = vi.fn();
 const insertValues = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
@@ -12,6 +14,11 @@ const selectLimit = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
+}));
+
+vi.mock("./crypto", () => ({
+	encryptSecret,
+	decryptSecret,
 }));
 
 vi.mock("./db", () => ({
@@ -37,6 +44,10 @@ describe("telegram handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 
+		encryptSecret.mockImplementation((value: string) => `enc:${value}`);
+		decryptSecret.mockImplementation((value: string) =>
+			value.startsWith("enc:") ? value.slice(4) : value,
+		);
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 		insertValues.mockResolvedValue(undefined);
@@ -92,7 +103,12 @@ describe("telegram handlers", () => {
 			},
 		});
 		expect(updateSet).toHaveBeenCalled();
-		expect(insertValues).toHaveBeenCalled();
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				botToken: "enc:123456:secret-token",
+			}),
+		);
+		expect(encryptSecret).toHaveBeenCalledWith("123456:secret-token");
 	});
 
 	it("returns a clear invalid token error", async () => {
