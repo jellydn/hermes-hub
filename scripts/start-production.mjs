@@ -37,7 +37,8 @@ async function serveStatic(urlPath, res) {
 	const filePath = path.join(clientDir, urlPath);
 
 	// Prevent directory traversal
-	if (!filePath.startsWith(clientDir)) {
+	const relative = path.relative(clientDir, filePath);
+	if (relative.startsWith("..") || path.isAbsolute(relative)) {
 		return false;
 	}
 
@@ -59,7 +60,7 @@ async function serveStatic(urlPath, res) {
 		res.setHeader("content-length", stats.size);
 
 		// Aggressive caching for content-hashed assets
-		if (/[a-fA-F0-9_-]{8,}\.\w+$/.test(urlPath)) {
+		if (/-[a-zA-Z0-9_-]{8,}\.\w+$/.test(urlPath)) {
 			res.setHeader("cache-control", "public, max-age=31536000, immutable");
 		} else {
 			res.setHeader("cache-control", "public, max-age=3600");
@@ -84,7 +85,7 @@ const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 if (process.env.DATABASE_URL) {
 	console.log("Running database migrations...");
 	try {
-		execSync("node ./node_modules/.bin/drizzle-kit migrate", {
+		execSync("npx drizzle-kit migrate", {
 			cwd: join(import.meta.dirname, ".."),
 			stdio: "inherit",
 			env: process.env,
