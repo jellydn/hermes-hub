@@ -542,21 +542,17 @@ function formatRelativeTimestamp(timestamp: string) {
 	});
 }
 
-function statusPillClassName(
-	status:
-		| "online"
-		| "offline"
-		| "connected"
-		| "disconnected"
-		| "healthy"
-		| "warning",
-) {
-	return cn(
-		"status-pill",
-		status === "online" || status === "connected" || status === "healthy"
-			? "status-pill--success"
-			: status === "warning"
-				? "status-pill--warning"
-				: "status-pill--error",
-	);
+const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> = {
+	online: "success",
+	connected: "success",
+	healthy: "success",
+	warning: "warning",
+	offline: "error",
+	disconnected: "error",
+	unhealthy: "error",
+};
+
+function statusPillClassName(status: keyof typeof STATUS_TYPE_MAP) {
+	const type = STATUS_TYPE_MAP[status] ?? "error";
+	return cn("status-pill", `status-pill--${type}`);
 }

@@ -128,7 +128,6 @@ export function AppShell({
 									onClick={() => setIsSidebarOpen(false)}
 									className="dashboard-nav-link"
 									activeProps={{ className: "dashboard-nav-link is-active" }}
-									aria-current={undefined}
 								>
 									<Icon className="h-4 w-4" aria-hidden="true" />
 									<span>{label}</span>

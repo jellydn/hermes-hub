@@ -96,15 +96,7 @@ function ServersPage() {
 				error?: string;
 			} | null;
 
-			if (!response.ok) {
-				if (response.status === 409) {
-					await navigate({
-						to: "/servers/$id/install",
-						params: { id: connectedServer.id },
-					});
-					return;
-				}
-
+			if (!response.ok && response.status !== 409) {
 				setInstallError(payload?.error ?? "Unable to start the install.");
 				return;
 			}
