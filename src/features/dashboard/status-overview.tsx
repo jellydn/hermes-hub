@@ -163,8 +163,12 @@ export function DashboardStatusOverview({
 	const showCardErrors = !snapshot && fetchState === "error";
 
 	return (
-		<section className="space-y-6">
-			<section className="island-shell relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8">
+		<section className="space-y-6" aria-label="Dashboard status overview">
+			<section
+				className="island-shell relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8"
+				aria-live="polite"
+				aria-atomic="true"
+			>
 				<div className="pointer-events-none absolute -left-16 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.24),transparent_70%)]" />
 				<div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
 					<div>
@@ -178,8 +182,11 @@ export function DashboardStatusOverview({
 								: "Connect your first VPS to get started."}
 						</p>
 						{snapshot?.server?.supportLevel === "untested" ? (
-							<p className="mt-3 flex items-center gap-2 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-700">
-								<TriangleAlert className="h-4 w-4 shrink-0" />
+							<p className="mt-3 flex items-center gap-2 rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-200">
+								<TriangleAlert
+									className="h-4 w-4 shrink-0"
+									aria-hidden="true"
+								/>
 								<span>
 									This OS is not officially supported. Hermes runs via Docker
 									but some features may not work.
@@ -205,11 +212,15 @@ export function DashboardStatusOverview({
 								void refreshStatus();
 							}}
 							disabled={fetchState === "loading" || fetchState === "refreshing"}
+							aria-live="polite"
 						>
 							{fetchState === "loading" || fetchState === "refreshing" ? (
-								<LoaderCircle className="h-4 w-4 animate-spin" />
+								<LoaderCircle
+									className="h-4 w-4 animate-spin"
+									aria-hidden="true"
+								/>
 							) : (
-								<RefreshCcw className="h-4 w-4" />
+								<RefreshCcw className="h-4 w-4" aria-hidden="true" />
 							)}
 							<span>Refresh now</span>
 						</Button>
@@ -218,9 +229,13 @@ export function DashboardStatusOverview({
 			</section>
 
 			{pollingPaused ? (
-				<section className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-2 text-red-700">
-						<TriangleAlert className="h-4 w-4 shrink-0" />
+				<section
+					className="flex flex-col items-start justify-between gap-4 rounded-[1.5rem] border border-red-600/20 bg-red-600/10 px-4 py-3 text-sm sm:flex-row sm:items-center"
+					role="alert"
+					aria-live="assertive"
+				>
+					<div className="flex items-center gap-2 text-red-900 dark:text-red-200">
+						<TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
 						<span>
 							Connection lost. Automatic updates are paused until you retry.
 						</span>
@@ -254,13 +269,17 @@ export function DashboardStatusOverview({
 			{snapshot ? (
 				<>
 					{fetchError ? (
-						<div className="rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+						<div
+							className="rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+							role="status"
+							aria-live="polite"
+						>
 							The latest refresh failed, so these cards may be stale.{" "}
 							{fetchError}
 						</div>
 					) : null}
 
-					<section className="grid gap-4 xl:grid-cols-2">
+					<section className="grid gap-4 md:grid-cols-2">
 						<StatusCard
 							icon={Activity}
 							label="Agent status"
@@ -384,7 +403,7 @@ function VpsHealthCard({
 				<span className={statusPillClassName(vps.status)}>{vps.status}</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{vps.detail}</p>
-			<div className="mt-5 grid grid-cols-3 gap-3">
+			<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
 				<MetricStat label="CPU" value={formatPercent(vps.cpu)} />
 				<MetricStat label="Memory" value={formatPercent(vps.memory)} />
 				<MetricStat label="Disk" value={formatPercent(vps.disk)} />
@@ -439,7 +458,7 @@ function DashboardSkeletonGrid() {
 
 	return (
 		<section
-			className="grid gap-4 xl:grid-cols-2"
+			className="grid gap-4 md:grid-cols-2"
 			aria-label="Loading dashboard status"
 		>
 			{skeletonCards.map((card) => (
@@ -465,7 +484,7 @@ function DashboardErrorGrid({
 	onRetry: () => void;
 }) {
 	return (
-		<section className="grid gap-4 xl:grid-cols-2">
+		<section className="grid gap-4 md:grid-cols-2">
 			{["Agent status", "VPS health", "AI provider", "Telegram"].map(
 				(label) => (
 					<article key={label} className="island-shell rounded-[2rem] p-5">
@@ -533,11 +552,11 @@ function statusPillClassName(
 		| "warning",
 ) {
 	return cn(
-		"rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
+		"status-pill",
 		status === "online" || status === "connected" || status === "healthy"
-			? "bg-emerald-500/15 text-emerald-700"
+			? "status-pill--success"
 			: status === "warning"
-				? "bg-amber-500/15 text-amber-700"
-				: "bg-red-500/15 text-red-700",
+				? "status-pill--warning"
+				: "status-pill--error",
 	);
 }
