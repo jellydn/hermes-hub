@@ -12,7 +12,9 @@ export default function Footer() {
 				<p className="m-0 text-sm">
 					&copy; {year} HermesHub. Self-hosted AI, without the terminal.
 				</p>
-				<p className="island-kicker m-0">Built for zero-terminal VPS setup</p>
+				<p className="island-kicker m-0" aria-hidden="true">
+					Built for zero-terminal VPS setup
+				</p>
 			</div>
 		</footer>
 	);
