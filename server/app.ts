@@ -33,8 +33,20 @@ function handleAuthUnavailable(context: {
 }
 
 /**
- * Rejects requests made over plain HTTP in production.
- * Relies on x-forwarded-proto set by the reverse proxy (e.g. Caddy, nginx).
+ * Rejects requests made over plain HTTP in production. In production we
+ * require a positive `https` signal — either the request URL is already
+ * `https://`, or the reverse proxy (Caddy/nginx/etc.) forwards
+ * `x-forwarded-proto: https`. Requests where the protocol is unknown are
+ * rejected so a missing or misconfigured proxy header cannot silently let
+ * credential bodies travel over plaintext.
+ *
+ * Deployment assumption: HermesHub is intended to run behind a single
+ * TLS-terminating reverse proxy that owns the public hostname (Caddy,
+ * nginx, etc.) and overwrites `x-forwarded-proto` rather than passing
+ * through client headers. The app process must NOT be exposed to the
+ * public Internet directly. If you do not control the upstream proxy
+ * (e.g. running with a pass-through CDN), the `x-forwarded-proto` header
+ * can be spoofed and this guard alone will not prevent plaintext leaks.
  */
 function requireHttps(context: {
 	req: { raw: Request };
@@ -44,8 +56,15 @@ function requireHttps(context: {
 		return;
 	}
 
-	const forwardedProto = context.req.raw.headers.get("x-forwarded-proto");
-	if (forwardedProto === "http") {
+	const forwardedProto = context.req.raw.headers
+		.get("x-forwarded-proto")
+		?.split(",")[0]
+		?.trim()
+		.toLowerCase();
+	const urlProtocol = new URL(context.req.raw.url).protocol;
+
+	const isHttps = forwardedProto === "https" || urlProtocol === "https:";
+	if (!isHttps) {
 		return context.json(
 			{
 				error:
@@ -56,26 +75,44 @@ function requireHttps(context: {
 	}
 }
 
+async function applyMagicLinkRateLimit(request: Request) {
+	let email: unknown = null;
+	try {
+		const cloned = request.clone();
+		const body = (await cloned.json().catch(() => null)) as {
+			email?: unknown;
+		} | null;
+		email = body?.email;
+	} catch {
+		email = null;
+	}
+
+	if (typeof email !== "string" || email.length === 0) {
+		return null;
+	}
+
+	try {
+		await magicLinkRateLimiter.consume(email);
+		return null;
+	} catch {
+		return Response.json(
+			{
+				error:
+					"Too many requests. Please wait 5 minutes before requesting another magic link.",
+			},
+			{ status: 429 },
+		);
+	}
+}
+
 apiApp.post("/auth/send-magic-link", async (context) => {
 	if (!hasDatabaseUrl()) {
 		return handleAuthUnavailable(context);
 	}
 
-	const body = await context.req.json().catch(() => null);
-	const email = body?.email;
-
-	if (email) {
-		try {
-			await magicLinkRateLimiter.consume(email);
-		} catch {
-			return context.json(
-				{
-					error:
-						"Too many requests. Please wait 5 minutes before requesting another magic link.",
-				},
-				429,
-			);
-		}
+	const limited = await applyMagicLinkRateLimit(context.req.raw);
+	if (limited) {
+		return limited;
 	}
 
 	return getAuth().handler(
@@ -83,9 +120,20 @@ apiApp.post("/auth/send-magic-link", async (context) => {
 	);
 });
 
-apiApp.on(["GET", "POST"], "/auth/*", (context) => {
+apiApp.on(["GET", "POST"], "/auth/*", async (context) => {
 	if (!hasDatabaseUrl()) {
 		return handleAuthUnavailable(context);
+	}
+
+	const url = new URL(context.req.raw.url);
+	if (
+		context.req.raw.method === "POST" &&
+		url.pathname === "/api/auth/sign-in/magic-link"
+	) {
+		const limited = await applyMagicLinkRateLimit(context.req.raw);
+		if (limited) {
+			return limited;
+		}
 	}
 
 	return getAuth().handler(context.req.raw);
@@ -141,7 +189,25 @@ apiApp.post("/servers/:id/actions", (c) => {
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
 apiApp.post("/logs/clear", clearLogs);
-apiApp.post("/providers", saveProviderConfig);
-apiApp.post("/providers/test", testProviderConfig);
-apiApp.post("/telegram/connect", connectTelegram);
+apiApp.post("/providers", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return saveProviderConfig(c);
+});
+apiApp.post("/providers/test", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return testProviderConfig(c);
+});
+apiApp.post("/telegram/connect", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return connectTelegram(c);
+});
 apiApp.post("/telegram/disconnect", disconnectTelegram);
