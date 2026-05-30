@@ -59,6 +59,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -77,6 +78,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -114,6 +116,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -146,6 +149,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={handleDetailChange}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -184,6 +188,7 @@ describe("ServerDetail", () => {
 				detail={createDetail({ install: null })}
 				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -214,6 +219,7 @@ describe("ServerDetail", () => {
 				})}
 				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
+				onDeleted={vi.fn()}
 			/>,
 		);
 

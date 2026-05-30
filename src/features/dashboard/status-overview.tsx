@@ -588,4 +588,3 @@ function formatRelativeTimestamp(timestamp: string) {
 		second: "2-digit",
 	});
 }
-

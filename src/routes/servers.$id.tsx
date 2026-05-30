@@ -98,6 +98,7 @@ function ServerDetailPage() {
 							params: { id: serverId },
 						})
 					}
+					onDeleted={() => navigate({ to: "/servers" })}
 				/>
 			) : null}
 		</AppShell>

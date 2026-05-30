@@ -16,6 +16,8 @@ const buttonVariants = cva(
 				ghost:
 					"text-[var(--sea-ink-soft)] hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)]",
 				link: "px-0 text-[var(--lagoon-deep)] underline-offset-4 hover:underline",
+				destructive:
+					"border border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20",
 			},
 			size: {
 				default: "h-11 px-5 py-2.5",
