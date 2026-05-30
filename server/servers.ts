@@ -604,39 +604,7 @@ function getSessionKey(sessionId?: string | null) {
 	return sessionId && sessionId.length > 0 ? sessionId : randomUUID();
 }
 
-function requireHttps(context: {
-	req: { raw: Request };
-	json: (obj: unknown, status?: number) => Response;
-}) {
-	if (process.env.NODE_ENV !== "production") {
-		return;
-	}
-
-	const forwardedProto = context.req.raw.headers
-		.get("x-forwarded-proto")
-		?.split(",")[0]
-		?.trim()
-		.toLowerCase();
-	const urlProtocol = new URL(context.req.raw.url).protocol;
-
-	const isHttps = forwardedProto === "https" || urlProtocol === "https:";
-	if (!isHttps) {
-		return context.json(
-			{
-				error:
-					"HTTPS required. Use a secure connection to access this endpoint.",
-			},
-			426,
-		);
-	}
-}
-
 export async function deleteServer(context: Context) {
-	const httpsResult = requireHttps(context);
-	if (httpsResult) {
-		return httpsResult;
-	}
-
 	const session = await getAuthSession(context.req.raw.headers);
 	if (!session) {
 		return context.json({ error: "Unauthorized" }, 401);
