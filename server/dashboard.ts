@@ -14,6 +14,7 @@ import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, installs, servers, telegramConfigs } from "./db/schema";
+import { readOsInfoValue } from "./server-records";
 import { withSshConnection } from "./ssh";
 
 type CacheEntry<T> = {
@@ -445,11 +446,6 @@ function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
 		osVersion,
 		supportLevel,
 	};
-}
-
-function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function getServerCredential(

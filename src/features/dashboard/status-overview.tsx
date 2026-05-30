@@ -19,8 +19,8 @@ import type {
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
 } from "@/lib/dashboard-status";
+import { getStatusPillClassName } from "@/lib/status-pill";
 import { useMountEffect } from "@/lib/use-mount-effect";
-import { cn } from "@/lib/utils";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;
@@ -353,7 +353,7 @@ function ServerInventoryCard({
 					</h3>
 				</div>
 				<span
-					className={statusPillClassName(
+					className={getStatusPillClassName(
 						serverCount > 0 ? "connected" : "disconnected",
 					)}
 				>
@@ -447,7 +447,7 @@ function VpsHealthCard({
 						{vps.status === "warning" ? "Watch closely" : "Healthy"}
 					</h3>
 				</div>
-				<span className={statusPillClassName(vps.status)}>{vps.status}</span>
+				<span className={getStatusPillClassName(vps.status)}>{vps.status}</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{vps.detail}</p>
 			<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -492,7 +492,7 @@ function StatusCard({
 						{title}
 					</h3>
 				</div>
-				<span className={statusPillClassName(status)}>{status}</span>
+				<span className={getStatusPillClassName(status)}>{status}</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{detail}</p>
 			<p className="mt-4 mb-0 text-sm text-[var(--sea-ink)]">{meta}</p>
@@ -589,17 +589,3 @@ function formatRelativeTimestamp(timestamp: string) {
 	});
 }
 
-const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> = {
-	online: "success",
-	connected: "success",
-	healthy: "success",
-	warning: "warning",
-	offline: "error",
-	disconnected: "error",
-	unhealthy: "error",
-};
-
-function statusPillClassName(status: keyof typeof STATUS_TYPE_MAP) {
-	const type = STATUS_TYPE_MAP[status] ?? "error";
-	return cn("status-pill", `status-pill--${type}`);
-}

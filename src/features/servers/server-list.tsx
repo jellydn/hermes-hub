@@ -3,7 +3,7 @@ import { ArrowRight, Plus, Rocket, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { ServerListSummary } from "@/lib/servers";
-import { cn } from "@/lib/utils";
+import { getStatusPillClassName } from "@/lib/status-pill";
 
 import { formatInstallStatus, formatTimestamp } from "./server-detail-helpers";
 
@@ -51,7 +51,7 @@ export function ServerList({ servers }: ServerListProps) {
 								{formatOsSummary(server) ? ` · ${formatOsSummary(server)}` : ""}
 							</p>
 						</div>
-						<span className={statusPillClassName(server.status)}>
+						<span className={getStatusPillClassName(server.status)}>
 							{server.status}
 						</span>
 					</div>
@@ -128,9 +128,4 @@ function formatOsSummary(
 	server: Pick<ServerListSummary, "osName" | "osVersion">,
 ) {
 	return [server.osName, server.osVersion].filter(Boolean).join(" ");
-}
-
-function statusPillClassName(status: string) {
-	const tone = status === "connected" ? "success" : "error";
-	return cn("status-pill", `status-pill--${tone}`);
 }

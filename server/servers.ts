@@ -14,6 +14,7 @@ import {
 	buildOsInfo,
 	getOwnedServerRecord,
 	normalizeAuthMethod,
+	readOsInfoValue,
 	resolveServerCredential,
 } from "./server-records";
 import {
@@ -576,11 +577,6 @@ function latestTimestampIso(values: Array<Date | null | undefined>) {
 	}
 
 	return new Date(Math.max(...timestamps)).toISOString();
-}
-
-function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function readServerId(details: unknown) {

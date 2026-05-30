@@ -93,3 +93,14 @@ export function buildOsInfo(verified: VerifiedServerInfo) {
 		raw: verified.raw,
 	};
 }
+
+export function readOsInfoValue(
+	osInfo: Record<string, unknown> | null | undefined,
+	key: string,
+): string | null {
+	if (!osInfo) {
+		return null;
+	}
+	const value = osInfo[key];
+	return typeof value === "string" && value.length > 0 ? value : null;
+}
