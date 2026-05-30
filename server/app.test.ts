@@ -11,6 +11,7 @@ const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
+const getLatestServerInstallLog = vi.fn();
 const getDashboardStatus = vi.fn();
 const getLogs = vi.fn();
 const clearLogs = vi.fn();
@@ -33,6 +34,7 @@ vi.mock("./server-actions", () => ({
 vi.mock("./install", () => ({
 	startServerInstall,
 	streamServerInstallEvents,
+	getLatestServerInstallLog,
 }));
 
 vi.mock("./dashboard", () => ({

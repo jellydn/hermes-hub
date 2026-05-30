@@ -17,6 +17,7 @@ import {
 	tryClaimInstallStream,
 } from "./install/sse-stream";
 import { getClientIp } from "./lib/get-client-ip";
+import { getOwnedServerRecord } from "./server-records";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 type InstallStep = {
@@ -290,6 +291,58 @@ export async function streamServerInstallEvents(context: Context) {
 			state.listeners.add(listener);
 			stream.onAbort(cleanup);
 		});
+	});
+}
+
+export async function getLatestServerInstallLog(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const serverId = context.req.param("id");
+	if (!serverId) {
+		return context.json({ error: "Server ID is required" }, 400);
+	}
+
+	const serverRecord = await getOwnedServerRecord({
+		serverId,
+		userId: session.user.id,
+	});
+	if (!serverRecord) {
+		return context.json({ error: "Server not found" }, 404);
+	}
+
+	const [installRecord] = await getDb()
+		.select({
+			id: installs.id,
+			status: installs.status,
+			step: installs.step,
+			log: installs.log,
+			updatedAt: installs.updatedAt,
+		})
+		.from(installs)
+		.where(eq(installs.serverId, serverId))
+		.orderBy(desc(installs.createdAt))
+		.limit(1);
+
+	if (!installRecord) {
+		return context.json({
+			installId: null,
+			status: null,
+			step: null,
+			log: null,
+			updatedAt: null,
+		});
+	}
+
+	return context.json({
+		installId: installRecord.id,
+		status: installRecord.status,
+		step: installRecord.step,
+		log: installRecord.log,
+		updatedAt: installRecord.updatedAt,
 	});
 }
 
