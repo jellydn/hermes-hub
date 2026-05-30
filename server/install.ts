@@ -38,7 +38,7 @@ type ServerCredentialRecord = {
 	storeCredential: boolean;
 };
 
-const defaultHermesImage = "ghcr.io/hermes-agent/hermes:latest";
+const defaultHermesImage = "nousresearch/hermes-agent:latest";
 
 function buildInstallSteps(): InstallStep[] {
 	const steps: InstallStep[] = [
