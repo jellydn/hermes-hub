@@ -48,7 +48,11 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 	}, [serverId]);
 
 	useEffect(() => {
-		if (!isExpanded || !install) {
+		if (!install) {
+			return;
+		}
+
+		if (!isExpanded && install.status !== "failed") {
 			return;
 		}
 
@@ -111,7 +115,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 				</div>
 			) : null}
 
-			{isFailed && !lastErrorLine && logData?.log ? (
+			{isFailed && !lastErrorLine ? (
 				<div className="mt-3 flex items-center gap-3 rounded-[1rem] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
 					<AlertCircle className="h-4 w-4 shrink-0" />
 					<span>Install failed. Expand the log to see details.</span>

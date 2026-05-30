@@ -233,6 +233,68 @@ describe("ServerDetail", () => {
 			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
 		});
 	});
+
+	it("blocks delete confirmation until the server label is typed", () => {
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /delete server/i }));
+
+		const textbox = screen.getByRole("textbox", {
+			name: /confirm server label/i,
+		});
+		const confirmButton = screen.getByRole("button", {
+			name: /confirm delete/i,
+		});
+
+		expect(confirmButton.getAttribute("disabled")).toBe("");
+
+		fireEvent.change(textbox, { target: { value: "Production VPS" } });
+
+		expect(confirmButton.getAttribute("disabled")).toBeNull();
+	});
+
+	it("calls onDeleted after successful delete", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ ok: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const handleDeleted = vi.fn();
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={handleDeleted}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /delete server/i }));
+
+		const textbox = screen.getByRole("textbox", {
+			name: /confirm server label/i,
+		});
+		fireEvent.change(textbox, { target: { value: "Production VPS" } });
+
+		fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/servers/server_123",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+			expect(handleDeleted).toHaveBeenCalled();
+		});
+	});
 });
 
 function createDetail(overrides?: {

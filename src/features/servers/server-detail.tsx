@@ -412,12 +412,19 @@ export function ServerDetail({
 										related installs, logs, and audit records. Type the server
 										label to confirm.
 									</p>
+									<label
+										htmlFor={`delete-confirm-${detail.server.id}`}
+										className="mt-3 block text-sm font-medium text-[var(--sea-ink)]"
+									>
+										Confirm server label
+									</label>
 									<input
+										id={`delete-confirm-${detail.server.id}`}
 										type="text"
 										value={deleteConfirmLabel}
 										onChange={(e) => setDeleteConfirmLabel(e.target.value)}
 										placeholder={detail.server.label}
-										className="mt-3 w-full rounded-[1rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-2 text-sm text-[var(--sea-ink)] placeholder:text-[var(--sea-ink-soft)]"
+										className="mt-1 w-full rounded-[1rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-2 text-sm text-[var(--sea-ink)] placeholder:text-[var(--sea-ink-soft)]"
 									/>
 									{deleteError ? (
 										<p className="mt-2 mb-0 text-xs text-red-600">

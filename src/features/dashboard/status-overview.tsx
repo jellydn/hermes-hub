@@ -501,11 +501,17 @@ function StatusCard({
 }
 
 function DashboardSkeletonGrid() {
-	const skeletonCards = ["agent", "vps", "provider", "telegram"] as const;
+	const skeletonCards = [
+		"servers",
+		"agent",
+		"vps",
+		"provider",
+		"telegram",
+	] as const;
 
 	return (
 		<section
-			className="grid gap-4 md:grid-cols-2"
+			className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
 			aria-label="Loading dashboard status"
 		>
 			{skeletonCards.map((card) => (
