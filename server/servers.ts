@@ -528,7 +528,8 @@ async function getLatestServerActionRecords(userId: string) {
 				inArray(auditLogs.action, [...relevantServerActionNames]),
 			),
 		)
-		.orderBy(desc(auditLogs.createdAt));
+		.orderBy(desc(auditLogs.createdAt))
+		.limit(100);
 
 	return records as ServerActionRecord[];
 }

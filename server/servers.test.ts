@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auditLogs, servers } from "./db/schema";
 
+// Allow mock promises to chain .limit()
+// @ts-expect-error
+Promise.prototype.limit = function () {
+	return this;
+};
+
 const getAuthSession = vi.fn();
 const insertServerValues = vi.fn();
 const insertAuditValues = vi.fn();

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { ServerList } from "@/features/servers/server-list";
 import { requireSession } from "@/lib/session";
 import { getAuthSession } from "../../server/auth";
-import { getServerListSnapshot } from "../../server/servers";
 import { AppShell } from "./dashboard";
 
 const loadServers = createServerFn({ method: "GET" }).handler(async () => {
@@ -16,6 +15,7 @@ const loadServers = createServerFn({ method: "GET" }).handler(async () => {
 		return [];
 	}
 
+	const { getServerListSnapshot } = await import("../../server/servers");
 	return getServerListSnapshot(session.user.id);
 });
 
