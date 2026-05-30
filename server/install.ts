@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
+import { defaultHermesImage } from "./constants";
 import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
@@ -36,8 +37,6 @@ type ServerCredentialRecord = {
 	encryptedCredential: string | null;
 	storeCredential: boolean;
 };
-
-const defaultHermesImage = "ghcr.io/hermes-agent/hermes:latest";
 
 const installSteps: InstallStep[] = [
 	{

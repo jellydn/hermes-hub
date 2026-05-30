@@ -3,6 +3,7 @@ import type { Context } from "hono";
 
 import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
+import { hermesImageRepository } from "./constants";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -44,8 +45,8 @@ const actionCommands: Record<
 		}
 		return [
 			"cd ~/hermes",
-			`sudo docker pull ghcr.io/hermes-agent/hermes:${imageTag}`,
-			`sudo sed -i.bak 's|image: ghcr.io/hermes-agent/hermes:.*|image: ghcr.io/hermes-agent/hermes:${imageTag}|' docker-compose.yml`,
+			`sudo docker pull ${hermesImageRepository}:${imageTag}`,
+			`sudo sed -i.bak 's|image: ${hermesImageRepository}:.*|image: ${hermesImageRepository}:${imageTag}|' docker-compose.yml`,
 			"sudo docker compose up -d",
 		].join(" && ");
 	},
