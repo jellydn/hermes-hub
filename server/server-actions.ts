@@ -5,6 +5,7 @@ import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
+import { prependGhcrLogin } from "./ghcr";
 import { getClientIp } from "./lib/get-client-ip";
 import {
 	getRollbackTargetFromHistory,
@@ -36,18 +37,22 @@ const actionCommands: Record<
 > = {
 	restart: () => "cd ~/hermes && sudo docker compose restart",
 	update: () =>
-		"cd ~/hermes && sudo docker compose pull && sudo docker compose up -d",
+		prependGhcrLogin(
+			"cd ~/hermes && sudo docker compose pull && sudo docker compose up -d",
+		),
 	rollback: (targetVersion) => {
 		const imageTag = targetVersion?.trim() || "latest";
 		if (!isValidDockerTag(imageTag)) {
 			throw new Error(`Invalid image tag: ${imageTag}`);
 		}
-		return [
-			"cd ~/hermes",
-			`sudo docker pull ghcr.io/hermes-agent/hermes:${imageTag}`,
-			`sudo sed -i.bak 's|image: ghcr.io/hermes-agent/hermes:.*|image: ghcr.io/hermes-agent/hermes:${imageTag}|' docker-compose.yml`,
-			"sudo docker compose up -d",
-		].join(" && ");
+		return prependGhcrLogin(
+			[
+				"cd ~/hermes",
+				`sudo docker pull ghcr.io/hermes-agent/hermes:${imageTag}`,
+				`sudo sed -i.bak 's|image: ghcr.io/hermes-agent/hermes:.*|image: ghcr.io/hermes-agent/hermes:${imageTag}|' docker-compose.yml`,
+				"sudo docker compose up -d",
+			].join(" && "),
+		);
 	},
 };
 

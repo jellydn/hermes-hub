@@ -6,6 +6,7 @@ import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
+import { buildGhcrLoginCommand } from "./ghcr";
 import {
 	emitInstallEvent,
 	ensureInstallStream,
@@ -39,46 +40,65 @@ type ServerCredentialRecord = {
 
 const defaultHermesImage = "ghcr.io/hermes-agent/hermes:latest";
 
-const installSteps: InstallStep[] = [
-	{
-		id: "install-docker",
-		progress: 15,
-		message: "Installing Docker",
-		command:
-			"sudo apt-get update -y && sudo apt-get install -y ca-certificates curl gnupg && curl -fsSL https://get.docker.com | sudo sh",
-	},
-	{
-		id: "install-compose",
-		progress: 30,
-		message: "Installing Docker Compose",
-		command:
-			"sudo apt-get install -y docker-compose-plugin && sudo systemctl enable --now docker",
-	},
-	{
-		id: "create-hermes-directory",
-		progress: 45,
-		message: "Creating Hermes workspace",
-		command: "mkdir -p ~/hermes",
-	},
-	{
-		id: "write-compose-file",
-		progress: 60,
-		message: "Writing docker-compose.yml",
-		command: buildComposeWriteCommand(),
-	},
-	{
-		id: "pull-image",
-		progress: 80,
-		message: "Pulling Hermes image",
-		command: "cd ~/hermes && sudo docker compose pull",
-	},
-	{
-		id: "start-containers",
-		progress: 100,
-		message: "Starting Hermes containers",
-		command: "cd ~/hermes && sudo docker compose up -d",
-	},
-];
+function buildInstallSteps(): InstallStep[] {
+	const steps: InstallStep[] = [
+		{
+			id: "install-docker",
+			progress: 15,
+			message: "Installing Docker",
+			command:
+				"sudo apt-get update -y && sudo apt-get install -y ca-certificates curl gnupg && curl -fsSL https://get.docker.com | sudo sh",
+		},
+		{
+			id: "install-compose",
+			progress: 30,
+			message: "Installing Docker Compose",
+			command:
+				"sudo apt-get install -y docker-compose-plugin && sudo systemctl enable --now docker",
+		},
+		{
+			id: "create-hermes-directory",
+			progress: 45,
+			message: "Creating Hermes workspace",
+			command: "mkdir -p ~/hermes",
+		},
+		{
+			id: "write-compose-file",
+			progress: 60,
+			message: "Writing docker-compose.yml",
+			command: buildComposeWriteCommand(),
+		},
+	];
+
+	const ghcrLogin = buildGhcrLoginCommand();
+	if (ghcrLogin) {
+		steps.push({
+			id: "login-ghcr",
+			progress: 70,
+			message: "Authenticating with GitHub Container Registry",
+			command: ghcrLogin,
+		});
+	}
+
+	steps.push(
+		{
+			id: "pull-image",
+			progress: 80,
+			message: "Pulling Hermes image",
+			command: "cd ~/hermes && sudo docker compose pull",
+		},
+		{
+			id: "start-containers",
+			progress: 100,
+			message: "Starting Hermes containers",
+			command: "cd ~/hermes && sudo docker compose up -d",
+		},
+	);
+
+	return steps;
+}
+
+const installSteps = buildInstallSteps();
 
 export async function startServerInstall(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
