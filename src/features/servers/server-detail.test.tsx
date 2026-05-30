@@ -40,7 +40,13 @@ beforeEach(() => {
 
 describe("ServerDetail", () => {
 	it("renders the last five action results", () => {
-		render(<ServerDetail initialDetail={createDetail()} />);
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
+		);
 
 		expect(screen.getAllByText(/restart agent/i).length).toBeGreaterThanOrEqual(
 			1,
@@ -52,7 +58,13 @@ describe("ServerDetail", () => {
 	});
 
 	it("requires confirmation before running a server action", async () => {
-		render(<ServerDetail initialDetail={createDetail()} />);
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
+		);
 
 		fireEvent.click(screen.getByRole("button", { name: /restart agent/i }));
 
@@ -83,7 +95,13 @@ describe("ServerDetail", () => {
 			),
 		);
 
-		render(<ServerDetail initialDetail={createDetail()} />);
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+			/>,
+		);
 
 		fireEvent.click(screen.getByRole("button", { name: /update hermes/i }));
 		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
@@ -92,9 +110,115 @@ describe("ServerDetail", () => {
 			expect(screen.getByText(/action failed: host unreachable/i)).toBeTruthy();
 		});
 	});
+
+	it("updates server basics from the readonly fields", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					serverDetail: createDetail({
+						server: { label: "Primary VPS" },
+					}),
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const handleDetailChange = vi.fn();
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={handleDetailChange}
+				onGoToInstall={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /edit server label/i }));
+		fireEvent.change(screen.getByLabelText(/server label/i), {
+			target: { value: "Primary VPS" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+		await waitFor(() => {
+			expect(screen.getByText(/server basics updated/i)).toBeTruthy();
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/servers/server_123",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		expect(handleDetailChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				server: expect.objectContaining({ label: "Primary VPS" }),
+			}),
+		);
+	});
+
+	it("opens the install flow from manage server", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ install: { id: "install_123" } }), {
+				status: 202,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const handleGoToInstall = vi.fn();
+		render(
+			<ServerDetail
+				detail={createDetail({ install: null })}
+				onDetailChange={vi.fn()}
+				onGoToInstall={handleGoToInstall}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /install hermes/i }));
+
+		await waitFor(() => {
+			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
+		});
+	});
+
+	it("retries a failed install from manage server", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ install: { id: "install_123" } }), {
+				status: 202,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const handleGoToInstall = vi.fn();
+		render(
+			<ServerDetail
+				detail={createDetail({
+					install: {
+						status: "failed",
+						version: "latest",
+						updatedAt: "2026-05-26T03:00:00.000Z",
+					},
+				})}
+				onDetailChange={vi.fn()}
+				onGoToInstall={handleGoToInstall}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /retry install/i }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/servers/server_123/install",
+				expect.objectContaining({ method: "POST" }),
+			);
+			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
+		});
+	});
 });
 
-function createDetail(): ServerDetailSnapshot {
+function createDetail(overrides?: {
+	server?: Partial<ServerDetailSnapshot["server"]>;
+	install?: ServerDetailSnapshot["install"];
+}): ServerDetailSnapshot {
 	return {
 		server: {
 			id: "server_123",
@@ -108,12 +232,16 @@ function createDetail(): ServerDetailSnapshot {
 			osVersion: "24.04",
 			architecture: "x86_64",
 			supportLevel: "supported",
+			...overrides?.server,
 		},
-		install: {
-			status: "succeeded",
-			version: "latest",
-			updatedAt: "2026-05-26T03:00:00.000Z",
-		},
+		install:
+			overrides && "install" in overrides
+				? (overrides.install ?? null)
+				: {
+						status: "succeeded",
+						version: "latest",
+						updatedAt: "2026-05-26T03:00:00.000Z",
+					},
 		actionHistory: [
 			{
 				id: "audit_2",

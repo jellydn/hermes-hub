@@ -331,6 +331,53 @@ describe("server install", () => {
 			}),
 		);
 	});
+
+	it("allows retrying after a failed install", async () => {
+		withSshConnection.mockImplementationOnce(async (_input, run) => {
+			const execCommand = vi.fn().mockResolvedValue({
+				code: 1,
+				stdout: "",
+				stderr: "host unreachable",
+			});
+			return run({ execCommand });
+		});
+
+		const { startServerInstall } = await import("./install");
+		const firstResponse = await startServerInstall(createContext("POST"));
+
+		expect(firstResponse.status).toBe(202);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		selectLimit.mockReset();
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+				},
+			])
+			.mockResolvedValueOnce([]);
+
+		withSshConnection.mockImplementationOnce(async (_input, run) => {
+			const execCommand = vi.fn().mockResolvedValue({
+				code: 0,
+				stdout: "ok",
+				stderr: "",
+			});
+			return run({ execCommand });
+		});
+
+		const secondResponse = await startServerInstall(createContext("POST"));
+
+		expect(secondResponse.status).toBe(202);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(withSshConnection).toHaveBeenCalledTimes(2);
+	});
 });
 
 function createContext(method: "GET" | "POST") {

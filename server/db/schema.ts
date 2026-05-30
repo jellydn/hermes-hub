@@ -201,3 +201,12 @@ export const auditLogs = pgTable(
 	},
 	(table) => [index("audit_logs_user_id_idx").on(table.userId)],
 );
+
+// Better Auth looks up schema models by singular names (user, session, account, verification).
+// These re-exports provide the expected keys without renaming the primary exports.
+export {
+	accounts as account,
+	sessions as session,
+	users as user,
+	verifications as verification,
+};

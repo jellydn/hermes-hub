@@ -7,7 +7,7 @@ import { startServerInstall, streamServerInstallEvents } from "./install";
 import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
-import { connectServer } from "./servers";
+import { connectServer, updateServer } from "./servers";
 import { connectTelegram, disconnectTelegram } from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
@@ -171,6 +171,13 @@ apiApp.post("/servers/connect", (c) => {
 	return connectServer(c);
 });
 apiApp.get("/servers/:id", getServerDetail);
+apiApp.patch("/servers/:id", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return updateServer(c);
+});
 apiApp.post("/servers/:id/install", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {

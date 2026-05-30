@@ -96,7 +96,7 @@ function ServersPage() {
 				error?: string;
 			} | null;
 
-			if (!response.ok) {
+			if (!response.ok && response.status !== 409) {
 				setInstallError(payload?.error ?? "Unable to start the install.");
 				return;
 			}
@@ -209,18 +209,6 @@ function ServersPage() {
 								<span>
 									{isStartingInstall ? "Starting install..." : "Install Hermes"}
 								</span>
-							</Button>
-							<Button
-								type="button"
-								variant="secondary"
-								onClick={() => {
-									void navigate({
-										to: "/servers/$id",
-										params: { id: connectedServer.id },
-									});
-								}}
-							>
-								Manage Server
 							</Button>
 						</div>
 					</div>

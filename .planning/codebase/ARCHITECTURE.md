@@ -1,134 +1,240 @@
 # Architecture
 
-**Analysis Date:** 2026-05-26
+**Analysis Date:** 2026-05-28
 
 ## Pattern Overview
-
-**Overall:** Hybrid SSR + API Gateway — TanStack Start serves the file-routed React app with streaming SSR, while a Hono API gateway handles all `/api/*` backend endpoints (auth, SSH, installs, integrations). The frontend calls backend APIs via `fetch` or `EventSource`, with `createServerFn` used selectively for route-level data preloading.
-
+**Overall:** Dual-runtime monolith with split frontend/backend concern layers
 **Key Characteristics:**
-- **File-based routing** via `@tanstack/react-router` with auto-generated `routeTree.gen.ts`
-- **API gateway pattern** — a Hono app at `server/app.ts` mounted at `/api/` and dispatched from the server entry point `src/server.ts`
-- **Feature-sliced UI** — each authenticated page mounts a feature component from `src/features/` that owns its own action state and form logic
-- **Shared types contract** — `src/lib/` holds TypeScript types shared between server and client (e.g., `DashboardStatusSnapshot`, `ServerDetailSnapshot`)
-- **In-memory stream state** — install progress is tracked in a `Map<string, InstallStreamState>` with SSE push, replayable on reconnect from DB logs
-- **Ephemeral + stored credentials** — SSH credentials are either AES-256-GCM encrypted in Postgres or held in-memory per-session via `Map<string, EphemeralCredentialRecord>`
-- **Lazy auth initialization** — Better Auth instance is created inside a getter (not at module load) so pages can render when `DATABASE_URL` is not set
-- **Route-wide auth guard** — authenticated routes use `beforeLoad` hooks that call `requireSession()` and redirect to `/login` if needed
+- Server entrypoint (`src/server.ts`) routes `/api/*` to Hono and everything else to TanStack Start SSR
+- Backend logic lives in `server/` as pure Hono handlers and service modules; no framework coupling to TanStack
+- Frontend lives in `src/` as file-based TanStack Start routes with UI pushed into feature modules
+- Database access is centralized through a lazy-initialized Drizzle singleton (`server/db/index.ts`)
+- Credentials are encrypted at rest with AES-256-GCM or held ephemerally in-process for session-only workflows
 
 ## Layers
 
-### Presentation Layer (UI / Routes)
-**Purpose:** Renders pages, handles user interactions, manages client-side state
-**Location:** `src/routes/`, `src/features/`, `src/components/`
+**Server Entrypoint:**
+- Purpose: HTTP router that splits requests between the Hono API app and the TanStack Start SSR handler
+- Location: `src/server.ts`
+- Contains: Single fetch function that delegates `/api/*` to Hono and all other paths to TanStack Start
+- Depends on: `server/app.ts` (Hono app), TanStack Start server entry
+- Used by: Node.js / Bun HTTP server (production and dev)
 
-The routing layer uses TanStack Router's file conventions (`servers.$id.tsx`, `servers.$id.install.tsx`). Each authenticated route runs a `beforeLoad` hook for session guard + server function preloading, then passes context down to a feature component. Feature components (like `ServerDetail`, `ConnectionWizard`) manage their own form/action state with `useState` or `useReducer`-style patterns. The `AppShell` layout in `src/routes/dashboard.tsx` wraps all dashboard pages with navigation, user info, and logout.
+**API Layer (Hono):**
+- Purpose: Handles all REST/JSON API endpoints for authentication, servers, installs, providers, Telegram, dashboard, and logs
+- Location: `server/app.ts`
+- Contains: Route definitions, middleware (HTTPS enforcement, rate limiting), handler delegation
+- Depends on: All `server/*.ts` service modules, `server/db/` for data access
+- Used by: `src/server.ts` (proxied via `/api/*`), frontend components (via fetch)
 
-### API / Server Layer
-**Purpose:** Handles all backend business logic — SSH, DB, auth, install workflows
-**Location:** `server/`
+**Backend Services:**
+- Purpose: Business logic for each domain area -- authentication, SSH, server management, install orchestration, AI providers, Telegram, dashboard aggregation, logging
+- Location: `server/auth.ts`, `server/servers.ts`, `server/install.ts`, `server/ssh.ts`, `server/providers.ts`, `server/telegram.ts`, `server/dashboard.ts`, `server/logs.ts`, `server/server-actions.ts`, `server/credentials.ts`, `server/crypto.ts`
+- Contains: Hono handler functions, database queries, SSH command execution, SSE streaming, credential management, encryption/decryption
+- Depends on: `server/db/` (Drizzle), `server/ssh.ts` (SSH client), `server/crypto.ts` (encryption), `server/credentials.ts` (ephemeral credentials), `server/lib/` (utilities)
+- Used by: `server/app.ts` (API routes), `src/routes/*.tsx` (via `createServerFn` server-side loaders)
 
-Hono router at `server/app.ts` exposes 15+ REST endpoints under `/api/`. Each endpoint handler is a standalone function imported (e.g., `connectServer`, `getServerDetail`). Auth is handled separately — Better Auth routes are proxied through request rewrites to `/api/auth/*`. The install flow uses Hono's SSE streaming (`streamSSE`) for real-time progress events.
+**Server Utilities:**
+- Purpose: Shared helper functions for client IP extraction, email sending, and database health checks
+- Location: `server/lib/get-client-ip.ts`, `server/lib/send-magic-link-email.ts`, `server/db/health.ts`
+- Contains: IP extraction from proxy headers, Resend API email dispatch, DB connectivity check
+- Depends on: Hono context, Resend HTTP API, Drizzle
+- Used by: Backend services (servers, installs, providers, telegram, logs)
 
-### Database / Data Layer
-**Purpose:** ORM schema, migrations, connection management
-**Location:** `server/db/`
+**Database Layer:**
+- Purpose: PostgreSQL schema definition, connection management, and health checks
+- Location: `server/db/schema.ts`, `server/db/index.ts`, `server/db/health.ts`
+- Contains: Drizzle ORM table definitions (users, sessions, accounts, verifications, servers, installs, aiProviders, telegramConfigs, auditLogs), lazy database singleton, health check query
+- Depends on: `postgres` client, `drizzle-orm`
+- Used by: All backend services that read/write data
 
-Drizzle ORM with Postgres driver (`postgres`). Schema is defined in `server/db/schema.ts` with 8 tables: `users`, `sessions`, `accounts`, `verifications` (Better Auth), and app-specific: `servers`, `installs`, `ai_providers`, `telegram_configs`, `audit_logs`. Connection is lazily initialized via `getDb()` getter.
+**Database Migrations:**
+- Purpose: Track and apply schema changes to PostgreSQL
+- Location: `drizzle/` directory, `drizzle.config.ts`
+- Contains: Generated SQL migration files, snapshot metadata, Drizzle Kit configuration
+- Depends on: `DATABASE_URL` environment variable
+- Used by: `bun run db:generate` script, deploy-time `drizzle-kit migrate`
 
-### Infrastructure / SSH Layer
-**Purpose:** SSH connection, command execution, OS verification
-**Location:** `server/ssh.ts`
+**Frontend Routes (TanStack Start):**
+- Purpose: File-based SSR routes that define page structure and data loading
+- Location: `src/routes/`
+- Contains: Route definitions with `beforeLoad` hooks for auth checks, `createServerFn` loaders for server-side data fetching, thin page components that delegate to features
+- Depends on: `src/features/`, `src/lib/`, `src/components/`, `server/*.ts` (imported directly for server-side loaders)
+- Used by: TanStack Router (client navigation), TanStack Start (SSR rendering)
 
-Node-SSH wrapper with `withSshConnection<T>()` — auto-connects, runs a callback, auto-disposes. Includes `verifyServerConnection()` that reads `/etc/os-release` and checks Ubuntu 22.04+/Debian 12+ support. Custom error classes `SshConnectError`, `UnsupportedOsError`.
+**Frontend Features:**
+- Purpose: Domain-specific UI components that contain the actual page content and state management
+- Location: `src/features/dashboard/`, `src/features/servers/`, `src/features/providers/`, `src/features/telegram/`, `src/features/logs/`
+- Contains: React components with local state, API fetch logic, SSE subscriptions, polling patterns
+- Depends on: `src/lib/`, `src/components/ui/`
+- Used by: `src/routes/*.tsx` (route page components)
 
-### Cryptography Layer
-**Purpose:** Encrypt/decrypt stored secrets (SSH credentials, API keys)
-**Location:** `server/crypto.ts`
+**Frontend Components:**
+- Purpose: Shared UI primitives and layout components used across the application
+- Location: `src/components/ui/button.tsx`, `src/components/Header.tsx`, `src/components/Footer.tsx`, `src/components/ThemeToggle.tsx`
+- Contains: Button component (CVA variants), site header with navigation and auth-aware links, footer, theme toggle with localStorage persistence
+- Depends on: `src/lib/utils.ts` (cn helper), `src/lib/auth-client.ts` (session state)
+- Used by: All route and feature components
 
-AES-256-GCM using `node:crypto`. Key derived from `ENCRYPTION_KEY` via SHA-256. Payload format: `iv.authTag.ciphertext` — each part base64url-encoded.
-
-### Shared Types Layer
-**Purpose:** Type definitions shared between frontend and backend
-**Location:** `src/lib/`
-
-Client-side type definitions that server handlers also import (`DashboardStatusSnapshot`, `ServerDetailSnapshot`, `LogsSnapshot`, `AiProviderId`, etc.). Also houses the auth client singleton (`authClient`), session helpers (`getCurrentSession`, `requireSession`), and utility `cn()`.
+**Frontend Library:**
+- Purpose: Shared types, utilities, client-side helpers, and React hooks
+- Location: `src/lib/`
+- Contains: Auth client setup, session management via `createServerFn`, AI provider definitions, type definitions for dashboard/install/server/logs snapshots, `cn()` utility, `useMountEffect` hook
+- Depends on: `better-auth/react`, `@tanstack/react-start`, `clsx`, `tailwind-merge`
+- Used by: All frontend components and features
 
 ## Data Flow
 
-### Dashboard Load Flow
-1. Route's `beforeLoad` calls `requireSession()` (redirects to `/login` if no session)
-2. `createServerFn` `loadDashboardStatus()` runs server-side, calls `getAuthSession()`, then `getDashboardStatusSnapshot()`
-3. Server queries DB for latest `server`, `install`, `provider`, `telegram` records
-4. Server optionally runs SSH to fetch VPS metrics (CPU/memory/disk) via `withSshConnection()`
-5. Snapshot returned as route context, passed as `initialStatus` prop to `DashboardStatusOverview`
-6. Client mounts and starts 30-second polling via `setInterval` calling `GET /api/dashboard/status`
+**Authentication Flow:**
+1. User enters email on `/login` page
+2. Frontend calls `authClient.signIn.magicLink()` which hits `/api/auth/send-magic-link`
+3. Hono rate-limits the request (3 per 5 minutes per email)
+4. `server/lib/send-magic-link-email.ts` sends email via Resend API (or console.log in dev)
+5. User clicks magic link, Better Auth processes the callback and creates a session
+6. Session cookie is set via `tanstackStartCookies()` plugin
+7. Subsequent requests include session cookie; `getAuthSession(headers)` validates it
 
-### Server Connection Flow
-1. User fills `ConnectionWizard` (3-step: basics → auth → review)
-2. On submit, `POST /api/servers/connect` is called with SSH details
-3. Server validates payload, calls `verifyServerConnection()` over Node-SSH
-4. If OS is unsupported, returns `UnsupportedOsError` (Ubuntu <22, Debian <12)
-5. On success, server record inserted to DB; credential either encrypted and stored or held ephemerally in `Map`
-6. Audit log entry written for success/failure
-7. Client shows connected server card with "Install Hermes" button
+**Server Connection Flow:**
+1. User fills in connection wizard on `/servers` page
+2. Frontend POSTs to `/api/servers/connect` with SSH credentials
+3. `server/servers.ts` validates the request, calls `server/ssh.ts` to verify the connection
+4. SSH verification runs `cat /etc/os-release` and `uname -m` on the remote server
+5. Server record is inserted into `servers` table (credential encrypted if `storeCredential` is true)
+6. Audit log entry is written for the connection event
+7. If credential is ephemeral, it is stored in-process via `server/credentials.ts` with a 30-minute TTL
 
-### Server Install Flow
-1. `POST /api/servers/:id/install` — validates session, fetches server record, resolves credential
-2. Creates/updates `installs` row, initializes SSE stream state in `installStreams` Map
-3. Returns 202 immediately; runs `runInstallWorkflow()` asynchronously
-4. workflow iterates 6 install steps (Docker → Compose → dir → compose file → pull → up)
-5. Each step emits `InstallEvent` to SSE listeners and persists to DB
-6. Client opens `EventSource` to `GET /api/servers/:id/install/events` for real-time logs
-7. On reconnect, server replays prior events from DB log text
+**Install Flow:**
+1. User clicks "Install Hermes" on `/servers` page
+2. Frontend POSTs to `/api/servers/:id/install`
+3. `server/install.ts` claims an in-process install slot (prevents concurrent installs per server)
+4. Install record is upserted in `installs` table
+5. `runInstallWorkflow` executes SSH commands in sequence (Docker, Compose, workspace, compose file, image pull, container start)
+6. Each step emits SSE events via `server/install/sse-stream.ts` and persists log lines to the `installs` table
+7. Frontend subscribes to `/api/servers/:id/install/events` via EventSource for live progress
+8. Install completion writes an audit log entry (`server.install.succeeded` or `server.install.failed`)
 
-### Server Action Flow (Restart/Update/Rollback)
-1. User clicks action button, sees inline `ConfirmationCard` dialog
-2. On confirm, `POST /api/servers/:id/actions` with `{ action, targetVersion? }`
-3. Server resolves credential, builds SSH command from `actionCommands` map
-4. Executes over SSH via `withSshConnection()`, writes audit log entries
-5. Returns result to client; client prepends to local action history
+**Dashboard Aggregation Flow:**
+1. Dashboard page loads, `createServerFn` loader calls `getDashboardStatusSnapshot()`
+2. `server/dashboard.ts` queries servers, installs, providers, and Telegram configs in parallel
+3. Static data is cached for 60 seconds; VPS metrics are cached for 15 seconds
+4. VPS health metrics (CPU, memory, disk, uptime) are read live over SSH
+5. Response is assembled into a `DashboardStatusSnapshot` type
+6. Frontend polls `/api/dashboard/status` every 30 seconds with exponential backoff on failure
+
+**Server Action Flow (restart/update/rollback):**
+1. User clicks an action button on `/servers/:id` page, confirms in dialog
+2. Frontend POSTs to `/api/servers/:id/actions` with the action type
+3. `server/server-actions.ts` resolves the SSH credential (stored or ephemeral)
+4. For rollback, the target version is resolved: request -> latest install -> "latest"
+5. SSH command is executed on the remote server (restart: `docker compose restart`, update: `docker compose pull && up -d`, rollback: `docker pull` + `sed` + `docker compose up -d`)
+6. Audit log entries are written for started, succeeded, and failed states
+7. For update/rollback, the install record's version field is updated
+
+**State Management:**
+- Server-side data is fetched via `createServerFn` loaders in route `beforeLoad` hooks and passed as route context
+- Client-side state is managed with React `useState` in feature components
+- Real-time updates use EventSource (SSE) for install progress and polling (30s interval) for dashboard status
+- Ephemeral credentials are stored in-process (`Map` with TTL) for session-only workflows
+- Dashboard metrics use a two-tier cache (60s static, 15s metrics) to avoid hammering VPS over SSH
 
 ## Key Abstractions
 
-**AppShell:** Shared authenticated layout component exported from `src/routes/dashboard.tsx`. Wraps all dashboard pages with sidebar navigation, user header, responsive grid. Used by every authenticated route via `<AppShell>...</AppShell>`.
+**AppShell:**
+- Purpose: Shared authenticated dashboard layout with sidebar navigation, user info, and logout
+- Examples: `src/routes/dashboard.tsx` (exports `AppShell`)
+- Pattern: Wrapper component used by all authenticated route pages (`/dashboard`, `/servers`, `/ai-provider`, `/telegram`, `/logs`, `/settings`, `/servers/:id`, `/servers/:id/install`)
 
-**ConnectionWizard:** Reusable multi-step form component in `src/features/servers/connection-wizard.tsx`. Manages its own step state, validation, and field rendering. Returns a `ConnectionDraft` object on submit.
+**Install SSE Stream:**
+- Purpose: In-process pub/sub for real-time install progress events with replay capability
+- Examples: `server/install/sse-stream.ts`, `server/install.ts`
+- Pattern: `installStreams` Map keyed by serverId, each holding events[], listeners Set, and status. `emitInstallEvent()` writes to DB and broadcasts to listeners. `ensureInstallStream()` hydrates from DB for replay on reconnection.
 
-**withSshConnection:** Generic SSH connection wrapper in `server/ssh.ts`. Connects, executes a callback, disposes. All SSH operations (verify, install, actions, metrics) flow through this.
+**Credential Management:**
+- Purpose: Dual-mode credential handling -- encrypted at rest or ephemeral in-memory with TTL
+- Examples: `server/credentials.ts`, `server/crypto.ts`, `server/auth.ts`
+- Pattern: If `storeCredential` is true, credential is AES-256-GCM encrypted and stored in DB. Otherwise, it is held in a `Map` with 30-minute TTL and cleaned up by an interval timer.
 
-**InstallStreamState:** In-memory state per server ID holding events array, listeners set, and run ID. Lives in `server/install.ts`. Enables SSE replay on reconnect and run-stale detection via `runId`.
+**Shared Type Definitions:**
+- Purpose: Frontend type definitions that are imported by both server-side loaders and client-side components
+- Examples: `src/lib/dashboard-status.ts`, `src/lib/server-detail.ts`, `src/lib/logs.ts`, `src/lib/ai-providers.ts`
+- Pattern: Pure type files in `src/lib/` that define snapshot/summary shapes. Server modules import these to construct responses; frontend components import them to type props and state.
 
-**Ephemeral Credentials:** In-memory `Map<string, EphemeralCredentialRecord>` in `server/credentials.ts`. Keyed by `serverId:sessionId`. Falls back to encrypted DB credential when `storeCredential` is true.
+**Session Management:**
+- Purpose: Server-side session validation and client-side auth state
+- Examples: `src/lib/session.ts`, `src/lib/auth-client.ts`, `server/auth.ts`
+- Pattern: `createServerFn` wrappers call `getAuthSession(headers)` server-side. `requireSession()` redirects unauthenticated users to `/login`. Client uses `authClient.useSession()` for reactive auth state in the header.
 
 ## Entry Points
 
-**Server Entry:** `src/server.ts` — creates TanStack Start handler with custom `fetch()` that routes `/api/*` to Hono `apiApp` and everything else to TanStack SSR.
+**Server Entrypoint:**
+- Location: `src/server.ts`
+- Triggers: HTTP requests from Bun/Node runtime
+- Responsibilities: Routes `/api/*` to Hono app, everything else to TanStack Start SSR handler
 
-**API Router:** `server/app.ts` — Hono instance with `.basePath("/api")` registering all REST endpoints and auth proxying.
+**Hono API App:**
+- Location: `server/app.ts`
+- Triggers: `/api/*` requests from `src/server.ts`
+- Responsibilities: Defines all API routes, applies middleware (rate limiting, HTTPS enforcement), delegates to service modules
 
-**Client Router:** `src/router.tsx` — creates TanStack Router instance with auto-generated `routeTree`.
+**TanStack Start Entry:**
+- Location: `src/router.tsx` + generated `src/routeTree.gen.ts`
+- Triggers: Non-`/api` HTTP requests from `src/server.ts`
+- Responsibilities: Server-side rendering of React routes, `beforeLoad` hooks for auth and data loading
 
-**Route Tree:** `src/routeTree.gen.ts` — auto-generated by `@tanstack/router-plugin`; do not edit.
+**Vite Dev Server:**
+- Location: `vite.config.ts`
+- Triggers: `bun run dev` command
+- Responsibilities: Development server on port 3000 with HMR, SSR, and Tailwind CSS processing
+
+**Production Runtime:**
+- Location: `scripts/start-production.mjs` (referenced in Dockerfile)
+- Triggers: `node scripts/start-production.mjs` in Docker container
+- Responsibilities: Starts the production server with the built output from `dist/`
 
 ## Error Handling
 
-**Strategy:** Layered error handling with custom error classes:
-- `SshConnectError` — normalized SSH failures ("invalid credentials", "host unreachable")
-- `UnsupportedOsError` — OS not supported for Hermes install
-- `ProviderConnectionError` — AI provider API connection failures (invalid key vs connection failed)
-- `TelegramConnectionError` — Telegram bot token verification failures
-- API handlers use try/catch with JSON error responses like `{ error: string }`
-- Frontend feature components use local `error` state with inline error banners
-- Hono errors for validation (400), auth (401), not found (404), conflicts (409)
-- Audit logs record both success and failure for all server operations
+**Strategy:** Explicit error normalization at service boundaries with structured JSON responses
+**Patterns:**
+- Custom error classes for domain-specific failures: `SshConnectError`, `UnsupportedOsError`, `ProviderConnectionError`, `TelegramConnectionError`
+- `normalizeSshError()` maps raw SSH errors to user-friendly messages ("invalid credentials", "host unreachable")
+- Every API handler wraps logic in try/catch and returns `{ error: string }` with appropriate HTTP status
+- Install workflow catches errors, writes audit log entries, and emits "failed" SSE events
+- Frontend components display error banners with retry buttons; dashboard polling backs off exponentially and pauses after 3 consecutive failures
+- `requireHttps()` guard in production rejects HTTP requests to credential-bearing endpoints (426 response)
+- Rate limiting via `rate-limiter-flexible` prevents magic link abuse (3 requests per 5 minutes per email)
 
 ## Cross-Cutting Concerns
 
-**Authentication:** Better Auth with magic-link-only flow. Lazy initialization (getter in `server/auth.ts`). Session checked via `getRequestHeaders()` → `getAuthSession()`. Frontend uses `authClient` singleton from `src/lib/auth-client.ts` with `magicLinkClient()` plugin. Route guard via `requireSession()` in `beforeLoad` hooks. Unauthenticated redirects to `/login`.
+**Logging:**
+- Install progress is persisted as newline-delimited log text in the `installs.log` column
+- Audit events are recorded in the `audit_logs` table with action names, JSONB details, and client IP
+- `console.log` is used for magic link URLs in development; Resend API is used in production
+- No structured logging framework; errors are normalized and returned as JSON responses
 
-**Encryption:** AES-256-GCM via `server/crypto.ts`. Used for stored SSH credentials (`servers.encryptedCredential`) and AI provider API keys (`ai_providers.encryptedApiKey`). Key derived from `ENCRYPTION_KEY` env var.
+**Validation:**
+- Request payloads are parsed and validated explicitly in each handler function (e.g., `parseConnectRequest`, `parseProviderRequest`)
+- SSH credentials are validated by actually connecting to the remote server
+- Docker image tags are validated with a regex pattern before interpolation into shell commands
+- Host validation supports IPv4, IPv6, and DNS hostnames
+- Port validation ensures integer values in the 1-65535 range
 
-**Audit Trail:** All server operations (connect, install, actions, provider saves, telegram connects) write to `audit_logs` table with action name, details JSONB, and IP address. Action history on server detail page queries finished action audit entries.
+**Authentication:**
+- Better Auth with magic link plugin for passwordless sign-in
+- Session tokens stored in cookies via `tanstackStartCookies()` plugin
+- `getAuthSession(headers)` extracts and validates sessions from request headers
+- `requireSession()` redirects unauthenticated users to `/login` with a return URL
+- Auth initialization is lazy (not at module scope) to avoid crashing when `DATABASE_URL` is unset
 
-**Credential Management:** Dual strategy — persisted (encrypted in DB) for stored credentials, or ephemeral (in-memory Map keyed by `serverId:sessionId`) for session-only credentials. Resolved via `resolveServerCredential()` pattern used by install, actions, and dashboard health checks.
+**Encryption:**
+- AES-256-GCM encryption for stored credentials (SSH keys, API keys, Telegram bot tokens)
+- Key derivation via SHA-256 hash of the `ENCRYPTION_KEY` environment variable
+- Encrypted payloads use base64url encoding with format: `iv.authTag.ciphertext`
+- `encryptSecret()` / `decryptSecret()` in `server/crypto.ts`
+
+**HTTPS Enforcement:**
+- `requireHttps()` in `server/app.ts` checks `x-forwarded-proto` header or URL protocol
+- Applied to all mutating API endpoints (connect, install, actions, providers, telegram)
+- Only enforced in production; development allows HTTP
+
+---
+*Architecture analysis: 2026-05-28*

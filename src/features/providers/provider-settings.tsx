@@ -131,15 +131,15 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 					<div className="mb-8 flex flex-col gap-3">
 						<p className="island-kicker m-0">Provider selection</p>
 						<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
-							Choose the model backend for Hermes
+							Choose your model backend
 						</h3>
 						<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-							Save one active provider configuration, then validate the key
-							before you wire it into Telegram and dashboard health cards.
+							Pick a provider, save your API key, and validate the connection
+							before wiring it into Telegram and the dashboard.
 						</p>
 					</div>
 
-					<fieldset className="grid gap-4 border-0 p-0 lg:grid-cols-3">
+					<fieldset className="grid gap-4 border-0 p-0 sm:grid-cols-2 lg:grid-cols-3">
 						<legend className="sr-only">AI provider</legend>
 						{aiProviderOptions.map((option) => {
 							const isSelected = option.id === form.provider;
@@ -196,8 +196,8 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							name="apiKey"
 							hint={
 								existingKeyLast4
-									? `Stored key ending in ${existingKeyLast4}. Leave this blank to keep it.`
-									: `Paste the ${formatAiProviderLabel(form.provider)} key HermesHub should encrypt.`
+									? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
+									: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
 							}
 						>
 							<input
@@ -243,7 +243,7 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							<Field
 								label="Model"
 								name="model"
-								hint="Recommended default is pre-selected for each provider."
+								hint="Pre-selected default for the chosen provider."
 							>
 								<select
 									id="model"
@@ -344,18 +344,11 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 					</section>
 
 					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Provider notes</p>
-						<ul className="m-0 space-y-3 pl-5 text-sm text-[var(--sea-ink-soft)]">
-							<li>
-								OpenAI ships with `gpt-4o`, `gpt-4o-mini`, and `gpt-4-turbo`.
-							</li>
-							<li>
-								Anthropic defaults to Sonnet and Haiku variants for Hermes.
-							</li>
-							<li>
-								OpenRouter accepts any model ID, so HermesHub leaves that field
-								freeform.
-							</li>
+						<p className="island-kicker mb-2">Model notes</p>
+						<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
+							<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
+							<li>Anthropic: Sonnet and Haiku variants.</li>
+							<li>OpenRouter accepts any model ID.</li>
 						</ul>
 					</section>
 				</aside>

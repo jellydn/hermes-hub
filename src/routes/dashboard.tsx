@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { DashboardStatusOverview } from "@/features/dashboard/status-overview";
 import { authClient } from "@/lib/auth-client";
 import { requireSession } from "@/lib/session";
+import { cn } from "@/lib/utils";
 import { getAuthSession } from "../../server/auth";
 import { getDashboardStatusSnapshot } from "../../server/dashboard";
 
@@ -78,7 +79,7 @@ export function AppShell({
 	}
 
 	return (
-		<main className="page-wrap px-4 pb-10 pt-8 lg:pt-10">
+		<main className="w-full max-w-none px-4 sm:px-6 lg:px-8 pb-10 pt-8 lg:pt-10">
 			<div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
 				<aside className="space-y-4 lg:sticky lg:top-24">
 					<div className="island-shell flex items-center justify-between rounded-[1.75rem] px-5 py-4 lg:hidden">
@@ -93,21 +94,24 @@ export function AppShell({
 							variant="secondary"
 							size="sm"
 							onClick={() => setIsSidebarOpen((open) => !open)}
+							aria-expanded={isSidebarOpen}
+							aria-controls="sidebar-nav"
 						>
 							{isSidebarOpen ? (
-								<X className="h-4 w-4" />
+								<X className="h-4 w-4" aria-hidden="true" />
 							) : (
-								<Menu className="h-4 w-4" />
+								<Menu className="h-4 w-4" aria-hidden="true" />
 							)}
 							<span>{isSidebarOpen ? "Close" : "Menu"}</span>
 						</Button>
 					</div>
 
 					<div
-						className={[
+						id="sidebar-nav"
+						className={cn(
 							"island-shell overflow-hidden rounded-[2rem] p-4",
 							isSidebarOpen ? "block" : "hidden lg:block",
-						].join(" ")}
+						)}
 					>
 						<div className="border-b border-[var(--line)] px-2 pb-4">
 							<p className="island-kicker mb-2">HermesHub</p>
@@ -125,25 +129,44 @@ export function AppShell({
 									className="dashboard-nav-link"
 									activeProps={{ className: "dashboard-nav-link is-active" }}
 								>
-									<Icon className="h-4 w-4" />
+									<Icon className="h-4 w-4" aria-hidden="true" />
 									<span>{label}</span>
 								</Link>
 							))}
 						</nav>
 
-						<div className="mt-6 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4">
-							<p className="island-kicker mb-2">Signed In</p>
-							<p className="m-0 text-sm font-medium text-[var(--sea-ink)]">
-								{userEmail}
-							</p>
+						<div className="mt-6 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4">
+							<div className="flex items-center justify-between gap-3">
+								<div className="min-w-0 flex-1">
+									<p className="island-kicker mb-1">Signed In</p>
+									<p
+										className="truncate text-sm font-medium text-[var(--sea-ink)]"
+										title={userEmail}
+									>
+										{userEmail}
+									</p>
+								</div>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 shrink-0 text-[var(--sea-ink-soft)] hover:bg-[var(--chip-line)] hover:text-[var(--sea-ink)]"
+									onClick={() => {
+										void handleLogout();
+									}}
+									aria-label="Log out"
+								>
+									<LogOut className="h-4 w-4" aria-hidden="true" />
+								</Button>
+							</div>
 						</div>
 					</div>
 				</aside>
 
-				<section className="space-y-6">
+				<section className="space-y-6 min-w-0">
 					<div className="island-shell rounded-[2rem] px-6 py-6 sm:px-8">
 						<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-							<div>
+							<div className="min-w-0">
 								<p className="island-kicker mb-2">{kicker}</p>
 								<h2 className="display-title m-0 text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-4xl">
 									{title}
@@ -154,9 +177,6 @@ export function AppShell({
 							</div>
 
 							<div className="flex flex-wrap items-center gap-3 lg:justify-end">
-								<div className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-2 text-sm text-[var(--sea-ink)]">
-									{userEmail}
-								</div>
 								<Button
 									type="button"
 									variant="secondary"
@@ -165,7 +185,7 @@ export function AppShell({
 										void handleLogout();
 									}}
 								>
-									<LogOut className="h-4 w-4" />
+									<LogOut className="h-4 w-4" aria-hidden="true" />
 									<span>Log out</span>
 								</Button>
 							</div>

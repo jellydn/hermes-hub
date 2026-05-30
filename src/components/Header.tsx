@@ -8,13 +8,20 @@ export default function Header() {
 
 	return (
 		<header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--header-bg)] px-4 backdrop-blur-lg">
-			<nav className="page-wrap flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:py-4">
+			<nav
+				className={`${session ? "w-full max-w-none sm:px-2 lg:px-4" : "page-wrap"} flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:py-4`}
+				aria-label="Main navigation"
+			>
 				<h2 className="m-0 flex-shrink-0 text-base font-semibold tracking-tight">
 					<Link
 						to="/"
 						className="inline-flex items-center gap-2 rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm text-[var(--sea-ink)] no-underline shadow-[0_8px_24px_rgba(30,90,72,0.08)] sm:px-4 sm:py-2"
+						aria-label="HermesHub home"
 					>
-						<span className="h-2 w-2 rounded-full bg-[linear-gradient(90deg,#56c6be,#7ed3bf)]" />
+						<span
+							className="h-2 w-2 rounded-full bg-[linear-gradient(90deg,#56c6be,#7ed3bf)]"
+							aria-hidden="true"
+						/>
 						HermesHub
 					</Link>
 				</h2>
@@ -39,18 +46,14 @@ export default function Header() {
 				</div>
 
 				<div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-					{session ? (
-						<span className="hidden rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm text-[var(--sea-ink)] sm:inline-flex">
-							{session.user.email}
-						</span>
-					) : (
+					{!session ? (
 						<Link
 							to="/login"
 							className="inline-flex items-center rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-semibold text-[var(--sea-ink)] no-underline shadow-[0_8px_24px_rgba(30,90,72,0.08)]"
 						>
 							Log in
 						</Link>
-					)}
+					) : null}
 
 					<ThemeToggle />
 				</div>

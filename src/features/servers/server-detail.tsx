@@ -2,105 +2,236 @@ import {
 	AlertCircle,
 	CheckCircle2,
 	LoaderCircle,
-	RefreshCw,
-	RotateCcw,
-	ShieldAlert,
+	Rocket,
 	TriangleAlert,
-	Wrench,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type {
-	ServerActionHistoryItem,
-	ServerActionResult,
 	ServerActionType,
 	ServerDetailSnapshot,
 } from "@/lib/server-detail";
+import { cn } from "@/lib/utils";
+
+import { ServerActionControls } from "./server-action-controls";
+import { ServerBasicsForm } from "./server-basics-form";
+import { ServerDetailAside } from "./server-detail-aside";
+import {
+	createHistoryEntry,
+	createServerBasicsDraft,
+	formatInstallStatus,
+	type ServerBasicsDraft,
+	type ServerBasicsErrors,
+	validateServerBasicsDraft,
+} from "./server-detail-helpers";
 
 type ServerDetailProps = {
-	initialDetail: ServerDetailSnapshot;
+	detail: ServerDetailSnapshot;
+	onDetailChange: (detail: ServerDetailSnapshot) => void;
+	onGoToInstall: (serverId: string) => void | Promise<void>;
 };
 
 type ActionState = {
-	pending: ServerActionType | null;
-	error: string | null;
-	success: string | null;
-	history: ServerActionHistoryItem[];
-	rollbackTarget: string | null;
 	activeDialog: ServerActionType | null;
+	error: string | null;
+	pending: ServerActionType | null;
+	success: string | null;
 };
 
-export function ServerDetail({ initialDetail }: ServerDetailProps) {
+export function ServerDetail({
+	detail,
+	onDetailChange,
+	onGoToInstall,
+}: ServerDetailProps) {
 	const [actionState, setActionState] = useState<ActionState>({
-		pending: null,
-		error: null,
-		success: null,
-		history: initialDetail.actionHistory,
-		rollbackTarget: initialDetail.rollbackTarget,
 		activeDialog: null,
+		error: null,
+		pending: null,
+		success: null,
 	});
+	const [basicsDraft, setBasicsDraft] = useState<ServerBasicsDraft>(() =>
+		createServerBasicsDraft(detail),
+	);
+	const [basicsErrors, setBasicsErrors] = useState<ServerBasicsErrors>({});
+	const [isEditingBasics, setIsEditingBasics] = useState(false);
+	const [basicsError, setBasicsError] = useState<string | null>(null);
+	const [basicsSuccess, setBasicsSuccess] = useState<string | null>(null);
+	const [isSavingBasics, setIsSavingBasics] = useState(false);
+	const [installError, setInstallError] = useState<string | null>(null);
+	const [isStartingInstall, setIsStartingInstall] = useState(false);
+
+	const installButtonLabel = detail.install
+		? detail.install.status === "failed"
+			? "Retry install"
+			: "Open install progress"
+		: "Install Hermes";
 
 	async function handleAction(action: ServerActionType) {
-		const rollbackTarget = actionState.rollbackTarget;
-
-		setActionState((current) => ({
-			...current,
-			pending: action,
-			error: null,
-			success: null,
+		setActionState({
 			activeDialog: null,
-		}));
+			error: null,
+			pending: action,
+			success: null,
+		});
 
 		try {
-			const response = await fetch(
-				`/api/servers/${initialDetail.server.id}/actions`,
-				{
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify({
-						action,
-						targetVersion: rollbackTarget,
-					}),
-				},
-			);
-
+			const response = await fetch(`/api/servers/${detail.server.id}/actions`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					action,
+					targetVersion: detail.rollbackTarget,
+				}),
+			});
 			const payload = (await response.json().catch(() => null)) as {
 				error?: string;
-				message?: string;
 				imageRef?: string;
+				message?: string;
 			} | null;
 
 			if (!response.ok || !payload?.message) {
-				setActionState((current) => ({
-					...current,
-					pending: null,
+				setActionState({
+					activeDialog: null,
 					error: payload?.error ?? "Action failed.",
-				}));
+					pending: null,
+					success: null,
+				});
 				return;
 			}
 
-			setActionState((current) => ({
-				...current,
-				pending: null,
-				success: payload.message ?? null,
-				rollbackTarget: payload.imageRef ?? current.rollbackTarget,
-				history: [
+			onDetailChange({
+				...detail,
+				actionHistory: [
 					createHistoryEntry({
 						action,
 						result: "succeeded",
-						message: payload.message ?? "Action completed.",
+						message: payload.message,
 						imageRef: payload.imageRef ?? null,
 					}),
-					...current.history,
+					...detail.actionHistory,
 				].slice(0, 5),
-			}));
-		} catch {
-			setActionState((current) => ({
-				...current,
+				rollbackTarget: payload.imageRef ?? detail.rollbackTarget,
+			});
+			setActionState({
+				activeDialog: null,
+				error: null,
 				pending: null,
+				success: payload.message,
+			});
+		} catch {
+			setActionState({
+				activeDialog: null,
 				error: "Action failed: Connection failed.",
-			}));
+				pending: null,
+				success: null,
+			});
+		}
+	}
+
+	function handleBasicsChange(field: keyof ServerBasicsDraft, value: string) {
+		setBasicsDraft((current) => ({
+			...current,
+			[field]: value,
+		}));
+		setBasicsErrors((current) => {
+			if (!current[field]) {
+				return current;
+			}
+
+			const nextErrors = { ...current };
+			delete nextErrors[field];
+			return nextErrors;
+		});
+	}
+
+	function startEditingBasics() {
+		setIsEditingBasics(true);
+		setBasicsError(null);
+		setBasicsSuccess(null);
+		setBasicsDraft(createServerBasicsDraft(detail));
+	}
+
+	function cancelEditingBasics() {
+		setIsEditingBasics(false);
+		setBasicsErrors({});
+		setBasicsError(null);
+		setBasicsSuccess(null);
+		setBasicsDraft(createServerBasicsDraft(detail));
+	}
+
+	async function handleSaveBasics() {
+		const nextErrors = validateServerBasicsDraft(basicsDraft);
+		if (Object.keys(nextErrors).length > 0) {
+			setBasicsErrors(nextErrors);
+			return;
+		}
+
+		setIsSavingBasics(true);
+		setBasicsError(null);
+		setBasicsSuccess(null);
+
+		try {
+			const response = await fetch(`/api/servers/${detail.server.id}`, {
+				method: "PATCH",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					label: basicsDraft.label.trim(),
+					host: basicsDraft.host.trim(),
+					port: Number(basicsDraft.port),
+					username: basicsDraft.username.trim(),
+				}),
+			});
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+				serverDetail?: ServerDetailSnapshot;
+			} | null;
+
+			if (!response.ok || !payload?.serverDetail) {
+				setBasicsError(payload?.error ?? "Unable to update this server.");
+				return;
+			}
+
+			onDetailChange(payload.serverDetail);
+			setBasicsDraft(createServerBasicsDraft(payload.serverDetail));
+			setBasicsErrors({});
+			setBasicsSuccess("Server basics updated.");
+			setIsEditingBasics(false);
+		} catch {
+			setBasicsError("Unable to update this server.");
+		} finally {
+			setIsSavingBasics(false);
+		}
+	}
+
+	async function handleInstall() {
+		setInstallError(null);
+
+		if (detail.install && detail.install.status !== "failed") {
+			await onGoToInstall(detail.server.id);
+			return;
+		}
+
+		setIsStartingInstall(true);
+
+		try {
+			const response = await fetch(`/api/servers/${detail.server.id}/install`, {
+				method: "POST",
+			});
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+			} | null;
+
+			if (!response.ok && response.status !== 409) {
+				setInstallError(payload?.error ?? "Unable to start the install.");
+				return;
+			}
+
+			await onGoToInstall(detail.server.id);
+		} catch {
+			setInstallError("Unable to start the install.");
+		} finally {
+			setIsStartingInstall(false);
 		}
 	}
 
@@ -108,23 +239,49 @@ export function ServerDetail({ initialDetail }: ServerDetailProps) {
 		<section className="space-y-6">
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 				<section className="island-shell rounded-[2rem] p-6 sm:p-8">
-					<p className="island-kicker mb-2">Server details</p>
-					<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
-						{initialDetail.server.label}
-					</h3>
-					<p className="mt-3 mb-6 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-						Run operational actions over SSH and keep the most recent results
-						close to the VPS summary.
-					</p>
-
-					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-						<SummaryCard label="Host" value={initialDetail.server.host} />
-						<SummaryCard label="User" value={initialDetail.server.username} />
-						<SummaryCard label="Status" value={initialDetail.server.status} />
-						<SummaryCard label="OS" value={formatOsSummary(initialDetail)} />
+					<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+						<div>
+							<p className="island-kicker mb-2">Manage server</p>
+							<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
+								{detail.server.label}
+							</h3>
+							<p className="mt-3 mb-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
+								Review the saved SSH basics, make small edits in place, and jump
+								straight into the Hermes install flow when you are ready.
+							</p>
+						</div>
+						<Button
+							type="button"
+							onClick={() => {
+								void handleInstall();
+							}}
+							disabled={isStartingInstall}
+						>
+							{isStartingInstall ? (
+								<LoaderCircle className="h-4 w-4 animate-spin" />
+							) : (
+								<Rocket className="h-4 w-4" />
+							)}
+							<span>
+								{isStartingInstall ? "Starting install..." : installButtonLabel}
+							</span>
+						</Button>
 					</div>
 
-					{initialDetail.server.supportLevel === "untested" ? (
+					<ServerBasicsForm
+						draft={basicsDraft}
+						errors={basicsErrors}
+						isEditing={isEditingBasics}
+						isSaving={isSavingBasics}
+						onCancel={cancelEditingBasics}
+						onChange={handleBasicsChange}
+						onSave={() => {
+							void handleSaveBasics();
+						}}
+						onStartEditing={startEditingBasics}
+					/>
+
+					{detail.server.supportLevel === "untested" ? (
 						<div className="mt-4 flex items-center gap-2 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
 							<TriangleAlert className="h-4 w-4 shrink-0" />
 							<span>
@@ -134,293 +291,99 @@ export function ServerDetail({ initialDetail }: ServerDetailProps) {
 						</div>
 					) : null}
 
-					{initialDetail.install ? (
-						<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
-							<p className="m-0 font-semibold">Latest install</p>
-							<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
-								Status: {initialDetail.install.status}
-								{initialDetail.install.version
-									? ` • Version: ${initialDetail.install.version}`
-									: ""}
-							</p>
-						</div>
+					<InstallSummary detail={detail} />
+					{basicsSuccess ? (
+						<Banner tone="success">{basicsSuccess}</Banner>
 					) : null}
-
+					{basicsError ? <Banner tone="error">{basicsError}</Banner> : null}
+					{installError ? <Banner tone="error">{installError}</Banner> : null}
 					{actionState.success ? (
-						<div className="mt-5 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							<div className="flex items-center gap-3">
-								<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-								<span>{actionState.success}</span>
-							</div>
-						</div>
+						<Banner tone="success">{actionState.success}</Banner>
 					) : null}
-
 					{actionState.error ? (
-						<div className="mt-5 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							<div className="flex items-center gap-3">
-								<AlertCircle className="h-5 w-5 text-red-600" />
-								<span>{actionState.error}</span>
-							</div>
-						</div>
+						<Banner tone="error">{actionState.error}</Banner>
 					) : null}
 
-					<div className="mt-6 flex flex-wrap gap-3">
-						<ActionButton
-							action="restart"
-							label="Restart Agent"
-							icon={RefreshCw}
-							pending={actionState.pending}
-							onOpenDialog={(action) => {
-								setActionState((current) => ({
-									...current,
-									activeDialog: action,
-								}));
-							}}
-						/>
-						<ActionButton
-							action="update"
-							label="Update Hermes"
-							icon={Wrench}
-							pending={actionState.pending}
-							onOpenDialog={(action) => {
-								setActionState((current) => ({
-									...current,
-									activeDialog: action,
-								}));
-							}}
-						/>
-						<ActionButton
-							action="rollback"
-							label="Rollback"
-							icon={RotateCcw}
-							pending={actionState.pending}
-							onOpenDialog={(action) => {
-								setActionState((current) => ({
-									...current,
-									activeDialog: action,
-								}));
-							}}
-						/>
-					</div>
-
-					{actionState.activeDialog ? (
-						<ConfirmationCard
-							action={actionState.activeDialog}
-							rollbackTarget={actionState.rollbackTarget}
-							onCancel={() => {
-								setActionState((current) => ({
-									...current,
-									activeDialog: null,
-								}));
-							}}
-							onConfirm={(action) => {
-								void handleAction(action);
-							}}
-						/>
-					) : null}
+					<ServerActionControls
+						activeAction={actionState.activeDialog}
+						pendingAction={actionState.pending}
+						rollbackTarget={detail.rollbackTarget}
+						onCancelDialog={() => {
+							setActionState((current) => ({
+								...current,
+								activeDialog: null,
+							}));
+						}}
+						onConfirmAction={(action) => {
+							void handleAction(action);
+						}}
+						onOpenDialog={(action) => {
+							setActionState((current) => ({
+								...current,
+								activeDialog: action,
+							}));
+						}}
+					/>
 				</section>
 
-				<aside className="space-y-4">
-					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Action history</p>
-						{actionState.history.length === 0 ? (
-							<p className="m-0 text-sm text-[var(--sea-ink-soft)]">
-								No actions yet.
-							</p>
-						) : (
-							<ul className="m-0 space-y-3 p-0">
-								{actionState.history.map((item) => (
-									<li
-										key={item.id}
-										className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4"
-									>
-										<div className="flex items-center justify-between gap-3">
-											<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
-												{formatActionTitle(item.action)}
-											</p>
-											<span className={badgeClassName(item.result)}>
-												{item.result}
-											</span>
-										</div>
-										<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">
-											{item.message}
-										</p>
-										<p className="mt-2 mb-0 text-xs text-[var(--sea-ink-soft)]">
-											{formatTimestamp(item.createdAt)}
-										</p>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-
-					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Safety checks</p>
-						<ul className="m-0 space-y-3 pl-5 text-sm text-[var(--sea-ink-soft)]">
-							<li>Every destructive action requires confirmation first.</li>
-							<li>
-								HermesHub reuses the same SSH credential rules as install and
-								health.
-							</li>
-							<li>
-								Rollback targets the latest remembered image tag when available.
-							</li>
-						</ul>
-					</section>
-				</aside>
+				<ServerDetailAside detail={detail} />
 			</div>
 		</section>
 	);
 }
 
-function ActionButton({
-	action,
-	label,
-	icon: Icon,
-	pending,
-	onOpenDialog,
-}: {
-	action: ServerActionType;
-	label: string;
-	icon: typeof RefreshCw;
-	pending: ServerActionType | null;
-	onOpenDialog: (action: ServerActionType) => void;
-}) {
-	const isPending = pending === action;
+function InstallSummary({ detail }: { detail: ServerDetailSnapshot }) {
+	if (detail.install) {
+		return (
+			<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
+				<p className="m-0 font-semibold">Latest install</p>
+				<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
+					Status: {formatInstallStatus(detail.install.status)}
+					{detail.install.version
+						? ` • Version: ${detail.install.version}`
+						: ""}
+				</p>
+			</div>
+		);
+	}
 
 	return (
-		<Button
-			type="button"
-			variant={action === "restart" ? "secondary" : "default"}
-			onClick={() => onOpenDialog(action)}
-			disabled={pending !== null}
-		>
-			{isPending ? (
-				<LoaderCircle className="h-4 w-4 animate-spin" />
-			) : (
-				<Icon className="h-4 w-4" />
-			)}
-			<span>{isPending ? `${label}...` : label}</span>
-		</Button>
+		<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
+			<p className="m-0 font-semibold">Install step</p>
+			<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
+				This server is ready for the Hermes install flow.
+			</p>
+		</div>
 	);
 }
 
-function ConfirmationCard({
-	action,
-	rollbackTarget,
-	onCancel,
-	onConfirm,
+function Banner({
+	children,
+	className,
+	tone,
 }: {
-	action: ServerActionType;
-	rollbackTarget: string | null;
-	onCancel: () => void;
-	onConfirm: (action: ServerActionType) => void;
+	children: ReactNode;
+	className?: string;
+	tone: "success" | "error";
 }) {
 	return (
-		<div className="mt-5 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
-			<div className="flex items-start gap-3">
-				<ShieldAlert className="mt-0.5 h-5 w-5 text-amber-600" />
-				<div className="flex-1">
-					<p className="m-0 font-semibold">Are you sure?</p>
-					<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
-						{confirmationMessage(action, rollbackTarget)}
-					</p>
-					<div className="mt-4 flex flex-wrap gap-3">
-						<Button type="button" size="sm" onClick={() => onConfirm(action)}>
-							Confirm
-						</Button>
-						<Button
-							type="button"
-							size="sm"
-							variant="secondary"
-							onClick={onCancel}
-						>
-							Cancel
-						</Button>
-					</div>
-				</div>
+		<div
+			className={cn(
+				"mt-5 rounded-[1.5rem] border px-4 py-3 text-sm text-[var(--sea-ink)]",
+				tone === "success"
+					? "border-emerald-500/30 bg-emerald-500/10"
+					: "border-red-500/30 bg-red-500/10",
+				className,
+			)}
+		>
+			<div className="flex items-center gap-3">
+				{tone === "success" ? (
+					<CheckCircle2 className="h-5 w-5 text-emerald-600" />
+				) : (
+					<AlertCircle className="h-5 w-5 text-red-600" />
+				)}
+				<span>{children}</span>
 			</div>
 		</div>
 	);
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4">
-			<p className="island-kicker mb-2">{label}</p>
-			<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">{value}</p>
-		</div>
-	);
-}
-
-function formatOsSummary(detail: ServerDetailSnapshot) {
-	const summary = [
-		detail.server.osName,
-		detail.server.osVersion,
-		detail.server.architecture,
-	]
-		.filter(Boolean)
-		.join(" • ");
-
-	return summary || "Verified";
-}
-
-function formatActionTitle(action: ServerActionType) {
-	if (action === "restart") {
-		return "Restart Agent";
-	}
-
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	return "Rollback";
-}
-
-function formatTimestamp(timestamp: string) {
-	const parsed = new Date(timestamp);
-	if (Number.isNaN(parsed.getTime())) {
-		return timestamp;
-	}
-
-	return parsed.toLocaleString();
-}
-
-function badgeClassName(result: ServerActionHistoryItem["result"]) {
-	return result === "succeeded"
-		? "rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700"
-		: "rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-700";
-}
-
-function createHistoryEntry(input: {
-	action: ServerActionType;
-	result: ServerActionResult;
-	message: string;
-	imageRef: string | null;
-}): ServerActionHistoryItem {
-	return {
-		id: `${input.action}-${Date.now()}`,
-		action: input.action,
-		result: input.result,
-		createdAt: new Date().toISOString(),
-		message: input.message,
-		imageRef: input.imageRef,
-	};
-}
-
-function confirmationMessage(
-	action: ServerActionType,
-	rollbackTarget: string | null,
-) {
-	if (action === "restart") {
-		return "HermesHub will restart the running containers on this VPS.";
-	}
-
-	if (action === "update") {
-		return "HermesHub will pull the latest image and recreate the containers.";
-	}
-
-	return rollbackTarget
-		? `HermesHub will redeploy the remembered image tag ${rollbackTarget}.`
-		: "HermesHub will attempt to redeploy the latest remembered Hermes image.";
 }

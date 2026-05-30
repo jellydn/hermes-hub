@@ -1,91 +1,164 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-05-26
+**Analysis Date:** 2026-05-28
 
 ## Naming Patterns
 
-**Files:** kebab-case (`server-detail.tsx`, `connection-wizard.tsx`, `status-overview.tsx`, `use-mount-effect.ts`, `ai-providers.ts`). Test files match source base name: `server-detail.test.tsx` co-located with `server-detail.tsx`. Feature files live under `src/features/<area>/`, lib files under `src/lib/`, UI primitives under `src/components/ui/`.
+**Files:**
+- Source files use `kebab-case`: `server-actions.ts`, `status-overview.tsx`, `sse-stream.ts`, `install-idle-timeout.ts`
+- Test files mirror source names with `.test.ts` or `.test.tsx` suffix: `server-actions.test.ts`, `status-overview.test.tsx`
+- Route files follow TanStack Router conventions: `servers.$id.tsx`, `servers.$id.install.tsx`, `ai-provider.tsx`
+- Generated files are excluded from linting: `src/routeTree.gen.ts`
+- Config files use standard names: `biome.json`, `tsconfig.json`, `vite.config.ts`, `drizzle.config.ts`
 
-**Functions:** camelCase for utility/helper/event handlers (`formatOsSummary`, `handleAction`, `refreshStatus`, `goToNextStep`). PascalCase for React component functions (`ServerDetail`, `DashboardStatusOverview`, `ConnectionWizard`). Async event handlers are declared with `function` keyword inside the component (not arrow) for hoisting, then wrapped at call sites with `() => void handleAction()`.
+**Functions:**
+- `camelCase` throughout: `getAuthSession`, `parseAndValidateOs`, `normalizeSshError`, `withSshConnection`
+- Getters prefixed with `get`: `getDb`, `getAuthSession`, `getSessionCredential`, `getDashboardStatus`
+- Transformers prefixed with `to` or descriptive verb: `toAgentSummary`, `toProviderSummary`, `toTelegramSummary`
+- Boolean helpers use `is`/`has` prefix: `isAiProviderId`, `hasDatabaseUrl`
+- Event emitters use `emit` prefix: `emitInstallEvent`
+- Stream helpers use `ensure`/`reset` prefix: `ensureInstallStream`, `resetInstallStream`
+- Action handlers use `run` prefix for command execution: `runServerAction`
+- Connection handlers use `connect`/`verify` prefix: `connectServer`, `verifyServerConnection`
 
-**Variables:** camelCase (`initialDetail`, `actionState`, `fetchMock`, `isConnecting`, `savedConfig`). Boolean prefixes: `is*`, `has*`, `show*` (`isPending`, `hasLogs`, `showConfirmation`). State setters follow `set<StateName>` pattern.
+**Variables:**
+- `camelCase` for all variables: `magicLinkRateLimiter`, `staticCache`, `metricsCache`
+- Constants use `UPPER_SNAKE_CASE` for module-level configuration: `DEFAULT_POLL_INTERVAL_MS`, `MAX_POLL_INTERVAL_MS`, `MAX_CONSECUTIVE_FAILURES`, `STATIC_CACHE_TTL_MS`
+- Refs use `Ref` suffix: `pollTimeoutRef`, `nextPollDelayRef`, `snapshotRef`
 
-**Types:** PascalCase. Union types use descriptive suffix or none (`ServerActionType`, `ServerActionResult`, `AuthMethod`, `ConnectionDraft`). Object types use descriptive names often with `Summary`, `Snapshot`, or `Config` suffixes (`DashboardStatusSnapshot`, `ProviderSettingsSummary`, `ServerActionHistoryItem`, `LogsSnapshot`). Interface-like object types use `type` keyword consistently (no `interface`).
+**Types:**
+- `PascalCase` for all types: `SshConnectionInput`, `VerifiedServerInfo`, `DashboardStatusSnapshot`, `ServerDetailSnapshot`
+- Props types use component name + `Props`: `DashboardStatusOverviewProps`
+- Record types use descriptive name + `Record`: `ServerRecord`, `InstallRecord`, `ProviderRecord`
+- Summary types use domain + `Summary`: `DashboardAgentSummary`, `DashboardProviderSummary`, `DashboardVpsSummary`
+- Error classes extend `Error` with descriptive names: `SshConnectError`, `UnsupportedOsError`
+- Error class `name` property matches class name: `this.name = "SshConnectError"`
 
 ## Code Style
 
-**Formatting:** Biome. Config at `biome.json` (schema `2.4.15`). No explicit formatter overrides (defaults apply). `css.parser.tailwindDirectives: true` for Tailwind v4 support. Linter rule: `security.noDangerouslySetInnerHtml: "off"`. File exclusion: `src/routeTree.gen.ts` (auto-generated).
+**Formatting:**
+- Tool: Biome (v2.4.16)
+- Tabs for indentation (Biome default)
+- Double quotes for strings
+- Trailing commas in multi-line structures
+- Semicolons at statement ends
+- CSS parser configured for Tailwind directives
 
-**Language:** TypeScript with strict mode (`strict: true`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noUncheckedSideEffectImports`). `verbatimModuleSyntax: true` requires `import type` for type-only imports. `jsx: "react-jsx"` means no explicit `import React` needed in JSX files. Target `ES2022`.
-
-**Classes:** CSS is entirely utility-first Tailwind v4 with custom `island-shell`, `island-kicker`, `display-title`, `page-wrap`, `dashboard-nav-link` classes. No CSS modules or styled-components. Conditional classes built with inline ternaries, array `.join(" ")`, or `cn()` helper.
+**Linting:**
+- Tool: Biome
+- `noDangerouslySetInnerHtml` is explicitly `off`
+- TypeScript strict mode with `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`
+- CI order: `biome check` -> `typecheck` -> `test` -> `build`
 
 ## Import Organization
 
 **Order:**
-1. Third-party library imports (alphabetically within group): `lucide-react`, `react` / `react-dom`, testing libraries, vitest
-2. Blank line
-3. `import type` for type-only imports (required by `verbatimModuleSyntax`)
-4. Blank line
-5. Local imports via `@/*` path alias: `@/components/ui/button`, `@/lib/utils`, `@/features/...`
-6. Relative imports (only in routes files importing from `../../server/...`)
-
-Type imports and value imports are separate statements:
-
-```ts
-import { useEffect, useState } from "react";
-import type { ComponentType, EffectCallback } from "react";
-```
+1. Third-party packages (`react`, `vitest`, `hono`, `drizzle-orm`, `lucide-react`)
+2. Internal imports using path aliases (`@/lib/utils`, `@/components/ui/button`)
+3. Relative imports within the same module (`./ssh`, `./auth`, `./db/schema`)
 
 **Path Aliases:**
-- `@/*` → `./src/*` (preferred, from `tsconfig.json` paths)
-- `#/*` → `./src/*` (from `package.json` imports, less common)
-- Relative imports (`../../server/auth`) are used in route files for server-side modules
+- `#/*` maps to `./src/*` (used in `package.json` `"imports"`)
+- `@/*` maps to `./src/*` (used in `tsconfig.json` `"paths"`)
+- Both are available; `@/*` is used more frequently in frontend code
+
+**Import Style:**
+- Named imports preferred: `import { describe, expect, it, vi } from "vitest"`
+- Type-only imports use `import type`: `import type { Context } from "hono"`, `import type * as React from "react"`
+- `verbatimModuleSyntax` is enabled, enforcing explicit `type` annotations on type-only imports
 
 ## Error Handling
 
-**Patterns:** Multi-layered approach with three distinct error styles:
+**Patterns:**
+- Custom error classes for domain-specific errors with descriptive `name` property
+- Errors normalized at boundaries: `normalizeSshError()` maps raw SSH errors to user-friendly `SshConnectError` messages
+- HTTP responses use status codes with JSON error bodies: `{ error: "message" }`
+- Guard clauses at function top: check auth, check credentials, check DB availability before proceeding
+- `requireHttps()` guard applied to credential-bearing endpoints in production
+- Auth unavailability returns 503: `{ error: "DATABASE_URL is required" }`
+- Validation errors return 400 with specific messages: `"Invalid target version"`, `"Action must be restart, update, or rollback"`
+- Conflict errors return 409: `"Install already in progress"`
+- Unauthorized returns 401: `{ error: "Unauthorized" }`
 
-1. **API fetch errors** — check `response.ok`, parse JSON with `.catch(() => null)`, fallback messages with `??` operator:
-   ```ts
-   const payload = (await response.json().catch(() => null)) as {...} | null;
-   if (!response.ok || !payload?.message) {
-     setError(payload?.error ?? "Action failed.");
-     return;
-   }
-   ```
+**Error Response Pattern:**
+```typescript
+// Server handlers return Response objects directly
+return context.json({ error: "message" }, 400);
 
-2. **Component state errors** — tracked as `string | null` state variables alongside `isLoading`, `isSaving`, etc. Set on failure, cleared before new attempts:
-   ```ts
-   const [error, setError] = useState<string | null>(null);
-   setError(null);    // clear before attempt
-   setError(msg);     // on failure
-   ```
+// Or throw custom errors that are caught upstream
+throw new UnsupportedOsError(`Unsupported OS: ${prettyName}`);
+```
 
-3. **Network/catch errors** — generic try/catch wrapping async operations, with typed narrowing:
-   ```ts
-   } catch (error) {
-     setError(error instanceof Error ? error.message : "Unable to refresh.");
-   }
-   ```
+## Logging
 
-4. **UI feedback** — success/error messages rendered as styled `<div>` elements with borders and icons (emerald for success, red/amber for error). No toast/notification library. Messages are state-driven, cleared on next action.
+**Framework:** No logging library; uses audit logs in the database
 
-5. **Edge cases** — `requestCounterRef` pattern prevents stale updates from out-of-order async responses. `isActive` boolean flag prevents state updates after unmount.
+**Patterns:**
+- Audit logs stored in `audit_logs` table via `insertAuditValues`
+- Action lifecycle: `server.action.{action}.started` -> `server.action.{action}.succeeded|failed`
+- Install lifecycle: `server.install.started` -> `server.install.succeeded|failed`
+- Log entries include `serverId` in `details` JSONB field for filtering
+- Install progress logs are stored as newline-delimited text in `installs.log`
+
+## Comments
+
+**When to Comment:**
+- JSDoc for public API functions with non-obvious behavior: `clearDashboardCache()`, `requireHttps()`
+- Inline comments for deployment assumptions and security considerations
+- Block comments for rate limiter configuration: `// 3 requests per 5 minutes per email`
+- Comments on mock helper functions in tests: `// reset to clear stale _onceImpl chains from prior tests`
+- Exposed-for-tests functions are documented: `/** Exposed for tests — clears all cached data between test runs. */`
+
+**JSDoc/TSDoc:**
+- Used sparingly, primarily for exported functions that need behavioral context
+- Not used for every function; self-documenting code preferred
 
 ## Function Design
 
-**Size:** Components stay focused — one feature per component file (e.g., `ServerDetail`, `DashboardStatusOverview`, `ConnectionWizard`). Sub-components extracted as private functions within the same file when reused (e.g., `ActionButton`, `ConfirmationCard`, `SummaryCard`, `Field`). Pure helpers extracted as standalone functions at module scope (`formatOsSummary`, `createHistoryEntry`, `formatTimestamp`).
+**Size:**
+- Functions are generally small and focused (10-40 lines typical)
+- Complex handlers extracted into helpers: `rewriteAuthRequest()`, `handleAuthUnavailable()`, `applyMagicLinkRateLimit()`
+- Test setup extracted into `createContext()` factory functions
 
-Each component follows a consistent structure:
-1. Imports
-2. Type definitions (props, state)
-3. Component function with state, handlers, JSX
-4. Private sub-components (if any)
-5. Helper/pure functions (formatters, validators)
+**Parameters:**
+- Hono context objects for HTTP handlers: `(context: Context) => Response`
+- Plain objects for domain functions: `{ userId, sessionId }`, `{ serverId, userId }`
+- Discriminated unions for action types: `{ action: "restart" | "update" | "rollback" }`
 
-**Event handlers:** Defined as `async function handleX()` inside component body, bound at call sites with `() => void handleX()`. Loading/error state managed within the handler with try/catch/finally.
+**Return Values:**
+- HTTP handlers return `Response` objects directly
+- Domain functions return typed objects or throw errors
+- Helper functions return primitive or simple object values
+- DB query chains use fluent builder pattern: `db.select().from().where().orderBy().limit()`
 
 ## Module Design
 
-**Exports:** Named exports exclusively (no default exports). Components export as named: `export function ServerDetail(...)` or `export function ProviderSettings(...)`. Pure function helpers are exported when tested directly (`export function mergeInstallSnapshot`, `export function quantizeInstallProgress`). Types exported with `export type`. UI primitives like `Button` export both the component and the `buttonVariants` config.
+**Exports:**
+- Named exports preferred over default exports
+- Only functions and types exported; internal state kept private
+- Test-only helpers exported with JSDoc annotation
+- Route files export default components (TanStack Router convention)
+
+**Barrel Files:**
+- No barrel/index files observed; imports use direct file paths
+- `server/db/schema.ts` serves as a schema barrel for all Drizzle tables
+
+## Database Conventions
+
+**Schema Location:** `server/db/schema.ts`
+
+**Primary Keys:**
+- App-owned tables: `text("id").primaryKey().default(sql\`gen_random_uuid()::text\`)`
+- Auth tables (Better Auth): `text("id").primaryKey()` (managed by auth library)
+
+**Column Naming:**
+- DB columns use `snake_case`: `user_id`, `created_at`, `encrypted_credential`
+- TypeScript properties use `camelCase`: `userId`, `createdAt`, `encryptedCredential`
+- Drizzle maps between them automatically
+
+**Timestamps:**
+- All tables have `created_at` with `defaultNow()` and `.notNull()`
+- Mutable tables add `updated_at` with `$onUpdate(() => new Date())`
+
+---
+*Convention analysis: 2026-05-28*

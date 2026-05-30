@@ -1,5 +1,20 @@
 {
-	"scripts": {
-		"postdeploy": "./node_modules/.bin/drizzle-kit migrate"
+	"healthchecks": {
+		"web": [
+			{
+				"path": "/api/health",
+				"type": "startup",
+				"timeout": 5,
+				"attempts": 10,
+				"wait": 5
+			},
+			{
+				"path": "/api/health",
+				"type": "liveness",
+				"timeout": 5,
+				"attempts": 3,
+				"wait": 10
+			}
+		]
 	}
 }
