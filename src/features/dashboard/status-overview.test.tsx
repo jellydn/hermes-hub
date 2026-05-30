@@ -47,10 +47,10 @@ describe("DashboardStatusOverview", () => {
 		render(<DashboardStatusOverview initialStatus={null} />);
 
 		await waitFor(() => {
-			expect(screen.getAllByText(/unable to load/i)).toHaveLength(4);
+			expect(screen.getAllByText(/unable to load/i)).toHaveLength(5);
 		});
 
-		expect(screen.getAllByRole("button", { name: /retry/i })).toHaveLength(4);
+		expect(screen.getAllByRole("button", { name: /retry/i })).toHaveLength(5);
 	});
 
 	it("backs off polling after failures and resets to 30 seconds after success", async () => {
@@ -163,6 +163,7 @@ function createSnapshot(
 			osVersion: "24.04",
 			supportLevel: "supported",
 		},
+		serverCount: 1,
 		agent: {
 			status: "online",
 			updatedAt: "2026-05-26T03:00:00.000Z",

@@ -73,6 +73,8 @@ export function ServerInstallProgress({
 				return;
 			}
 
+			statusRef.current = nextEvent.status;
+
 			setConnectionState("open");
 			setRetryError(null);
 			setSnapshot((current) => mergeInstallSnapshot(current, nextEvent));

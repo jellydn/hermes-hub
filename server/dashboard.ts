@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { formatAiProviderLabel, isAiProviderId } from "../src/lib/ai-providers";
 import type {
@@ -14,6 +14,7 @@ import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, installs, servers, telegramConfigs } from "./db/schema";
+import { readOsInfoValue } from "./server-records";
 import { withSshConnection } from "./ssh";
 
 type CacheEntry<T> = {
@@ -35,6 +36,7 @@ export function clearDashboardCache() {
 
 type StaticDashboardData = {
 	serverRecord: ServerRecord | null;
+	serverCount: number;
 	installRecord: InstallRecord | null;
 	providerRecord: ProviderRecord | null;
 	telegramRecord: TelegramRecord | null;
@@ -104,6 +106,7 @@ export async function getDashboardStatusSnapshot(input: {
 	const cachedStatic = staticCache.get(staticCacheKey);
 
 	let serverRecord: ServerRecord | null;
+	let serverCount: number;
 	let installRecord: InstallRecord | null;
 	let providerRecord: ProviderRecord | null;
 	let telegramRecord: TelegramRecord | null;
@@ -111,27 +114,32 @@ export async function getDashboardStatusSnapshot(input: {
 
 	if (cachedStatic && now - cachedStatic.timestamp < STATIC_CACHE_TTL_MS) {
 		serverRecord = cachedStatic.data.serverRecord;
+		serverCount = cachedStatic.data.serverCount;
 		installRecord = cachedStatic.data.installRecord;
 		providerRecord = cachedStatic.data.providerRecord;
 		telegramRecord = cachedStatic.data.telegramRecord;
 		staticGeneratedAt = cachedStatic.data.staticGeneratedAt;
 	} else {
-		serverRecord = await getLatestServer(input.userId);
-
 		const results = await Promise.all([
-			serverRecord ? getLatestInstall(serverRecord.id) : Promise.resolve(null),
+			getLatestServer(input.userId),
+			getServerCount(input.userId),
 			getLatestProvider(input.userId),
 			getLatestTelegram(input.userId),
 		]);
 
-		installRecord = results[0];
-		providerRecord = results[1];
-		telegramRecord = results[2];
+		serverRecord = results[0];
+		serverCount = results[1];
+		providerRecord = results[2];
+		telegramRecord = results[3];
+		installRecord = serverRecord
+			? await getLatestInstall(serverRecord.id)
+			: null;
 		staticGeneratedAt = new Date().toISOString();
 
 		staticCache.set(staticCacheKey, {
 			data: {
 				serverRecord,
+				serverCount,
 				installRecord,
 				providerRecord,
 				telegramRecord,
@@ -146,6 +154,7 @@ export async function getDashboardStatusSnapshot(input: {
 	return {
 		generatedAt: new Date().toISOString(),
 		server: serverSummary,
+		serverCount,
 		agent: toAgentSummary(serverRecord, installRecord),
 		vps: await getVpsSummary(serverRecord, input.sessionId),
 		provider: toProviderSummary(providerRecord),
@@ -367,6 +376,15 @@ async function getLatestServer(userId: string) {
 	return (serverRecord as ServerRecord | undefined) ?? null;
 }
 
+async function getServerCount(userId: string) {
+	const [result] = await getDb()
+		.select({ count: sql<number>`count(*)` })
+		.from(servers)
+		.where(eq(servers.userId, userId));
+
+	return result ? Number(result.count) : 0;
+}
+
 async function getLatestInstall(serverId: string) {
 	const [installRecord] = await getDb()
 		.select({
@@ -427,11 +445,6 @@ function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
 		osVersion,
 		supportLevel,
 	};
-}
-
-function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function getServerCredential(

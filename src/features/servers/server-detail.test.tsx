@@ -7,9 +7,23 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
+
+type MockLinkProps = {
+	children?: ReactNode;
+	to: string;
+} & Omit<ComponentPropsWithoutRef<"a">, "href">;
+
+vi.mock("@tanstack/react-router", () => ({
+	Link: ({ children, to, ...props }: MockLinkProps) => (
+		<a href={to} {...props}>
+			{children}
+		</a>
+	),
+}));
 
 import { ServerDetail } from "./server-detail";
 
@@ -45,6 +59,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -63,6 +78,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -100,6 +116,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={vi.fn()}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -132,6 +149,7 @@ describe("ServerDetail", () => {
 				detail={createDetail()}
 				onDetailChange={handleDetailChange}
 				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -170,6 +188,7 @@ describe("ServerDetail", () => {
 				detail={createDetail({ install: null })}
 				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -200,6 +219,7 @@ describe("ServerDetail", () => {
 				})}
 				onDetailChange={vi.fn()}
 				onGoToInstall={handleGoToInstall}
+				onDeleted={vi.fn()}
 			/>,
 		);
 
@@ -211,6 +231,68 @@ describe("ServerDetail", () => {
 				expect.objectContaining({ method: "POST" }),
 			);
 			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
+		});
+	});
+
+	it("blocks delete confirmation until the server label is typed", () => {
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /delete server/i }));
+
+		const textbox = screen.getByRole("textbox", {
+			name: /confirm server label/i,
+		});
+		const confirmButton = screen.getByRole("button", {
+			name: /confirm delete/i,
+		});
+
+		expect(confirmButton.getAttribute("disabled")).toBe("");
+
+		fireEvent.change(textbox, { target: { value: "Production VPS" } });
+
+		expect(confirmButton.getAttribute("disabled")).toBeNull();
+	});
+
+	it("calls onDeleted after successful delete", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ ok: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const handleDeleted = vi.fn();
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={handleDeleted}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /delete server/i }));
+
+		const textbox = screen.getByRole("textbox", {
+			name: /confirm server label/i,
+		});
+		fireEvent.change(textbox, { target: { value: "Production VPS" } });
+
+		fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/servers/server_123",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+			expect(handleDeleted).toHaveBeenCalled();
 		});
 	});
 });

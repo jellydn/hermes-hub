@@ -5,11 +5,14 @@ vi.mock("./db/health", () => ({
 }));
 
 const connectServer = vi.fn();
+const listServers = vi.fn();
 const updateServer = vi.fn();
+const deleteServer = vi.fn();
 const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
 const streamServerInstallEvents = vi.fn();
+const getLatestServerInstallLog = vi.fn();
 const getDashboardStatus = vi.fn();
 const getLogs = vi.fn();
 const clearLogs = vi.fn();
@@ -20,7 +23,9 @@ const disconnectTelegram = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
+	listServers,
 	updateServer,
+	deleteServer,
 }));
 
 vi.mock("./server-actions", () => ({
@@ -31,6 +36,7 @@ vi.mock("./server-actions", () => ({
 vi.mock("./install", () => ({
 	startServerInstall,
 	streamServerInstallEvents,
+	getLatestServerInstallLog,
 }));
 
 vi.mock("./dashboard", () => ({
@@ -166,6 +172,21 @@ describe("apiApp", () => {
 			error: "DATABASE_URL is required",
 		});
 		expect(authHandler).not.toHaveBeenCalled();
+	});
+
+	it("routes server list requests through the server list handler", async () => {
+		listServers.mockResolvedValueOnce(
+			new Response(JSON.stringify({ servers: [] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request("http://localhost/api/servers");
+
+		expect(response.status).toBe(200);
+		expect(listServers).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes server connect requests through the server connection handler", async () => {

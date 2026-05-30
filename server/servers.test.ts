@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auditLogs, servers } from "./db/schema";
 
+// Allow mock promises to chain .limit()
+// @ts-expect-error
+Promise.prototype.limit = function () {
+	return this;
+};
+
 const getAuthSession = vi.fn();
 const insertServerValues = vi.fn();
 const insertAuditValues = vi.fn();
@@ -12,6 +18,7 @@ const updateServerSet = vi.fn();
 const updateServerWhere = vi.fn();
 const selectFrom = vi.fn();
 const selectWhere = vi.fn();
+const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
 const verifyServerConnection = vi.fn();
 const encryptSecret = vi.fn();
@@ -90,8 +97,9 @@ describe("server handlers", () => {
 
 		dbSelect.mockReturnValue({ from: selectFrom });
 		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ limit: selectLimit });
+		selectWhere.mockReturnValue({ limit: selectLimit, orderBy: selectOrderBy });
 		selectLimit.mockResolvedValue([]);
+		selectOrderBy.mockResolvedValue([]);
 
 		dbUpdate.mockReturnValue({ set: updateServerSet });
 		updateServerSet.mockReturnValue({ where: updateServerWhere });
@@ -231,6 +239,86 @@ describe("server handlers", () => {
 			error: "host unreachable",
 		});
 		expect(insertAuditValues).toHaveBeenCalled();
+	});
+
+	it("lists the current user's servers with install and action summaries", async () => {
+		selectOrderBy
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Production",
+					host: "203.0.113.10",
+					status: "connected",
+					osInfo: {
+						name: "Ubuntu",
+						version: "24.04",
+						supportLevel: "supported",
+					},
+					updatedAt: new Date("2026-05-26T03:00:00.000Z"),
+				},
+				{
+					id: "server_456",
+					label: "Staging",
+					host: "198.51.100.20",
+					status: "connected",
+					osInfo: {},
+					updatedAt: new Date("2026-05-25T03:00:00.000Z"),
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					serverId: "server_123",
+					status: "succeeded",
+					updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					action: "server.action.restart.succeeded",
+					details: { serverId: "server_123" },
+					createdAt: new Date("2026-05-26T05:00:00.000Z"),
+				},
+			]);
+
+		const { listServers } = await import("./servers");
+		const response = await listServers(
+			createContext(undefined, {
+				method: "GET",
+				url: "http://localhost/api/servers",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			servers: [
+				{
+					id: "server_123",
+					label: "Production",
+					host: "203.0.113.10",
+					status: "connected",
+					osName: "Ubuntu",
+					osVersion: "24.04",
+					supportLevel: "supported",
+					installStatus: "succeeded",
+					installUpdatedAt: "2026-05-26T04:00:00.000Z",
+					lastActionAt: "2026-05-26T05:00:00.000Z",
+					lastActivityAt: "2026-05-26T05:00:00.000Z",
+				},
+				{
+					id: "server_456",
+					label: "Staging",
+					host: "198.51.100.20",
+					status: "connected",
+					osName: null,
+					osVersion: null,
+					supportLevel: null,
+					installStatus: null,
+					installUpdatedAt: null,
+					lastActionAt: null,
+					lastActivityAt: "2026-05-25T03:00:00.000Z",
+				},
+			],
+		});
 	});
 
 	it("updates server basics and returns the refreshed detail snapshot", async () => {

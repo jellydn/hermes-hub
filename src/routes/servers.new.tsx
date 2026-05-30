@@ -8,7 +8,7 @@ import { requireSession } from "@/lib/session";
 
 import { AppShell } from "./dashboard";
 
-export const Route = createFileRoute("/servers")({
+export const Route = createFileRoute("/servers/new")({
 	beforeLoad: async ({ location }) => {
 		return { session: await requireSession(location.href) };
 	},
@@ -113,13 +113,13 @@ function ServersPage() {
 	return (
 		<AppShell
 			userEmail={session.user.email}
-			title="Servers"
-			description="Walk through the first-time VPS connection flow, validate the SSH details, and hand a clean payload to the backend connection step."
-			kicker="Infrastructure"
+			title="New server"
+			description="Walk through the new-server connection flow, verify the SSH details, and hand a clean payload to the backend connection step before you install Hermes."
+			kicker="New server"
 		>
 			<section className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 				<div className="island-shell rounded-[2rem] p-6 sm:p-8">
-					<p className="island-kicker mb-2">Connection plan</p>
+					<p className="island-kicker mb-2">New connection plan</p>
 					<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
 						Guide one secure SSH connection from details to review.
 					</h3>

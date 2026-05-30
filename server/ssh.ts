@@ -63,10 +63,13 @@ export async function withSshConnection<T>(
 			privateKey: input.authMethod === "ssh-key" ? input.credential : undefined,
 			readyTimeout: 15_000,
 		});
-
-		return await run(ssh);
 	} catch (error) {
+		ssh.dispose();
 		throw normalizeSshError(error);
+	}
+
+	try {
+		return await run(ssh);
 	} finally {
 		ssh.dispose();
 	}

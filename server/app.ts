@@ -3,11 +3,20 @@ import { RateLimiterMemory } from "rate-limiter-flexible";
 import { getAuth, hasDatabaseUrl } from "./auth";
 import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
-import { startServerInstall, streamServerInstallEvents } from "./install";
+import {
+	getLatestServerInstallLog,
+	startServerInstall,
+	streamServerInstallEvents,
+} from "./install";
 import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
-import { connectServer, updateServer } from "./servers";
+import {
+	connectServer,
+	deleteServer,
+	listServers,
+	updateServer,
+} from "./servers";
 import { connectTelegram, disconnectTelegram } from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
@@ -163,6 +172,7 @@ apiApp.get("/health", async (context) => {
 	}
 });
 
+apiApp.get("/servers", listServers);
 apiApp.post("/servers/connect", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {
@@ -178,6 +188,13 @@ apiApp.patch("/servers/:id", (c) => {
 	}
 	return updateServer(c);
 });
+apiApp.delete("/servers/:id", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return deleteServer(c);
+});
 apiApp.post("/servers/:id/install", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {
@@ -186,6 +203,7 @@ apiApp.post("/servers/:id/install", (c) => {
 	return startServerInstall(c);
 });
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
+apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {

@@ -4,6 +4,7 @@ import {
 	Cpu,
 	LoaderCircle,
 	RefreshCcw,
+	Server,
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
@@ -13,12 +14,13 @@ import { Button } from "@/components/ui/button";
 import { formatAiProviderLabel } from "@/lib/ai-providers";
 import type {
 	DashboardProviderSummary,
+	DashboardServerSummary,
 	DashboardStatusSnapshot,
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
 } from "@/lib/dashboard-status";
+import { getStatusPillClassName } from "@/lib/status-pill";
 import { useMountEffect } from "@/lib/use-mount-effect";
-import { cn } from "@/lib/utils";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;
@@ -196,14 +198,10 @@ export function DashboardStatusOverview({
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button asChild>
-							<a
-								href={
-									snapshot?.server
-										? `/servers/${snapshot.server.id}`
-										: "/servers"
-								}
-							>
-								{snapshot?.server ? "Manage servers" : "Connect your first VPS"}
+							<a href="/servers">
+								{snapshot?.serverCount
+									? `View ${snapshot.serverCount} server${snapshot.serverCount === 1 ? "" : "s"}`
+									: "Connect your first VPS"}
 							</a>
 						</Button>
 						<Button
@@ -285,7 +283,11 @@ export function DashboardStatusOverview({
 						</div>
 					) : null}
 
-					<section className="grid gap-4 md:grid-cols-2">
+					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+						<ServerInventoryCard
+							server={snapshot.server}
+							serverCount={snapshot.serverCount}
+						/>
 						<StatusCard
 							icon={Activity}
 							label="Agent status"
@@ -328,6 +330,45 @@ export function DashboardStatusOverview({
 				</>
 			) : null}
 		</section>
+	);
+}
+
+function ServerInventoryCard({
+	server,
+	serverCount,
+}: {
+	server: DashboardServerSummary | null;
+	serverCount: number;
+}) {
+	return (
+		<article className="island-shell rounded-[2rem] p-5">
+			<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-[var(--chip-bg)] p-3 text-[var(--sea-ink)]">
+				<Server className="h-5 w-5" />
+			</div>
+			<div className="flex items-start justify-between gap-4">
+				<div>
+					<p className="island-kicker mb-2">Servers</p>
+					<h3 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
+						{serverCount} server{serverCount === 1 ? "" : "s"}
+					</h3>
+				</div>
+				<span
+					className={getStatusPillClassName(
+						serverCount > 0 ? "connected" : "disconnected",
+					)}
+				>
+					{serverCount > 0 ? "ready" : "empty"}
+				</span>
+			</div>
+			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">
+				{server
+					? `Latest server: ${server.label} · ${server.host}`
+					: "Add your first VPS to unlock installs, health checks, and recovery actions."}
+			</p>
+			<Button asChild variant="secondary" className="mt-4">
+				<a href="/servers">Open server list</a>
+			</Button>
+		</article>
 	);
 }
 
@@ -406,7 +447,7 @@ function VpsHealthCard({
 						{vps.status === "warning" ? "Watch closely" : "Healthy"}
 					</h3>
 				</div>
-				<span className={statusPillClassName(vps.status)}>{vps.status}</span>
+				<span className={getStatusPillClassName(vps.status)}>{vps.status}</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{vps.detail}</p>
 			<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -451,7 +492,7 @@ function StatusCard({
 						{title}
 					</h3>
 				</div>
-				<span className={statusPillClassName(status)}>{status}</span>
+				<span className={getStatusPillClassName(status)}>{status}</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{detail}</p>
 			<p className="mt-4 mb-0 text-sm text-[var(--sea-ink)]">{meta}</p>
@@ -460,11 +501,17 @@ function StatusCard({
 }
 
 function DashboardSkeletonGrid() {
-	const skeletonCards = ["agent", "vps", "provider", "telegram"] as const;
+	const skeletonCards = [
+		"servers",
+		"agent",
+		"vps",
+		"provider",
+		"telegram",
+	] as const;
 
 	return (
 		<section
-			className="grid gap-4 md:grid-cols-2"
+			className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
 			aria-label="Loading dashboard status"
 		>
 			{skeletonCards.map((card) => (
@@ -490,8 +537,8 @@ function DashboardErrorGrid({
 	onRetry: () => void;
 }) {
 	return (
-		<section className="grid gap-4 md:grid-cols-2">
-			{["Agent status", "VPS health", "AI provider", "Telegram"].map(
+		<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+			{["Servers", "Agent status", "VPS health", "AI provider", "Telegram"].map(
 				(label) => (
 					<article key={label} className="island-shell rounded-[2rem] p-5">
 						<div className="mb-4 inline-flex rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-red-600">
@@ -546,19 +593,4 @@ function formatRelativeTimestamp(timestamp: string) {
 		minute: "2-digit",
 		second: "2-digit",
 	});
-}
-
-const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> = {
-	online: "success",
-	connected: "success",
-	healthy: "success",
-	warning: "warning",
-	offline: "error",
-	disconnected: "error",
-	unhealthy: "error",
-};
-
-function statusPillClassName(status: keyof typeof STATUS_TYPE_MAP) {
-	const type = STATUS_TYPE_MAP[status] ?? "error";
-	return cn("status-pill", `status-pill--${type}`);
 }
