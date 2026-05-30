@@ -69,9 +69,13 @@ function ServerDetailPage() {
 	return (
 		<AppShell
 			userEmail={session.user.email}
-			title={serverDetail?.server.label ?? "Server detail"}
-			description="Review the connected VPS, run recovery actions with confirmation, and inspect the last five operational results without leaving the dashboard shell."
-			kicker="Infrastructure"
+			title={
+				serverDetail?.server.label
+					? `Manage server · ${serverDetail.server.label}`
+					: "Manage server"
+			}
+			description="Review the connected VPS, save SSH basics in place, run recovery actions with confirmation, and jump straight into install progress when you need it."
+			kicker="Manage server"
 		>
 			{isLoading ? (
 				<section className="island-shell rounded-[2rem] p-6 sm:p-8">

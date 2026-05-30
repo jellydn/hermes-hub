@@ -35,6 +35,7 @@ export function clearDashboardCache() {
 
 type StaticDashboardData = {
 	serverRecord: ServerRecord | null;
+	serverCount: number;
 	installRecord: InstallRecord | null;
 	providerRecord: ProviderRecord | null;
 	telegramRecord: TelegramRecord | null;
@@ -104,6 +105,7 @@ export async function getDashboardStatusSnapshot(input: {
 	const cachedStatic = staticCache.get(staticCacheKey);
 
 	let serverRecord: ServerRecord | null;
+	let serverCount: number;
 	let installRecord: InstallRecord | null;
 	let providerRecord: ProviderRecord | null;
 	let telegramRecord: TelegramRecord | null;
@@ -111,27 +113,32 @@ export async function getDashboardStatusSnapshot(input: {
 
 	if (cachedStatic && now - cachedStatic.timestamp < STATIC_CACHE_TTL_MS) {
 		serverRecord = cachedStatic.data.serverRecord;
+		serverCount = cachedStatic.data.serverCount;
 		installRecord = cachedStatic.data.installRecord;
 		providerRecord = cachedStatic.data.providerRecord;
 		telegramRecord = cachedStatic.data.telegramRecord;
 		staticGeneratedAt = cachedStatic.data.staticGeneratedAt;
 	} else {
-		serverRecord = await getLatestServer(input.userId);
-
 		const results = await Promise.all([
-			serverRecord ? getLatestInstall(serverRecord.id) : Promise.resolve(null),
+			getLatestServer(input.userId),
+			getServerCount(input.userId),
 			getLatestProvider(input.userId),
 			getLatestTelegram(input.userId),
 		]);
 
-		installRecord = results[0];
-		providerRecord = results[1];
-		telegramRecord = results[2];
+		serverRecord = results[0];
+		serverCount = results[1];
+		providerRecord = results[2];
+		telegramRecord = results[3];
+		installRecord = serverRecord
+			? await getLatestInstall(serverRecord.id)
+			: null;
 		staticGeneratedAt = new Date().toISOString();
 
 		staticCache.set(staticCacheKey, {
 			data: {
 				serverRecord,
+				serverCount,
 				installRecord,
 				providerRecord,
 				telegramRecord,
@@ -146,6 +153,7 @@ export async function getDashboardStatusSnapshot(input: {
 	return {
 		generatedAt: new Date().toISOString(),
 		server: serverSummary,
+		serverCount,
 		agent: toAgentSummary(serverRecord, installRecord),
 		vps: await getVpsSummary(serverRecord, input.sessionId),
 		provider: toProviderSummary(providerRecord),
@@ -365,6 +373,16 @@ async function getLatestServer(userId: string) {
 		.limit(1);
 
 	return (serverRecord as ServerRecord | undefined) ?? null;
+}
+
+async function getServerCount(userId: string) {
+	const records = await getDb()
+		.select({ id: servers.id })
+		.from(servers)
+		.where(eq(servers.userId, userId))
+		.orderBy(desc(servers.createdAt));
+
+	return records.length;
 }
 
 async function getLatestInstall(serverId: string) {

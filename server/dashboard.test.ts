@@ -53,6 +53,16 @@ import {
 	toTelegramSummary,
 } from "./dashboard";
 
+function mockDashboardServerCount(count: number) {
+	selectOrderBy.mockReset();
+	selectOrderBy
+		.mockReturnValueOnce({ limit: selectLimit })
+		.mockResolvedValueOnce(
+			Array.from({ length: count }, (_, index) => ({ id: `server_${index}` })),
+		)
+		.mockReturnValue({ limit: selectLimit });
+}
+
 describe("dashboard helpers", () => {
 	it("marks the agent online only after a successful install", () => {
 		const summary = toAgentSummary(
@@ -172,6 +182,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("builds a full dashboard snapshot with server, install, provider, telegram, and VPS metrics", async () => {
+		mockDashboardServerCount(1);
 		selectLimit
 			// getLatestServer
 			.mockResolvedValueOnce([
@@ -189,8 +200,6 @@ describe("dashboard snapshot integration", () => {
 					updatedAt: now,
 				},
 			])
-			// getLatestInstall
-			.mockResolvedValueOnce([{ status: "succeeded", updatedAt: now }])
 			// getLatestProvider
 			.mockResolvedValueOnce([
 				{
@@ -200,7 +209,9 @@ describe("dashboard snapshot integration", () => {
 				},
 			])
 			// getLatestTelegram
-			.mockResolvedValueOnce([{ botUsername: "hermes_bot", isActive: true }]);
+			.mockResolvedValueOnce([{ botUsername: "hermes_bot", isActive: true }])
+			// getLatestInstall
+			.mockResolvedValueOnce([{ status: "succeeded", updatedAt: now }]);
 
 		decryptSecret.mockReturnValue("ssh-key-secret");
 		withSshConnection.mockImplementation(async (_config, run) => {
@@ -225,6 +236,7 @@ describe("dashboard snapshot integration", () => {
 			osName: "Ubuntu",
 			osVersion: "24.04",
 		});
+		expect(snapshot.serverCount).toBe(1);
 
 		expect(snapshot.agent).toMatchObject({
 			status: "online",
@@ -252,6 +264,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("returns empty summaries when no server exists", async () => {
+		mockDashboardServerCount(0);
 		selectLimit
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
@@ -263,6 +276,7 @@ describe("dashboard snapshot integration", () => {
 		});
 
 		expect(snapshot.server).toBeNull();
+		expect(snapshot.serverCount).toBe(0);
 		expect(snapshot.agent).toMatchObject({ status: "offline" });
 		expect(snapshot.vps).toMatchObject({ status: "disconnected" });
 		expect(snapshot.provider).toMatchObject({ status: "disconnected" });
@@ -271,6 +285,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("returns VPS error summary when SSH metrics fail", async () => {
+		mockDashboardServerCount(1);
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -309,6 +324,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("returns disconnected VPS when server status is not connected", async () => {
+		mockDashboardServerCount(1);
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -345,6 +361,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("returns warning VPS health when metrics exceed thresholds", async () => {
+		mockDashboardServerCount(1);
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -390,6 +407,7 @@ describe("dashboard snapshot integration", () => {
 	});
 
 	it("handles missing stored credential for VPS metrics", async () => {
+		mockDashboardServerCount(1);
 		selectLimit
 			.mockResolvedValueOnce([
 				{

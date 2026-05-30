@@ -7,7 +7,7 @@ import { startServerInstall, streamServerInstallEvents } from "./install";
 import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
-import { connectServer, updateServer } from "./servers";
+import { connectServer, listServers, updateServer } from "./servers";
 import { connectTelegram, disconnectTelegram } from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
@@ -163,6 +163,7 @@ apiApp.get("/health", async (context) => {
 	}
 });
 
+apiApp.get("/servers", listServers);
 apiApp.post("/servers/connect", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {

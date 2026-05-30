@@ -60,10 +60,12 @@ type AppShellProps = {
 	title: string;
 	description: string;
 	kicker: string;
+	actions?: ReactNode;
 	children: ReactNode;
 };
 
 export function AppShell({
+	actions,
 	children,
 	description,
 	kicker,
@@ -177,6 +179,7 @@ export function AppShell({
 							</div>
 
 							<div className="flex flex-wrap items-center gap-3 lg:justify-end">
+								{actions}
 								<Button
 									type="button"
 									variant="secondary"
@@ -201,6 +204,7 @@ export function AppShell({
 
 function DashboardPage() {
 	const { dashboardStatus, session } = Route.useRouteContext();
+	const serverCount = dashboardStatus?.serverCount ?? 0;
 
 	return (
 		<AppShell
@@ -208,6 +212,13 @@ function DashboardPage() {
 			title="Mission control"
 			description="Track Hermes health, confirm the VPS is still responsive, and see whether provider and Telegram integrations are ready without leaving the dashboard."
 			kicker="Dashboard"
+			actions={
+				<Button asChild size="sm">
+					<a href="/servers">
+						<span>Servers {serverCount > 0 ? `(${serverCount})` : ""}</span>
+					</a>
+				</Button>
+			}
 		>
 			<DashboardStatusOverview initialStatus={dashboardStatus ?? null} />
 		</AppShell>

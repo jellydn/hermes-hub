@@ -5,6 +5,7 @@ vi.mock("./db/health", () => ({
 }));
 
 const connectServer = vi.fn();
+const listServers = vi.fn();
 const updateServer = vi.fn();
 const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
@@ -20,6 +21,7 @@ const disconnectTelegram = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
+	listServers,
 	updateServer,
 }));
 
@@ -166,6 +168,21 @@ describe("apiApp", () => {
 			error: "DATABASE_URL is required",
 		});
 		expect(authHandler).not.toHaveBeenCalled();
+	});
+
+	it("routes server list requests through the server list handler", async () => {
+		listServers.mockResolvedValueOnce(
+			new Response(JSON.stringify({ servers: [] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const { apiApp } = await import("./app");
+		const response = await apiApp.request("http://localhost/api/servers");
+
+		expect(response.status).toBe(200);
+		expect(listServers).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes server connect requests through the server connection handler", async () => {

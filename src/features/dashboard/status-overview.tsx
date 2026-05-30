@@ -4,6 +4,7 @@ import {
 	Cpu,
 	LoaderCircle,
 	RefreshCcw,
+	Server,
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatAiProviderLabel } from "@/lib/ai-providers";
 import type {
 	DashboardProviderSummary,
+	DashboardServerSummary,
 	DashboardStatusSnapshot,
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
@@ -196,14 +198,10 @@ export function DashboardStatusOverview({
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button asChild>
-							<a
-								href={
-									snapshot?.server
-										? `/servers/${snapshot.server.id}`
-										: "/servers"
-								}
-							>
-								{snapshot?.server ? "Manage servers" : "Connect your first VPS"}
+							<a href="/servers">
+								{snapshot?.serverCount
+									? `View ${snapshot.serverCount} server${snapshot.serverCount === 1 ? "" : "s"}`
+									: "Connect your first VPS"}
 							</a>
 						</Button>
 						<Button
@@ -285,7 +283,11 @@ export function DashboardStatusOverview({
 						</div>
 					) : null}
 
-					<section className="grid gap-4 md:grid-cols-2">
+					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+						<ServerInventoryCard
+							server={snapshot.server}
+							serverCount={snapshot.serverCount}
+						/>
 						<StatusCard
 							icon={Activity}
 							label="Agent status"
@@ -328,6 +330,45 @@ export function DashboardStatusOverview({
 				</>
 			) : null}
 		</section>
+	);
+}
+
+function ServerInventoryCard({
+	server,
+	serverCount,
+}: {
+	server: DashboardServerSummary | null;
+	serverCount: number;
+}) {
+	return (
+		<article className="island-shell rounded-[2rem] p-5">
+			<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-[var(--chip-bg)] p-3 text-[var(--sea-ink)]">
+				<Server className="h-5 w-5" />
+			</div>
+			<div className="flex items-start justify-between gap-4">
+				<div>
+					<p className="island-kicker mb-2">Servers</p>
+					<h3 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
+						{serverCount} server{serverCount === 1 ? "" : "s"}
+					</h3>
+				</div>
+				<span
+					className={statusPillClassName(
+						serverCount > 0 ? "connected" : "disconnected",
+					)}
+				>
+					{serverCount > 0 ? "ready" : "empty"}
+				</span>
+			</div>
+			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">
+				{server
+					? `Latest server: ${server.label} · ${server.host}`
+					: "Add your first VPS to unlock installs, health checks, and recovery actions."}
+			</p>
+			<Button asChild variant="secondary" className="mt-4">
+				<a href="/servers">Open server list</a>
+			</Button>
+		</article>
 	);
 }
 
@@ -490,8 +531,8 @@ function DashboardErrorGrid({
 	onRetry: () => void;
 }) {
 	return (
-		<section className="grid gap-4 md:grid-cols-2">
-			{["Agent status", "VPS health", "AI provider", "Telegram"].map(
+		<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+			{["Servers", "Agent status", "VPS health", "AI provider", "Telegram"].map(
 				(label) => (
 					<article key={label} className="island-shell rounded-[2rem] p-5">
 						<div className="mb-4 inline-flex rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-red-600">

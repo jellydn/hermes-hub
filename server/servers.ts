@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Context } from "hono";
 
+import type { ServerListSummary } from "../src/lib/servers";
 import { getAuthSession } from "./auth";
 import { storeSessionCredential } from "./credentials";
 import { encryptSecret } from "./crypto";
 import { getDb } from "./db";
-import { auditLogs, servers } from "./db/schema";
+import { auditLogs, installs, servers } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
 import { getServerDetailSnapshot } from "./server-detail-snapshot";
 import {
@@ -39,6 +40,99 @@ type UpdateServerRequest = {
 	port?: number;
 	username?: string;
 };
+
+type ServerListRecord = {
+	id: string;
+	label: string;
+	host: string;
+	status: string;
+	osInfo: Record<string, unknown>;
+	updatedAt: Date;
+};
+
+type InstallListRecord = {
+	serverId: string;
+	status: string;
+	updatedAt: Date;
+};
+
+type ServerActionRecord = {
+	action: string;
+	details: unknown;
+	createdAt: Date;
+};
+
+const relevantServerActionNames = [
+	"server.connect.succeeded",
+	"server.connect.failed",
+	"server.update.succeeded",
+	"server.update.failed",
+	"server.action.restart.succeeded",
+	"server.action.restart.failed",
+	"server.action.update.succeeded",
+	"server.action.update.failed",
+	"server.action.rollback.succeeded",
+	"server.action.rollback.failed",
+] as const;
+
+export async function listServers(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const servers = await getServerListSnapshot(session.user.id);
+	return context.json({ servers });
+}
+
+export async function getServerListSnapshot(
+	userId: string,
+): Promise<ServerListSummary[]> {
+	const serverRecords = await getOwnedServerListRecords(userId);
+	if (serverRecords.length === 0) {
+		return [];
+	}
+
+	const serverIds = serverRecords.map((serverRecord) => serverRecord.id);
+	const [installRecords, actionRecords] = await Promise.all([
+		getLatestInstallRecords(serverIds),
+		getLatestServerActionRecords(userId),
+	]);
+	const installsByServerId = collectLatestInstalls(installRecords);
+	const actionsByServerId = collectLatestActions(
+		actionRecords,
+		new Set(serverIds),
+	);
+
+	return serverRecords.map((serverRecord) => {
+		const installRecord = installsByServerId.get(serverRecord.id) ?? null;
+		const actionRecord = actionsByServerId.get(serverRecord.id) ?? null;
+		const lastActivityAt =
+			latestTimestampIso([
+				serverRecord.updatedAt,
+				installRecord?.updatedAt,
+				actionRecord?.createdAt,
+			]) ?? serverRecord.updatedAt.toISOString();
+
+		return {
+			id: serverRecord.id,
+			label: serverRecord.label,
+			host: serverRecord.host,
+			status: serverRecord.status,
+			osName: readOsInfoValue(serverRecord.osInfo, "name"),
+			osVersion: readOsInfoValue(serverRecord.osInfo, "version"),
+			supportLevel: readOsInfoValue(serverRecord.osInfo, "supportLevel") as
+				| "supported"
+				| "untested"
+				| null,
+			installStatus: installRecord?.status ?? null,
+			installUpdatedAt: installRecord?.updatedAt.toISOString() ?? null,
+			lastActionAt: actionRecord?.createdAt.toISOString() ?? null,
+			lastActivityAt,
+		};
+	});
+}
 
 export async function connectServer(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
@@ -386,6 +480,120 @@ async function readServerDetailResponse(
 	}
 
 	return context.json({ serverDetail: detail });
+}
+
+async function getOwnedServerListRecords(userId: string) {
+	const records = await getDb()
+		.select({
+			id: servers.id,
+			label: servers.label,
+			host: servers.host,
+			status: servers.status,
+			osInfo: servers.osInfo,
+			updatedAt: servers.updatedAt,
+		})
+		.from(servers)
+		.where(eq(servers.userId, userId))
+		.orderBy(desc(servers.createdAt));
+
+	return records as ServerListRecord[];
+}
+
+async function getLatestInstallRecords(serverIds: string[]) {
+	const records = await getDb()
+		.select({
+			serverId: installs.serverId,
+			status: installs.status,
+			updatedAt: installs.updatedAt,
+		})
+		.from(installs)
+		.where(inArray(installs.serverId, serverIds))
+		.orderBy(desc(installs.createdAt));
+
+	return records as InstallListRecord[];
+}
+
+async function getLatestServerActionRecords(userId: string) {
+	const records = await getDb()
+		.select({
+			action: auditLogs.action,
+			details: auditLogs.details,
+			createdAt: auditLogs.createdAt,
+		})
+		.from(auditLogs)
+		.where(
+			and(
+				eq(auditLogs.userId, userId),
+				inArray(auditLogs.action, [...relevantServerActionNames]),
+			),
+		)
+		.orderBy(desc(auditLogs.createdAt));
+
+	return records as ServerActionRecord[];
+}
+
+function collectLatestInstalls(records: InstallListRecord[]) {
+	const installsByServerId = new Map<string, InstallListRecord>();
+
+	for (const record of records) {
+		if (!installsByServerId.has(record.serverId)) {
+			installsByServerId.set(record.serverId, record);
+		}
+	}
+
+	return installsByServerId;
+}
+
+function collectLatestActions(
+	records: ServerActionRecord[],
+	serverIds: Set<string>,
+) {
+	const actionsByServerId = new Map<string, ServerActionRecord>();
+
+	for (const record of records) {
+		const serverId = readServerId(record.details);
+		if (
+			!serverId ||
+			!serverIds.has(serverId) ||
+			actionsByServerId.has(serverId)
+		) {
+			continue;
+		}
+
+		actionsByServerId.set(serverId, record);
+	}
+
+	return actionsByServerId;
+}
+
+function latestTimestampIso(values: Array<Date | null | undefined>) {
+	const timestamps = values
+		.filter((value): value is Date => value instanceof Date)
+		.map((value) => value.getTime());
+
+	if (timestamps.length === 0) {
+		return null;
+	}
+
+	return new Date(Math.max(...timestamps)).toISOString();
+}
+
+function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
+	const value = osInfo[key];
+	return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readServerId(details: unknown) {
+	if (!isRecord(details)) {
+		return null;
+	}
+
+	const value = details.serverId;
+	return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
 
 function getSessionKey(sessionId?: string | null) {

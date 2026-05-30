@@ -7,9 +7,23 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
+
+type MockLinkProps = {
+	children?: ReactNode;
+	to: string;
+} & Omit<ComponentPropsWithoutRef<"a">, "href">;
+
+vi.mock("@tanstack/react-router", () => ({
+	Link: ({ children, to, ...props }: MockLinkProps) => (
+		<a href={to} {...props}>
+			{children}
+		</a>
+	),
+}));
 
 import { ServerDetail } from "./server-detail";
 

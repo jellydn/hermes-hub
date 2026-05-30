@@ -11,13 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TelegramRouteImport } from './routes/telegram'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ServersRouteImport } from './routes/servers'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AiProviderRouteImport } from './routes/ai-provider'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ServersIndexRouteImport } from './routes/servers.index'
+import { Route as ServersNewRouteImport } from './routes/servers.new'
 import { Route as ServersIdRouteImport } from './routes/servers.$id'
 import { Route as ServersIdInstallRouteImport } from './routes/servers.$id.install'
 
@@ -29,11 +30,6 @@ const TelegramRoute = TelegramRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ServersRoute = ServersRouteImport.update({
-  id: '/servers',
-  path: '/servers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsRoute = LogsRouteImport.update({
@@ -66,10 +62,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServersIndexRoute = ServersIndexRouteImport.update({
+  id: '/servers/',
+  path: '/servers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServersNewRoute = ServersNewRouteImport.update({
+  id: '/servers/new',
+  path: '/servers/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServersIdRoute = ServersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ServersRoute,
+  id: '/servers/$id',
+  path: '/servers/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ServersIdInstallRoute = ServersIdInstallRouteImport.update({
   id: '/install',
@@ -84,10 +90,11 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
   '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/new': typeof ServersNewRoute
+  '/servers/': typeof ServersIndexRoute
   '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesByTo {
@@ -97,10 +104,11 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
   '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/new': typeof ServersNewRoute
+  '/servers': typeof ServersIndexRoute
   '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRoutesById {
@@ -111,10 +119,11 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
-  '/servers': typeof ServersRouteWithChildren
   '/settings': typeof SettingsRoute
   '/telegram': typeof TelegramRoute
   '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/new': typeof ServersNewRoute
+  '/servers/': typeof ServersIndexRoute
   '/servers/$id/install': typeof ServersIdInstallRoute
 }
 export interface FileRouteTypes {
@@ -126,10 +135,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/logs'
-    | '/servers'
     | '/settings'
     | '/telegram'
     | '/servers/$id'
+    | '/servers/new'
+    | '/servers/'
     | '/servers/$id/install'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,10 +149,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/logs'
-    | '/servers'
     | '/settings'
     | '/telegram'
     | '/servers/$id'
+    | '/servers/new'
+    | '/servers'
     | '/servers/$id/install'
   id:
     | '__root__'
@@ -152,10 +163,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/logs'
-    | '/servers'
     | '/settings'
     | '/telegram'
     | '/servers/$id'
+    | '/servers/new'
+    | '/servers/'
     | '/servers/$id/install'
   fileRoutesById: FileRoutesById
 }
@@ -166,9 +178,11 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
-  ServersRoute: typeof ServersRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   TelegramRoute: typeof TelegramRoute
+  ServersIdRoute: typeof ServersIdRouteWithChildren
+  ServersNewRoute: typeof ServersNewRoute
+  ServersIndexRoute: typeof ServersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -185,13 +199,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/servers': {
-      id: '/servers'
-      path: '/servers'
-      fullPath: '/servers'
-      preLoaderRoute: typeof ServersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs': {
@@ -236,12 +243,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/servers/': {
+      id: '/servers/'
+      path: '/servers'
+      fullPath: '/servers/'
+      preLoaderRoute: typeof ServersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/servers/new': {
+      id: '/servers/new'
+      path: '/servers/new'
+      fullPath: '/servers/new'
+      preLoaderRoute: typeof ServersNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/servers/$id': {
       id: '/servers/$id'
-      path: '/$id'
+      path: '/servers/$id'
       fullPath: '/servers/$id'
       preLoaderRoute: typeof ServersIdRouteImport
-      parentRoute: typeof ServersRoute
+      parentRoute: typeof rootRouteImport
     }
     '/servers/$id/install': {
       id: '/servers/$id/install'
@@ -265,17 +286,6 @@ const ServersIdRouteWithChildren = ServersIdRoute._addFileChildren(
   ServersIdRouteChildren,
 )
 
-interface ServersRouteChildren {
-  ServersIdRoute: typeof ServersIdRouteWithChildren
-}
-
-const ServersRouteChildren: ServersRouteChildren = {
-  ServersIdRoute: ServersIdRouteWithChildren,
-}
-
-const ServersRouteWithChildren =
-  ServersRoute._addFileChildren(ServersRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
@@ -283,9 +293,11 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
-  ServersRoute: ServersRouteWithChildren,
   SettingsRoute: SettingsRoute,
   TelegramRoute: TelegramRoute,
+  ServersIdRoute: ServersIdRouteWithChildren,
+  ServersNewRoute: ServersNewRoute,
+  ServersIndexRoute: ServersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

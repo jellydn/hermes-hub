@@ -43,6 +43,7 @@ export type DashboardTelegramSummary = {
 export type DashboardStatusSnapshot = {
 	generatedAt: string;
 	server: DashboardServerSummary | null;
+	serverCount: number;
 	agent: DashboardAgentSummary;
 	vps: DashboardVpsSummary;
 	provider: DashboardProviderSummary;

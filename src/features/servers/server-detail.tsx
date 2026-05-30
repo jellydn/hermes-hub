@@ -1,5 +1,7 @@
+import { Link } from "@tanstack/react-router";
 import {
 	AlertCircle,
+	ArrowLeft,
 	CheckCircle2,
 	LoaderCircle,
 	Rocket,
@@ -237,6 +239,15 @@ export function ServerDetail({
 
 	return (
 		<section className="space-y-6">
+			<div>
+				<Link
+					to="/servers"
+					className="inline-flex items-center gap-2 text-sm font-medium text-[var(--lagoon-deep)] transition hover:text-[var(--sea-ink)]"
+				>
+					<ArrowLeft className="h-4 w-4" />
+					<span>All servers</span>
+				</Link>
+			</div>
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 				<section className="island-shell rounded-[2rem] p-6 sm:p-8">
 					<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
