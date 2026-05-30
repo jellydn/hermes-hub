@@ -188,7 +188,13 @@ apiApp.patch("/servers/:id", (c) => {
 	}
 	return updateServer(c);
 });
-apiApp.delete("/servers/:id", (c) => deleteServer(c));
+apiApp.delete("/servers/:id", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return deleteServer(c);
+});
 apiApp.post("/servers/:id/install", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {
