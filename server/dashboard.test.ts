@@ -57,10 +57,20 @@ function mockDashboardServerCount(count: number) {
 	selectOrderBy.mockReset();
 	selectOrderBy
 		.mockReturnValueOnce({ limit: selectLimit })
-		.mockResolvedValueOnce(
-			Array.from({ length: count }, (_, index) => ({ id: `server_${index}` })),
-		)
 		.mockReturnValue({ limit: selectLimit });
+
+	// getServerCount now uses COUNT(*) without orderBy/limit,
+	// so inject the count into the selectWhere return for the 2nd call
+	selectWhere
+		.mockReturnValueOnce(
+			Object.assign([], { orderBy: selectOrderBy, limit: selectLimit }),
+		)
+		.mockReturnValueOnce(
+			Object.assign([{ count }], {
+				orderBy: selectOrderBy,
+				limit: selectLimit,
+			}),
+		);
 }
 
 describe("dashboard helpers", () => {
@@ -170,7 +180,9 @@ describe("dashboard snapshot integration", () => {
 
 		dbSelect.mockReturnValue({ from: selectFrom });
 		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
+		selectWhere.mockReturnValue(
+			Object.assign([], { orderBy: selectOrderBy, limit: selectLimit }),
+		);
 		selectOrderBy.mockReturnValue({ limit: selectLimit });
 
 		// reset to clear stale _onceImpl chains from prior tests

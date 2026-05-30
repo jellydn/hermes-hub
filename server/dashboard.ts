@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { formatAiProviderLabel, isAiProviderId } from "../src/lib/ai-providers";
 import type {
@@ -377,13 +377,12 @@ async function getLatestServer(userId: string) {
 }
 
 async function getServerCount(userId: string) {
-	const records = await getDb()
-		.select({ id: servers.id })
+	const [result] = await getDb()
+		.select({ count: sql<number>`count(*)` })
 		.from(servers)
-		.where(eq(servers.userId, userId))
-		.orderBy(desc(servers.createdAt));
+		.where(eq(servers.userId, userId));
 
-	return records.length;
+	return result ? Number(result.count) : 0;
 }
 
 async function getLatestInstall(serverId: string) {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Context } from "hono";
 
 import type { ServerListSummary } from "../src/lib/servers";
@@ -98,7 +98,7 @@ export async function getServerListSnapshot(
 	const serverIds = serverRecords.map((serverRecord) => serverRecord.id);
 	const [installRecords, actionRecords] = await Promise.all([
 		getLatestInstallRecords(serverIds),
-		getLatestServerActionRecords(userId),
+		getLatestServerActionRecords(userId, serverIds),
 	]);
 	const installsByServerId = collectLatestInstalls(installRecords);
 	const actionsByServerId = collectLatestActions(
@@ -514,7 +514,10 @@ async function getLatestInstallRecords(serverIds: string[]) {
 	return records as InstallListRecord[];
 }
 
-async function getLatestServerActionRecords(userId: string) {
+async function getLatestServerActionRecords(
+	userId: string,
+	serverIds: string[],
+) {
 	const records = await getDb()
 		.select({
 			action: auditLogs.action,
@@ -526,6 +529,10 @@ async function getLatestServerActionRecords(userId: string) {
 			and(
 				eq(auditLogs.userId, userId),
 				inArray(auditLogs.action, [...relevantServerActionNames]),
+				sql`${auditLogs.details}->>'serverId' IN (${sql.join(
+					serverIds.map((id) => sql`${id}`),
+					sql`,`,
+				)})`,
 			),
 		)
 		.orderBy(desc(auditLogs.createdAt))
@@ -640,31 +647,26 @@ export async function deleteServer(context: Context) {
 		return context.json({ error: "Server ID is required" }, 400);
 	}
 
-	const serverRecord = await getOwnedServerRecord({
-		serverId,
-		userId: session.user.id,
-	});
-	if (!serverRecord) {
-		return context.json({ error: "Server not found" }, 404);
-	}
-
 	const db = getDb();
 	const ipAddress = getClientIp(context);
 
 	try {
-		await db
+		const [deleted] = await db
 			.delete(servers)
-			.where(
-				and(eq(servers.id, serverId), eq(servers.userId, session.user.id)),
-			);
+			.where(and(eq(servers.id, serverId), eq(servers.userId, session.user.id)))
+			.returning({ id: servers.id, label: servers.label, host: servers.host });
+
+		if (!deleted) {
+			return context.json({ error: "Server not found" }, 404);
+		}
 
 		await db.insert(auditLogs).values({
 			userId: session.user.id,
 			action: "server.action.delete.succeeded",
 			details: {
-				serverId,
-				label: serverRecord.label,
-				host: serverRecord.host,
+				serverId: deleted.id,
+				label: deleted.label,
+				host: deleted.host,
 			},
 			ipAddress,
 		});
