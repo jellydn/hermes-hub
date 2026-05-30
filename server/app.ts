@@ -11,7 +11,12 @@ import {
 import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
-import { connectServer, listServers, updateServer } from "./servers";
+import {
+	connectServer,
+	deleteServer,
+	listServers,
+	updateServer,
+} from "./servers";
 import { connectTelegram, disconnectTelegram } from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
@@ -183,6 +188,7 @@ apiApp.patch("/servers/:id", (c) => {
 	}
 	return updateServer(c);
 });
+apiApp.delete("/servers/:id", (c) => deleteServer(c));
 apiApp.post("/servers/:id/install", (c) => {
 	const httpsResult = requireHttps(c);
 	if (httpsResult) {

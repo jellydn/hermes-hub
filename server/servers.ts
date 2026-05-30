@@ -595,3 +595,86 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getSessionKey(sessionId?: string | null) {
 	return sessionId && sessionId.length > 0 ? sessionId : randomUUID();
 }
+
+function requireHttps(context: {
+	req: { raw: Request };
+	json: (obj: unknown, status?: number) => Response;
+}) {
+	if (process.env.NODE_ENV !== "production") {
+		return;
+	}
+
+	const forwardedProto = context.req.raw.headers
+		.get("x-forwarded-proto")
+		?.split(",")[0]
+		?.trim()
+		.toLowerCase();
+	const urlProtocol = new URL(context.req.raw.url).protocol;
+
+	const isHttps = forwardedProto === "https" || urlProtocol === "https:";
+	if (!isHttps) {
+		return context.json(
+			{
+				error:
+					"HTTPS required. Use a secure connection to access this endpoint.",
+			},
+			426,
+		);
+	}
+}
+
+export async function deleteServer(context: Context) {
+	const httpsResult = requireHttps(context);
+	if (httpsResult) {
+		return httpsResult;
+	}
+
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const serverId = context.req.param("id");
+	if (!serverId) {
+		return context.json({ error: "Server ID is required" }, 400);
+	}
+
+	const serverRecord = await getOwnedServerRecord({
+		serverId,
+		userId: session.user.id,
+	});
+	if (!serverRecord) {
+		return context.json({ error: "Server not found" }, 404);
+	}
+
+	const db = getDb();
+	const ipAddress = getClientIp(context);
+
+	try {
+		await db
+			.delete(servers)
+			.where(
+				and(eq(servers.id, serverId), eq(servers.userId, session.user.id)),
+			);
+
+		await db.insert(auditLogs).values({
+			userId: session.user.id,
+			action: "server.action.delete.succeeded",
+			details: {
+				serverId,
+				label: serverRecord.label,
+				host: serverRecord.host,
+			},
+			ipAddress,
+		});
+
+		const { clearDashboardCache } = await import("./dashboard");
+		clearDashboardCache();
+
+		return context.json({ ok: true });
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Failed to delete server";
+		return context.json({ error: message }, 500);
+	}
+}

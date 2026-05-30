@@ -7,6 +7,7 @@ vi.mock("./db/health", () => ({
 const connectServer = vi.fn();
 const listServers = vi.fn();
 const updateServer = vi.fn();
+const deleteServer = vi.fn();
 const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
@@ -24,6 +25,7 @@ vi.mock("./servers", () => ({
 	connectServer,
 	listServers,
 	updateServer,
+	deleteServer,
 }));
 
 vi.mock("./server-actions", () => ({
