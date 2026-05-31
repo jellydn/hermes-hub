@@ -348,12 +348,6 @@ a {
 	}
 }
 
-@media (max-width: 640px) {
-	.nav-link::after {
-		bottom: -4px;
-	}
-}
-
 .site-footer {
 	border-top: 1px solid var(--line);
 	background: color-mix(in oklab, var(--header-bg) 84%, transparent 16%);
