@@ -1,5 +1,5 @@
 {
-	"include": ["**/*.ts", "**/*.tsx"],
+	"include": ["src/**/*", "server/**/*", "scripts/**/*", "drizzle.config.ts", "vite.config.ts"],
 	"compilerOptions": {
 		"target": "ES2022",
 		"jsx": "react-jsx",
