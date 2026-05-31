@@ -14,7 +14,7 @@ const config = defineConfig({
 	},
 	resolve: { tsconfigPaths: true },
 	plugins: isTest
-		? [viteReact()]
+		? []
 		: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 	test: {
 		environment: "node",
