@@ -66,7 +66,15 @@ function requireHttps(context: {
 	req: { raw: Request };
 	json: (obj: unknown, status?: number) => Response;
 }) {
-	if (process.env.NODE_ENV !== "production") {
+	/**
+	 * NOTE: Uses globalThis.process to avoid Vite's build-time replacement
+	 * of `process.env.NODE_ENV`. The Dockerfile bakes ENV NODE_ENV=production,
+	 * which causes the compiler to inline the literal and tree-shake this
+	 * dev-only early return away.
+	 */
+	const nodeEnv =
+		typeof globalThis !== "undefined" && globalThis.process?.env?.NODE_ENV;
+	if (nodeEnv !== "production") {
 		return;
 	}
 
