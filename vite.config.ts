@@ -18,9 +18,6 @@ const config = defineConfig({
 		: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 	test: {
 		environment: "node",
-		cache: {
-			dir: "node_modules/.vitest-cache",
-		},
 		include: [
 			"src/**/*.{test,spec}.{js,ts,jsx,tsx}",
 			"server/**/*.{test,spec}.{js,ts,jsx,tsx}",

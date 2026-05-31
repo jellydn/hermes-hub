@@ -4,6 +4,7 @@ export function buildHermesComposeContent(input?: {
 	apiServerKey?: string;
 	telegramBotToken?: string;
 	providerEnvVars?: Record<string, string>;
+	hermesModel?: string;
 }) {
 	const lines = [
 		"services:",

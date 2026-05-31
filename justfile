@@ -31,8 +31,14 @@ typecheck:
 db-generate:
     bun run db:generate
 
-# Run all checks (typecheck + test)
-check: typecheck test
+# Run all checks (typecheck + test, parallel for speed)
+check:
+	#!/usr/bin/env bash
+	set -e
+	bun run typecheck & T1=$!
+	bun run test & T2=$!
+	wait $T1
+	wait $T2
 
 # Install dependencies
 install:
