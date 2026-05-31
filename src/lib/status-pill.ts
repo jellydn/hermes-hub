@@ -1,6 +1,6 @@
 import { cn } from "./utils";
 
-export const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> =
+const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> =
 	{
 		online: "success",
 		connected: "success",

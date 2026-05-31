@@ -10,5 +10,3 @@ export const authClient = createAuthClient({
 	baseURL: authBaseUrl,
 	plugins: [magicLinkClient()],
 });
-
-export type AuthSession = typeof authClient.$Infer.Session;
