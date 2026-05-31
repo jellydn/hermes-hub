@@ -22,10 +22,6 @@ type ProviderRequest = {
 	baseUrl?: string;
 };
 
-type ModelUpdateRequest = {
-	model: string;
-};
-
 type StoredProviderRecord = {
 	provider: string;
 	model: string;

@@ -5,6 +5,7 @@ import {
 	LoaderCircle,
 	Radio,
 	ShieldCheck,
+	Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
