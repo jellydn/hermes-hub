@@ -13,4 +13,3 @@ __unconfig*
 todos.json
 .antigravitycli/
 .tsbuildinfo
-node_modules/.vitest-cache
