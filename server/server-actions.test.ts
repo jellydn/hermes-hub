@@ -7,6 +7,7 @@ const withSshConnection = vi.fn();
 const dbInsert = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
+const transaction = vi.fn();
 const insertAuditValues = vi.fn();
 const updateInstallSet = vi.fn();
 const updateInstallWhere = vi.fn();
@@ -46,6 +47,7 @@ vi.mock("./db", () => ({
 		insert: dbInsert,
 		select: dbSelect,
 		update: dbUpdate,
+		transaction,
 	}),
 }));
 
@@ -58,6 +60,14 @@ describe("server actions", () => {
 			user: { id: "user_123", email: "test@example.com" },
 		});
 
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				insert: dbInsert,
+				select: dbSelect,
+				update: dbUpdate,
+			};
+			return fn(tx);
+		});
 		dbInsert.mockReturnValue({ values: insertAuditValues });
 		insertAuditValues.mockResolvedValue(undefined);
 
