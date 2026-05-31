@@ -12,22 +12,8 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1748653200000,
-      "tag": "0001_ai_providers_base_url",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1749358800000,
-      "tag": "0002_telegram_configs_deploy",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780206703354,
-      "tag": "0003_boring_wilson_fisk",
+      "when": 1780241329806,
+      "tag": "0001_overjoyed_annihilus",
       "breakpoints": true
     }
   ]
