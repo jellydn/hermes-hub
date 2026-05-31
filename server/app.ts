@@ -9,7 +9,11 @@ import {
 	streamServerInstallEvents,
 } from "./install";
 import { clearLogs, getLogs } from "./logs";
-import { saveProviderConfig, testProviderConfig } from "./providers";
+import {
+	deployProviderToHermes,
+	saveProviderConfig,
+	testProviderConfig,
+} from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
 import {
 	connectServer,
@@ -240,6 +244,13 @@ apiApp.post("/providers/test", (c) => {
 		return httpsResult;
 	}
 	return testProviderConfig(c);
+});
+apiApp.post("/providers/deploy", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return deployProviderToHermes(c);
 });
 apiApp.post("/telegram/connect", (c) => {
 	const httpsResult = requireHttps(c);

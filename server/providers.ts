@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import {
@@ -10,10 +10,13 @@ import {
 	isValidAiModel,
 } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
+import { buildHermesComposeContent } from "./compose";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
-import { aiProviders, auditLogs } from "./db/schema";
+import { aiProviders, auditLogs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { resolveServerSshConfig } from "./server-records";
+import { type SshAuthMethod, withSshConnection } from "./ssh";
 
 type ProviderRequest = {
 	provider: string;
@@ -363,6 +366,230 @@ function createProviderTestRequest(input: {
 			},
 		},
 	};
+}
+
+const PROVIDER_ENV_MAP: Record<
+	AiProviderId,
+	{ apiKey?: string; baseUrl?: string }
+> = {
+	openai: { apiKey: "OPENAI_API_KEY" },
+	anthropic: { apiKey: "ANTHROPIC_API_KEY" },
+	openrouter: { apiKey: "OPENROUTER_API_KEY" },
+	ollama: {},
+	custom: { apiKey: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL" },
+};
+
+async function getTelegramDeployInfo(userId: string) {
+	const [record] = await getDb()
+		.select({
+			botToken: telegramConfigs.botToken,
+			apiServerKey: telegramConfigs.apiServerKey,
+			deployedServerId: telegramConfigs.deployedServerId,
+			deployedServerHost: telegramConfigs.deployedServerHost,
+		})
+		.from(telegramConfigs)
+		.where(
+			and(
+				eq(telegramConfigs.userId, userId),
+				eq(telegramConfigs.isActive, true),
+			),
+		)
+		.orderBy(desc(telegramConfigs.createdAt))
+		.limit(1);
+
+	if (!record?.apiServerKey || !record.deployedServerId) {
+		return null;
+	}
+
+	return record as {
+		botToken: string;
+		apiServerKey: string;
+		deployedServerId: string;
+		deployedServerHost: string;
+	};
+}
+
+async function getServerById(serverId: string) {
+	const [row] = await getDb()
+		.select({
+			id: servers.id,
+			host: servers.host,
+			port: servers.port,
+			username: servers.username,
+			authMethod: servers.authMethod,
+			encryptedCredential: servers.encryptedCredential,
+			storeCredential: servers.storeCredential,
+		})
+		.from(servers)
+		.where(eq(servers.id, serverId))
+		.limit(1);
+
+	return row ?? null;
+}
+
+function buildProviderEnvMap(
+	provider: AiProviderId,
+	apiKey: string,
+	baseUrl: string | null | undefined,
+): Record<string, string> {
+	const mapping = PROVIDER_ENV_MAP[provider];
+	if (!mapping) {
+		return {};
+	}
+
+	const envVars: Record<string, string> = {};
+
+	if (mapping.apiKey && apiKey) {
+		envVars[mapping.apiKey] = apiKey;
+	}
+
+	if (mapping.baseUrl && baseUrl) {
+		envVars[mapping.baseUrl] = baseUrl;
+	}
+
+	return envVars;
+}
+
+export async function deployProviderToHermes(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const db = getDb();
+	const ipAddress = getClientIp(context);
+
+	const providerRecord = await getLatestProviderRecord(session.user.id);
+	if (!providerRecord || !isAiProviderId(providerRecord.provider)) {
+		return context.json(
+			{ error: "No provider config found. Save a provider first." },
+			400,
+		);
+	}
+
+	const telegramInfo = await getTelegramDeployInfo(session.user.id);
+	if (!telegramInfo) {
+		return context.json(
+			{
+				error:
+					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
+			},
+			400,
+		);
+	}
+
+	const serverRecord = await getServerById(telegramInfo.deployedServerId);
+	if (!serverRecord) {
+		return context.json({ error: "Deployed server not found." }, 404);
+	}
+
+	let decryptedBotToken: string;
+	try {
+		decryptedBotToken = decryptSecret(telegramInfo.botToken);
+	} catch {
+		return context.json({ error: "Failed to decrypt bot token." }, 500);
+	}
+
+	let decryptedApiKey: string;
+	try {
+		decryptedApiKey = decryptSecret(providerRecord.encryptedApiKey);
+	} catch {
+		return context.json({ error: "Failed to decrypt API key." }, 500);
+	}
+
+	const providerEnvVars = buildProviderEnvMap(
+		providerRecord.provider,
+		decryptedApiKey,
+		providerRecord.baseUrl,
+	);
+
+	const composeContent = buildHermesComposeContent({
+		apiServerKey: telegramInfo.apiServerKey,
+		telegramBotToken: decryptedBotToken,
+		providerEnvVars,
+		hermesModel: providerRecord.model,
+	});
+
+	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${composeContent}\nDOCKER_EOF`;
+
+	let sshConfig: { authMethod: SshAuthMethod; credential: string };
+	try {
+		sshConfig = resolveServerSshConfig(serverRecord, session.session.id);
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Credential unavailable";
+		return context.json({ error: message }, 400);
+	}
+
+	try {
+		await withSshConnection(
+			{
+				host: serverRecord.host,
+				port: serverRecord.port,
+				username: serverRecord.username,
+				...sshConfig,
+			},
+			async (ssh) => {
+				const writeResult = await ssh.execCommand(writeCmd);
+				if (writeResult.code !== 0) {
+					throw new Error(
+						writeResult.stderr || "Failed to write docker-compose.yml",
+					);
+				}
+
+				const restartResult = await ssh.execCommand(
+					"cd ~/hermes && sudo docker compose up -d --force-recreate",
+				);
+				if (restartResult.code !== 0) {
+					throw new Error(restartResult.stderr || "Failed to restart Hermes");
+				}
+
+				const configResult = await ssh.execCommand(
+					`docker exec hermes hermes config set model ${providerRecord.model}`,
+				);
+				if (configResult.code !== 0) {
+					throw new Error(
+						configResult.stderr || "Failed to set model inside Hermes",
+					);
+				}
+			},
+		);
+
+		await db.insert(auditLogs).values({
+			userId: session.user.id,
+			action: "provider.deploy.succeeded",
+			details: {
+				provider: providerRecord.provider,
+				model: providerRecord.model,
+				serverId: serverRecord.id,
+				serverHost: serverRecord.host,
+			},
+			ipAddress,
+		});
+
+		return context.json({
+			status: "deployed",
+			provider: providerRecord.provider,
+			model: providerRecord.model,
+			serverHost: serverRecord.host,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Deploy failed";
+
+		await db.insert(auditLogs).values({
+			userId: session.user.id,
+			action: "provider.deploy.failed",
+			details: {
+				provider: providerRecord.provider,
+				model: providerRecord.model,
+				serverId: serverRecord.id,
+				error: message,
+			},
+			ipAddress,
+		});
+
+		return context.json({ error: `Deploy failed: ${message}` }, 502);
+	}
 }
 
 function getApiKeyLast4(apiKey: string) {
