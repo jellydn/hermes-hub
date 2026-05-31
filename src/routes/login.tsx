@@ -1,9 +1,18 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { getCurrentSession } from "@/lib/session";
+
+const loginSchema = z.object({
+	email: z.string().min(1, "Email is required").email("Invalid email address"),
+});
+
+type LoginFields = z.infer<typeof loginSchema>;
 
 type LoginSearch = {
 	redirect?: string;
@@ -26,24 +35,29 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
-	const [email, setEmail] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [submitted, setSubmitted] = useState(false);
-	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault();
+	const {
+		register,
+		handleSubmit,
+		formState: { errors, isSubmitting },
+	} = useForm<LoginFields>({
+		resolver: zodResolver(loginSchema),
+		defaultValues: {
+			email: "",
+		},
+	});
+
+	async function onSubmit(data: LoginFields) {
 		setError(null);
-		setIsSubmitting(true);
 
 		const callbackURL = search.redirect ?? "/dashboard";
 
 		const result = await authClient.signIn.magicLink({
-			email,
+			email: data.email,
 			callbackURL,
 		});
-
-		setIsSubmitting(false);
 
 		if (result.error) {
 			setError(result.error.message ?? "Unable to send magic link.");
@@ -79,19 +93,26 @@ function LoginPage() {
 
 				<form
 					className="mt-6 space-y-4"
-					onSubmit={(event) => void handleSubmit(event)}
+					onSubmit={(event) => void handleSubmit(onSubmit)(event)}
 				>
-					<label className="block space-y-2 text-sm font-medium text-[var(--sea-ink)]">
-						<span>Email</span>
+					<div className="space-y-2">
+						<label
+							htmlFor="email"
+							className="block text-sm font-medium text-[var(--sea-ink)]"
+						>
+							Email
+						</label>
 						<input
-							required
+							id="email"
 							type="email"
-							value={email}
-							onChange={(event) => setEmail(event.target.value)}
 							placeholder="you@example.com"
 							className="w-full rounded-2xl border border-[var(--line)] bg-white/70 px-4 py-3 text-base text-[var(--sea-ink)] outline-none transition focus:border-[var(--sea-ink)] dark:bg-white/5"
+							{...register("email")}
 						/>
-					</label>
+						{errors.email ? (
+							<p className="text-xs text-red-500">{errors.email.message}</p>
+						) : null}
+					</div>
 
 					<div className="flex flex-wrap items-center gap-3">
 						<Button type="submit" disabled={isSubmitting}>

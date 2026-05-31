@@ -15,6 +15,7 @@
 	},
 	"dependencies": {
 		"@better-auth/drizzle-adapter": "^1.6.11",
+		"@hookform/resolvers": "^5.4.0",
 		"@radix-ui/react-slot": "^1.2.4",
 		"@tailwindcss/vite": "^4.1.18",
 		"@tanstack/react-devtools": "^0.10.5",
@@ -35,8 +36,10 @@
 		"rate-limiter-flexible": "^11.1.0",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
+		"react-hook-form": "^7.76.1",
 		"tailwind-merge": "^3.6.0",
-		"tailwindcss": "^4.1.18"
+		"tailwindcss": "^4.1.18",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@tailwindcss/typography": "^0.5.16",

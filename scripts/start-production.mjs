@@ -90,7 +90,7 @@ const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 if (process.env.DATABASE_URL) {
 	console.log("Running database migrations...");
 	try {
-		execSync("npx drizzle-kit migrate", {
+		execSync("node ./node_modules/.bin/drizzle-kit migrate", {
 			cwd: join(import.meta.dirname, ".."),
 			stdio: "inherit",
 			env: process.env,
