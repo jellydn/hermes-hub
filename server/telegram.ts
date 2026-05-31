@@ -266,7 +266,7 @@ export async function deployTelegramToServer(context: Context) {
 				}
 
 				const restartResult = await ssh.execCommand(
-					"cd ~/hermes && sudo docker compose up -d",
+					"cd ~/hermes && sudo docker compose up -d --force-recreate",
 				);
 				if (restartResult.code !== 0) {
 					throw new Error(restartResult.stderr || "Failed to restart Hermes");
