@@ -7,7 +7,7 @@
 
 > **Your personal AI agent in 5 minutes. Zero terminal required.**
 
-HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/anomalyco/hermes) on any VPS — no SSH, Docker, or Linux knowledge needed.
+HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/nousresearch/hermes-agent) on any VPS — no SSH, Docker, or Linux knowledge needed.
 
 ## ✨ Features
 
