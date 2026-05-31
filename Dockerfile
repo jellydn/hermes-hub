@@ -17,7 +17,6 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./package.json
-COPY tsconfig.json ./tsconfig.json
 COPY drizzle.config.ts ./drizzle.config.ts
 COPY drizzle ./drizzle
 COPY server/db/schema.ts ./server/db/schema.ts
