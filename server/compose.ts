@@ -31,6 +31,10 @@ export function buildHermesComposeContent(input?: {
 		);
 	}
 
+	if (input?.hermesModel) {
+		lines.push(`      - HERMES_DEFAULT_MODEL=${input.hermesModel}`);
+	}
+
 	if (input?.providerEnvVars) {
 		for (const [key, value] of Object.entries(input.providerEnvVars)) {
 			if (value) {
