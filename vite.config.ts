@@ -18,6 +18,10 @@ const config = defineConfig({
 		: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 	test: {
 		environment: "node",
+		include: [
+			"src/**/*.{test,spec}.{js,ts,jsx,tsx}",
+			"server/**/*.{test,spec}.{js,ts,jsx,tsx}",
+		],
 	},
 });
 
