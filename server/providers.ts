@@ -11,7 +11,7 @@ import {
 } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
-import { decryptSecret, encryptSecret } from "./crypto";
+import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, auditLogs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -241,13 +241,15 @@ function resolveProviderApiKey(
 	// If API key is not supplied, try to retrieve it from existingRecord
 	if (!resolvedApiKey) {
 		if (existingRecord && existingRecord.provider === parsed.provider) {
-			try {
-				resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
-				if (!resolvedBaseUrl) {
-					resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
-				}
-			} catch {
+			resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
+			if (
+				!resolvedApiKey &&
+				PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
+			) {
 				return { error: "Stored API key could not be read. Paste a new key." };
+			}
+			if (!resolvedBaseUrl) {
+				resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
 			}
 		}
 	}
@@ -368,17 +370,6 @@ function createProviderTestRequest(input: {
 	};
 }
 
-const PROVIDER_ENV_MAP: Record<
-	AiProviderId,
-	{ apiKey?: string; baseUrl?: string }
-> = {
-	openai: { apiKey: "OPENAI_API_KEY" },
-	anthropic: { apiKey: "ANTHROPIC_API_KEY" },
-	openrouter: { apiKey: "OPENROUTER_API_KEY" },
-	ollama: {},
-	custom: { apiKey: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL" },
-};
-
 async function getTelegramDeployInfo(userId: string) {
 	const [record] = await getDb()
 		.select({
@@ -427,27 +418,73 @@ async function getServerById(serverId: string) {
 	return row ?? null;
 }
 
+type ProviderEnvConfig = {
+	apiKeyEnvVar?: string;
+	baseUrlEnvVar?: string;
+};
+
+const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
+	openai: { apiKeyEnvVar: "OPENAI_API_KEY" },
+	anthropic: { apiKeyEnvVar: "ANTHROPIC_API_KEY" },
+	openrouter: { apiKeyEnvVar: "OPENROUTER_API_KEY" },
+	ollama: { baseUrlEnvVar: "OPENAI_BASE_URL" },
+	custom: { apiKeyEnvVar: "OPENAI_API_KEY", baseUrlEnvVar: "OPENAI_BASE_URL" },
+};
+
 function buildProviderEnvMap(
 	provider: AiProviderId,
 	apiKey: string,
 	baseUrl: string | null | undefined,
 ): Record<string, string> {
-	const mapping = PROVIDER_ENV_MAP[provider];
-	if (!mapping) {
+	const config = PROVIDER_ENV_CONFIGS[provider];
+	if (!config) {
 		return {};
 	}
 
 	const envVars: Record<string, string> = {};
 
-	if (mapping.apiKey && apiKey) {
-		envVars[mapping.apiKey] = apiKey;
+	if (config.apiKeyEnvVar && apiKey) {
+		envVars[config.apiKeyEnvVar] = apiKey;
 	}
 
-	if (mapping.baseUrl && baseUrl) {
-		envVars[mapping.baseUrl] = baseUrl;
+	if (config.baseUrlEnvVar && baseUrl) {
+		envVars[config.baseUrlEnvVar] = baseUrl;
 	}
 
 	return envVars;
+}
+
+export async function getProviderEnvVars(
+	userId: string,
+): Promise<Record<string, string> | null> {
+	const record = await getLatestProviderRecord(userId);
+	if (!record || !isAiProviderId(record.provider)) {
+		return null;
+	}
+
+	const config = PROVIDER_ENV_CONFIGS[record.provider];
+	const option = getAiProviderOption(record.provider);
+	let decryptedApiKey = "";
+
+	if (config?.apiKeyEnvVar) {
+		const isKeyRequired = !option?.requiresBaseUrl;
+
+		if (record.encryptedApiKey) {
+			try {
+				decryptedApiKey = decryptSecret(record.encryptedApiKey);
+			} catch {
+				throw new Error(
+					"Stored API key could not be decrypted. Paste a new key.",
+				);
+			}
+		}
+
+		if (isKeyRequired && !decryptedApiKey) {
+			throw new Error(`API key is required for provider ${record.provider}.`);
+		}
+	}
+
+	return buildProviderEnvMap(record.provider, decryptedApiKey, record.baseUrl);
 }
 
 export async function deployProviderToHermes(context: Context) {
@@ -490,12 +527,22 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
 
-	let decryptedApiKey: string;
-	try {
-		decryptedApiKey = decryptSecret(providerRecord.encryptedApiKey);
-	} catch {
-		return context.json({ error: "Failed to decrypt API key." }, 500);
+	let decryptedApiKey = "";
+	if (providerRecord.encryptedApiKey) {
+		try {
+			decryptedApiKey = decryptSecret(providerRecord.encryptedApiKey);
+		} catch {
+			return context.json({ error: "Failed to decrypt API key." }, 500);
+		}
 	}
+
+	const isKeyRequired = !getAiProviderOption(providerRecord.provider)
+		?.requiresBaseUrl;
+	if (isKeyRequired && !decryptedApiKey) {
+		return context.json({ error: "API key is required." }, 500);
+	}
+
+	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
 
 	const providerEnvVars = buildProviderEnvMap(
 		providerRecord.provider,
@@ -504,7 +551,7 @@ export async function deployProviderToHermes(context: Context) {
 	);
 
 	const composeContent = buildHermesComposeContent({
-		apiServerKey: telegramInfo.apiServerKey,
+		apiServerKey: decryptedApiServerKey,
 		telegramBotToken: decryptedBotToken,
 		providerEnvVars,
 		hermesModel: providerRecord.model,
@@ -543,6 +590,9 @@ export async function deployProviderToHermes(context: Context) {
 				if (restartResult.code !== 0) {
 					throw new Error(restartResult.stderr || "Failed to restart Hermes");
 				}
+
+				// Give the container a brief moment to initialize before running CLI commands inside it
+				await ssh.execCommand("sleep 2");
 
 				const configResult = await ssh.execCommand(
 					`docker exec hermes hermes config set model ${providerRecord.model}`,

@@ -52,3 +52,14 @@ export function decryptSecret(payload: string) {
 		decipher.final(),
 	]).toString("utf8");
 }
+
+export function decryptApiServerKey(payload: string): string {
+	if (!payload) {
+		return "";
+	}
+	try {
+		return decryptSecret(payload);
+	} catch {
+		return payload;
+	}
+}

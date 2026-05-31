@@ -2,20 +2,13 @@ import crypto from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
-import type { AiProviderId } from "../src/lib/ai-providers";
-import { isAiProviderId } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
-import { decryptSecret, encryptSecret } from "./crypto";
+import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
-import {
-	aiProviders,
-	auditLogs,
-	installs,
-	servers,
-	telegramConfigs,
-} from "./db/schema";
+import { auditLogs, installs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { getProviderEnvVars } from "./providers";
 import { resolveServerSshConfig } from "./server-records";
 import { type SshAuthMethod, withSshConnection } from "./ssh";
 
@@ -239,7 +232,28 @@ export async function deployTelegramToServer(context: Context) {
 	}
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
-	const providerEnvVars = await buildProviderEnvVars(db, session.user.id);
+	let providerEnvVars: Record<string, string> | undefined;
+	try {
+		const envVars = await getProviderEnvVars(session.user.id);
+		providerEnvVars = envVars ?? undefined;
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to resolve provider config";
+
+		await db.insert(auditLogs).values({
+			userId: session.user.id,
+			action: "telegram.deploy.failed",
+			details: {
+				serverId: serverRecord.id,
+				error: message,
+			},
+			ipAddress,
+		});
+
+		return context.json({ error: `Deploy failed: ${message}` }, 502);
+	}
 
 	const composeContent = buildHermesComposeContent({
 		apiServerKey,
@@ -280,7 +294,7 @@ export async function deployTelegramToServer(context: Context) {
 				.set({
 					deployedServerId: serverRecord.id,
 					deployedServerHost: serverRecord.host,
-					apiServerKey,
+					apiServerKey: encryptSecret(apiServerKey),
 				})
 				.where(
 					and(
@@ -356,6 +370,8 @@ export async function testTelegramBot(context: Context) {
 		);
 	}
 
+	const decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+
 	const serverRecord = await findServerById(record.deployedServerId);
 	if (!serverRecord) {
 		return context.json({ error: "Deployed server not found." }, 404);
@@ -373,7 +389,7 @@ export async function testTelegramBot(context: Context) {
 	const curlCommand = [
 		`curl -s -X POST http://localhost:8642/v1/chat/completions`,
 		`-H "Content-Type: application/json"`,
-		`-H "Authorization: Bearer ${record.apiServerKey}"`,
+		`-H "Authorization: Bearer ${decryptedApiServerKey}"`,
 		`-d '${JSON.stringify({
 			model: "hermes-agent",
 			messages: [{ role: "user", content: message }],
@@ -564,64 +580,4 @@ function getTokenLast4(botToken: string) {
 	}
 
 	return trimmedToken.slice(-4);
-}
-
-const PROVIDER_ENV_MAP: Record<
-	AiProviderId,
-	{ apiKey?: string; baseUrl?: string }
-> = {
-	openai: { apiKey: "OPENAI_API_KEY" },
-	anthropic: { apiKey: "ANTHROPIC_API_KEY" },
-	openrouter: { apiKey: "OPENROUTER_API_KEY" },
-	ollama: {},
-	custom: { apiKey: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL" },
-};
-
-async function buildProviderEnvVars(
-	db: ReturnType<typeof getDb>,
-	userId: string,
-): Promise<Record<string, string> | undefined> {
-	const records = await db
-		.select({
-			provider: aiProviders.provider,
-			encryptedApiKey: aiProviders.encryptedApiKey,
-			baseUrl: aiProviders.baseUrl,
-		})
-		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
-		.orderBy(desc(aiProviders.createdAt))
-		.limit(1);
-
-	const record = records[0];
-	if (!record) {
-		return undefined;
-	}
-
-	if (!isAiProviderId(record.provider)) {
-		return undefined;
-	}
-
-	const mapping = PROVIDER_ENV_MAP[record.provider];
-	if (!mapping) {
-		return undefined;
-	}
-
-	const envVars: Record<string, string> = {};
-
-	if (mapping.apiKey && record.encryptedApiKey) {
-		try {
-			const key = decryptSecret(record.encryptedApiKey);
-			if (key) {
-				envVars[mapping.apiKey] = key;
-			}
-		} catch {
-			// skip if decryption fails
-		}
-	}
-
-	if (mapping.baseUrl && record.baseUrl) {
-		envVars[mapping.baseUrl] = record.baseUrl;
-	}
-
-	return Object.keys(envVars).length > 0 ? envVars : undefined;
 }
