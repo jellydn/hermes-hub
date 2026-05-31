@@ -570,6 +570,37 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 
 ---
 
+### POST `/api/providers/deploy`
+
+Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegram bot to already be deployed to a server. Over SSH, writes a new `docker-compose.yml` with provider env vars, restarts the Hermes container (with `--force-recreate`), and runs `hermes config set model` inside the container.
+
+**Auth required:** Yes
+
+**Request body:** None (uses the latest saved provider config)
+
+**Response (200):**
+```json
+{
+  "status": "deployed",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "serverHost": "192.168.1.100"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | No provider config saved yet                                 |
+| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | Credential unavailable / expired                             |
+| 401    | Unauthorized                                                 |
+| 404    | Deployed server not found                                    |
+| 502    | SSH connect or deploy command failed                         |
+
+---
+
 ## Telegram
 
 ### POST `/api/telegram/connect`
