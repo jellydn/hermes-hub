@@ -156,7 +156,7 @@ bun run build
 | `ENCRYPTION_KEY`     | 32-byte hex key for AES-256 credential encryption |
 | `BETTER_AUTH_SECRET` | Secret for Better Auth session signing            |
 | `BETTER_AUTH_URL`    | Public URL of the app for magic link emails       |
-| `HERMES_DEFAULT_MODEL` | Default model ID injected into Hermes Docker Compose on deploy |
+| `API_SERVER_MODEL_NAME` | Model ID injected into Hermes Docker Compose on deploy |
 | `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
 | `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
 
