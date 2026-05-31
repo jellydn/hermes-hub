@@ -32,6 +32,7 @@ HermesHub is a web application that lets non-technical users deploy and manage a
 - **Node.js >= 20** — JavaScript runtime
 - **Bun** — Fast package manager and runtime (preferred)
 - **PostgreSQL** — Running locally for development
+- **Docker & Docker Compose** — For local full-stack testing with an email server
 
 ## 🚀 Quick Start
 
@@ -56,6 +57,66 @@ bun run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## 🐳 Local Full-Stack Testing with Docker Compose
+
+The project includes a `compose.yaml` that spins up the full stack locally with **PostgreSQL** and **Mailpit** (a fake SMTP server for viewing magic link emails in the browser). This is the recommended way to test the complete auth and onboarding flow end-to-end.
+
+### Setup
+
+```bash
+# 1. Set required environment variables
+export APP_IMAGE=hermes-hub:local
+export BETTER_AUTH_SECRET=dev-only-better-auth-secret-for-local-development
+export BETTER_AUTH_URL=http://localhost:3000
+export ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+
+# 2. Build the Docker image
+docker build -t hermes-hub:local .
+
+# 3. Start the stack (Postgres + Mailpit + App)
+docker compose up -d
+
+# 4. Check that all services are healthy
+docker compose ps
+```
+
+### Login Flow
+
+The app runs in development mode (`NODE_ENV=development`) inside the container, so magic link emails are logged to stdout when no `RESEND_API_KEY` is set:
+
+```bash
+# 1. Request a magic link via the API
+curl -X POST http://localhost:3000/api/auth/send-magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com"}'
+
+# 2. Retrieve the magic link URL from the app logs
+docker compose logs app --tail=5
+# Look for: Magic link for test@example.com: http://localhost:3000/api/auth/...
+
+# 3. Open the magic link URL in your browser to log in
+# Alternatively, use Mailpit to see the email (if RESEND_API_KEY is set):
+open http://localhost:8025
+```
+
+### Service URLs
+
+| Service  | URL                               |
+| -------- | --------------------------------- |
+| App      | http://localhost:3000             |
+| Mailpit  | http://localhost:8025             |
+| Postgres | localhost:5432 (via port mapping) |
+
+### Resetting the Stack
+
+```bash
+# Stop and remove all containers (data persists in volumes)
+docker compose down
+
+# Stop and remove everything including volumes (fresh start)
+docker compose down -v
+```
+
 ## 🧪 Running Tests
 
 ```bash
@@ -71,13 +132,13 @@ bun run build
 
 ## 📦 Scripts
 
-| Command               | Description                       |
-| --------------------- | --------------------------------- |
+| Command               | Description                        |
+| --------------------- | ---------------------------------- |
 | `bun run dev`         | Start Vite dev server on port 3000 |
-| `bun run build`       | Build for production              |
-| `bun run test`        | Run Vitest test suite             |
-| `bun run typecheck`   | Run TypeScript type checking      |
-| `bun run db:generate` | Generate Drizzle migrations       |
+| `bun run build`       | Build for production               |
+| `bun run test`        | Run Vitest test suite              |
+| `bun run typecheck`   | Run TypeScript type checking       |
+| `bun run db:generate` | Generate Drizzle migrations        |
 
 ## 🔧 Environment Variables
 
@@ -122,17 +183,17 @@ server/               — Hono API routes and business logic
 
 ### Stack
 
-| Layer      | Choice                                                                  |
-| ---------- | ----------------------------------------------------------------------- |
-| Frontend   | [TanStack Start](https://tanstack.com/start/latest) (file-based routing) |
+| Layer      | Choice                                                                           |
+| ---------- | -------------------------------------------------------------------------------- |
+| Frontend   | [TanStack Start](https://tanstack.com/start/latest) (file-based routing)         |
 | UI         | [TailwindCSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
-| Backend    | [Hono](https://hono.dev/) REST API on `/api/*`                          |
-| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                   |
-| Auth       | [Better Auth](https://www.better-auth.com/) (magic link only)           |
-| SSH        | [node-ssh](https://github.com/steelbrain/node-ssh)                      |
-| Realtime   | Server-Sent Events (Hono `streamSSE`)                                   |
-| Encryption | AES-256-GCM (built-in Node `crypto`)                                    |
-| Tests      | [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/) |
+| Backend    | [Hono](https://hono.dev/) REST API on `/api/*`                                   |
+| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                            |
+| Auth       | [Better Auth](https://www.better-auth.com/) (magic link only)                    |
+| SSH        | [node-ssh](https://github.com/steelbrain/node-ssh)                               |
+| Realtime   | Server-Sent Events (Hono `streamSSE`)                                            |
+| Encryption | AES-256-GCM (built-in Node `crypto`)                                             |
+| Tests      | [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)  |
 
 ## 📚 API Reference
 
