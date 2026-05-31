@@ -1,9 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	CheckCircle2,
+	CloudUpload,
 	KeyRound,
 	LoaderCircle,
 	Radio,
+	Server,
 	ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
@@ -27,8 +29,13 @@ export type ProviderSettingsSummary = {
 	baseUrl?: string | null;
 };
 
+type TelegramDeployInfo = {
+	deployedServerHost: string;
+};
+
 type ProviderSettingsProps = {
 	initialConfig: ProviderSettingsSummary | null;
+	telegramDeploy?: TelegramDeployInfo | null;
 };
 
 type ProviderFormState = {
@@ -47,7 +54,10 @@ const providerSchema = z.object({
 	baseUrl: z.string(),
 });
 
-export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
+export function ProviderSettings({
+	initialConfig,
+	telegramDeploy,
+}: ProviderSettingsProps) {
 	const [savedConfig, setSavedConfig] =
 		useState<ProviderSettingsSummary | null>(initialConfig);
 
@@ -63,6 +73,9 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [testError, setTestError] = useState<string | null>(null);
 	const [isConnected, setIsConnected] = useState(false);
+	const [isDeploying, setIsDeploying] = useState(false);
+	const [deployError, setDeployError] = useState<string | null>(null);
+	const [deployResult, setDeployResult] = useState<string | null>(null);
 
 	const providerOption = getAiProviderOption(form.provider);
 	const existingKeyLast4 =
@@ -142,6 +155,37 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 			setIsConnected(payload?.status === "connected");
 		} finally {
 			setIsTesting(false);
+		}
+	}
+
+	async function handleDeployToHermes() {
+		setIsDeploying(true);
+		setDeployError(null);
+		setDeployResult(null);
+
+		try {
+			const response = await fetch("/api/providers/deploy", {
+				method: "POST",
+			});
+
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+				status?: string;
+				model?: string;
+			} | null;
+
+			if (!response.ok) {
+				setDeployError(payload?.error ?? "Deploy failed");
+				return;
+			}
+
+			setDeployResult(
+				payload?.model
+					? `Model "${payload.model}" deployed successfully.`
+					: "Deployed successfully.",
+			);
+		} finally {
+			setIsDeploying(false);
 		}
 	}
 
@@ -367,6 +411,62 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 								Stored key ending in {savedConfig.keyLast4}
 							</p>
 						) : null}
+					</section>
+
+					<section className="island-shell rounded-[2rem] p-6">
+						<p className="island-kicker mb-2">Hermes deployment</p>
+						{telegramDeploy ? (
+							<>
+								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+									Push your current provider config to the Hermes server.
+								</p>
+								{savedConfig ? (
+									<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+										Model:{" "}
+										<span className="font-semibold text-[var(--sea-ink)]">
+											{savedConfig.model}
+										</span>
+									</p>
+								) : null}
+								<div className="mt-4">
+									<Button
+										type="button"
+										onClick={() => void handleDeployToHermes()}
+										disabled={isDeploying || !savedConfig}
+									>
+										{isDeploying ? (
+											<LoaderCircle className="h-4 w-4 animate-spin" />
+										) : (
+											<CloudUpload className="h-4 w-4" />
+										)}
+										<span>
+											{isDeploying ? "Deploying..." : "Deploy to Hermes Server"}
+										</span>
+									</Button>
+								</div>
+								{deployError ? (
+									<p className="mt-3 mb-0 text-sm text-red-600">
+										{deployError}
+									</p>
+								) : null}
+								{deployResult ? (
+									<p className="mt-3 mb-0 text-sm text-emerald-600">
+										{deployResult}
+									</p>
+								) : null}
+							</>
+						) : (
+							<>
+								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+									Deploy a Telegram bot to a VPS first to enable Hermes
+									deployment.
+								</p>
+								<div className="mt-4 flex items-center gap-2 text-sm text-[var(--sea-ink-soft)]">
+									<Server className="h-4 w-4" />
+									<span>Not deployed</span>
+								</div>
+							</>
+						)}
 					</section>
 
 					<section className="island-shell rounded-[2rem] p-6">
