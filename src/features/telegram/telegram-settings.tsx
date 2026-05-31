@@ -8,6 +8,7 @@ import {
 	XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +26,21 @@ type TelegramSettingsProps = {
 export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 	const [savedConfig, setSavedConfig] =
 		useState<TelegramSettingsSummary | null>(initialConfig);
-	const [botToken, setBotToken] = useState("");
+
+	const {
+		register,
+		watch,
+		setValue,
+		setError: setFormError,
+		clearErrors,
+		formState: { errors: formErrors },
+	} = useForm<{ botToken: string }>({
+		defaultValues: {
+			botToken: "",
+		},
+	});
+
+	const botToken = watch("botToken");
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [isDisconnecting, setIsDisconnecting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -43,6 +58,15 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 	const [testError, setTestError] = useState<string | null>(null);
 
 	async function handleConnect() {
+		if (!botToken.trim()) {
+			setFormError("botToken", {
+				type: "manual",
+				message: "Telegram bot token is required.",
+			});
+			return;
+		}
+		clearErrors("botToken");
+
 		setIsConnecting(true);
 		setError(null);
 		setSuccessMessage(null);
@@ -65,7 +89,7 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 			}
 
 			setSavedConfig(payload.telegram);
-			setBotToken("");
+			setValue("botToken", "");
 			setSuccessMessage("Telegram bot connected");
 		} finally {
 			setIsConnecting(false);
@@ -202,10 +226,12 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 							</label>
 							<input
 								id="botToken"
-								name="botToken"
 								type="password"
-								value={botToken}
-								onChange={(event) => setBotToken(event.currentTarget.value)}
+								{...register("botToken")}
+								onChange={(event) => {
+									void register("botToken").onChange(event);
+									clearErrors("botToken");
+								}}
 								className={inputClassName}
 								placeholder={
 									savedConfig?.botTokenLast4
@@ -213,6 +239,11 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 										: "123456789:AA..."
 								}
 							/>
+							{formErrors.botToken ? (
+								<p className="mt-1 text-xs text-red-500">
+									{formErrors.botToken.message}
+								</p>
+							) : null}
 							<p className="block min-h-5 text-xs text-[var(--sea-ink-soft)]">
 								{savedConfig?.botTokenLast4
 									? `Stored token ending in ${savedConfig.botTokenLast4}. Paste a new one to replace it.`
