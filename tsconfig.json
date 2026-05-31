@@ -19,6 +19,8 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true
+		"noUncheckedSideEffectImports": true,
+		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo"
 	}
 }
