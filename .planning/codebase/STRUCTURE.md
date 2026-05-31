@@ -47,9 +47,8 @@ hermes-hub/
 ├── drizzle.config.ts             # Drizzle Kit configuration
 ├── justfile                      # Task runner shortcuts
 ├── package.json                  # Dependencies and scripts
-├── postcss.config.mjs            # PostCSS configuration
 ├── tsconfig.json                 # TypeScript configuration
-├── vite.config.ts                # Vite + TanStack Start + Tailwind config
+├── vite.config.ts                # Vite + TanStack Start + Tailwind v4 config
 ├── AGENTS.md                     # Agent-specific development guidelines
 ├── CLAUDE.md                     # Claude Code agent instructions
 ├── README.md                     # Project overview and setup
