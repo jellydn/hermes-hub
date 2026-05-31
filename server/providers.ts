@@ -463,6 +463,11 @@ function buildProviderEnvMap(
 		envVars[config.apiKeyEnvVar] = apiKey;
 	}
 
+	const customApiKeyEnvVar = deriveCustomProviderApiKeyEnvVar(baseUrl);
+	if (customApiKeyEnvVar && apiKey) {
+		envVars[customApiKeyEnvVar] = apiKey;
+	}
+
 	if (config.baseUrlEnvVar && baseUrl) {
 		envVars[config.baseUrlEnvVar] = baseUrl;
 		for (const extraEnvVar of config.extraBaseUrlEnvVars ?? []) {
@@ -471,6 +476,54 @@ function buildProviderEnvMap(
 	}
 
 	return envVars;
+}
+
+function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
+	if (!baseUrl) {
+		return null;
+	}
+
+	let hostname: string;
+	try {
+		hostname = new URL(baseUrl).hostname.toLowerCase();
+	} catch {
+		return null;
+	}
+
+	if (!hostname || hostname === "localhost" || hostname.includes(":")) {
+		return null;
+	}
+
+	const labels = hostname
+		.split(".")
+		.map((label) => label.trim())
+		.filter(Boolean);
+	while (labels[0] === "api" || labels[0] === "www") {
+		labels.shift();
+	}
+
+	if (labels.length < 2 || /^\d/.test(labels.at(-1) ?? "")) {
+		return null;
+	}
+
+	const vendor = labels.at(-2) ?? "";
+	const sanitized = vendor
+		.toUpperCase()
+		.replace(/[^A-Z0-9]/g, "_")
+		.replace(/_+/g, "_");
+	if (!/^[A-Z]/.test(sanitized)) {
+		return null;
+	}
+
+	if (
+		sanitized === "OPENAI" ||
+		sanitized === "OPENROUTER" ||
+		sanitized === "OLLAMA"
+	) {
+		return null;
+	}
+
+	return `${sanitized}_API_KEY`;
 }
 
 export async function getProviderDeployConfig(

@@ -279,6 +279,7 @@ describe("provider settings", () => {
 			model: "deepseek-chat",
 			envVars: {
 				CUSTOM_BASE_URL: "https://api.deepseek.com/v1",
+				DEEPSEEK_API_KEY: "stored-api-key",
 				HERMES_INFERENCE_PROVIDER: "custom",
 				OPENAI_API_KEY: "stored-api-key",
 				OPENAI_BASE_URL: "https://api.deepseek.com/v1",
