@@ -13,6 +13,7 @@ type AiProviderOption = {
 	defaultModel: string;
 	requiresCustomModel?: boolean;
 	requiresBaseUrl?: boolean;
+	defaultBaseUrl?: string;
 };
 
 export const aiProviderOptions: readonly AiProviderOption[] = [
@@ -50,6 +51,7 @@ export const aiProviderOptions: readonly AiProviderOption[] = [
 		defaultModel: "llama3",
 		requiresCustomModel: true,
 		requiresBaseUrl: true,
+		defaultBaseUrl: "http://localhost:11434/v1",
 	},
 	{
 		id: "custom",

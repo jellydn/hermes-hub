@@ -43,9 +43,13 @@ function decryptApiKey(encryptedStr: string): string {
 		// Backward-compatibility: keys saved before the explicit baseUrl column
 		// may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
 		if (decrypted.startsWith("{")) {
-			const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-			if (typeof parsed.apiKey === "string") {
-				return parsed.apiKey;
+			try {
+				const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+				if (typeof parsed.apiKey === "string") {
+					return parsed.apiKey;
+				}
+			} catch {
+				// Not valid JSON — treat as a raw key starting with '{'
 			}
 		}
 		return decrypted;
@@ -331,26 +335,9 @@ function createProviderTestRequest(input: {
 		};
 	}
 
-	if (input.provider === "ollama") {
-		const baseUrl = input.baseUrl || "http://localhost:11434/v1";
-		const url = baseUrl.endsWith("/")
-			? `${baseUrl}models`
-			: `${baseUrl}/models`;
-		const headers: Record<string, string> = {};
-		if (input.apiKey) {
-			headers.Authorization = `Bearer ${input.apiKey}`;
-		}
-		return {
-			url,
-			init: {
-				method: "GET",
-				headers,
-			},
-		};
-	}
-
-	if (input.provider === "custom") {
-		const baseUrl = input.baseUrl || "";
+	const option = getAiProviderOption(input.provider);
+	if (option?.requiresBaseUrl) {
+		const baseUrl = input.baseUrl || option.defaultBaseUrl || "";
 		const url = baseUrl.endsWith("/")
 			? `${baseUrl}models`
 			: `${baseUrl}/models`;
