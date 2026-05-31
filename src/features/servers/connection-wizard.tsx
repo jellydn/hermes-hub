@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	CheckCircle2,
 	ChevronLeft,
@@ -9,7 +8,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { type Path, useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -108,13 +107,12 @@ export function ConnectionWizard({
 
 	const {
 		register,
-		trigger,
 		watch,
 		setValue,
+		setError,
 		clearErrors,
 		formState: { errors },
 	} = useForm<ConnectionDraft>({
-		resolver: zodResolver(connectionSchema),
 		defaultValues: initialDraft,
 	});
 
@@ -128,18 +126,54 @@ export function ConnectionWizard({
 		clearErrors(["password", "privateKey"]);
 	}
 
-	async function goToNextStep() {
-		let fieldsToValidate: Array<keyof ConnectionDraft> = [];
+	function goToNextStep() {
+		const stepErrors: Record<string, string> = {};
+
 		if (currentStep === 1) {
-			fieldsToValidate = ["label", "host", "port", "username"];
+			if (!draft.label.trim()) {
+				stepErrors.label = "Enter a label so you can recognize this VPS later.";
+			}
+			if (!draft.host.trim()) {
+				stepErrors.host = "Enter a hostname or IP address.";
+			} else if (!isValidHost(draft.host)) {
+				stepErrors.host = "Use a valid hostname or IP address.";
+			}
+			if (!draft.port.trim()) {
+				stepErrors.port = "Enter the SSH port.";
+			} else {
+				const numericPort = Number(draft.port);
+				if (
+					!Number.isInteger(numericPort) ||
+					numericPort < 1 ||
+					numericPort > 65535
+				) {
+					stepErrors.port = "Port must be between 1 and 65535.";
+				}
+			}
+			if (!draft.username.trim()) {
+				stepErrors.username = "Enter the SSH username.";
+			}
 		} else if (currentStep === 2) {
-			fieldsToValidate = ["authMethod", "password", "privateKey"];
+			if (draft.authMethod === "password" && !draft.password.trim()) {
+				stepErrors.password = "Enter the SSH password.";
+			}
+			if (draft.authMethod === "ssh-key" && !draft.privateKey.trim()) {
+				stepErrors.privateKey = "Paste the private key for this server.";
+			}
 		}
 
-		const isValid = await trigger(fieldsToValidate);
-		if (isValid) {
-			setCurrentStep((step) => Math.min(step + 1, wizardSteps.length));
+		if (Object.keys(stepErrors).length > 0) {
+			for (const [key, msg] of Object.entries(stepErrors)) {
+				setError(key as Path<ConnectionDraft>, {
+					type: "manual",
+					message: msg,
+				});
+			}
+			return;
 		}
+
+		clearErrors();
+		setCurrentStep((step) => Math.min(step + 1, wizardSteps.length));
 	}
 
 	function goToPreviousStep() {
@@ -148,10 +182,50 @@ export function ConnectionWizard({
 	}
 
 	async function handleSubmit() {
-		const isValid = await trigger();
-		if (isValid) {
-			await onSubmit(draft);
+		const stepErrors: Record<string, string> = {};
+
+		if (!draft.label.trim()) {
+			stepErrors.label = "Enter a label so you can recognize this VPS later.";
 		}
+		if (!draft.host.trim()) {
+			stepErrors.host = "Enter a hostname or IP address.";
+		} else if (!isValidHost(draft.host)) {
+			stepErrors.host = "Use a valid hostname or IP address.";
+		}
+		if (!draft.port.trim()) {
+			stepErrors.port = "Enter the SSH port.";
+		} else {
+			const numericPort = Number(draft.port);
+			if (
+				!Number.isInteger(numericPort) ||
+				numericPort < 1 ||
+				numericPort > 65535
+			) {
+				stepErrors.port = "Port must be between 1 and 65535.";
+			}
+		}
+		if (!draft.username.trim()) {
+			stepErrors.username = "Enter the SSH username.";
+		}
+		if (draft.authMethod === "password" && !draft.password.trim()) {
+			stepErrors.password = "Enter the SSH password.";
+		}
+		if (draft.authMethod === "ssh-key" && !draft.privateKey.trim()) {
+			stepErrors.privateKey = "Paste the private key for this server.";
+		}
+
+		if (Object.keys(stepErrors).length > 0) {
+			for (const [key, msg] of Object.entries(stepErrors)) {
+				setError(key as Path<ConnectionDraft>, {
+					type: "manual",
+					message: msg,
+				});
+			}
+			return;
+		}
+
+		clearErrors();
+		await onSubmit(draft);
 	}
 
 	return (
