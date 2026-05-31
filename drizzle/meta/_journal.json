@@ -1,27 +1,34 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1779771594157,
-			"tag": "0000_swift_luckman",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1748653200000,
-			"tag": "0001_ai_providers_base_url",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1749358800000,
-			"tag": "0002_telegram_configs_deploy",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779771594157,
+      "tag": "0000_swift_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1748653200000,
+      "tag": "0001_ai_providers_base_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1749358800000,
+      "tag": "0002_telegram_configs_deploy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780206703354,
+      "tag": "0003_boring_wilson_fisk",
+      "breakpoints": true
+    }
+  ]
 }

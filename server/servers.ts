@@ -22,6 +22,7 @@ import {
 	type VerifiedServerInfo,
 	verifyServerConnection,
 } from "./ssh";
+import { clearDashboardCache } from "./dashboard";
 
 type ConnectServerRequest = {
 	label: string;
@@ -633,11 +634,10 @@ export async function deleteServer(context: Context) {
 				serverId: deleted.id,
 				label: deleted.label,
 				host: deleted.host,
-			},
+				},
 			ipAddress,
 		});
 
-		const { clearDashboardCache } = await import("./dashboard");
 		clearDashboardCache();
 
 		return context.json({ ok: true });
