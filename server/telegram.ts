@@ -384,16 +384,23 @@ export async function testTelegramBot(context: Context) {
 				});
 
 				if (execResult.code !== 0) {
-					const stderr = execResult.stderr?.trim();
+					const stdout = execResult.stdout?.trim() || "";
+					const stderr = execResult.stderr?.trim() || "";
 					if (
-						stderr?.includes("Connection refused") ||
-						stderr?.includes("Could not resolve")
+						stderr.includes("Connection refused") ||
+						stderr.includes("Could not resolve")
 					) {
 						throw new Error(
 							"Hermes API server is not reachable. Make sure Hermes is running on the server.",
 						);
 					}
-					throw new Error(stderr || "Failed to reach Hermes API");
+
+					const detail = (stderr || stdout).slice(0, 300);
+					throw new Error(
+						detail
+							? `Failed to reach Hermes API (exit ${execResult.code}): ${detail}`
+							: `Failed to reach Hermes API (exit ${execResult.code})`,
+					);
 				}
 
 				const stdout = execResult.stdout?.trim();
