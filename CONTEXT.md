@@ -22,6 +22,8 @@
 
 **Dashboard Caching**: Two-tier in-memory cache on the server. **Static data** (server info, provider, telegram, install status) cached for 60 seconds. **Live metrics** (SSH: cpu, memory, disk, uptime) cached for 15 seconds. Each tier is a module-level variable with a timestamp check. SSH only runs once per 15s expiry regardless of client count. The 30-second client poll hits cached data most of the time.
 
+**Single-Instance Boundary**: Near-term deployments are intentionally single-instance. In-memory state (install streams, session credentials, rate limiting, dashboard caches) is accepted as a temporary constraint and must be documented as non-shared across nodes.
+
 **OS Validation**: Ubuntu 22.04+ and Debian 12+ are officially supported and pass validation. All other Linux distributions are allowed through with a `warning` status instead of rejection. The dashboard displays a note: "This OS is not officially supported; Hermes runs via Docker but some features may not work." The validation function returns a `supportLevel: "supported" | "untested"` field alongside the OS info, so the UI can show the warning without blocking the user.
 
 **Install Module Decomposition**: `server/install.ts` splits its SSE infrastructure into `server/install/sse-stream.ts` (stream state map, heartbeat, idle timeout, event hydration). The install workflow orchestration and step definitions stay in `server/install.ts`. This isolates ~150 lines of pure SSE plumbing from the business logic.

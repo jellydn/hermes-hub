@@ -160,6 +160,36 @@ bun run build
 | `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
 | `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
 
+## Troubleshooting
+
+### Telegram says the user is not recognized
+
+When Hermes replies in Telegram with a pairing code and asks the owner to run `hermes pairing approve telegram <code>`, approve the code from HermesHub instead:
+
+1. Open `/telegram`.
+2. Make sure the Telegram bot has been deployed to the Hermes VPS.
+3. Paste the 8-character code into **Pair Telegram users**.
+4. Click **Approve**.
+
+HermesHub runs the approval against the deployed Hermes container over SSH and uses Hermes' own pairing store. You do not need to run `hermes setup` for the managed install path.
+
+### Telegram test returns a Hermes API 401 or 502
+
+Check the deployed Hermes container logs on the VPS first:
+
+```bash
+docker logs hermes --tail=100
+```
+
+If the raw provider API works but Hermes returns an authentication error, redeploy the AI provider from HermesHub. For custom OpenAI-compatible providers, the deployed container must receive both the generic base URL variables and the host-derived API key variable. For example:
+
+| Custom base URL | Required vendor key |
+| --------------- | ------------------- |
+| `https://crof.ai/v1` | `CROF_API_KEY` |
+| `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+
+HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
+
 ## 🏗️ Architecture
 
 ```

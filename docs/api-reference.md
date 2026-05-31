@@ -660,6 +660,80 @@ Deactivates the currently active Telegram configuration.
 
 ---
 
+### GET `/api/telegram/pairings`
+
+Lists pending and approved Telegram pairing records from the deployed Hermes container. Requires Telegram to be deployed to a server.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "pairings": {
+    "pending": [
+      {
+        "code": "ABCD2345",
+        "userId": "123456789",
+        "userName": "Example User",
+        "ageMinutes": 2
+      }
+    ],
+    "approved": [
+      {
+        "userId": "123456789",
+        "userName": "Example User",
+        "approvedAt": 1780272000000
+      }
+    ]
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                      |
+| ------ | ---------------------------------------------- |
+| 400    | Telegram is not deployed / credential unavailable |
+| 401    | Unauthorized                                   |
+| 404    | Deployed server not found                      |
+| 502    | SSH command or Hermes pairing command failed   |
+
+---
+
+### POST `/api/telegram/pairings/approve`
+
+Approves a Telegram pairing code by running Hermes' pairing store approval inside the deployed Hermes container. This is the web UI replacement for running `hermes pairing approve telegram <code>` manually on the VPS.
+
+**Auth required:** Yes
+
+**Request body:**
+```json
+{
+  "code": "ABCD2345"
+}
+```
+
+**Response (200):**
+```json
+{
+  "approved": {
+    "userId": "123456789",
+    "userName": "Example User"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                      |
+| ------ | ---------------------------------------------- |
+| 400    | Invalid code / code expired / approval lockout / Telegram not deployed / credential unavailable |
+| 401    | Unauthorized                                   |
+| 404    | Deployed server not found                      |
+| 502    | SSH command or Hermes pairing command failed   |
+
+---
+
 ## Database Schema
 
 The following tables are used by the API:
