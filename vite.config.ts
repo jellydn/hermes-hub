@@ -17,7 +17,7 @@ const config = defineConfig({
 		? [viteReact()]
 		: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 	test: {
-		environment: "jsdom",
+		environment: "node",
 	},
 });
 
