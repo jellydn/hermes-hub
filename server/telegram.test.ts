@@ -4,13 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getAuthSession = vi.fn();
 const encryptSecret = vi.fn();
 const decryptSecret = vi.fn();
+const decryptApiServerKey = vi.fn();
 const insertValues = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
 const selectFrom = vi.fn();
+const selectInnerJoin = vi.fn();
 const selectWhere = vi.fn();
 const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
+const withSshConnection = vi.fn();
+const transaction = vi.fn();
+const getProviderDeployConfig = vi.fn();
+const resolveServerSshConfig = vi.fn();
+const buildHermesComposeContent = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -19,6 +26,7 @@ vi.mock("./auth", () => ({
 vi.mock("./crypto", () => ({
 	encryptSecret,
 	decryptSecret,
+	decryptApiServerKey,
 }));
 
 vi.mock("./db", () => ({
@@ -26,6 +34,7 @@ vi.mock("./db", () => ({
 		insert: () => ({ values: insertValues }),
 		update: () => ({ set: updateSet }),
 		select: () => ({ from: selectFrom }),
+		transaction,
 	}),
 }));
 
@@ -37,7 +46,39 @@ vi.mock("./db/schema", () => ({
 		isActive: Symbol("telegramConfigs.isActive"),
 		createdAt: Symbol("telegramConfigs.createdAt"),
 	},
+	servers: {
+		id: Symbol("servers.id"),
+		host: Symbol("servers.host"),
+		port: Symbol("servers.port"),
+		username: Symbol("servers.username"),
+		authMethod: Symbol("servers.authMethod"),
+		encryptedCredential: Symbol("servers.encryptedCredential"),
+		storeCredential: Symbol("servers.storeCredential"),
+		userId: Symbol("servers.userId"),
+	},
+	installs: {
+		serverId: Symbol("installs.serverId"),
+		status: Symbol("installs.status"),
+		createdAt: Symbol("installs.createdAt"),
+	},
 	auditLogs: {},
+}));
+
+vi.mock("./ssh", () => ({
+	withSshConnection,
+	shellQuote: (value: string) => `'${value.replace(/'/g, "'\\''")}'`,
+}));
+
+vi.mock("./providers", () => ({
+	getProviderDeployConfig,
+}));
+
+vi.mock("./server-records", () => ({
+	resolveServerSshConfig,
+}));
+
+vi.mock("./compose", () => ({
+	buildHermesComposeContent,
 }));
 
 describe("telegram handlers", () => {
@@ -48,11 +89,38 @@ describe("telegram handlers", () => {
 		decryptSecret.mockImplementation((value: string) =>
 			value.startsWith("enc:") ? value.slice(4) : value,
 		);
+		decryptApiServerKey.mockReturnValue("decrypted-server-key");
+		resolveServerSshConfig.mockReturnValue({
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		getProviderDeployConfig.mockResolvedValue({
+			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
+			model: "gpt-4o",
+		});
+		buildHermesComposeContent.mockReturnValue("# mocked compose content");
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				update: () => ({ set: updateSet }),
+				insert: () => ({ values: insertValues }),
+			};
+			return fn(tx);
+		});
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 		insertValues.mockResolvedValue(undefined);
-		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy });
+		selectInnerJoin.mockReturnValue({
+			where: selectWhere,
+			orderBy: selectOrderBy,
+			limit: selectLimit,
+		});
+		selectFrom.mockReturnValue({
+			innerJoin: selectInnerJoin,
+			where: selectWhere,
+			orderBy: selectOrderBy,
+			limit: selectLimit,
+		});
+		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
 		selectOrderBy.mockReturnValue({ limit: selectLimit });
 		selectLimit.mockResolvedValue([]);
 	});
@@ -155,6 +223,228 @@ describe("telegram handlers", () => {
 		expect(payload).toEqual({ status: "disconnected" });
 		expect(updateSet).toHaveBeenCalled();
 		expect(insertValues).toHaveBeenCalled();
+	});
+
+	it("testTelegramBot shell-quotes the model value in the curl command", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		// Simulate a model name containing a single quote — the curl command
+		// must still be a valid, non-injectable shell command.
+		getProviderDeployConfig.mockResolvedValue({
+			envVars: { HERMES_INFERENCE_PROVIDER: "custom" },
+			model: "test's-model",
+		});
+
+		// First .limit() call is getLatestTelegramRecord, second is findServerById
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "192.168.1.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: false,
+			},
+		]);
+
+		// Track the command passed to ssh.execCommand
+		let capturedCommand = "";
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: {
+					execCommand: (
+						cmd: string,
+						opts?: unknown,
+					) => Promise<{ code: number; stdout: string; stderr: string }>;
+				}) => Promise<unknown>,
+			) => {
+				return callback({
+					execCommand: async (cmd: string) => {
+						capturedCommand = cmd;
+						return {
+							code: 0,
+							stdout: JSON.stringify({
+								choices: [
+									{
+										message: {
+											content: "Hello, world!",
+										},
+									},
+								],
+							}),
+							stderr: "",
+						};
+					},
+				});
+			},
+		);
+
+		const { testTelegramBot } = await import("./telegram");
+		const response = await testTelegramBot(createContext({ message: "Hello" }));
+
+		// The request should succeed
+		expect(response.status).toBe(200);
+
+		// Verify the captured curl command contains the model value shell-quoted
+		// inside the JSON payload via the single-quote escape sequence.
+		expect(capturedCommand).toContain("test'\\''s-model");
+		// Single quotes in the JSON payload are escaped via '\\'' so they never
+		// break out of the outer single-quoted -d '...' argument.
+		expect(capturedCommand).toContain('"model":"test\'\\\'\'s-model"');
+	});
+
+	it("does not persist deploy state when SSH deploy fails", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		// First .limit() — getLatestTelegramRecord with existing deploy state
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_old",
+				deployedServerHost: "5.6.7.8",
+				apiServerKey: "enc:old-server-key",
+			},
+		]);
+
+		// Second .limit() — findServerForDeploy
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: false,
+			},
+		]);
+
+		// SSH fails
+		withSshConnection.mockRejectedValueOnce(
+			new Error("SSH connection refused"),
+		);
+
+		const { deployTelegramToServer } = await import("./telegram");
+		const response = await deployTelegramToServer(
+			createContext() as unknown as Context,
+		);
+
+		expect(response.status).toBe(502);
+		const payload = await response.json();
+		expect(payload).toMatchObject({
+			error: expect.stringContaining("Deploy failed"),
+		});
+
+		// The deploy state should NOT have been persisted — the only updateSet
+		// call in deployTelegramToServer is after successful SSH, so if SSH
+		// fails, updateSet should never be called.
+		expect(updateSet).not.toHaveBeenCalled();
+
+		// An audit log for the failure should have been written with the
+		// original deployedServerId preserved in the details.
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "telegram.deploy.failed",
+				details: expect.objectContaining({
+					serverId: "server_1",
+				}),
+			}),
+		);
+	});
+
+	it("runHermesPairingJsonCommand shell-quotes env vars and python code", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		// First .limit() call is getLatestTelegramRecord, second is findServerById
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "192.168.1.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: false,
+			},
+		]);
+
+		let capturedCommand = "";
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: {
+					execCommand: (
+						cmd: string,
+					) => Promise<{ code: number; stdout: string; stderr: string }>;
+				}) => Promise<unknown>,
+			) => {
+				return callback({
+					execCommand: async (cmd: string) => {
+						capturedCommand = cmd;
+						return {
+							code: 0,
+							stdout: JSON.stringify({
+								pending: [],
+								approved: [],
+							}),
+							stderr: "",
+						};
+					},
+				});
+			},
+		);
+
+		const { listTelegramPairings } = await import("./telegram");
+		const response = await listTelegramPairings(
+			createContext() as unknown as Context,
+		);
+
+		expect(response.status).toBe(200);
+
+		// The command should contain the python code wrapped in shellQuote and
+		// the env vars should not be injectable — the entire argument after
+		// `-e` is single-quoted.
+		// The command starts with "docker exec" and the python code is in single quotes
+		expect(capturedCommand).toMatch(/^docker exec hermes python -c '/);
+		// The python code should be a complete, valid statement inside quotes
+		expect(capturedCommand).toContain(
+			"import json; from gateway.pairing import PairingStore",
+		);
+		// The command should end with a closing single quote
+		expect(capturedCommand?.trim()).toMatch(/'$/);
 	});
 });
 

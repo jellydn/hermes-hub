@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
 import { hermesImageRepository } from "./constants";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -148,22 +149,45 @@ export async function runServerAction(context: Context) {
 			command,
 		});
 
-		await db.insert(auditLogs).values({
-			userId: session.user.id,
-			action: `server.action.${action}.succeeded`,
-			details: {
-				serverId,
-				host: serverRecord.host,
-				message: actionSuccessMessage(action, versionTarget),
-				output: commandOutput || null,
-				...(versionTarget ? { imageRef: versionTarget } : {}),
-			},
-			ipAddress,
+		// Persist success audit log and (for update/rollback) install version in
+		// a single transaction so both writes commit atomically. If the version
+		// update fails, the audit log also rolls back, keeping the install
+		// history consistent with the action record.
+		await db.transaction(async (tx) => {
+			await tx.insert(auditLogs).values({
+				userId: session.user.id,
+				action: `server.action.${action}.succeeded`,
+				details: {
+					serverId,
+					host: serverRecord.host,
+					message: actionSuccessMessage(action, versionTarget),
+					output: commandOutput || null,
+					...(versionTarget ? { imageRef: versionTarget } : {}),
+				},
+				ipAddress,
+			});
+
+			if (action === "update" || action === "rollback") {
+				const [latestInstall] = await tx
+					.select({ id: installs.id })
+					.from(installs)
+					.where(eq(installs.serverId, serverId))
+					.orderBy(desc(installs.createdAt))
+					.limit(1);
+
+				if (latestInstall) {
+					await tx
+						.update(installs)
+						.set({
+							version: versionTarget ?? "latest",
+							updatedAt: new Date(),
+						})
+						.where(eq(installs.id, latestInstall.id));
+				}
+			}
 		});
 
-		if (action === "update" || action === "rollback") {
-			await updateLatestInstallVersion(serverId, versionTarget ?? "latest");
-		}
+		clearDashboardCache();
 
 		return context.json({
 			status: "succeeded",
@@ -250,15 +274,14 @@ function actionSuccessMessage(
 	action: ServerActionType,
 	versionTarget: string | null,
 ) {
-	if (action === "restart") {
-		return "Restarted Hermes successfully.";
+	switch (action) {
+		case "restart":
+			return "Restarted Hermes successfully.";
+		case "update":
+			return "Updated Hermes to the latest image successfully.";
+		default:
+			return `Rolled Hermes back to ${versionTarget ?? "the previous image"}.`;
 	}
-
-	if (action === "update") {
-		return "Updated Hermes to the latest image successfully.";
-	}
-
-	return `Rolled Hermes back to ${versionTarget ?? "the previous image"}.`;
 }
 
 async function getRollbackTarget(serverId: string) {

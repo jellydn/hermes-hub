@@ -23,8 +23,12 @@ export function buildHermesComposeContent(input?: {
 	];
 
 	if (input?.apiServerKey && input?.telegramBotToken) {
-		lines.push(`      - API_SERVER_KEY=${input.apiServerKey}`);
-		lines.push(`      - TELEGRAM_BOT_TOKEN=${input.telegramBotToken}`);
+		lines.push(
+			`      - "API_SERVER_KEY=${input.apiServerKey.replace(/"/g, '\\"')}"`,
+		);
+		lines.push(
+			`      - "TELEGRAM_BOT_TOKEN=${input.telegramBotToken.replace(/"/g, '\\"')}"`,
+		);
 	} else {
 		lines.push(
 			"      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy",
@@ -32,13 +36,17 @@ export function buildHermesComposeContent(input?: {
 	}
 
 	if (input?.hermesModel) {
-		lines.push(`      - API_SERVER_MODEL_NAME=${input.hermesModel}`);
+		// Double-quote the value to prevent YAML special characters (colons,
+		// octothorpes, brackets, etc.) from breaking the compose file.
+		lines.push(
+			`      - "API_SERVER_MODEL_NAME=${input.hermesModel.replace(/"/g, '\\"')}"`,
+		);
 	}
 
 	if (input?.providerEnvVars) {
 		for (const [key, value] of Object.entries(input.providerEnvVars)) {
 			if (value) {
-				lines.push(`      - ${key}=${value}`);
+				lines.push(`      - "${key}=${value.replace(/"/g, '\\"')}"`);
 			}
 		}
 	}

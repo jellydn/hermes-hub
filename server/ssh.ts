@@ -118,12 +118,12 @@ export function parseAndValidateOs(
 		);
 	}
 
+	const majorVersion = Number.parseInt(versionId.split(".")[0] ?? "0", 10);
+
 	// Ubuntu 22.04+ and Debian 12+ are officially supported
 	if (
-		(osId === "ubuntu" &&
-			Number.parseInt(versionId.split(".")[0] ?? "0", 10) >= 22) ||
-		(osId === "debian" &&
-			Number.parseInt(versionId.split(".")[0] ?? "0", 10) >= 12)
+		(osId === "ubuntu" && majorVersion >= 22) ||
+		(osId === "debian" && majorVersion >= 12)
 	) {
 		return {
 			osName: prettyName,
@@ -170,4 +170,8 @@ export function normalizeSshError(error: unknown) {
 	}
 
 	return new SshConnectError("host unreachable");
+}
+
+export function shellQuote(value: string): string {
+	return `'${value.replace(/'/g, "'\\''")}'`;
 }

@@ -5,12 +5,14 @@ import type { Context } from "hono";
 import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { auditLogs, installs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { getLast4 } from "./lib/get-last-4";
 import { getProviderDeployConfig } from "./providers";
 import { resolveServerSshConfig } from "./server-records";
-import { type SshAuthMethod, withSshConnection } from "./ssh";
+import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 
 type TelegramConnectRequest = {
 	botToken?: string;
@@ -149,6 +151,8 @@ export async function connectTelegram(context: Context) {
 			ipAddress,
 		});
 
+		clearDashboardCache();
+
 		return context.json({
 			telegram: {
 				botUsername: bot.username,
@@ -195,6 +199,8 @@ export async function disconnectTelegram(context: Context) {
 			},
 			ipAddress,
 		});
+
+		clearDashboardCache();
 
 		return context.json({ status: "disconnected" });
 	} catch (error) {
@@ -309,6 +315,10 @@ export async function deployTelegramToServer(context: Context) {
 			},
 		);
 
+		// Persist deploy state in a single transaction so that the config update
+		// and the audit log insert are committed atomically. If the transaction
+		// fails, neither side effect is applied and the DB retains the previous
+		// deploy state (or null), keeping local and remote consistent.
 		await db.transaction(async (tx) => {
 			await tx
 				.update(telegramConfigs)
@@ -334,6 +344,8 @@ export async function deployTelegramToServer(context: Context) {
 				ipAddress,
 			});
 		});
+
+		clearDashboardCache();
 
 		return context.json({
 			status: "deployed",
@@ -421,11 +433,13 @@ export async function testTelegramBot(context: Context) {
 	const curlCommand = [
 		`curl -s -X POST http://localhost:8642/v1/chat/completions`,
 		`-H "Content-Type: application/json"`,
-		`-H "Authorization: Bearer ${decryptedApiServerKey}"`,
-		`-d '${JSON.stringify({
-			model: providerConfig?.model,
-			messages: [{ role: "user", content: message }],
-		}).replace(/'/g, "'\\''")}'`,
+		`-H ${shellQuote(`Authorization: Bearer ${decryptedApiServerKey}`)}`,
+		`-d ${shellQuote(
+			JSON.stringify({
+				model: providerConfig?.model,
+				messages: [{ role: "user", content: message }],
+			}),
+		)}`,
 	].join(" \\\n  ");
 
 	try {
@@ -775,10 +789,6 @@ function parsePairingSummary(payload: unknown): TelegramPairingSummary {
 	};
 }
 
-function shellQuote(value: string) {
-	return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
 async function getLatestTelegramRecord(userId: string) {
 	const [record] = await getDb()
 		.select({
@@ -839,10 +849,5 @@ function createTelegramApiUrl(botToken: string, method: string) {
 }
 
 function getTokenLast4(botToken: string) {
-	const trimmedToken = botToken.trim();
-	if (!trimmedToken) {
-		return null;
-	}
-
-	return trimmedToken.slice(-4);
+	return getLast4(botToken);
 }

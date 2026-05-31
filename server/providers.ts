@@ -12,11 +12,13 @@ import {
 import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { aiProviders, auditLogs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { getLast4 } from "./lib/get-last-4";
 import { resolveServerSshConfig } from "./server-records";
-import { type SshAuthMethod, withSshConnection } from "./ssh";
+import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 
 type ProviderRequest = {
 	provider: string;
@@ -43,8 +45,7 @@ export type ProviderConfigSummary = {
 function decryptApiKey(encryptedStr: string): string {
 	try {
 		const decrypted = decryptSecret(encryptedStr);
-		// Backward-compatibility: keys saved before the explicit baseUrl column
-		// may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
+		// Keys saved before the explicit baseUrl column may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
 		if (decrypted.startsWith("{")) {
 			try {
 				const parsed = JSON.parse(decrypted) as Record<string, unknown>;
@@ -142,6 +143,8 @@ export async function saveProviderConfig(context: Context) {
 			ipAddress,
 		});
 
+		clearDashboardCache();
+
 		return context.json({
 			provider: {
 				provider: parsed.provider,
@@ -211,9 +214,7 @@ function parseProviderRequest(payload: ProviderRequest) {
 		return { error: "Choose a valid provider." };
 	}
 
-	const model = (
-		payload.model?.trim() || getDefaultAiModel(payload.provider)
-	).trim();
+	const model = payload.model?.trim() || getDefaultAiModel(payload.provider);
 	if (!isValidAiModel(payload.provider, model)) {
 		return { error: "Choose a valid model for the selected provider." };
 	}
@@ -238,24 +239,21 @@ function resolveProviderApiKey(
 	let resolvedApiKey = parsed.apiKey;
 	let resolvedBaseUrl = parsed.baseUrl;
 
-	// If API key is not supplied, try to retrieve it from existingRecord
-	if (!resolvedApiKey) {
-		if (existingRecord && existingRecord.provider === parsed.provider) {
-			resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
-			if (
-				!resolvedApiKey &&
-				PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
-			) {
-				return { error: "Stored API key could not be read. Paste a new key." };
-			}
-			if (!resolvedBaseUrl) {
-				resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
-			}
+	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
+		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
+		if (
+			!resolvedApiKey &&
+			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
+		) {
+			return { error: "Stored API key could not be read. Paste a new key." };
+		}
+		if (!resolvedBaseUrl) {
+			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
 		}
 	}
 
-	// For OpenAI, Anthropic, and OpenRouter, API key is required.
-	// For Ollama / Local and Custom / BYO, base URL is required. API key is optional.
+	// API key is required for OpenAI/Anthropic/OpenRouter.
+	// Base URL is required for Ollama/Custom; API key is optional.
 	const option = getAiProviderOption(parsed.provider);
 	if (option?.requiresBaseUrl && !resolvedBaseUrl) {
 		return { error: "Base URL is required." };
@@ -542,9 +540,8 @@ export async function getProviderDeployConfig(
 		const isKeyRequired = !option?.requiresBaseUrl;
 
 		if (record.encryptedApiKey) {
-			try {
-				decryptedApiKey = decryptSecret(record.encryptedApiKey);
-			} catch {
+			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
+			if (!decryptedApiKey) {
 				throw new Error(
 					"Stored API key could not be decrypted. Paste a new key.",
 				);
@@ -613,13 +610,9 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
 
-	let decryptedApiKey = "";
-	if (providerRecord.encryptedApiKey) {
-		try {
-			decryptedApiKey = decryptSecret(providerRecord.encryptedApiKey);
-		} catch {
-			return context.json({ error: "Failed to decrypt API key." }, 500);
-		}
+	const decryptedApiKey = decryptApiKey(providerRecord.encryptedApiKey);
+	if (providerRecord.encryptedApiKey && !decryptedApiKey) {
+		return context.json({ error: "Failed to decrypt API key." }, 500);
 	}
 
 	const isKeyRequired = !getAiProviderOption(providerRecord.provider)
@@ -681,7 +674,7 @@ export async function deployProviderToHermes(context: Context) {
 				await ssh.execCommand("sleep 2");
 
 				const configResult = await ssh.execCommand(
-					`docker exec hermes hermes config set model ${providerRecord.model}`,
+					`docker exec hermes hermes config set model ${shellQuote(providerRecord.model)}`,
 				);
 				if (configResult.code !== 0) {
 					throw new Error(
@@ -729,10 +722,5 @@ export async function deployProviderToHermes(context: Context) {
 }
 
 function getApiKeyLast4(apiKey: string) {
-	const trimmedKey = apiKey.trim();
-	if (!trimmedKey) {
-		return null;
-	}
-
-	return trimmedKey.slice(-4);
+	return getLast4(apiKey);
 }

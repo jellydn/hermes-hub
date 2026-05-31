@@ -236,6 +236,8 @@ export async function connectServer(context: Context) {
 			ipAddress,
 		});
 
+		clearDashboardCache();
+
 		return context.json({
 			server: serverRecord,
 			verification: {
@@ -372,6 +374,8 @@ export async function updateServer(context: Context) {
 		},
 		ipAddress,
 	});
+
+	clearDashboardCache();
 
 	return readServerDetailResponse(context, serverId, session.user.id);
 }
@@ -600,7 +604,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getSessionKey(sessionId?: string | null) {
-	return sessionId && sessionId.length > 0 ? sessionId : randomUUID();
+	return sessionId?.length ? sessionId : randomUUID();
 }
 
 export async function deleteServer(context: Context) {

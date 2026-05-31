@@ -3,6 +3,7 @@ import {
 	normalizeSshError,
 	parseAndValidateOs,
 	SshConnectError,
+	shellQuote,
 	UnsupportedOsError,
 } from "./ssh";
 
@@ -109,5 +110,45 @@ describe("normalizeSshError", () => {
 		const normalized = normalizeSshError(err);
 		expect(normalized).toBeInstanceOf(SshConnectError);
 		expect(normalized.message).toBe("host unreachable");
+	});
+});
+
+describe("shellQuote", () => {
+	it("wraps a simple string in single quotes", () => {
+		expect(shellQuote("hello")).toBe("'hello'");
+	});
+
+	it("escapes single quotes via the shell-standard '\\'' sequence", () => {
+		const result = shellQuote("it's");
+		expect(result).toBe("'it'\\''s'");
+	});
+
+	it("escapes multiple single quotes", () => {
+		const result = shellQuote("'a' 'b'");
+		expect(result).toBe("''\\''a'\\'' '\\''b'\\'''");
+	});
+
+	it("wraps shell metacharacters as literal text", () => {
+		const result = shellQuote("$(rm -rf /)");
+		expect(result).toBe("'$(rm -rf /)'");
+	});
+
+	it("wraps backtick command substitution as literal text", () => {
+		const result = shellQuote("`whoami`");
+		expect(result).toBe("'`whoami`'");
+	});
+
+	it("wraps semicolons and pipes as literal text", () => {
+		const result = shellQuote("; rm -rf / || echo pwned");
+		expect(result).toBe("'; rm -rf / || echo pwned'");
+	});
+
+	it("handles empty strings", () => {
+		expect(shellQuote("")).toBe("''");
+	});
+
+	it("handles strings with only single quotes", () => {
+		const result = shellQuote("'''");
+		expect(result).toBe("''\\'''\\'''\\'''");
 	});
 });
