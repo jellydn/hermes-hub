@@ -1,400 +1,161 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-05-28
+**Analysis Date:** 2026-05-31
 
 ## Test Framework
 
 **Runner:**
-- Vitest 4.1.5
-- Config: `vite.config.ts` (inline `test` block)
-- Environment: `jsdom` (set globally in config and via `@vitest-environment jsdom` pragma in component tests)
+- Vitest `^4.1.5` (`package.json`)
+- Config: `vite.config.ts` (`test.environment = "node"`, include patterns for `src/**/*.{test,spec}.*` and `server/**/*.{test,spec}.*`)
 
 **Assertion Library:**
-- Vitest built-in (`expect` from `vitest`)
+- Vitest `expect` API (`server/ssh.test.ts`, `src/lib/session.test.ts`, all `*.test.ts(x)` files)
+- UI tests pair `expect` with Testing Library queries (`src/features/*/*.test.tsx`)
 
 **Run Commands:**
 ```bash
-bun run test            # Run all tests (vitest run --passWithNoTests)
-bunx vitest             # Watch mode (do NOT use `bun test`)
+bun run test                      # Run all tests (script in `package.json`, mirrored in `justfile`)
+bunx vitest                       # Watch mode (no dedicated watch script in `package.json`)
+bunx vitest run --coverage        # Coverage run (no dedicated coverage script in `package.json`)
 ```
-
-**Important:** Never use `bun test` directly. The repo uses Vitest configured through `vite.config.ts`, and the test command is `bun run test`.
 
 ## Test File Organization
 
 **Location:**
-- Co-located with source files using `.test.ts` or `.test.tsx` suffix
-- Server tests live alongside their source in `server/`: `server/ssh.test.ts`, `server/telegram.test.ts`
-- Frontend tests live alongside their feature component: `src/features/dashboard/status-overview.test.tsx`
-- Shared library tests live in `src/lib/`: `src/lib/session.test.ts`
+- Co-located tests next to source in both frontend and backend (`src/features/servers/server-list.tsx` + `src/features/servers/server-list.test.tsx`, `server/install.ts` + `server/install.test.ts`).
 
 **Naming:**
-- Mirror the source file name exactly with `.test.` inserted: `ssh.ts` -> `ssh.test.ts`
-- Component tests use `.test.tsx` for JSX: `status-overview.tsx` -> `status-overview.test.tsx`
-- Pure logic tests use `.test.ts`: `install-progress.tsx` contains pure helpers tested in `install-progress.test.tsx`
+- `*.test.ts` and `*.test.tsx` naming (`server/providers.test.ts`, `src/features/providers/provider-settings.test.tsx`).
 
 **Structure:**
-```
-server/
-  ssh.ts                    # Source
-  ssh.test.ts               # Co-located test
-  app.ts
-  app.test.ts
-  db/
-    schema.ts
-
-src/
-  features/
-    dashboard/
-      status-overview.tsx
-      status-overview.test.tsx
-    servers/
-      server-detail.tsx
-      server-detail.test.tsx
-      install-progress.test.tsx
-      connection-wizard.test.tsx
-  lib/
-    session.ts
-    session.test.ts
+```text
+server/<module>.ts
+server/<module>.test.ts
+src/features/<feature>/<component>.tsx
+src/features/<feature>/<component>.test.tsx
+src/lib/<module>.ts
+src/lib/<module>.test.ts
 ```
 
 ## Test Structure
 
 **Suite Organization:**
 ```typescript
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-describe("feature name", () => {
+describe("server handlers", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
-		// Additional setup
+		vi.resetAllMocks();
+		// mock wiring...
 	});
 
-	it("describes behavior in plain English", async () => {
-		// Arrange, Act, Assert
+	it("stores encrypted credentials when requested", async () => {
+		const { connectServer } = await import("./servers");
+		const response = await connectServer(createContext({...}));
+		expect(response.status).toBe(200);
+		expect(encryptSecret).toHaveBeenCalledWith("secret");
 	});
 });
 ```
+(From `server/servers.test.ts`)
 
 **Patterns:**
-- `describe()` blocks group related tests by feature or handler
-- `beforeEach()` resets mocks with `vi.clearAllMocks()` and sets up default mock implementations
-- `afterEach()` calls `cleanup()` for React component tests and restores timers with `vi.useRealTimers()`
-- Descriptive `it()` names written as complete sentences: `"stores encrypted credentials when requested"`, `"returns unauthorized when connect runs without a session"`
-- Nested `describe()` blocks for integration vs unit tests: `describe("dashboard helpers")` and `describe("dashboard snapshot integration")`
-
-**Import Pattern:**
-```typescript
-// Vitest imports first
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// Then type imports
-import type { Context } from "hono";
-
-// Then the module under test (dynamic import after mocks are set up)
-// The actual import is done inside the test via dynamic import:
-// const { functionUnderTest } = await import("./module");
-```
+- Setup pattern: per-suite `beforeEach` to reset mocks and set default stubs (`server/servers.test.ts`, `server/providers.test.ts`, `src/features/logs/logs-viewer.test.tsx`).
+- Teardown pattern: UI tests use `afterEach(cleanup + clearAllMocks)` (`src/features/server-detail.test.tsx`, `src/features/dashboard/status-overview.test.tsx`, `src/features/providers/provider-settings.test.tsx`).
+- Assertion pattern: response status + payload object checks for server handlers; role/text-based assertions for UI (`server/app.test.ts`, `server/servers.test.ts`, `src/features/servers/server-list.test.tsx`).
 
 ## Mocking
 
-**Framework:** Vitest built-in (`vi.mock`, `vi.fn`, `vi.stubGlobal`, `vi.hoisted`)
+**Framework:** Vitest (`vi.mock`, `vi.fn`, `vi.stubGlobal`)
 
-**Module Mocking Pattern (Top of file):**
+**Patterns:**
 ```typescript
-// Declare mock functions at module scope
-const getAuthSession = vi.fn();
-const dbSelect = vi.fn();
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
-const selectLimit = vi.fn();
-
-// Mock modules before any imports
-vi.mock("./auth", () => ({
-	getAuthSession,
-}));
-
 vi.mock("./db", () => ({
-	getDb: () => ({
-		select: dbSelect,
-	}),
+	getDb: () => ({ select: dbSelect, update: dbUpdate, insert: dbInsert }),
 }));
 
-// Dynamic import of the module under test inside each test
-// This ensures mocks are applied before the module is loaded
-it("test case", async () => {
-	const { functionUnderTest } = await import("./module");
-	// ... test code
-});
-```
-
-**Hoisted Mocks Pattern (for complex setups):**
-```typescript
-const { getAuthSession, withSshConnection, dbSelect } = vi.hoisted(() => ({
-	getAuthSession: vi.fn(),
-	withSshConnection: vi.fn(),
-	dbSelect: vi.fn(),
-}));
-
-vi.mock("./auth", () => ({ getAuthSession }));
-vi.mock("./ssh", () => ({ withSshConnection }));
-
-// Import after mocks
-import { getDashboardStatusSnapshot } from "./dashboard";
-```
-
-**Global Fetch Mocking:**
-```typescript
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
-// In beforeEach, set default response
 beforeEach(() => {
-	fetchMock.mockResolvedValue(
-		new Response(JSON.stringify({ data: [] }), {
-			status: 200,
-			headers: { "content-type": "application/json" },
-		}),
-	);
+	vi.clearAllMocks();
+	fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: "connected" }), { status: 200 }));
 });
 ```
-
-**DB Chain Mocking:**
-```typescript
-// Drizzle query builder is mocked as a fluent chain
-dbSelect.mockReturnValue({ from: selectFrom });
-selectFrom.mockReturnValue({ where: selectWhere });
-selectWhere.mockReturnValue({ orderBy: selectOrderBy });
-selectOrderBy.mockReturnValue({ limit: selectLimit });
-selectLimit.mockResolvedValue([{ id: "server_123", /* ... */ }]);
-```
+(From `server/providers.test.ts`, `src/features/providers/provider-settings.test.tsx`)
 
 **What to Mock:**
-- External modules: `./auth`, `./db`, `./ssh`, `./crypto`, `./credentials`
-- Global `fetch` for HTTP calls in component tests
-- `navigator.clipboard` for clipboard API tests
-- Hono streaming: `hono/streaming` for SSE tests
-- Database schema symbols: `./db/schema` for table references
+- Network and external boundaries (`fetch`, auth/session, DB adapters, SSH layer) in `server/providers.test.ts`, `server/servers.test.ts`, `server/app.test.ts`, `src/features/*` tests with `vi.stubGlobal("fetch", ...)`.
+- Router primitives for component tests (`@tanstack/react-router` `Link` mocks in `src/features/servers/server-list.test.tsx`, `src/features/servers/server-detail.test.tsx`).
 
 **What NOT to Mock:**
-- The module under test itself
-- Pure utility functions (`cn`, `parseAndValidateOs`, `normalizeInstallStatus`)
-- React hooks and components being tested
-- Internal helper functions within the same module
+- Pure computation/parsing behavior is tested directly without module mocks (`parseAndValidateOs`, `normalizeSshError` in `server/ssh.test.ts`).
+- Session redirect helper behavior is tested against actual promise outcomes (`src/lib/session.test.ts`).
 
 ## Fixtures and Factories
 
-**Test Data Pattern:**
+**Test Data:**
 ```typescript
-// Factory functions for complex test data
-function createSnapshot(
-	overrides?: Partial<DashboardStatusSnapshot>,
-): DashboardStatusSnapshot {
+function createServer(overrides?: Partial<ServerListSummary>): ServerListSummary {
 	return {
-		generatedAt: "2026-05-26T03:00:00.000Z",
-		server: {
-			id: "server_123",
-			label: "Production VPS",
-			host: "203.0.113.10",
-			status: "connected",
-			osName: "Ubuntu",
-			osVersion: "24.04",
-			supportLevel: "supported",
-		},
-		agent: { status: "online", /* ... */ },
-		vps: { status: "warning", cpu: 85, memory: 62, disk: 44, /* ... */ },
-		provider: { status: "connected", provider: "openai", model: "gpt-4o-mini", /* ... */ },
-		telegram: { status: "connected", botUsername: "hermes_helper_bot", /* ... */ },
+		id: "server_123",
+		label: "Production VPS",
+		host: "203.0.113.10",
+		// ...
 		...overrides,
 	};
 }
-
-function createDetail(): ServerDetailSnapshot {
-	return {
-		server: { id: "server_123", label: "Production VPS", /* ... */ },
-		install: { status: "succeeded", version: "latest", /* ... */ },
-		actionHistory: [/* ... */],
-		rollbackTarget: "latest",
-	};
-}
-
-function createLogs(): LogsSnapshot {
-	return {
-		installLogs: [/* ... */],
-		actionLogs: [/* ... */],
-	};
-}
 ```
+(From `src/features/servers/server-list.test.tsx`)
 
-**Response Factories:**
-```typescript
-function createStatusResponse(snapshot: DashboardStatusSnapshot) {
-	return new Response(JSON.stringify({ dashboard: snapshot }), {
-		status: 200,
-		headers: { "content-type": "application/json" },
-	});
-}
-
-function createErrorResponse(error: string) {
-	return new Response(JSON.stringify({ error }), {
-		status: 502,
-		headers: { "content-type": "application/json" },
-	});
-}
-```
-
-**Hono Context Factories:**
-```typescript
-function createContext(body: unknown) {
-	return {
-		req: {
-			raw: new Request("http://localhost/api/servers/connect", {
-				method: "POST",
-				body: JSON.stringify(body),
-				headers: { "content-type": "application/json" },
-			}),
-			json: () => Promise.resolve(body),
-			header: () => null,
-			param: (name: string) => (name === "id" ? "server_123" : undefined),
-		},
-		json: (payload: unknown, status = 200) =>
-			new Response(JSON.stringify(payload), {
-				status,
-				headers: { "content-type": "application/json" },
-			}),
-	} as never;
-}
-```
-
-**Location:** Factory functions are defined at the bottom of each test file, not shared across files.
+**Location:**
+- Fixtures/factories are local helper functions inside each test file (`createContext` in `server/servers.test.ts`, `createSnapshot` in `src/features/dashboard/status-overview.test.tsx`, `createLogs` in `src/features/logs/logs-viewer.test.tsx`, `createDetail` in `src/features/servers/server-detail.test.tsx`).
 
 ## Coverage
 
-**Requirements:** None enforced
+**Requirements:** None enforced (no threshold config found in `vite.config.ts` or `package.json`).
 
 **View Coverage:**
 ```bash
-bunx vitest --coverage    # If coverage provider is configured
+bunx vitest run --coverage
 ```
 
 ## Test Types
 
 **Unit Tests:**
-- Pure function tests: `parseAndValidateOs`, `normalizeSshError`, `normalizeInstallStatus`, `quantizeInstallProgress`
-- Helper function tests: `toAgentSummary`, `getHealthTone`, `toProviderSummary`
-- Credential lifecycle tests: `storeSessionCredential`, `getSessionCredential`
-- No mocking needed for pure functions; direct input/output assertions
+- Pure function/unit behavior tests without I/O mocks for parser/normalizer logic (`server/ssh.test.ts`, `src/lib/session.test.ts`).
 
 **Integration Tests:**
-- Hono route handler tests: mock DB/auth/SSH, test full request flow through `apiApp.request()`
-- Server action tests: test `runServerAction`, `startServerInstall`, `connectServer` with mocked dependencies
-- Dashboard snapshot tests: test full data aggregation with mocked DB and SSH
-- Install SSE stream tests: test event emission, DB persistence, and listener notification
-- DB query chain tests: verify correct Drizzle query builder calls
+- Handler/component integration with mocked dependencies and full request/response flows (`server/app.test.ts`, `server/servers.test.ts`, `server/providers.test.ts`, `src/features/servers/server-detail.test.tsx`, `src/features/dashboard/status-overview.test.tsx`).
 
-**Component Tests:**
-- React component tests using `@testing-library/react`: `render`, `screen`, `fireEvent`, `waitFor`
-- Tests verify user-facing behavior: rendering, form submission, error states, polling
-- Mock `fetch` for API calls; mock `navigator.clipboard` for clipboard operations
-- Use `// @vitest-environment jsdom` pragma at top of file
-
-**E2E Tests:** Not used
+**E2E Tests:**
+- Not used (no Playwright/Cypress config found; no e2e scripts/deps in `package.json`).
 
 ## Common Patterns
 
 **Async Testing:**
 ```typescript
-// Testing async operations with waitFor
-it("shows success message after API call", async () => {
-	render(<Component />);
-	fireEvent.click(screen.getByRole("button", { name: /submit/i }));
-
-	await waitFor(() => {
-		expect(screen.getByText(/success/i)).toBeTruthy();
-	});
-
-	expect(fetchMock).toHaveBeenCalledWith("/api/endpoint", expect.objectContaining({
-		method: "POST",
-	}));
+await waitFor(() => {
+	expect(screen.getByText(/provider connected/i)).toBeTruthy();
 });
 
-// Testing with fake timers for polling
-it("polls at the configured interval", async () => {
-	vi.useFakeTimers();
-	render(<DashboardStatusOverview initialStatus={createSnapshot()} />);
-
-	await advancePollingTime(30_000);
-	expect(fetchMock).toHaveBeenCalledTimes(1);
-
-	await advancePollingTime(30_000);
-	expect(fetchMock).toHaveBeenCalledTimes(2);
-});
-
-// Helper for advancing fake timers with async work
-async function advancePollingTime(ms: number) {
-	await act(async () => {
-		vi.advanceTimersByTime(ms);
-		await Promise.resolve();
-		await Promise.resolve();
-	});
-}
+await expect(
+	requireSession("/dashboard", async () => null as never),
+).rejects.toEqual({ to: "/login", search: { redirect: "/dashboard" } });
 ```
+(From `src/features/providers/provider-settings.test.tsx`, `src/lib/session.test.ts`)
 
 **Error Testing:**
 ```typescript
-// Testing error responses
-it("returns validation error when credentials are missing", async () => {
-	selectLimit.mockResolvedValueOnce([{ /* server with null credential */ }]);
+expect(() => parseAndValidateOs("\n", "x86_64\n")).toThrowError(UnsupportedOsError);
 
-	const { startServerInstall } = await import("./install");
-	const response = await startServerInstall(createContext("POST"));
-
-	expect(response.status).toBe(400);
-	expect(await response.json()).toEqual({
-		error: "Temporary credential expired. Reconnect the server first.",
-	});
-});
-
-// Testing thrown errors
-it("rejects non-Linux operating systems", () => {
-	expect(() =>
-		parseAndValidateOs('NAME="FreeBSD"\nVERSION_ID="13.2"', "x86_64"),
-	).toThrowError(UnsupportedOsError);
-});
-
-// Testing error normalization
-it("maps auth errors to invalid credentials", () => {
-	const err = new Error("All configured authentication methods failed");
-	const normalized = normalizeSshError(err);
-	expect(normalized).toBeInstanceOf(SshConnectError);
-	expect(normalized.message).toBe("invalid credentials");
+const response = await updateServer(createContext({ host: "198.51.100.25" }, {...}));
+expect(response.status).toBe(400);
+expect(await response.json()).toEqual({
+	error: "Temporary credential expired. Reconnect the server first.",
 });
 ```
-
-**Mock Chain Reset:**
-```typescript
-// Reset mock chains between tests to avoid stale _onceImpl chains
-beforeEach(() => {
-	vi.clearAllMocks();
-	selectLimit.mockReset();
-	// Then set up fresh default implementations
-	selectLimit
-		.mockResolvedValueOnce([serverRecord])
-		.mockResolvedValueOnce([installRecord])
-		.mockResolvedValueOnce([]);
-});
-```
-
-**Component Cleanup:**
-```typescript
-// Always clean up React components after each test
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	vi.useRealTimers(); // Restore real timers if fake timers were used
-});
-```
+(From `server/ssh.test.ts`, `server/servers.test.ts`)
 
 ---
-*Testing analysis: 2026-05-28*
+
+*Testing analysis: 2026-05-31*
+

@@ -1,164 +1,96 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-05-28
+**Analysis Date:** 2026-05-31
 
 ## Naming Patterns
 
 **Files:**
-- Source files use `kebab-case`: `server-actions.ts`, `status-overview.tsx`, `sse-stream.ts`, `install-idle-timeout.ts`
-- Test files mirror source names with `.test.ts` or `.test.tsx` suffix: `server-actions.test.ts`, `status-overview.test.tsx`
-- Route files follow TanStack Router conventions: `servers.$id.tsx`, `servers.$id.install.tsx`, `ai-provider.tsx`
-- Generated files are excluded from linting: `src/routeTree.gen.ts`
-- Config files use standard names: `biome.json`, `tsconfig.json`, `vite.config.ts`, `drizzle.config.ts`
+- `kebab-case` for most feature/lib files (for example `src/features/servers/server-detail.tsx`, `src/lib/server-detail.ts`).
+- Route files follow TanStack file-route naming (`src/routes/servers.$id.tsx`, `src/routes/servers.$id.install.tsx`, `src/routes/servers.index.tsx`, `src/routes/servers.new.tsx`).
+- `PascalCase` is used for some top-level component filenames (`src/components/Header.tsx`, `src/components/Footer.tsx`, `src/components/ThemeToggle.tsx`), while `src/components/ui/button.tsx` is lowercase.
 
 **Functions:**
-- `camelCase` throughout: `getAuthSession`, `parseAndValidateOs`, `normalizeSshError`, `withSshConnection`
-- Getters prefixed with `get`: `getDb`, `getAuthSession`, `getSessionCredential`, `getDashboardStatus`
-- Transformers prefixed with `to` or descriptive verb: `toAgentSummary`, `toProviderSummary`, `toTelegramSummary`
-- Boolean helpers use `is`/`has` prefix: `isAiProviderId`, `hasDatabaseUrl`
-- Event emitters use `emit` prefix: `emitInstallEvent`
-- Stream helpers use `ensure`/`reset` prefix: `ensureInstallStream`, `resetInstallStream`
-- Action handlers use `run` prefix for command execution: `runServerAction`
-- Connection handlers use `connect`/`verify` prefix: `connectServer`, `verifyServerConnection`
+- Runtime functions are `camelCase` (`connectServer`, `updateServer`, `getServerListSnapshot` in `server/servers.ts`; `refreshStatus`, `handleManualRetry` in `src/features/dashboard/status-overview.tsx`).
+- React component functions are `PascalCase` (`ServerList` in `src/features/servers/server-list.tsx`, `ProviderSettings` in `src/features/providers/provider-settings.tsx`, `DashboardStatusOverview` in `src/features/dashboard/status-overview.tsx`).
+- Route modules consistently export `Route` (`src/routes/index.tsx`, `src/routes/login.tsx`, `src/routes/servers.index.tsx`).
 
 **Variables:**
-- `camelCase` for all variables: `magicLinkRateLimiter`, `staticCache`, `metricsCache`
-- Constants use `UPPER_SNAKE_CASE` for module-level configuration: `DEFAULT_POLL_INTERVAL_MS`, `MAX_POLL_INTERVAL_MS`, `MAX_CONSECUTIVE_FAILURES`, `STATIC_CACHE_TTL_MS`
-- Refs use `Ref` suffix: `pollTimeoutRef`, `nextPollDelayRef`, `snapshotRef`
+- Local/state variables use `camelCase` (`fetchState`, `pollingPausedRef` in `src/features/dashboard/status-overview.tsx`; `installRecord`, `ipAddress` in `server/install.ts`).
+- Constants use `UPPER_SNAKE_CASE` for shared timing/config constants (`IDLE_TIMEOUT_MS`, `HEARTBEAT_INTERVAL_MS` in `server/install/sse-stream.ts`; `DEFAULT_POLL_INTERVAL_MS`, `MAX_CONSECUTIVE_FAILURES` in `src/features/dashboard/status-overview.tsx`).
+- Domain event/action names are dot-separated strings in arrays (`relevantServerActionNames` in `server/servers.ts`).
 
 **Types:**
-- `PascalCase` for all types: `SshConnectionInput`, `VerifiedServerInfo`, `DashboardStatusSnapshot`, `ServerDetailSnapshot`
-- Props types use component name + `Props`: `DashboardStatusOverviewProps`
-- Record types use descriptive name + `Record`: `ServerRecord`, `InstallRecord`, `ProviderRecord`
-- Summary types use domain + `Summary`: `DashboardAgentSummary`, `DashboardProviderSummary`, `DashboardVpsSummary`
-- Error classes extend `Error` with descriptive names: `SshConnectError`, `UnsupportedOsError`
-- Error class `name` property matches class name: `this.name = "SshConnectError"`
+- Types are `PascalCase` with domain suffixes (`ServerListSummary` in `src/lib/servers.ts`, `ServerDetailSnapshot` in `src/lib/server-detail.ts`, `InstallStreamState` in `server/install/sse-stream.ts`).
+- Frontend form schemas/types pair Zod schema + inferred/declared TS type (`loginSchema` + `LoginFields` in `src/routes/login.tsx`; `providerSchema` + `ProviderFormState` in `src/features/providers/provider-settings.tsx`).
+- Unknown external data is narrowed with guards (`isRecord` in `server/servers.ts`, `normalizeInstallStatus` in `server/install/sse-stream.ts`).
 
 ## Code Style
 
 **Formatting:**
-- Tool: Biome (v2.4.16)
-- Tabs for indentation (Biome default)
-- Double quotes for strings
-- Trailing commas in multi-line structures
-- Semicolons at statement ends
-- CSS parser configured for Tailwind directives
+- Formatter/linter tooling is Biome (`biome.json`, `justfile` `lint`/`format` recipes, `.pre-commit-config.yaml` `biome-check` hook).
+- Formatting style in repo uses tabs and trailing commas in multiline constructs (for example `server/app.ts`, `server/install.ts`, `src/routes/login.tsx`).
+- Biome scope excludes generated/output dirs (`biome.json` excludes `dist`, `drizzle`, `src/routeTree.gen.ts`).
 
 **Linting:**
-- Tool: Biome
-- `noDangerouslySetInnerHtml` is explicitly `off`
-- TypeScript strict mode with `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`
-- CI order: `biome check` -> `typecheck` -> `test` -> `build`
+- Biome is the primary linter (`biome.json`, `.pre-commit-config.yaml`).
+- Custom lint override disables `security.noDangerouslySetInnerHtml` (`biome.json`).
+- Pre-commit additionally enforces whitespace/EOF/YAML/JSON and typecheck (`.pre-commit-config.yaml`).
 
 ## Import Organization
 
 **Order:**
-1. Third-party packages (`react`, `vitest`, `hono`, `drizzle-orm`, `lucide-react`)
-2. Internal imports using path aliases (`@/lib/utils`, `@/components/ui/button`)
-3. Relative imports within the same module (`./ssh`, `./auth`, `./db/schema`)
+1. External packages first (`hono`, `drizzle-orm`, `react`, `lucide-react`) as seen in `server/servers.ts`, `src/features/providers/provider-settings.tsx`, `src/routes/servers.index.tsx`.
+2. Internal aliases (`@/...`) next in frontend modules (`src/routes/login.tsx`, `src/features/servers/server-list.tsx`, `src/routes/dashboard.tsx`).
+3. Relative local/server imports last (`./...`, `../...`) in backend and route bridge files (`server/app.ts`, `src/routes/servers.index.tsx`, `src/lib/session.ts`).
 
 **Path Aliases:**
-- `#/*` maps to `./src/*` (used in `package.json` `"imports"`)
-- `@/*` maps to `./src/*` (used in `tsconfig.json` `"paths"`)
-- Both are available; `@/*` is used more frequently in frontend code
-
-**Import Style:**
-- Named imports preferred: `import { describe, expect, it, vi } from "vitest"`
-- Type-only imports use `import type`: `import type { Context } from "hono"`, `import type * as React from "react"`
-- `verbatimModuleSyntax` is enabled, enforcing explicit `type` annotations on type-only imports
+- Aliases configured: `@/*` and `#/*` in `tsconfig.json`; `#/*` also in `package.json#imports`.
+- Active usage is primarily `@/*` in frontend (`src/routes/*`, `src/features/*`, `src/components/ui/button.tsx`).
+- Server modules typically use relative imports (`server/*.ts`).
 
 ## Error Handling
 
 **Patterns:**
-- Custom error classes for domain-specific errors with descriptive `name` property
-- Errors normalized at boundaries: `normalizeSshError()` maps raw SSH errors to user-friendly `SshConnectError` messages
-- HTTP responses use status codes with JSON error bodies: `{ error: "message" }`
-- Guard clauses at function top: check auth, check credentials, check DB availability before proceeding
-- `requireHttps()` guard applied to credential-bearing endpoints in production
-- Auth unavailability returns 503: `{ error: "DATABASE_URL is required" }`
-- Validation errors return 400 with specific messages: `"Invalid target version"`, `"Action must be restart, update, or rollback"`
-- Conflict errors return 409: `"Install already in progress"`
-- Unauthorized returns 401: `{ error: "Unauthorized" }`
-
-**Error Response Pattern:**
-```typescript
-// Server handlers return Response objects directly
-return context.json({ error: "message" }, 400);
-
-// Or throw custom errors that are caught upstream
-throw new UnsupportedOsError(`Unsupported OS: ${prettyName}`);
-```
+- API handlers return structured JSON errors with HTTP status (`context.json({ error: ... }, status)`) throughout server endpoints (`server/servers.ts`, `server/install.ts`, `server/providers.ts`, `server/telegram.ts`, `server/app.ts`).
+- Input parsing uses `try/catch` around `context.req.json()` with explicit 400 on malformed JSON (`server/servers.ts`, `server/providers.ts`, `server/telegram.ts`).
+- Domain errors are normalized before response (for example `SshConnectError` handling in `server/servers.ts`, `normalizeInstallError` in `server/install.ts`, `normalizeSshError` in `server/ssh.ts`).
+- Frontend fetch flows parse optional payload and surface fallback messages (`src/features/providers/provider-settings.tsx`, `src/routes/servers.$id.tsx`, `src/features/dashboard/status-overview.tsx`).
 
 ## Logging
 
-**Framework:** No logging library; uses audit logs in the database
+**Framework:** `console` (selective)
 
 **Patterns:**
-- Audit logs stored in `audit_logs` table via `insertAuditValues`
-- Action lifecycle: `server.action.{action}.started` -> `server.action.{action}.succeeded|failed`
-- Install lifecycle: `server.install.started` -> `server.install.succeeded|failed`
-- Log entries include `serverId` in `details` JSONB field for filtering
-- Install progress logs are stored as newline-delimited text in `installs.log`
+- Logging is minimal and mostly security/ops related in server helper code (`console.log` fallback and `console.error` send failure in `server/lib/send-magic-link-email.ts`).
+- Normal server flow favors persisted audit logs over console logs (`auditLogs` writes in `server/servers.ts`, `server/install.ts`, `server/providers.ts`, `server/telegram.ts`).
 
 ## Comments
 
 **When to Comment:**
-- JSDoc for public API functions with non-obvious behavior: `clearDashboardCache()`, `requireHttps()`
-- Inline comments for deployment assumptions and security considerations
-- Block comments for rate limiter configuration: `// 3 requests per 5 minutes per email`
-- Comments on mock helper functions in tests: `// reset to clear stale _onceImpl chains from prior tests`
-- Exposed-for-tests functions are documented: `/** Exposed for tests — clears all cached data between test runs. */`
+- Comments are used for security assumptions/guardrails and concurrency invariants (HTTPS proxy assumptions in `server/app.ts`; install slot claim semantics in `server/install.ts`; atomic claim docs in `server/install/sse-stream.ts`).
+- Comments clarify non-obvious test scaffolding (`Promise.prototype.limit` note in `server/servers.test.ts`) and storage behavior (`server/providers.test.ts`).
 
 **JSDoc/TSDoc:**
-- Used sparingly, primarily for exported functions that need behavioral context
-- Not used for every function; self-documenting code preferred
+- Multi-line doc comments are used sparingly for high-risk behavior (`requireHttps` rationale in `server/app.ts`, `sendMagicLinkEmail` behavior in `server/lib/send-magic-link-email.ts`, `tryClaimInstallStream` in `server/install/sse-stream.ts`).
+- Most functions rely on expressive names + types rather than pervasive JSDoc (`src/features/*`, `server/*.ts` generally).
 
 ## Function Design
 
-**Size:**
-- Functions are generally small and focused (10-40 lines typical)
-- Complex handlers extracted into helpers: `rewriteAuthRequest()`, `handleAuthUnavailable()`, `applyMagicLinkRateLimit()`
-- Test setup extracted into `createContext()` factory functions
+**Size:** Mixed; many small helpers plus several large orchestrator functions (`connectServer`/`updateServer` in `server/servers.ts`, `runInstallWorkflow` and SSE route handler in `server/install.ts`, `refreshStatus` in `src/features/dashboard/status-overview.tsx`).
 
-**Parameters:**
-- Hono context objects for HTTP handlers: `(context: Context) => Response`
-- Plain objects for domain functions: `{ userId, sessionId }`, `{ serverId, userId }`
-- Discriminated unions for action types: `{ action: "restart" | "update" | "rollback" }`
+**Parameters:** Typed object parameters are common for multi-argument operations (`verifyServerConnection` call input in `server/servers.ts`; `runInstallWorkflow` input object in `server/install.ts`; `refreshStatus(options?)` in `src/features/dashboard/status-overview.tsx`).
 
-**Return Values:**
-- HTTP handlers return `Response` objects directly
-- Domain functions return typed objects or throw errors
-- Helper functions return primitive or simple object values
-- DB query chains use fluent builder pattern: `db.select().from().where().orderBy().limit()`
+**Return Values:** 
+- API handlers return `Response` via `context.json(...)` (`server/app.ts`, `server/servers.ts`, `server/install.ts`).
+- Helper functions return typed data/union-with-error objects (`parseConnectRequest` and `parseUpdateRequest` in `server/servers.ts`; `normalizeInstallStatus` in `server/install/sse-stream.ts`).
 
 ## Module Design
 
-**Exports:**
-- Named exports preferred over default exports
-- Only functions and types exported; internal state kept private
-- Test-only helpers exported with JSDoc annotation
-- Route files export default components (TanStack Router convention)
+**Exports:** Predominantly named exports for handlers/components/types (`server/servers.ts`, `server/install.ts`, `src/features/servers/server-list.tsx`, `src/lib/server-detail.ts`); default export mainly for framework entry points (`src/server.ts`).
 
-**Barrel Files:**
-- No barrel/index files observed; imports use direct file paths
-- `server/db/schema.ts` serves as a schema barrel for all Drizzle tables
-
-## Database Conventions
-
-**Schema Location:** `server/db/schema.ts`
-
-**Primary Keys:**
-- App-owned tables: `text("id").primaryKey().default(sql\`gen_random_uuid()::text\`)`
-- Auth tables (Better Auth): `text("id").primaryKey()` (managed by auth library)
-
-**Column Naming:**
-- DB columns use `snake_case`: `user_id`, `created_at`, `encrypted_credential`
-- TypeScript properties use `camelCase`: `userId`, `createdAt`, `encryptedCredential`
-- Drizzle maps between them automatically
-
-**Timestamps:**
-- All tables have `created_at` with `defaultNow()` and `.notNull()`
-- Mutable tables add `updated_at` with `$onUpdate(() => new Date())`
+**Barrel Files:** Minimal barrel usage; one db entry module exists (`server/db/index.ts`). Most modules import from concrete files directly (`server/*.ts`, `src/features/*`, `src/routes/*`).
 
 ---
-*Convention analysis: 2026-05-28*
+
+*Convention analysis: 2026-05-31*
+
