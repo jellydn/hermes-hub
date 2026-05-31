@@ -1,7 +1,7 @@
 {
 	"include": ["src/**/*", "server/**/*", "scripts/**/*", "drizzle.config.ts", "vite.config.ts"],
 	"compilerOptions": {
-		"target": "ES2022",
+		"target": "ESNext",
 		"jsx": "react-jsx",
 		"module": "ESNext",
 		"paths": {
