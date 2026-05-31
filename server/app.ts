@@ -22,9 +22,11 @@ import {
 	updateServer,
 } from "./servers";
 import {
+	approveTelegramPairing,
 	connectTelegram,
 	deployTelegramToServer,
 	disconnectTelegram,
+	listTelegramPairings,
 	testTelegramBot,
 } from "./telegram";
 
@@ -273,4 +275,12 @@ apiApp.post("/telegram/test", (c) => {
 		return httpsResult;
 	}
 	return testTelegramBot(c);
+});
+apiApp.get("/telegram/pairings", listTelegramPairings);
+apiApp.post("/telegram/pairings/approve", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return approveTelegramPairing(c);
 });

@@ -124,4 +124,71 @@ describe("TelegramSettings", () => {
 			}),
 		);
 	});
+
+	it("approves a Telegram pairing code", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					approved: {
+						userId: "123456",
+						userName: "Dung",
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					pairings: {
+						pending: [],
+						approved: [
+							{
+								userId: "123456",
+								userName: "Dung",
+								approvedAt: 1780243682,
+							},
+						],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<TelegramSettings
+				initialConfig={{
+					botUsername: "hermes_helper_bot",
+					botTokenLast4: "1234",
+					isActive: true,
+					deployedServerHost: "95.111.232.131",
+				}}
+			/>,
+		);
+
+		fireEvent.change(screen.getByLabelText(/pairing code/i), {
+			target: { value: "rgts8s2r" },
+		});
+		const approveButton = screen.getByRole("button", { name: /^approve$/i });
+		await waitFor(() => {
+			expect((approveButton as HTMLButtonElement).disabled).toBe(false);
+		});
+		fireEvent.click(approveButton);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/telegram/pairings/approve",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ code: "RGTS8S2R" }),
+				}),
+			);
+		});
+	});
 });

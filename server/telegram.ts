@@ -33,8 +33,26 @@ export type TelegramConfigSummary = {
 	deployedServerHost: string | null;
 };
 
+export type TelegramPairingSummary = {
+	pending: Array<{
+		code: string;
+		userId: string;
+		userName: string;
+		ageMinutes: number;
+	}>;
+	approved: Array<{
+		userId: string;
+		userName: string;
+		approvedAt: number | null;
+	}>;
+};
+
 type TelegramTestRequest = {
 	message?: string;
+};
+
+type TelegramPairingApproveRequest = {
+	code?: string;
 };
 
 class TelegramConnectionError extends Error {
@@ -490,6 +508,106 @@ export async function testTelegramBot(context: Context) {
 	}
 }
 
+export async function listTelegramPairings(
+	context: Context,
+): Promise<Response> {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const deployedServer = await getDeployedTelegramServer(session);
+	if ("response" in deployedServer) {
+		return deployedServer.response;
+	}
+
+	try {
+		const result = await runHermesPairingJsonCommand(
+			deployedServer.serverRecord,
+			deployedServer.sshConfig,
+			'import json; from gateway.pairing import PairingStore; store = PairingStore(); print(json.dumps({"pending": store.list_pending("telegram"), "approved": store.list_approved("telegram")}))',
+		);
+
+		return context.json({ pairings: parsePairingSummary(result) });
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unable to load pairings";
+		return context.json({ error: message }, 502);
+	}
+}
+
+export async function approveTelegramPairing(
+	context: Context,
+): Promise<Response> {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	let payload: TelegramPairingApproveRequest;
+	try {
+		payload = await context.req.json<TelegramPairingApproveRequest>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const code = payload.code?.trim().toUpperCase() ?? "";
+	if (!/^[A-Z2-9]{8}$/.test(code)) {
+		return context.json({ error: "Pairing code must be 8 characters." }, 400);
+	}
+
+	const deployedServer = await getDeployedTelegramServer(session);
+	if ("response" in deployedServer) {
+		return deployedServer.response;
+	}
+
+	try {
+		const result = await runHermesPairingJsonCommand(
+			deployedServer.serverRecord,
+			deployedServer.sshConfig,
+			[
+				"import json, os",
+				"from gateway.pairing import PairingStore",
+				"store = PairingStore()",
+				'result = store.approve_code("telegram", os.environ["PAIRING_CODE"])',
+				'print(json.dumps({"approved": result, "locked": store._is_locked_out("telegram")}))',
+			].join("; "),
+			{ PAIRING_CODE: code },
+		);
+
+		const approved =
+			result && typeof result === "object" && "approved" in result
+				? (result as { approved?: unknown }).approved
+				: null;
+		const locked =
+			result && typeof result === "object" && "locked" in result
+				? Boolean((result as { locked?: unknown }).locked)
+				: false;
+
+		if (!approved || typeof approved !== "object") {
+			return context.json(
+				{
+					error: locked
+						? "Telegram pairing approvals are temporarily locked after too many failed attempts."
+						: "Pairing code not found or expired.",
+				},
+				400,
+			);
+		}
+
+		return context.json({
+			approved: {
+				userId: String((approved as Record<string, unknown>).user_id ?? ""),
+				userName: String((approved as Record<string, unknown>).user_name ?? ""),
+			},
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unable to approve pairing";
+		return context.json({ error: message }, 502);
+	}
+}
+
 async function findServerForDeploy(userId: string) {
 	const [row] = await getDb()
 		.select({
@@ -526,6 +644,139 @@ async function findServerById(serverId: string) {
 		.limit(1);
 
 	return row ?? null;
+}
+
+async function getDeployedTelegramServer(
+	session: Awaited<ReturnType<typeof getAuthSession>>,
+): Promise<
+	| { response: Response }
+	| {
+			serverRecord: NonNullable<Awaited<ReturnType<typeof findServerById>>>;
+			sshConfig: { authMethod: SshAuthMethod; credential: string };
+	  }
+> {
+	if (!session) {
+		return {
+			response: Response.json({ error: "Unauthorized" }, { status: 401 }),
+		};
+	}
+
+	const record = await getLatestTelegramRecord(session.user.id);
+	if (!record?.isActive || !record.deployedServerId) {
+		return {
+			response: Response.json(
+				{ error: "Deploy Telegram to a server before managing pairings." },
+				{ status: 400 },
+			),
+		};
+	}
+
+	const serverRecord = await findServerById(record.deployedServerId);
+	if (!serverRecord) {
+		return {
+			response: Response.json(
+				{ error: "Deployed server not found." },
+				{ status: 404 },
+			),
+		};
+	}
+
+	try {
+		return {
+			serverRecord,
+			sshConfig: resolveServerSshConfig(serverRecord, session.session.id),
+		};
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Credential unavailable";
+		return {
+			response: Response.json({ error: message }, { status: 400 }),
+		};
+	}
+}
+
+async function runHermesPairingJsonCommand(
+	serverRecord: NonNullable<Awaited<ReturnType<typeof findServerById>>>,
+	sshConfig: { authMethod: SshAuthMethod; credential: string },
+	pythonCode: string,
+	env: Record<string, string> = {},
+) {
+	const envArgs = Object.entries(env)
+		.map(([key, value]) => `-e ${shellQuote(`${key}=${value}`)}`)
+		.join(" ");
+	const command = [
+		"docker exec",
+		envArgs,
+		"hermes python -c",
+		shellQuote(pythonCode),
+	]
+		.filter(Boolean)
+		.join(" ");
+
+	return withSshConnection(
+		{
+			host: serverRecord.host,
+			port: serverRecord.port,
+			username: serverRecord.username,
+			...sshConfig,
+		},
+		async (ssh) => {
+			const result = await ssh.execCommand(command, {
+				execOptions: { timeout: 30_000 },
+			});
+			if (result.code !== 0) {
+				throw new Error(result.stderr || "Hermes pairing command failed.");
+			}
+
+			try {
+				return JSON.parse(result.stdout.trim()) as unknown;
+			} catch {
+				throw new Error(
+					`Invalid pairing response: ${result.stdout.slice(0, 200)}`,
+				);
+			}
+		},
+	);
+}
+
+function parsePairingSummary(payload: unknown): TelegramPairingSummary {
+	const record =
+		payload && typeof payload === "object"
+			? (payload as Record<string, unknown>)
+			: {};
+	const pending = Array.isArray(record.pending) ? record.pending : [];
+	const approved = Array.isArray(record.approved) ? record.approved : [];
+
+	return {
+		pending: pending.map((entry) => {
+			const item =
+				entry && typeof entry === "object"
+					? (entry as Record<string, unknown>)
+					: {};
+			return {
+				code: String(item.code ?? ""),
+				userId: String(item.user_id ?? ""),
+				userName: String(item.user_name ?? ""),
+				ageMinutes: Number(item.age_minutes ?? 0),
+			};
+		}),
+		approved: approved.map((entry) => {
+			const item =
+				entry && typeof entry === "object"
+					? (entry as Record<string, unknown>)
+					: {};
+			return {
+				userId: String(item.user_id ?? ""),
+				userName: String(item.user_name ?? ""),
+				approvedAt:
+					typeof item.approved_at === "number" ? item.approved_at : null,
+			};
+		}),
+	};
+}
+
+function shellQuote(value: string) {
+	return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 async function getLatestTelegramRecord(userId: string) {
