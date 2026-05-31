@@ -17,11 +17,12 @@ HermesHub is a web application that lets non-technical users deploy and manage a
 - 🚀 **Hermes Install** — Automated Docker + Compose setup and container launch over SSH
 - 📊 **Live Install Progress** — SSE-based real-time streaming logs with replay
 - 📈 **Dashboard** — Aggregated status cards with live VPS metrics (CPU/memory/disk)
-- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter with encrypted key storage
+- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints with encrypted key storage
+- 🚀 **Hermes Provider Deploy** — Push provider config to your Hermes VPS over SSH; sets API keys, base URLs, and default model inside the running container
 - 💬 **Telegram Integration** — Bot token verification via Telegram API; connect/disconnect flow
 - 🔄 **Server Actions** — One-click restart, update, rollback with audit-based history
 - 📋 **Logs Viewer** — Aggregated install logs and operational action history
-- ✅ **20+ tests** — Vitest + Testing Library for components and server integration
+- ✅ **58 tests** — Vitest + Testing Library for components and server integration
 
 ## 📹 Demo
 
@@ -139,6 +140,13 @@ bun run build
 | `bun run test`        | Run Vitest test suite              |
 | `bun run typecheck`   | Run TypeScript type checking       |
 | `bun run db:generate` | Generate Drizzle migrations        |
+| `just dev`            | Thin wrapper: `bun run dev`        |
+| `just test`           | Thin wrapper: `bun run test`       |
+| `just typecheck`      | Thin wrapper: `bun run typecheck`  |
+| `just check`          | Runs typecheck + test in parallel  |
+| `just lint`           | Biome check (no auto-fix)          |
+| `just format`         | Biome auto-format (`--write`)      |
+| `just ci`             | Full pipeline: lint → typecheck → test → build |
 
 ## 🔧 Environment Variables
 
@@ -148,6 +156,9 @@ bun run build
 | `ENCRYPTION_KEY`     | 32-byte hex key for AES-256 credential encryption |
 | `BETTER_AUTH_SECRET` | Secret for Better Auth session signing            |
 | `BETTER_AUTH_URL`    | Public URL of the app for magic link emails       |
+| `HERMES_DEFAULT_MODEL` | Default model ID injected into Hermes Docker Compose on deploy |
+| `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
+| `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
 
 ## 🏗️ Architecture
 
