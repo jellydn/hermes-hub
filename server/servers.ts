@@ -6,6 +6,7 @@ import type { ServerListSummary } from "../src/lib/servers";
 import { getAuthSession } from "./auth";
 import { storeSessionCredential } from "./credentials";
 import { encryptSecret } from "./crypto";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -22,7 +23,6 @@ import {
 	type VerifiedServerInfo,
 	verifyServerConnection,
 } from "./ssh";
-import { clearDashboardCache } from "./dashboard";
 
 type ConnectServerRequest = {
 	label: string;
@@ -634,7 +634,7 @@ export async function deleteServer(context: Context) {
 				serverId: deleted.id,
 				label: deleted.label,
 				host: deleted.host,
-				},
+			},
 			ipAddress,
 		});
 

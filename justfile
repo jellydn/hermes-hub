@@ -43,3 +43,14 @@ check:
 # Install dependencies
 install:
     bun install
+
+# Lint with Biome
+lint:
+    bunx @biomejs/biome check .
+
+# Auto-format with Biome
+format:
+    bunx @biomejs/biome check --write .
+
+# Run complete CI pipeline (lint, typecheck, test, build)
+ci: lint typecheck test build
