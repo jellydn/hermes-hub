@@ -13,9 +13,8 @@ import { getServerDetailSnapshot } from "./server-detail-snapshot";
 import {
 	buildOsInfo,
 	getOwnedServerRecord,
-	normalizeAuthMethod,
 	readOsInfoValue,
-	resolveServerCredential,
+	resolveServerSshConfig,
 } from "./server-records";
 import {
 	type SshAuthMethod,
@@ -304,14 +303,13 @@ export async function updateServer(context: Context) {
 	let nextStatus = currentServer.status;
 
 	if (connectionChanged) {
-		const authMethod = normalizeAuthMethod(currentServer.authMethod);
-		if (!authMethod) {
-			return context.json({ error: "Unsupported authentication method" }, 400);
-		}
-
+		let authMethod: SshAuthMethod;
 		let credential: string;
 		try {
-			credential = resolveServerCredential(currentServer, session.session.id);
+			({ authMethod, credential } = resolveServerSshConfig(
+				currentServer,
+				session.session.id,
+			));
 		} catch (error) {
 			const message =
 				error instanceof Error

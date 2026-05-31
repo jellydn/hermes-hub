@@ -10,11 +10,13 @@ import type {
 	DashboardVpsSummary,
 } from "../src/lib/dashboard-status";
 import { getAuthSession } from "./auth";
-import { getSessionCredential } from "./credentials";
-import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { aiProviders, installs, servers, telegramConfigs } from "./db/schema";
-import { readOsInfoValue } from "./server-records";
+import {
+	normalizeAuthMethod,
+	readOsInfoValue,
+	resolveServerCredential,
+} from "./server-records";
 import { withSshConnection } from "./ssh";
 
 type CacheEntry<T> = {
@@ -314,7 +316,7 @@ async function getVpsSummary(
 	}
 
 	try {
-		const credential = getServerCredential(serverRecord, sessionId);
+		const credential = resolveServerCredential(serverRecord, sessionId);
 		const metrics = await readServerMetrics(serverRecord, credential);
 		const status = getHealthTone(metrics);
 
@@ -447,37 +449,6 @@ function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
 	};
 }
 
-function getServerCredential(
-	serverRecord: Pick<
-		ServerRecord,
-		"id" | "encryptedCredential" | "storeCredential"
-	>,
-	sessionId?: string | null,
-) {
-	if (serverRecord.storeCredential) {
-		if (!serverRecord.encryptedCredential) {
-			throw new Error("Stored credential is missing.");
-		}
-
-		return decryptSecret(serverRecord.encryptedCredential);
-	}
-
-	if (!sessionId) {
-		throw new Error(
-			"Temporary credential expired. Reconnect the server first.",
-		);
-	}
-
-	const ephemeralCredential = getSessionCredential(serverRecord.id, sessionId);
-	if (!ephemeralCredential) {
-		throw new Error(
-			"Temporary credential expired. Reconnect the server first.",
-		);
-	}
-
-	return ephemeralCredential.credential;
-}
-
 async function readServerMetrics(
 	serverRecord: ServerRecord,
 	credential: string,
@@ -533,12 +504,4 @@ function parsePercentValue(value: string) {
 	}
 
 	return Math.max(0, Math.min(100, parsed));
-}
-
-function normalizeAuthMethod(authMethod: string) {
-	if (authMethod === "password" || authMethod === "ssh-key") {
-		return authMethod;
-	}
-
-	return null;
 }

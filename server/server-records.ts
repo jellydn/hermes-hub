@@ -104,3 +104,26 @@ export function readOsInfoValue(
 	const value = osInfo[key];
 	return typeof value === "string" && value.length > 0 ? value : null;
 }
+
+export function resolveServerSshConfig(
+	serverRecord: Pick<
+		OwnedServerRecord,
+		| "id"
+		| "host"
+		| "port"
+		| "username"
+		| "authMethod"
+		| "encryptedCredential"
+		| "storeCredential"
+	>,
+	sessionId?: string | null,
+): { authMethod: SshAuthMethod; credential: string } {
+	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
+	if (!authMethod) {
+		throw new Error("Unsupported authentication method.");
+	}
+
+	const credential = resolveServerCredential(serverRecord, sessionId);
+
+	return { authMethod, credential };
+}

@@ -13,11 +13,10 @@ import {
 } from "./server-detail-snapshot";
 import {
 	getOwnedServerRecord,
-	normalizeAuthMethod,
 	type OwnedServerRecord,
-	resolveServerCredential,
+	resolveServerSshConfig,
 } from "./server-records";
-import { SshConnectError, withSshConnection } from "./ssh";
+import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 export { getRollbackTargetFromHistory, getServerDetailSnapshot };
 
@@ -106,14 +105,13 @@ export async function runServerAction(context: Context) {
 		return context.json({ error: "Server not found" }, 404);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
-	}
-
+	let authMethod: SshAuthMethod;
 	let credential: string;
 	try {
-		credential = resolveServerCredential(serverRecord, session.session.id);
+		({ authMethod, credential } = resolveServerSshConfig(
+			serverRecord,
+			session.session.id,
+		));
 	} catch (error) {
 		const message =
 			error instanceof Error
@@ -217,7 +215,7 @@ export async function getServerDetail(context: Context) {
 
 async function executeServerAction(input: {
 	server: OwnedServerRecord;
-	authMethod: NonNullable<ReturnType<typeof normalizeAuthMethod>>;
+	authMethod: SshAuthMethod;
 	credential: string;
 	command: string;
 }) {

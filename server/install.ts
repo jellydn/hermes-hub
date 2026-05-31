@@ -2,9 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
-import { defaultHermesImage } from "./constants";
-import { getSessionCredential } from "./credentials";
-import { decryptSecret } from "./crypto";
+import { buildHermesComposeContent } from "./compose";
 import { getDb } from "./db";
 import { auditLogs, installs, servers } from "./db/schema";
 import {
@@ -18,7 +16,7 @@ import {
 	tryClaimInstallStream,
 } from "./install/sse-stream";
 import { getClientIp } from "./lib/get-client-ip";
-import { getOwnedServerRecord } from "./server-records";
+import { getOwnedServerRecord, resolveServerSshConfig } from "./server-records";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 type InstallStep = {
@@ -101,18 +99,13 @@ export async function startServerInstall(context: Context) {
 		return context.json({ error: "Server not found" }, 404);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
-	}
-
+	let authMethod: SshAuthMethod;
 	let credential: string;
-
 	try {
-		credential = getInstallCredential({
-			server: serverRecord,
-			sessionId: session.session.id,
-		});
+		({ authMethod, credential } = resolveServerSshConfig(
+			serverRecord,
+			session.session.id,
+		));
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Install credential unavailable";
@@ -503,40 +496,6 @@ async function getServerForInstall(input: {
 	return serverRecord ?? null;
 }
 
-function getInstallCredential(input: {
-	server: ServerCredentialRecord;
-	sessionId?: string | null;
-}) {
-	if (input.server.storeCredential) {
-		if (!input.server.encryptedCredential) {
-			throw new Error("Stored credential is missing");
-		}
-
-		return decryptSecret(input.server.encryptedCredential);
-	}
-
-	if (!input.sessionId) {
-		throw new Error("Session is required for ephemeral credentials");
-	}
-
-	const ephemeral = getSessionCredential(input.server.id, input.sessionId);
-	if (!ephemeral) {
-		throw new Error(
-			"Temporary credential expired. Reconnect the server first.",
-		);
-	}
-
-	return ephemeral.credential;
-}
-
-function normalizeAuthMethod(authMethod: string): SshAuthMethod | null {
-	if (authMethod === "password" || authMethod === "ssh-key") {
-		return authMethod;
-	}
-
-	return null;
-}
-
 function normalizeInstallError(error: unknown) {
 	if (error instanceof SshConnectError) {
 		return error.message;
@@ -546,25 +505,5 @@ function normalizeInstallError(error: unknown) {
 }
 
 function buildComposeWriteCommand() {
-	// API_SERVER_KEY and TELEGRAM_BOT_TOKEN are injected by the Telegram deploy
-	// step, which is the sole owner of those secrets. The install step only lays
-	// down a working docker-compose that the deploy step will later overwrite.
-	const composeFile = [
-		"services:",
-		"  hermes:",
-		`    image: ${defaultHermesImage}`,
-		"    container_name: hermes",
-		"    restart: unless-stopped",
-		"    command: gateway run",
-		"    ports:",
-		'      - "8642:8642"',
-		"    volumes:",
-		"      - ~/.hermes:/opt/data",
-		"    environment:",
-		"      - API_SERVER_ENABLED=true",
-		"      - API_SERVER_HOST=0.0.0.0",
-		"      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy",
-	].join("\n");
-
-	return `cat <<'EOF' > ~/hermes/docker-compose.yml\n${composeFile}\nEOF`;
+	return `cat <<'EOF' > ~/hermes/docker-compose.yml\n${buildHermesComposeContent()}\nEOF`;
 }
