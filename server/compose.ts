@@ -3,6 +3,7 @@ import { defaultHermesImage } from "./constants";
 export function buildHermesComposeContent(input?: {
 	apiServerKey?: string;
 	telegramBotToken?: string;
+	providerEnvVars?: Record<string, string>;
 }) {
 	const lines = [
 		"services:",
@@ -27,6 +28,14 @@ export function buildHermesComposeContent(input?: {
 		lines.push(
 			"      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy",
 		);
+	}
+
+	if (input?.providerEnvVars) {
+		for (const [key, value] of Object.entries(input.providerEnvVars)) {
+			if (value) {
+				lines.push(`      - ${key}=${value}`);
+			}
+		}
 	}
 
 	return lines.join("\n");

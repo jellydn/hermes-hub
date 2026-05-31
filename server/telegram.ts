@@ -2,11 +2,19 @@ import crypto from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
+import type { AiProviderId } from "../src/lib/ai-providers";
+import { isAiProviderId } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
-import { auditLogs, installs, servers, telegramConfigs } from "./db/schema";
+import {
+	aiProviders,
+	auditLogs,
+	installs,
+	servers,
+	telegramConfigs,
+} from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
 import { resolveServerSshConfig } from "./server-records";
 import { type SshAuthMethod, withSshConnection } from "./ssh";
@@ -231,10 +239,12 @@ export async function deployTelegramToServer(context: Context) {
 	}
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
+	const providerEnvVars = await buildProviderEnvVars(db, session.user.id);
 
 	const composeContent = buildHermesComposeContent({
 		apiServerKey,
 		telegramBotToken: decryptedToken,
+		providerEnvVars,
 	});
 
 	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${composeContent}\nDOCKER_EOF`;
@@ -554,4 +564,64 @@ function getTokenLast4(botToken: string) {
 	}
 
 	return trimmedToken.slice(-4);
+}
+
+const PROVIDER_ENV_MAP: Record<
+	AiProviderId,
+	{ apiKey?: string; baseUrl?: string }
+> = {
+	openai: { apiKey: "OPENAI_API_KEY" },
+	anthropic: { apiKey: "ANTHROPIC_API_KEY" },
+	openrouter: { apiKey: "OPENROUTER_API_KEY" },
+	ollama: {},
+	custom: { apiKey: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL" },
+};
+
+async function buildProviderEnvVars(
+	db: ReturnType<typeof getDb>,
+	userId: string,
+): Promise<Record<string, string> | undefined> {
+	const records = await db
+		.select({
+			provider: aiProviders.provider,
+			encryptedApiKey: aiProviders.encryptedApiKey,
+			baseUrl: aiProviders.baseUrl,
+		})
+		.from(aiProviders)
+		.where(eq(aiProviders.userId, userId))
+		.orderBy(desc(aiProviders.createdAt))
+		.limit(1);
+
+	const record = records[0];
+	if (!record) {
+		return undefined;
+	}
+
+	if (!isAiProviderId(record.provider)) {
+		return undefined;
+	}
+
+	const mapping = PROVIDER_ENV_MAP[record.provider];
+	if (!mapping) {
+		return undefined;
+	}
+
+	const envVars: Record<string, string> = {};
+
+	if (mapping.apiKey && record.encryptedApiKey) {
+		try {
+			const key = decryptSecret(record.encryptedApiKey);
+			if (key) {
+				envVars[mapping.apiKey] = key;
+			}
+		} catch {
+			// skip if decryption fails
+		}
+	}
+
+	if (mapping.baseUrl && record.baseUrl) {
+		envVars[mapping.baseUrl] = record.baseUrl;
+	}
+
+	return Object.keys(envVars).length > 0 ? envVars : undefined;
 }
