@@ -1,8 +1,14 @@
-# 💡 Autoresearch Optimization Ideas
+# 💡 Deferred Optimization Ideas
 
-Here are promising performance and DX optimization ideas for HermesHub:
+Items that are genuine improvements but were deferred to focus on higher-impact work first.
 
-- **Parallelize CI/CD Checks**: Run `typecheck` and `test` in parallel using concurrently or shell traps to make dev checks even faster on multi-core platforms.
-- **Transpile-only Typechecks**: Utilize a tool like `ts-blank-space` or `esbuild` for ultra-fast type stripping, combined with isolated type checking chunking in larger codebases.
-- **Exclude Vite Plugins selectively**: Continue pruning dev-only plugins from test configurations to keep transformer times minimal.
-- **Cache Vitest in CI**: Configure persistent cache actions for `node_modules/.vitest` in GitHub Actions configurations to reuse transform state across runs.
+## Done (not actionable)
+
+- **Parallelize CI/CD checks** — ✅ Done via `just check` shebang recipe
+- **Exclude Vite Plugins selectively** — ✅ Done via lazy `await import()` in async config factory
+- **Cache Vitest** — ✅ Done via default Vite `cacheDir`
+- **Transpile-only Typechecks** — Partially done (incremental tsbuildinfo); full `ts-blank-space` integration is a larger project
+
+## Database
+
+- **`health_checks` table defined but never queried**: `server/db/schema.ts` defines a `healthChecks` table that is never imported or referenced by any server or client code. The health check endpoint (`server/db/health.ts`) uses `SELECT 1` instead. A migration to drop this table would clean up the database schema. Not urgent — the table has no FK dependencies and occupies negligible space.
