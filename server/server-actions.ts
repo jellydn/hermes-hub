@@ -294,24 +294,3 @@ async function getRollbackTarget(serverId: string) {
 
 	return latestInstall?.version ?? null;
 }
-
-async function updateLatestInstallVersion(serverId: string, version: string) {
-	const [latestInstall] = await getDb()
-		.select({ id: installs.id })
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	if (!latestInstall) {
-		return;
-	}
-
-	await getDb()
-		.update(installs)
-		.set({
-			version,
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, latestInstall.id));
-}
