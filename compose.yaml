@@ -6,7 +6,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes_hub}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
