@@ -239,6 +239,52 @@ describe("provider settings", () => {
 			}),
 		);
 	});
+
+	it("builds Hermes deploy env for OpenRouter provider configs", async () => {
+		selectLimit.mockResolvedValue([
+			{
+				provider: "openrouter",
+				model: "openai/gpt-4o-mini",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: null,
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "openai/gpt-4o-mini",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "openrouter",
+				OPENROUTER_API_KEY: "stored-api-key",
+			},
+		});
+	});
+
+	it("builds Hermes deploy env for custom provider configs", async () => {
+		selectLimit.mockResolvedValue([
+			{
+				provider: "custom",
+				model: "deepseek-chat",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: "https://api.deepseek.com/v1",
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "deepseek-chat",
+			envVars: {
+				CUSTOM_BASE_URL: "https://api.deepseek.com/v1",
+				HERMES_INFERENCE_PROVIDER: "custom",
+				OPENAI_API_KEY: "stored-api-key",
+				OPENAI_BASE_URL: "https://api.deepseek.com/v1",
+			},
+		});
+	});
 });
 
 function createContext(url: string, body: unknown) {

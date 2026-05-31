@@ -421,14 +421,28 @@ async function getServerById(serverId: string) {
 type ProviderEnvConfig = {
 	apiKeyEnvVar?: string;
 	baseUrlEnvVar?: string;
+	hermesProvider: string;
+	extraBaseUrlEnvVars?: string[];
 };
 
 const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
-	openai: { apiKeyEnvVar: "OPENAI_API_KEY" },
-	anthropic: { apiKeyEnvVar: "ANTHROPIC_API_KEY" },
-	openrouter: { apiKeyEnvVar: "OPENROUTER_API_KEY" },
-	ollama: { baseUrlEnvVar: "OPENAI_BASE_URL" },
-	custom: { apiKeyEnvVar: "OPENAI_API_KEY", baseUrlEnvVar: "OPENAI_BASE_URL" },
+	openai: { apiKeyEnvVar: "OPENAI_API_KEY", hermesProvider: "openai-api" },
+	anthropic: { apiKeyEnvVar: "ANTHROPIC_API_KEY", hermesProvider: "anthropic" },
+	openrouter: {
+		apiKeyEnvVar: "OPENROUTER_API_KEY",
+		hermesProvider: "openrouter",
+	},
+	ollama: {
+		baseUrlEnvVar: "CUSTOM_BASE_URL",
+		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
+		hermesProvider: "custom",
+	},
+	custom: {
+		apiKeyEnvVar: "OPENAI_API_KEY",
+		baseUrlEnvVar: "CUSTOM_BASE_URL",
+		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
+		hermesProvider: "custom",
+	},
 };
 
 function buildProviderEnvMap(
@@ -443,20 +457,25 @@ function buildProviderEnvMap(
 
 	const envVars: Record<string, string> = {};
 
+	envVars.HERMES_INFERENCE_PROVIDER = config.hermesProvider;
+
 	if (config.apiKeyEnvVar && apiKey) {
 		envVars[config.apiKeyEnvVar] = apiKey;
 	}
 
 	if (config.baseUrlEnvVar && baseUrl) {
 		envVars[config.baseUrlEnvVar] = baseUrl;
+		for (const extraEnvVar of config.extraBaseUrlEnvVars ?? []) {
+			envVars[extraEnvVar] = baseUrl;
+		}
 	}
 
 	return envVars;
 }
 
-export async function getProviderEnvVars(
+export async function getProviderDeployConfig(
 	userId: string,
-): Promise<Record<string, string> | null> {
+): Promise<{ envVars: Record<string, string>; model: string } | null> {
 	const record = await getLatestProviderRecord(userId);
 	if (!record || !isAiProviderId(record.provider)) {
 		return null;
@@ -484,7 +503,21 @@ export async function getProviderEnvVars(
 		}
 	}
 
-	return buildProviderEnvMap(record.provider, decryptedApiKey, record.baseUrl);
+	return {
+		envVars: buildProviderEnvMap(
+			record.provider,
+			decryptedApiKey,
+			record.baseUrl,
+		),
+		model: record.model,
+	};
+}
+
+export async function getProviderEnvVars(
+	userId: string,
+): Promise<Record<string, string> | null> {
+	const config = await getProviderDeployConfig(userId);
+	return config?.envVars ?? null;
 }
 
 export async function deployProviderToHermes(context: Context) {
