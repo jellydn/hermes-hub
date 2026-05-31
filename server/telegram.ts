@@ -8,7 +8,7 @@ import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
-import { getProviderEnvVars } from "./providers";
+import { getProviderDeployConfig } from "./providers";
 import { resolveServerSshConfig } from "./server-records";
 import { type SshAuthMethod, withSshConnection } from "./ssh";
 
@@ -233,9 +233,11 @@ export async function deployTelegramToServer(context: Context) {
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
 	let providerEnvVars: Record<string, string> | undefined;
+	let hermesModel: string | undefined;
 	try {
-		const envVars = await getProviderEnvVars(session.user.id);
-		providerEnvVars = envVars ?? undefined;
+		const providerConfig = await getProviderDeployConfig(session.user.id);
+		providerEnvVars = providerConfig?.envVars;
+		hermesModel = providerConfig?.model;
 	} catch (error) {
 		const message =
 			error instanceof Error
@@ -259,6 +261,7 @@ export async function deployTelegramToServer(context: Context) {
 		apiServerKey,
 		telegramBotToken: decryptedToken,
 		providerEnvVars,
+		hermesModel,
 	});
 
 	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${composeContent}\nDOCKER_EOF`;
@@ -371,6 +374,17 @@ export async function testTelegramBot(context: Context) {
 	}
 
 	const decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+	let providerConfig: Awaited<ReturnType<typeof getProviderDeployConfig>> =
+		null;
+	try {
+		providerConfig = await getProviderDeployConfig(session.user.id);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Provider config could not be loaded.";
+		return context.json({ error: message }, 400);
+	}
 
 	const serverRecord = await findServerById(record.deployedServerId);
 	if (!serverRecord) {
@@ -391,7 +405,7 @@ export async function testTelegramBot(context: Context) {
 		`-H "Content-Type: application/json"`,
 		`-H "Authorization: Bearer ${decryptedApiServerKey}"`,
 		`-d '${JSON.stringify({
-			model: "hermes-agent",
+			model: providerConfig?.model,
 			messages: [{ role: "user", content: message }],
 		}).replace(/'/g, "'\\''")}'`,
 	].join(" \\\n  ");

@@ -32,7 +32,7 @@ export function buildHermesComposeContent(input?: {
 	}
 
 	if (input?.hermesModel) {
-		lines.push(`      - HERMES_DEFAULT_MODEL=${input.hermesModel}`);
+		lines.push(`      - API_SERVER_MODEL_NAME=${input.hermesModel}`);
 	}
 
 	if (input?.providerEnvVars) {
