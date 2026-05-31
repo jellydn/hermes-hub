@@ -2,14 +2,14 @@ import crypto from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
-
 import { getAuthSession } from "./auth";
+import { buildHermesComposeContent } from "./compose";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { auditLogs, installs, servers, telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
-import { normalizeAuthMethod, resolveServerCredential } from "./server-records";
-import { withSshConnection } from "./ssh";
+import { resolveServerSshConfig } from "./server-records";
+import { type SshAuthMethod, withSshConnection } from "./ssh";
 
 type TelegramConnectRequest = {
 	botToken?: string;
@@ -30,12 +30,6 @@ export type TelegramConfigSummary = {
 	botTokenLast4: string | null;
 	isActive: boolean;
 	deployedServerHost: string | null;
-};
-
-export type TelegramDeployStatus = {
-	isDeployed: boolean;
-	serverHost: string | null;
-	serverId: string | null;
 };
 
 type TelegramTestRequest = {
@@ -71,21 +65,6 @@ export async function getCurrentTelegramConfig(userId: string) {
 		isActive: true,
 		deployedServerHost: record.deployedServerHost ?? null,
 	} satisfies TelegramConfigSummary;
-}
-
-export async function getTelegramDeployStatus(
-	userId: string,
-): Promise<TelegramDeployStatus> {
-	const record = await getLatestTelegramRecord(userId);
-	if (!record?.isActive || !record.deployedServerId) {
-		return { isDeployed: false, serverHost: null, serverId: null };
-	}
-
-	return {
-		isDeployed: true,
-		serverHost: record.deployedServerHost ?? null,
-		serverId: record.deployedServerId,
-	};
 }
 
 export async function connectTelegram(context: Context) {
@@ -126,8 +105,6 @@ export async function connectTelegram(context: Context) {
 	const ipAddress = getClientIp(context);
 
 	try {
-		const existing = await getLatestTelegramRecord(session.user.id);
-
 		await db
 			.update(telegramConfigs)
 			.set({ isActive: false })
@@ -138,9 +115,9 @@ export async function connectTelegram(context: Context) {
 			botToken: encryptSecret(botToken),
 			botUsername: bot.username,
 			isActive: true,
-			deployedServerId: existing?.deployedServerId ?? null,
-			deployedServerHost: existing?.deployedServerHost ?? null,
-			apiServerKey: existing?.apiServerKey ?? null,
+			deployedServerId: null,
+			deployedServerHost: null,
+			apiServerKey: null,
 		});
 
 		await db.insert(auditLogs).values({
@@ -158,7 +135,7 @@ export async function connectTelegram(context: Context) {
 				botUsername: bot.username,
 				botTokenLast4: getTokenLast4(botToken),
 				isActive: true,
-				deployedServerHost: existing?.deployedServerHost ?? null,
+				deployedServerHost: null,
 			} satisfies TelegramConfigSummary,
 		});
 	} catch (error) {
@@ -244,14 +221,9 @@ export async function deployTelegramToServer(context: Context) {
 		);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
-	}
-
-	let credential: string;
+	let sshConfig: { authMethod: SshAuthMethod; credential: string };
 	try {
-		credential = resolveServerCredential(serverRecord, session.session.id);
+		sshConfig = resolveServerSshConfig(serverRecord, session.session.id);
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Credential unavailable";
@@ -260,23 +232,10 @@ export async function deployTelegramToServer(context: Context) {
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
 
-	const composeContent = [
-		"services:",
-		"  hermes:",
-		"    image: nousresearch/hermes-agent:latest",
-		"    container_name: hermes",
-		"    restart: unless-stopped",
-		"    command: gateway run",
-		"    ports:",
-		'      - "8642:8642"',
-		"    volumes:",
-		"      - ~/.hermes:/opt/data",
-		"    environment:",
-		"      - API_SERVER_ENABLED=true",
-		"      - API_SERVER_HOST=0.0.0.0",
-		`      - API_SERVER_KEY=${apiServerKey}`,
-		`      - TELEGRAM_BOT_TOKEN=${decryptedToken}`,
-	].join("\n");
+	const composeContent = buildHermesComposeContent({
+		apiServerKey,
+		telegramBotToken: decryptedToken,
+	});
 
 	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${composeContent}\nDOCKER_EOF`;
 
@@ -286,8 +245,7 @@ export async function deployTelegramToServer(context: Context) {
 				host: serverRecord.host,
 				port: serverRecord.port,
 				username: serverRecord.username,
-				authMethod,
-				credential,
+				...sshConfig,
 			},
 			async (ssh) => {
 				const writeResult = await ssh.execCommand(writeCmd);
@@ -306,28 +264,30 @@ export async function deployTelegramToServer(context: Context) {
 			},
 		);
 
-		await db
-			.update(telegramConfigs)
-			.set({
-				deployedServerId: serverRecord.id,
-				deployedServerHost: serverRecord.host,
-				apiServerKey,
-			})
-			.where(
-				and(
-					eq(telegramConfigs.userId, session.user.id),
-					eq(telegramConfigs.isActive, true),
-				),
-			);
+		await db.transaction(async (tx) => {
+			await tx
+				.update(telegramConfigs)
+				.set({
+					deployedServerId: serverRecord.id,
+					deployedServerHost: serverRecord.host,
+					apiServerKey,
+				})
+				.where(
+					and(
+						eq(telegramConfigs.userId, session.user.id),
+						eq(telegramConfigs.isActive, true),
+					),
+				);
 
-		await db.insert(auditLogs).values({
-			userId: session.user.id,
-			action: "telegram.deployed",
-			details: {
-				serverId: serverRecord.id,
-				serverHost: serverRecord.host,
-			},
-			ipAddress,
+			await tx.insert(auditLogs).values({
+				userId: session.user.id,
+				action: "telegram.deployed",
+				details: {
+					serverId: serverRecord.id,
+					serverHost: serverRecord.host,
+				},
+				ipAddress,
+			});
 		});
 
 		return context.json({
@@ -391,14 +351,9 @@ export async function testTelegramBot(context: Context) {
 		return context.json({ error: "Deployed server not found." }, 404);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
-	}
-
-	let credential: string;
+	let sshConfig: { authMethod: SshAuthMethod; credential: string };
 	try {
-		credential = resolveServerCredential(serverRecord, session.session.id);
+		sshConfig = resolveServerSshConfig(serverRecord, session.session.id);
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Credential unavailable";
@@ -421,8 +376,7 @@ export async function testTelegramBot(context: Context) {
 				host: serverRecord.host,
 				port: serverRecord.port,
 				username: serverRecord.username,
-				authMethod,
-				credential,
+				...sshConfig,
 			},
 			async (ssh) => {
 				const execResult = await ssh.execCommand(curlCommand, {
@@ -447,18 +401,33 @@ export async function testTelegramBot(context: Context) {
 					throw new Error("Empty response from Hermes API");
 				}
 
-				let parsed: { choices?: Array<{ message?: { content?: string } }> };
+				let parsed: unknown;
 				try {
-					parsed = JSON.parse(stdout) as {
-						choices?: Array<{ message?: { content?: string } }>;
-					};
+					parsed = JSON.parse(stdout);
 				} catch {
 					throw new Error(
 						`Invalid JSON from Hermes API: ${stdout.slice(0, 200)}`,
 					);
 				}
 
-				const content = parsed.choices?.[0]?.message?.content;
+				if (parsed && typeof parsed === "object" && "error" in parsed) {
+					const errBody = (parsed as Record<string, unknown>).error;
+					const errMsg =
+						typeof errBody === "object" && errBody !== null
+							? String((errBody as Record<string, unknown>).message ?? errBody)
+							: String(errBody);
+					throw new Error(`Hermes API error: ${errMsg}`);
+				}
+
+				const choices =
+					parsed && typeof parsed === "object" && "choices" in parsed
+						? (
+								parsed as {
+									choices?: Array<{ message?: { content?: string } }>;
+								}
+							).choices
+						: undefined;
+				const content = choices?.[0]?.message?.content;
 				if (!content) {
 					throw new Error("No response content from Hermes");
 				}

@@ -64,15 +64,7 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 				return;
 			}
 
-			// Preserve the existing deployed host so a re-connect doesn't clear
-			// the deploy status that was set by a prior deploy.
-			setSavedConfig({
-				...payload.telegram,
-				deployedServerHost:
-					payload.telegram.deployedServerHost ??
-					savedConfig?.deployedServerHost ??
-					null,
-			});
+			setSavedConfig(payload.telegram);
 			setBotToken("");
 			setSuccessMessage("Telegram bot connected");
 		} finally {

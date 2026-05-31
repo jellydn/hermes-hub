@@ -15,6 +15,13 @@
 			"when": 1748653200000,
 			"tag": "0001_ai_providers_base_url",
 			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1749358800000,
+			"tag": "0002_telegram_configs_deploy",
+			"breakpoints": true
 		}
 	]
 }
