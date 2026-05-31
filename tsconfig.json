@@ -1,5 +1,11 @@
 {
-	"include": ["src/**/*", "server/**/*", "scripts/**/*", "drizzle.config.ts", "vite.config.ts"],
+	"include": [
+		"src/**/*",
+		"server/**/*",
+		"scripts/**/*",
+		"drizzle.config.ts",
+		"vite.config.ts"
+	],
 	"compilerOptions": {
 		"target": "ESNext",
 		"jsx": "react-jsx",
