@@ -9,56 +9,22 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { type Path, useForm } from "react-hook-form";
-import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type AuthMethod = "password" | "ssh-key";
 
-const connectionSchema = z
-	.object({
-		label: z
-			.string()
-			.trim()
-			.min(1, "Enter a label so you can recognize this VPS later."),
-		host: z
-			.string()
-			.trim()
-			.min(1, "Enter a hostname or IP address.")
-			.refine((val) => isValidHost(val), "Use a valid hostname or IP address."),
-		port: z
-			.string()
-			.trim()
-			.min(1, "Enter the SSH port.")
-			.refine((val) => {
-				const port = Number(val);
-				return Number.isInteger(port) && port >= 1 && port <= 65535;
-			}, "Port must be between 1 and 65535."),
-		username: z.string().trim().min(1, "Enter the SSH username."),
-		authMethod: z.enum(["password", "ssh-key"]),
-		password: z.string(),
-		privateKey: z.string(),
-		storeCredential: z.boolean(),
-	})
-	.superRefine((data, ctx) => {
-		if (data.authMethod === "password" && !data.password.trim()) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ["password"],
-				message: "Enter the SSH password.",
-			});
-		}
-		if (data.authMethod === "ssh-key" && !data.privateKey.trim()) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ["privateKey"],
-				message: "Paste the private key for this server.",
-			});
-		}
-	});
-
-type ConnectionDraft = z.infer<typeof connectionSchema>;
+type ConnectionDraft = {
+	label: string;
+	host: string;
+	port: string;
+	username: string;
+	authMethod: AuthMethod;
+	password: string;
+	privateKey: string;
+	storeCredential: boolean;
+};
 
 type ConnectionWizardProps = {
 	onSubmit: (draft: ConnectionDraft) => void | Promise<void>;
