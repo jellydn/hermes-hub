@@ -1,0 +1,1 @@
+{"run":5,"commit":"c46dfd9","metric":7200,"metrics":{},"status":"keep","description":"Migrate ConnectionWizard form to react-hook-form + zod","timestamp":1780201493892,"segment":0,"confidence":2.5,"asi":{"hypothesis":"Migrated ConnectionWizard to react-hook-form + zod synchronous validation"}}

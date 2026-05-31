@@ -1,3 +1,4 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	CheckCircle2,
 	KeyRound,
@@ -6,6 +7,8 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,12 +40,23 @@ type ProviderFormState = {
 
 const initialProvider = aiProviderOptions[0]?.id ?? "openai";
 
+const providerSchema = z.object({
+	provider: z.custom<AiProviderId>(),
+	model: z.string(),
+	apiKey: z.string(),
+	baseUrl: z.string(),
+});
+
 export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 	const [savedConfig, setSavedConfig] =
 		useState<ProviderSettingsSummary | null>(initialConfig);
-	const [form, setForm] = useState<ProviderFormState>(() =>
-		createInitialFormState(initialConfig),
-	);
+
+	const { register, watch, setValue } = useForm<ProviderFormState>({
+		resolver: zodResolver(providerSchema),
+		defaultValues: createInitialFormState(initialConfig),
+	});
+
+	const form = watch();
 	const [isSaving, setIsSaving] = useState(false);
 	const [isTesting, setIsTesting] = useState(false);
 	const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -56,15 +70,15 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 
 	function updateProvider(provider: AiProviderId) {
 		const option = getAiProviderOption(provider);
-		setForm({
-			provider,
-			model: getDefaultAiModel(provider),
-			apiKey: "",
-			baseUrl:
-				option?.id === savedConfig?.provider && savedConfig?.baseUrl
-					? savedConfig.baseUrl
-					: (option?.defaultBaseUrl ?? ""),
-		});
+		setValue("provider", provider);
+		setValue("model", getDefaultAiModel(provider));
+		setValue("apiKey", "");
+		setValue(
+			"baseUrl",
+			option?.id === savedConfig?.provider && savedConfig?.baseUrl
+				? savedConfig.baseUrl
+				: (option?.defaultBaseUrl ?? ""),
+		);
 		setSaveMessage(null);
 		setSaveError(null);
 		setTestError(null);
@@ -95,7 +109,7 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 			}
 
 			setSavedConfig(payload.provider);
-			setForm((currentForm) => ({ ...currentForm, apiKey: "" }));
+			setValue("apiKey", "");
 			setSaveMessage("Provider settings saved.");
 		} finally {
 			setIsSaving(false);
@@ -211,15 +225,8 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 						>
 							<input
 								id="apiKey"
-								name="apiKey"
 								type="password"
-								value={form.apiKey}
-								onChange={(event) =>
-									setForm((currentForm) => ({
-										...currentForm,
-										apiKey: event.currentTarget.value,
-									}))
-								}
+								{...register("apiKey")}
 								className={inputClassName}
 								placeholder={
 									existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
@@ -235,15 +242,8 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							>
 								<input
 									id="baseUrl"
-									name="baseUrl"
 									type="text"
-									value={form.baseUrl}
-									onChange={(event) =>
-										setForm((currentForm) => ({
-											...currentForm,
-											baseUrl: event.currentTarget.value,
-										}))
-									}
+									{...register("baseUrl")}
 									className={inputClassName}
 									placeholder={
 										providerOption?.defaultBaseUrl ??
@@ -261,15 +261,8 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							>
 								<input
 									id="model"
-									name="model"
 									type="text"
-									value={form.model}
-									onChange={(event) =>
-										setForm((currentForm) => ({
-											...currentForm,
-											model: event.currentTarget.value,
-										}))
-									}
+									{...register("model")}
 									className={inputClassName}
 									placeholder={providerOption?.defaultModel || "deepseek-chat"}
 								/>
@@ -282,14 +275,7 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							>
 								<select
 									id="model"
-									name="model"
-									value={form.model}
-									onChange={(event) =>
-										setForm((currentForm) => ({
-											...currentForm,
-											model: event.currentTarget.value,
-										}))
-									}
+									{...register("model")}
 									className={inputClassName}
 								>
 									{providerOption?.models.map((model) => (
