@@ -1,4 +1,9 @@
-export type AiProviderId = "openai" | "anthropic" | "openrouter";
+export type AiProviderId =
+	| "openai"
+	| "anthropic"
+	| "openrouter"
+	| "ollama"
+	| "custom";
 
 type AiProviderOption = {
 	id: AiProviderId;
@@ -7,6 +12,7 @@ type AiProviderOption = {
 	models: readonly string[];
 	defaultModel: string;
 	requiresCustomModel?: boolean;
+	requiresBaseUrl?: boolean;
 };
 
 export const aiProviderOptions: readonly AiProviderOption[] = [
@@ -34,6 +40,26 @@ export const aiProviderOptions: readonly AiProviderOption[] = [
 		models: [],
 		defaultModel: "openai/gpt-4o-mini",
 		requiresCustomModel: true,
+	},
+	{
+		id: "ollama",
+		label: "Ollama / Local",
+		description:
+			"Run open-weight models locally or via a private Ollama cluster.",
+		models: [],
+		defaultModel: "llama3",
+		requiresCustomModel: true,
+		requiresBaseUrl: true,
+	},
+	{
+		id: "custom",
+		label: "Custom / BYO",
+		description:
+			"Connect to any OpenAI-compatible API endpoint (e.g. OllamaCloud, DeepSeek, Together, etc.).",
+		models: [],
+		defaultModel: "",
+		requiresCustomModel: true,
+		requiresBaseUrl: true,
 	},
 ] as const;
 

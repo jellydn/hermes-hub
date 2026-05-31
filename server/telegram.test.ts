@@ -100,6 +100,7 @@ describe("telegram handlers", () => {
 				botUsername: "hermes_helper_bot",
 				botTokenLast4: "oken",
 				isActive: true,
+				deployedServerHost: null,
 			},
 		});
 		expect(updateSet).toHaveBeenCalled();

@@ -8,6 +8,13 @@
 			"when": 1779771594157,
 			"tag": "0000_swift_luckman",
 			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1748653200000,
+			"tag": "0001_ai_providers_base_url",
+			"breakpoints": true
 		}
 	]
 }

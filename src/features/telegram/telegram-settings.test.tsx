@@ -46,6 +46,7 @@ describe("TelegramSettings", () => {
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
 					isActive: true,
+					deployedServerHost: null,
 				}}
 			/>,
 		);
@@ -105,6 +106,7 @@ describe("TelegramSettings", () => {
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
 					isActive: true,
+					deployedServerHost: null,
 				}}
 			/>,
 		);

@@ -160,6 +160,7 @@ export const aiProviders = pgTable(
 			.references(() => users.id, { onDelete: "cascade" }),
 		provider: text("provider").notNull(),
 		encryptedApiKey: text("encrypted_api_key").notNull(),
+		baseUrl: text("base_url"),
 		model: text("model").notNull(),
 		label: text("label"),
 		isActive: boolean("is_active").default(false).notNull(),
@@ -180,6 +181,9 @@ export const telegramConfigs = pgTable(
 		botToken: text("bot_token").notNull(),
 		botUsername: text("bot_username"),
 		isActive: boolean("is_active").default(false).notNull(),
+		deployedServerId: text("deployed_server_id"),
+		deployedServerHost: text("deployed_server_host"),
+		apiServerKey: text("api_server_key"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

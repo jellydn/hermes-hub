@@ -21,6 +21,7 @@ export type ProviderSettingsSummary = {
 	model: string;
 	keyLast4: string | null;
 	hasStoredKey: boolean;
+	baseUrl?: string | null;
 };
 
 type ProviderSettingsProps = {
@@ -31,6 +32,7 @@ type ProviderFormState = {
 	provider: AiProviderId;
 	model: string;
 	apiKey: string;
+	baseUrl: string;
 };
 
 const initialProvider = aiProviderOptions[0]?.id ?? "openai";
@@ -53,10 +55,17 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 		savedConfig?.provider === form.provider ? savedConfig.keyLast4 : null;
 
 	function updateProvider(provider: AiProviderId) {
+		const option = getAiProviderOption(provider);
 		setForm({
 			provider,
 			model: getDefaultAiModel(provider),
 			apiKey: "",
+			baseUrl:
+				option?.id === savedConfig?.provider && savedConfig?.baseUrl
+					? savedConfig.baseUrl
+					: provider === "ollama"
+						? "http://localhost:11434/v1"
+						: "",
 		});
 		setSaveMessage(null);
 		setSaveError(null);
@@ -197,7 +206,9 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							hint={
 								existingKeyLast4
 									? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
-									: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
+									: form.provider === "ollama"
+										? "API Key (optional for local Ollama instances)."
+										: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
 							}
 						>
 							<input
@@ -218,11 +229,48 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							/>
 						</Field>
 
+						{providerOption?.requiresBaseUrl ? (
+							<Field
+								label="Base URL"
+								name="baseUrl"
+								hint={
+									form.provider === "ollama"
+										? "The endpoint of your Ollama API (default: http://localhost:11434/v1)."
+										: "The base URL for the custom OpenAI-compatible endpoint."
+								}
+							>
+								<input
+									id="baseUrl"
+									name="baseUrl"
+									type="text"
+									value={form.baseUrl}
+									onChange={(event) =>
+										setForm((currentForm) => ({
+											...currentForm,
+											baseUrl: event.currentTarget.value,
+										}))
+									}
+									className={inputClassName}
+									placeholder={
+										form.provider === "ollama"
+											? "http://localhost:11434/v1"
+											: "https://api.yourprovider.com/v1"
+									}
+								/>
+							</Field>
+						) : null}
+
 						{providerOption?.requiresCustomModel ? (
 							<Field
 								label="Custom model ID"
 								name="model"
-								hint="Enter the exact OpenRouter model identifier Hermes should call."
+								hint={
+									form.provider === "ollama"
+										? "Enter the Ollama model name (e.g. llama3, mistral, phi3)."
+										: form.provider === "custom"
+											? "Enter the model ID (e.g. deepseek-chat, mixtral-8x7b)."
+											: "Enter the exact OpenRouter model identifier Hermes should call."
+								}
 							>
 								<input
 									id="model"
@@ -236,7 +284,13 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 										}))
 									}
 									className={inputClassName}
-									placeholder="openai/gpt-4o-mini"
+									placeholder={
+										form.provider === "ollama"
+											? "llama3"
+											: form.provider === "custom"
+												? "deepseek-chat"
+												: "openai/gpt-4o-mini"
+									}
 								/>
 							</Field>
 						) : (
@@ -336,6 +390,11 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 								? `Model: ${savedConfig.model}`
 								: "Save a provider configuration to power Hermes responses."}
 						</p>
+						{savedConfig?.baseUrl ? (
+							<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
+								Base URL: {savedConfig.baseUrl}
+							</p>
+						) : null}
 						{savedConfig?.keyLast4 ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
 								Stored key ending in {savedConfig.keyLast4}
@@ -349,6 +408,8 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
 							<li>Anthropic: Sonnet and Haiku variants.</li>
 							<li>OpenRouter accepts any model ID.</li>
+							<li>Ollama: Run local open-weight models (e.g. llama3).</li>
+							<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
 						</ul>
 					</section>
 				</aside>
@@ -364,6 +425,9 @@ function createInitialFormState(initialConfig: ProviderSettingsSummary | null) {
 		provider,
 		model: initialConfig?.model ?? getDefaultAiModel(provider),
 		apiKey: "",
+		baseUrl:
+			initialConfig?.baseUrl ??
+			(provider === "ollama" ? "http://localhost:11434/v1" : ""),
 	};
 }
 

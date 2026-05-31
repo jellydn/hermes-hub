@@ -76,4 +76,15 @@ describe("ProviderSettings", () => {
 			}),
 		);
 	});
+
+	it("shows Base URL and Custom Model fields when Ollama is selected", () => {
+		render(<ProviderSettings initialConfig={null} />);
+
+		fireEvent.click(screen.getByRole("radio", { name: /ollama \/ local/i }));
+
+		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
+		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(screen.getByDisplayValue("http://localhost:11434/v1")).toBeTruthy();
+		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
+	});
 });

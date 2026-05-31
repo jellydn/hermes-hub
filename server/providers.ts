@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import {
 	type AiProviderId,
 	formatAiProviderLabel,
+	getAiProviderOption,
 	getDefaultAiModel,
 	isAiProviderId,
 	isValidAiModel,
@@ -18,12 +19,14 @@ type ProviderRequest = {
 	provider: string;
 	model?: string;
 	apiKey?: string;
+	baseUrl?: string;
 };
 
 type StoredProviderRecord = {
 	provider: string;
 	model: string;
 	encryptedApiKey: string;
+	baseUrl: string | null;
 };
 
 export type ProviderConfigSummary = {
@@ -31,7 +34,25 @@ export type ProviderConfigSummary = {
 	model: string;
 	keyLast4: string | null;
 	hasStoredKey: boolean;
+	baseUrl?: string;
 };
+
+function decryptApiKey(encryptedStr: string): string {
+	try {
+		const decrypted = decryptSecret(encryptedStr);
+		// Backward-compatibility: keys saved before the explicit baseUrl column
+		// may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
+		if (decrypted.startsWith("{")) {
+			const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+			if (typeof parsed.apiKey === "string") {
+				return parsed.apiKey;
+			}
+		}
+		return decrypted;
+	} catch {
+		return "";
+	}
+}
 
 class ProviderConnectionError extends Error {
 	constructor(
@@ -49,11 +70,14 @@ export async function getCurrentProviderConfig(userId: string) {
 		return null;
 	}
 
+	const parsedApiKey = decryptApiKey(record.encryptedApiKey);
+
 	return {
 		provider: record.provider,
 		model: record.model,
-		keyLast4: getKeyLast4(record.encryptedApiKey),
+		keyLast4: getApiKeyLast4(parsedApiKey),
 		hasStoredKey: true,
+		baseUrl: record.baseUrl ?? undefined,
 	} satisfies ProviderConfigSummary;
 }
 
@@ -95,6 +119,7 @@ export async function saveProviderConfig(context: Context) {
 			userId: session.user.id,
 			provider: parsed.provider,
 			encryptedApiKey: encryptSecret(resolvedApiKey.apiKey),
+			baseUrl: resolvedApiKey.baseUrl || null,
 			model: parsed.model,
 			label: formatAiProviderLabel(parsed.provider),
 			isActive: true,
@@ -116,6 +141,7 @@ export async function saveProviderConfig(context: Context) {
 				model: parsed.model,
 				keyLast4: getApiKeyLast4(resolvedApiKey.apiKey),
 				hasStoredKey: true,
+				baseUrl: resolvedApiKey.baseUrl || undefined,
 			} satisfies ProviderConfigSummary,
 		});
 	} catch (error) {
@@ -157,6 +183,7 @@ export async function testProviderConfig(context: Context) {
 		await verifyProviderConnection({
 			provider: parsed.provider,
 			apiKey: resolvedApiKey.apiKey,
+			baseUrl: resolvedApiKey.baseUrl,
 		});
 
 		return context.json({ status: "connected" });
@@ -174,7 +201,7 @@ export async function testProviderConfig(context: Context) {
 
 function parseProviderRequest(payload: ProviderRequest) {
 	if (!isAiProviderId(payload.provider)) {
-		return { error: "Choose OpenAI, Anthropic, or OpenRouter." };
+		return { error: "Choose a valid provider." };
 	}
 
 	const model = (
@@ -188,26 +215,48 @@ function parseProviderRequest(payload: ProviderRequest) {
 		provider: payload.provider,
 		model,
 		apiKey: payload.apiKey?.trim() ?? "",
+		baseUrl: payload.baseUrl?.trim() ?? "",
 	};
 }
 
 function resolveProviderApiKey(
-	parsed: { provider: AiProviderId; model: string; apiKey: string },
+	parsed: {
+		provider: AiProviderId;
+		model: string;
+		apiKey: string;
+		baseUrl?: string;
+	},
 	existingRecord: StoredProviderRecord | null,
 ) {
-	if (parsed.apiKey) {
-		return { apiKey: parsed.apiKey };
+	let resolvedApiKey = parsed.apiKey;
+	let resolvedBaseUrl = parsed.baseUrl;
+
+	// If API key is not supplied, try to retrieve it from existingRecord
+	if (!resolvedApiKey) {
+		if (existingRecord && existingRecord.provider === parsed.provider) {
+			try {
+				resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
+				if (!resolvedBaseUrl) {
+					resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
+				}
+			} catch {
+				return { error: "Stored API key could not be read. Paste a new key." };
+			}
+		}
 	}
 
-	if (!existingRecord || existingRecord.provider !== parsed.provider) {
+	// For OpenAI, Anthropic, and OpenRouter, API key is required.
+	// For Ollama / Local and Custom / BYO, base URL is required. API key is optional.
+	const option = getAiProviderOption(parsed.provider);
+	if (option?.requiresBaseUrl && !resolvedBaseUrl) {
+		return { error: "Base URL is required." };
+	}
+
+	if (!option?.requiresBaseUrl && !resolvedApiKey) {
 		return { error: "API key is required." };
 	}
 
-	try {
-		return { apiKey: decryptSecret(existingRecord.encryptedApiKey) };
-	} catch {
-		return { error: "Stored API key could not be read. Paste a new key." };
-	}
+	return { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl };
 }
 
 async function getLatestProviderRecord(userId: string) {
@@ -216,6 +265,7 @@ async function getLatestProviderRecord(userId: string) {
 			provider: aiProviders.provider,
 			model: aiProviders.model,
 			encryptedApiKey: aiProviders.encryptedApiKey,
+			baseUrl: aiProviders.baseUrl,
 		})
 		.from(aiProviders)
 		.where(eq(aiProviders.userId, userId))
@@ -228,6 +278,7 @@ async function getLatestProviderRecord(userId: string) {
 async function verifyProviderConnection(input: {
 	provider: AiProviderId;
 	apiKey: string;
+	baseUrl?: string;
 }) {
 	const request = createProviderTestRequest(input);
 
@@ -253,6 +304,7 @@ async function verifyProviderConnection(input: {
 function createProviderTestRequest(input: {
 	provider: AiProviderId;
 	apiKey: string;
+	baseUrl?: string;
 }): { url: string; init: RequestInit } {
 	if (input.provider === "anthropic") {
 		return {
@@ -279,6 +331,42 @@ function createProviderTestRequest(input: {
 		};
 	}
 
+	if (input.provider === "ollama") {
+		const baseUrl = input.baseUrl || "http://localhost:11434/v1";
+		const url = baseUrl.endsWith("/")
+			? `${baseUrl}models`
+			: `${baseUrl}/models`;
+		const headers: Record<string, string> = {};
+		if (input.apiKey) {
+			headers.Authorization = `Bearer ${input.apiKey}`;
+		}
+		return {
+			url,
+			init: {
+				method: "GET",
+				headers,
+			},
+		};
+	}
+
+	if (input.provider === "custom") {
+		const baseUrl = input.baseUrl || "";
+		const url = baseUrl.endsWith("/")
+			? `${baseUrl}models`
+			: `${baseUrl}/models`;
+		const headers: Record<string, string> = {};
+		if (input.apiKey) {
+			headers.Authorization = `Bearer ${input.apiKey}`;
+		}
+		return {
+			url,
+			init: {
+				method: "GET",
+				headers,
+			},
+		};
+	}
+
 	return {
 		url: "https://api.openai.com/v1/models",
 		init: {
@@ -288,14 +376,6 @@ function createProviderTestRequest(input: {
 			},
 		},
 	};
-}
-
-function getKeyLast4(encryptedApiKey: string) {
-	try {
-		return getApiKeyLast4(decryptSecret(encryptedApiKey));
-	} catch {
-		return null;
-	}
 }
 
 function getApiKeyLast4(apiKey: string) {

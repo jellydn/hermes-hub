@@ -89,6 +89,7 @@ describe("provider settings", () => {
 		);
 
 		expect(response.status).toBe(200);
+		// API key is now stored directly — no JSON wrapping.
 		expect(encryptSecret).toHaveBeenCalledWith("sk-live-secret");
 		expect(updateWhere).toHaveBeenCalledTimes(1);
 		expect(insertProviderValues).toHaveBeenCalledWith(
@@ -97,6 +98,7 @@ describe("provider settings", () => {
 				provider: "openai",
 				model: "gpt-4o-mini",
 				encryptedApiKey: "encrypted-api-key",
+				baseUrl: null,
 				isActive: true,
 			}),
 		);
@@ -117,6 +119,7 @@ describe("provider settings", () => {
 				provider: "openai",
 				model: "gpt-4o-mini",
 				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: null,
 			},
 		]);
 
@@ -137,6 +140,101 @@ describe("provider settings", () => {
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					Authorization: "Bearer stored-api-key",
+				}),
+			}),
+		);
+	});
+
+	it("saves and tests Ollama local configuration without API key", async () => {
+		const { saveProviderConfig, testProviderConfig } = await import(
+			"./providers"
+		);
+
+		const saveResponse = await saveProviderConfig(
+			createContext("http://localhost/api/providers", {
+				provider: "ollama",
+				model: "llama3",
+				apiKey: "",
+				baseUrl: "http://localhost:11434/v1",
+			}),
+		);
+
+		expect(saveResponse.status).toBe(200);
+		// baseUrl is now stored in its own column; the encrypted key is just the
+		// API key string (empty for Ollama, which doesn't require one).
+		expect(encryptSecret).toHaveBeenCalledWith("");
+		expect(insertProviderValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				baseUrl: "http://localhost:11434/v1",
+			}),
+		);
+		expect(await saveResponse.json()).toMatchObject({
+			provider: {
+				provider: "ollama",
+				model: "llama3",
+				keyLast4: null,
+				hasStoredKey: true,
+				baseUrl: "http://localhost:11434/v1",
+			},
+		});
+
+		const testResponse = await testProviderConfig(
+			createContext("http://localhost/api/providers/test", {
+				provider: "ollama",
+				model: "llama3",
+				apiKey: "",
+				baseUrl: "http://localhost:11434/v1",
+			}),
+		);
+
+		expect(testResponse.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"http://localhost:11434/v1/models",
+			expect.objectContaining({
+				method: "GET",
+			}),
+		);
+	});
+
+	it("saves and tests Custom / BYO provider configuration with API key and baseUrl", async () => {
+		const { saveProviderConfig, testProviderConfig } = await import(
+			"./providers"
+		);
+
+		const saveResponse = await saveProviderConfig(
+			createContext("http://localhost/api/providers", {
+				provider: "custom",
+				model: "deepseek-chat",
+				apiKey: "sk-custom-key",
+				baseUrl: "https://api.deepseek.com/v1",
+			}),
+		);
+
+		expect(saveResponse.status).toBe(200);
+		// baseUrl is stored in its own column; the key is encrypted directly.
+		expect(encryptSecret).toHaveBeenCalledWith("sk-custom-key");
+		expect(insertProviderValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				baseUrl: "https://api.deepseek.com/v1",
+			}),
+		);
+
+		const testResponse = await testProviderConfig(
+			createContext("http://localhost/api/providers/test", {
+				provider: "custom",
+				model: "deepseek-chat",
+				apiKey: "sk-custom-key",
+				baseUrl: "https://api.deepseek.com/v1",
+			}),
+		);
+
+		expect(testResponse.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.deepseek.com/v1/models",
+			expect.objectContaining({
+				method: "GET",
+				headers: expect.objectContaining({
+					Authorization: "Bearer sk-custom-key",
 				}),
 			}),
 		);

@@ -546,11 +546,24 @@ function normalizeInstallError(error: unknown) {
 }
 
 function buildComposeWriteCommand() {
+	// API_SERVER_KEY and TELEGRAM_BOT_TOKEN are injected by the Telegram deploy
+	// step, which is the sole owner of those secrets. The install step only lays
+	// down a working docker-compose that the deploy step will later overwrite.
 	const composeFile = [
 		"services:",
 		"  hermes:",
 		`    image: ${defaultHermesImage}`,
+		"    container_name: hermes",
 		"    restart: unless-stopped",
+		"    command: gateway run",
+		"    ports:",
+		'      - "8642:8642"',
+		"    volumes:",
+		"      - ~/.hermes:/opt/data",
+		"    environment:",
+		"      - API_SERVER_ENABLED=true",
+		"      - API_SERVER_HOST=0.0.0.0",
+		"      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy",
 	].join("\n");
 
 	return `cat <<'EOF' > ~/hermes/docker-compose.yml\n${composeFile}\nEOF`;

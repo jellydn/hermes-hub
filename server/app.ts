@@ -17,7 +17,12 @@ import {
 	listServers,
 	updateServer,
 } from "./servers";
-import { connectTelegram, disconnectTelegram } from "./telegram";
+import {
+	connectTelegram,
+	deployTelegramToServer,
+	disconnectTelegram,
+	testTelegramBot,
+} from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
 const magicLinkRateLimiter = new RateLimiterMemory({
@@ -236,3 +241,17 @@ apiApp.post("/telegram/connect", (c) => {
 	return connectTelegram(c);
 });
 apiApp.post("/telegram/disconnect", disconnectTelegram);
+apiApp.post("/telegram/deploy", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return deployTelegramToServer(c);
+});
+apiApp.post("/telegram/test", (c) => {
+	const httpsResult = requireHttps(c);
+	if (httpsResult) {
+		return httpsResult;
+	}
+	return testTelegramBot(c);
+});
