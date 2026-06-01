@@ -28,8 +28,8 @@
 
 - Route-level `createServerFn` loaders are the normal pattern for authenticated page snapshots such as dashboard, logs, AI provider, and Telegram.
 - `src/routes/servers.$id.tsx` is the exception: it fetches `/api/servers/:id` from the component with `useMountEffect` instead of using a route loader. Follow the existing pattern unless you are intentionally reshaping that page.
-- Install progress lives in two places: persisted `installs.log` rows and the in-memory SSE stream in `server/install.ts`. Keep both in sync if you change install events or replay behavior.
-- Server action history is read from `audit_logs` rows named `server.action.*.succeeded|failed`, filtered by `details ->> 'serverId'` in SQL before `LIMIT 5`.
+- Install progress lives in two places: persisted `install_events` rows (the single source of truth) and the in-memory SSE stream in `server/install/sse-stream.ts`. `installs.log` is a legacy column kept only for read-fallback during migration; do not write to it. When you change install events or replay behavior, keep both the rows and the in-memory stream in sync.
+- Server action history is read from `audit_logs` rows named `server.action.*.succeeded|failed`, filtered by the indexed `audit_logs.server_id` column (not by JSON `details.serverId`) before `LIMIT 5`. The list query in `server/servers/list.ts` keys records on the returned `serverId` column.
 - Rollback target resolution is `request targetVersion -> latest installs.version -> "latest"`.
 
 ## Auth And Runtime Constraints
@@ -55,6 +55,7 @@ Use `db.transaction()` when a write path touches multiple Drizzle statements tha
 
 - **`server/telegram.ts` — `deployTelegramToServer`:** SSH deploy succeeds, then config update + success audit log insert are wrapped in a single transaction. If the transaction fails, deploy state (`deployedServerId`, `deployedServerHost`, `apiServerKey`) is not persisted, keeping local DB consistent with the remote Hermes container.
 - **`server/server-actions.ts` — `runServerAction`:** SSH action succeeds, then success audit log + install version update (SELECT then UPDATE on `installs`) are wrapped in a single transaction. If the version update fails, the audit log also rolls back, so rollout history and install version stay in sync.
+- **`server/install/sse-stream.ts` — `emitInstallEvent`:** `install_events` row insert + `installs` row update are wrapped in a single transaction. If the update fails, the event row rolls back too, so SSE replay and the persisted install row never disagree.
 
 **When to use transactions:** When a secondary write (e.g., audit log) is coupled to a primary write (e.g., config update), and the primary write being committed without the secondary would cause an inconsistent or unrecoverable state. Examples: deploy state changes, version tracking updates.
 
