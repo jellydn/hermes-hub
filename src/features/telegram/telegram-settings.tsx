@@ -52,7 +52,10 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 								onConfigChange={handleConfigUpdate}
 							/>
 
-							<TelegramPairingSection isDeployed={isDeployed} />
+							<TelegramPairingSection
+								key={savedConfig.deployedServerHost ?? "not-deployed"}
+								isDeployed={isDeployed}
+							/>
 
 							<TelegramTestSection isDeployed={isDeployed} />
 						</>

@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useMountEffect } from "@/lib/use-mount-effect";
 
 import { inputClassName } from "./telegram-input-class";
 
@@ -29,6 +30,8 @@ type TelegramPairingSectionProps = {
 	isDeployed: boolean;
 };
 
+const PAIRING_REFRESH_INTERVAL_MS = 10_000;
+
 export function TelegramPairingSection({
 	isDeployed,
 }: TelegramPairingSectionProps) {
@@ -38,10 +41,17 @@ export function TelegramPairingSection({
 	const [isApprovingPairing, setIsApprovingPairing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
 
-	async function handleLoadPairings() {
-		setIsLoadingPairings(true);
-		setError(null);
+	async function loadPairings({ quiet = false }: { quiet?: boolean } = {}) {
+		if (!isDeployed) {
+			return;
+		}
+
+		if (!quiet) {
+			setIsLoadingPairings(true);
+			setError(null);
+		}
 
 		try {
 			const response = await fetch("/api/telegram/pairings");
@@ -51,18 +61,23 @@ export function TelegramPairingSection({
 			} | null;
 
 			if (!response.ok || !payload?.pairings) {
-				setError(payload?.error ?? "Unable to load pairings");
+				if (!quiet) {
+					setError(payload?.error ?? "Unable to load pairings");
+				}
 				return;
 			}
 
 			setPairings(payload.pairings);
+			setLastLoadedAt(new Date());
 		} finally {
-			setIsLoadingPairings(false);
+			if (!quiet) {
+				setIsLoadingPairings(false);
+			}
 		}
 	}
 
-	async function handleApprovePairing() {
-		const code = pairingCode.trim().toUpperCase();
+	async function handleApprovePairing(selectedCode?: string) {
+		const code = (selectedCode ?? pairingCode).trim().toUpperCase();
 		if (!code) {
 			setError("Pairing code is required.");
 			return;
@@ -92,11 +107,26 @@ export function TelegramPairingSection({
 			const displayName = payload.approved.userName || payload.approved.userId;
 			setPairingCode("");
 			setSuccessMessage(`Approved ${displayName || "Telegram user"}.`);
-			void handleLoadPairings();
+			void loadPairings({ quiet: true });
 		} finally {
 			setIsApprovingPairing(false);
 		}
 	}
+
+	useMountEffect(() => {
+		if (!isDeployed) {
+			return;
+		}
+
+		void loadPairings();
+		const intervalId = window.setInterval(() => {
+			void loadPairings({ quiet: true });
+		}, PAIRING_REFRESH_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
 
 	return (
 		<section className="island-shell rounded-[2rem] p-6 sm:p-8">
@@ -106,8 +136,8 @@ export function TelegramPairingSection({
 					Approve a chat request
 				</h3>
 				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					When Hermes sends a pairing code in Telegram, paste it here to approve
-					that user.
+					When Hermes sends a pairing code in Telegram, approve it here. This
+					panel tracks authorization requests, not live chat messages.
 				</p>
 			</div>
 
@@ -164,7 +194,7 @@ export function TelegramPairingSection({
 						<Button
 							type="button"
 							variant="secondary"
-							onClick={() => void handleLoadPairings()}
+							onClick={() => void loadPairings()}
 							disabled={isLoadingPairings}
 						>
 							{isLoadingPairings ? (
@@ -174,6 +204,11 @@ export function TelegramPairingSection({
 							)}
 							<span>{isLoadingPairings ? "Refreshing..." : "Refresh"}</span>
 						</Button>
+						{lastLoadedAt ? (
+							<span className="self-center text-xs text-[var(--sea-ink-soft)]">
+								Updated {lastLoadedAt.toLocaleTimeString()}
+							</span>
+						) : null}
 					</div>
 
 					{successMessage ? (
@@ -202,15 +237,31 @@ export function TelegramPairingSection({
 										{pairings.pending.map((request) => (
 											<li
 												key={`${request.userId}-${request.code}`}
-												className="list-none"
+												className="flex list-none flex-col gap-2 rounded-2xl border border-[var(--line)] bg-white/60 p-3 sm:flex-row sm:items-center sm:justify-between"
 											>
-												<span className="font-semibold">
-													{request.userName || request.userId}
-												</span>
-												<span className="text-[var(--sea-ink-soft)]">
-													{" "}
-													{request.ageMinutes}m ago
-												</span>
+												<div className="min-w-0">
+													<div className="font-semibold">
+														{request.userName || request.userId}
+													</div>
+													<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--sea-ink-soft)]">
+														<code className="rounded-full border border-[var(--line)] bg-[var(--surface-strong)] px-2 py-1 font-mono text-[var(--sea-ink)]">
+															{request.code}
+														</code>
+														<span>{request.ageMinutes}m ago</span>
+													</div>
+												</div>
+												<Button
+													type="button"
+													size="sm"
+													onClick={() =>
+														void handleApprovePairing(request.code)
+													}
+													disabled={isApprovingPairing}
+													aria-label={`Approve ${request.code}`}
+												>
+													<UserCheck className="h-4 w-4" />
+													<span>Approve</span>
+												</Button>
 											</li>
 										))}
 									</ul>

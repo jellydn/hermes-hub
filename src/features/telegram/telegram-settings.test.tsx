@@ -21,6 +21,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+	fetchMock.mockReset();
 	fetchMock.mockResolvedValue(
 		new Response(
 			JSON.stringify({
@@ -125,7 +126,106 @@ describe("TelegramSettings", () => {
 		);
 	});
 
+	it("loads pending Telegram pairing requests and approves one from the list", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					pairings: {
+						pending: [
+							{
+								code: "ABCD2345",
+								userId: "123456",
+								userName: "Dung",
+								ageMinutes: 1,
+							},
+						],
+						approved: [],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					approved: {
+						userId: "123456",
+						userName: "Dung",
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					pairings: {
+						pending: [],
+						approved: [
+							{
+								userId: "123456",
+								userName: "Dung",
+								approvedAt: 1780243682,
+							},
+						],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<TelegramSettings
+				initialConfig={{
+					botUsername: "hermes_helper_bot",
+					botTokenLast4: "1234",
+					isActive: true,
+					deployedServerHost: "95.111.232.131",
+				}}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("ABCD2345")).toBeTruthy();
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: /approve abcd2345/i }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/telegram/pairings/approve",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ code: "ABCD2345" }),
+				}),
+			);
+		});
+	});
+
 	it("approves a Telegram pairing code", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					pairings: {
+						pending: [],
+						approved: [],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
