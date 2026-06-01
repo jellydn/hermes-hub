@@ -173,6 +173,8 @@ When Hermes replies in Telegram with a pairing code and asks the owner to run `h
 
 HermesHub runs the approval against the deployed Hermes container over SSH and uses Hermes' own pairing store. You do not need to run `hermes setup` for the managed install path.
 
+If the same Telegram user is asked to approve again after a successful approval, the pairing files may have been written by an older root-run approval command. Refresh the **Pair Telegram users** panel or approve the next code from HermesHub again. HermesHub repairs `$HERMES_HOME/platforms/pairing` ownership and runs the pairing command as the container's `hermes` user so the live Telegram gateway can read the approved-user file.
+
 ### Telegram test returns a Hermes API 401 or 502
 
 Check the deployed Hermes container logs on the VPS first:

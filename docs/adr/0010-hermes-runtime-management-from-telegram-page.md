@@ -23,12 +23,15 @@ That CLI instruction conflicts with HermesHub's product boundary: the owner shou
 
 The `/telegram` test flow also surfaced a second runtime mismatch for custom OpenAI-compatible providers. HermesHub's provider test can succeed with the saved API key, but the deployed Hermes container may still return provider authentication errors if the container only receives generic OpenAI-style variables. Hermes derives vendor-specific keys from custom provider hosts, so a custom endpoint such as `https://crof.ai/v1` also needs `CROF_API_KEY`.
 
+Pairing approval also has to respect Hermes' container user boundary. Hermes stores pairing files under `$HERMES_HOME/platforms/pairing` with restrictive permissions. Running `PairingStore` as root through `docker exec` can create or update approved-user files that the live gateway process, which runs as the `hermes` user, cannot read. The result is confusing: HermesHub shows a user as approved, but Telegram asks that same user to pair again and does not answer messages.
+
 ## Decision
 
 HermesHub will manage these deployed Hermes runtime concerns from the web app:
 
 - The `/telegram` page exposes pairing management so owners can refresh pending and approved Telegram users, paste an 8-character pairing code, and approve it from the UI.
 - Pairing APIs execute over SSH against the already deployed Hermes server and call Hermes' `gateway.pairing.PairingStore` inside the running `hermes` container.
+- Pairing APIs repair ownership of the pairing directory and run `PairingStore` as the container's `hermes` user, matching the live Telegram gateway's filesystem permissions.
 - Hermes' PairingStore remains the source of truth for pairing state. HermesHub does not mirror pending or approved Telegram users into PostgreSQL.
 - HermesHub does not require running `hermes setup` during install or pairing approval. The managed Docker Compose deployment writes the required environment and volume state non-interactively.
 - Custom provider deploys include the generic Hermes/OpenAI-compatible variables and, when derivable from the custom base URL, the vendor-specific `<VENDOR>_API_KEY` variable used by Hermes runtime code.
@@ -39,6 +42,7 @@ HermesHub will manage these deployed Hermes runtime concerns from the web app:
 
 - Telegram pairing is no longer a terminal-only operation for the bot owner.
 - The UI can resolve the exact pairing prompt Hermes sends to unrecognized Telegram users.
+- Pairing approvals are readable by the live Telegram gateway process instead of only being visible to root-run maintenance commands.
 - Runtime provider deploys better match Hermes' own custom-provider key lookup behavior.
 - Pairing data stays in the Hermes runtime store, avoiding duplicated state and sync drift in HermesHub.
 
@@ -46,4 +50,5 @@ HermesHub will manage these deployed Hermes runtime concerns from the web app:
 
 - Pairing management depends on SSH reachability and valid stored or session-scoped VPS credentials.
 - The implementation is coupled to the deployed container name and Hermes' current Python `PairingStore` module path.
+- HermesHub now performs a targeted ownership repair on the pairing directory before listing or approving pairings.
 - Troubleshooting still needs VPS-level checks when the Hermes container is stopped, replaced manually, or missing the expected volume state.
