@@ -25,6 +25,23 @@ vi.mock("@tanstack/react-router", () => ({
 	),
 }));
 
+vi.mock("./install-log-card", () => ({
+	InstallLogCard: () => <div data-testid="install-log-card" />,
+}));
+
+vi.mock("./server-detail-aside", () => ({
+	ServerDetailAside: ({ detail }: { detail: ServerDetailSnapshot }) => (
+		<aside data-testid="server-detail-aside">
+			{detail.actionHistory.map((item) => (
+				<div key={item.id}>
+					<p>{formatActionLabel(item.action)}</p>
+					<p>{item.message}</p>
+				</div>
+			))}
+		</aside>
+	),
+}));
+
 import { ServerDetail } from "./server-detail";
 
 const fetchMock = vi.fn();
@@ -304,6 +321,18 @@ async function flushAsyncWork() {
 		await Promise.resolve();
 		await Promise.resolve();
 	});
+}
+
+function formatActionLabel(action: ServerDetailSnapshot["actionHistory"][number]["action"]) {
+	if (action === "update") {
+		return "Update Hermes";
+	}
+
+	if (action === "rollback") {
+		return "Rollback";
+	}
+
+	return "Restart Agent";
 }
 
 function createDetail(overrides?: {
