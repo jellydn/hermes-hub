@@ -16,7 +16,9 @@ const selectLimit = vi.fn();
 const withSshConnection = vi.fn();
 const transaction = vi.fn();
 const getProviderDeployConfig = vi.fn();
+const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
+const resolveServerSshConfigOrError = vi.fn();
 const buildHermesComposeContent = vi.fn();
 
 vi.mock("./auth", () => ({
@@ -74,7 +76,9 @@ vi.mock("./providers", () => ({
 }));
 
 vi.mock("./server-records", () => ({
+	getServerById: getServerByIdMock,
 	resolveServerSshConfig,
+	resolveServerSshConfigOrError,
 }));
 
 vi.mock("./compose", () => ({
@@ -238,7 +242,6 @@ describe("telegram handlers", () => {
 			model: "test's-model",
 		});
 
-		// First .limit() call is getLatestTelegramRecord, second is findServerById
 		selectLimit.mockResolvedValueOnce([
 			{
 				botToken: "enc:123456:secret-token",
@@ -249,17 +252,20 @@ describe("telegram handlers", () => {
 				apiServerKey: "enc:api-server-key",
 			},
 		]);
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_1",
-				host: "192.168.1.1",
-				port: 22,
-				username: "root",
-				authMethod: "password",
-				encryptedCredential: null,
-				storeCredential: false,
-			},
-		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
 
 		// Track the command passed to ssh.execCommand
 		let capturedCommand = "";
@@ -344,6 +350,12 @@ describe("telegram handlers", () => {
 			new Error("SSH connection refused"),
 		);
 
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
 		const { deployTelegramToServer } = await import("./telegram");
 		const response = await deployTelegramToServer(
 			createContext() as unknown as Context,
@@ -378,7 +390,6 @@ describe("telegram handlers", () => {
 			session: { id: "session_123" },
 		});
 
-		// First .limit() call is getLatestTelegramRecord, second is findServerById
 		selectLimit.mockResolvedValueOnce([
 			{
 				botToken: "enc:123456:secret-token",
@@ -389,17 +400,20 @@ describe("telegram handlers", () => {
 				apiServerKey: "enc:api-server-key",
 			},
 		]);
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_1",
-				host: "192.168.1.1",
-				port: 22,
-				username: "root",
-				authMethod: "password",
-				encryptedCredential: null,
-				storeCredential: false,
-			},
-		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
 
 		let capturedCommand = "";
 		withSshConnection.mockImplementation(
