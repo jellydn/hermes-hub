@@ -56,6 +56,7 @@ export async function getServerForInstall(input: {
 			authMethod: servers.authMethod,
 			encryptedCredential: servers.encryptedCredential,
 			storeCredential: servers.storeCredential,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
 		})
 		.from(servers)
 		.where(

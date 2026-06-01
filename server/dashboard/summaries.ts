@@ -22,6 +22,7 @@ export type ServerRecord = {
 	status: string;
 	osInfo: Record<string, unknown>;
 	updatedAt: Date;
+	hostKeyFingerprint: string | null;
 };
 
 export type InstallRecord = {

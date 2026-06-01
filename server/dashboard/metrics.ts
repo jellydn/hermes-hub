@@ -133,6 +133,7 @@ async function readServerMetrics(
 			username: serverRecord.username,
 			authMethod,
 			credential,
+			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 		},
 		async (ssh) => {
 			const [cpuResult, memoryResult, diskResult, uptimeResult] =

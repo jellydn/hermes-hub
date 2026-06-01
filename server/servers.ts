@@ -7,8 +7,9 @@ import { storeSessionCredential } from "./credentials";
 import { encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { auditLogs, servers } from "./db/schema";
+import { servers } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import { getServerDetailSnapshot } from "./server-detail-snapshot";
 import {
 	buildOsInfo,
@@ -19,9 +20,9 @@ import { getServerListSnapshot as getServerListSnapshotImpl } from "./servers/li
 import {
 	type SshAuthMethod,
 	SshConnectError,
-	type VerifiedServerInfo,
 	verifyServerConnection,
 } from "./ssh";
+import { isValidSha256HostKeyFingerprint } from "./ssh/host-key-fingerprint";
 
 // Re-export for server-fn usage in src/routes/servers.index.tsx
 export { getServerListSnapshotImpl as getServerListSnapshot };
@@ -76,10 +77,10 @@ export async function connectServer(context: Context) {
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
-	let verified: VerifiedServerInfo;
+	let connectionResult: Awaited<ReturnType<typeof verifyServerConnection>>;
 
 	try {
-		verified = await verifyServerConnection({
+		connectionResult = await verifyServerConnection({
 			host: parsed.host,
 			port: parsed.port,
 			username: parsed.username,
@@ -92,7 +93,7 @@ export async function connectServer(context: Context) {
 				? error.message
 				: "SSH verification failed";
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "server.connect.failed",
 			details: {
@@ -104,6 +105,8 @@ export async function connectServer(context: Context) {
 
 		return context.json({ error: message }, 400);
 	}
+
+	const { verified, hostKey } = connectionResult;
 
 	try {
 		const [serverRecord] = await db
@@ -121,6 +124,8 @@ export async function connectServer(context: Context) {
 				storeCredential: parsed.storeCredential,
 				status: "connected",
 				osInfo: buildOsInfo(verified),
+				hostKeyFingerprint: hostKey.fingerprint,
+				hostKeyAlgorithm: hostKey.algorithm,
 			})
 			.returning({
 				id: servers.id,
@@ -142,9 +147,10 @@ export async function connectServer(context: Context) {
 			});
 		}
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "server.connect.succeeded",
+			serverId: serverRecord.id,
 			details: {
 				serverId: serverRecord.id,
 				host: parsed.host,
@@ -166,6 +172,10 @@ export async function connectServer(context: Context) {
 				osVersion: verified.osVersion,
 				architecture: verified.architecture,
 				supportLevel: verified.supportLevel,
+			},
+			hostKey: {
+				fingerprint: hostKey.fingerprint,
+				algorithm: hostKey.algorithm,
 			},
 		});
 	} catch (error) {
@@ -224,6 +234,8 @@ export async function updateServer(context: Context) {
 	const ipAddress = getClientIp(context);
 	let nextOsInfo = currentServer.osInfo;
 	let nextStatus = currentServer.status;
+	let nextHostKeyFingerprint: string | null = null;
+	let nextHostKeyAlgorithm: string | null = null;
 
 	if (connectionChanged) {
 		let authMethod: SshAuthMethod;
@@ -242,24 +254,63 @@ export async function updateServer(context: Context) {
 		}
 
 		try {
-			const verified = await verifyServerConnection({
+			const connectionResult = await verifyServerConnection({
 				host: parsed.host,
 				port: parsed.port,
 				username: parsed.username,
 				authMethod,
 				credential,
+				expectedFingerprint: currentServer.hostKeyFingerprint ?? undefined,
 			});
-			nextOsInfo = buildOsInfo(verified);
+			nextOsInfo = buildOsInfo(connectionResult.verified);
 			nextStatus = "connected";
+			nextHostKeyFingerprint = connectionResult.hostKey.fingerprint;
+			nextHostKeyAlgorithm = connectionResult.hostKey.algorithm;
 		} catch (error) {
+			if (
+				error instanceof SshConnectError &&
+				error.code === "host_key_mismatch"
+			) {
+				await insertAuditLog(db, {
+					userId: session.user.id,
+					action: "server.host_key.mismatch",
+					serverId,
+					details: {
+						serverId,
+						host: parsed.host,
+						expectedFingerprint: currentServer.hostKeyFingerprint,
+					},
+					ipAddress,
+				});
+
+				return context.json(
+					{
+						error: "host key mismatch",
+						code: "host_key_mismatch",
+						hostKey: {
+							expectedFingerprint: currentServer.hostKeyFingerprint,
+							algorithm: currentServer.hostKeyAlgorithm,
+							...(error.hostKey
+								? {
+										observedFingerprint: error.hostKey.fingerprint,
+										observedAlgorithm: error.hostKey.algorithm,
+									}
+								: {}),
+						},
+					},
+					409,
+				);
+			}
+
 			const message =
 				error instanceof SshConnectError
 					? error.message
 					: "SSH verification failed";
 
-			await db.insert(auditLogs).values({
+			await insertAuditLog(db, {
 				userId: session.user.id,
 				action: "server.update.failed",
+				serverId,
 				details: {
 					serverId,
 					host: parsed.host,
@@ -281,12 +332,19 @@ export async function updateServer(context: Context) {
 			username: parsed.username,
 			status: nextStatus,
 			osInfo: nextOsInfo,
+			...(nextHostKeyFingerprint
+				? {
+						hostKeyFingerprint: nextHostKeyFingerprint,
+						hostKeyAlgorithm: nextHostKeyAlgorithm,
+					}
+				: {}),
 		})
 		.where(and(eq(servers.id, serverId), eq(servers.userId, session.user.id)));
 
-	await db.insert(auditLogs).values({
+	await insertAuditLog(db, {
 		userId: session.user.id,
 		action: "server.update.succeeded",
+		serverId,
 		details: {
 			serverId,
 			host: parsed.host,
@@ -324,9 +382,10 @@ export async function deleteServer(context: Context) {
 			return context.json({ error: "Server not found" }, 404);
 		}
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "server.action.delete.succeeded",
+			serverId: deleted.id,
 			details: {
 				serverId: deleted.id,
 				label: deleted.label,
@@ -343,6 +402,73 @@ export async function deleteServer(context: Context) {
 			error instanceof Error ? error.message : "Failed to delete server";
 		return context.json({ error: message }, 500);
 	}
+}
+
+type AcceptHostKeyRequest = {
+	fingerprint: string;
+	algorithm?: string;
+};
+
+export async function acceptHostKey(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	const serverId = context.req.param("id");
+	if (!serverId) {
+		return context.json({ error: "Server ID is required" }, 400);
+	}
+
+	let payload: AcceptHostKeyRequest;
+	try {
+		payload = await context.req.json<AcceptHostKeyRequest>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const fingerprint = payload.fingerprint?.trim();
+	if (!fingerprint || !isValidSha256HostKeyFingerprint(fingerprint)) {
+		return context.json(
+			{
+				error:
+					"Fingerprint must be a SHA256-prefixed OpenSSH fingerprint (SHA256: followed by 43 base64 characters).",
+			},
+			400,
+		);
+	}
+
+	const db = getDb();
+	const ipAddress = getClientIp(context);
+
+	const [serverRecord] = await db
+		.update(servers)
+		.set({
+			hostKeyFingerprint: fingerprint,
+			hostKeyAlgorithm: payload.algorithm ?? null,
+		})
+		.where(and(eq(servers.id, serverId), eq(servers.userId, session.user.id)))
+		.returning({ id: servers.id, host: servers.host });
+
+	if (!serverRecord) {
+		return context.json({ error: "Server not found" }, 404);
+	}
+
+	await insertAuditLog(db, {
+		userId: session.user.id,
+		action: "server.host_key.rotated",
+		serverId: serverRecord.id,
+		details: {
+			serverId: serverRecord.id,
+			host: serverRecord.host,
+			fingerprint,
+		},
+		ipAddress,
+	});
+
+	clearDashboardCache();
+
+	return context.json({ ok: true, fingerprint });
 }
 
 function parseConnectRequest(payload: ConnectServerRequest) {

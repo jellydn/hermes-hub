@@ -98,6 +98,7 @@ async function runHermesPairingJsonCommand(
 			username: serverRecord.username,
 			authMethod,
 			credential,
+			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 		},
 		async (ssh) => {
 			const result = await ssh.execCommand(command, {

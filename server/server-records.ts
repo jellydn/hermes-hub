@@ -15,6 +15,7 @@ export type ServerConnectionRecord = {
 	authMethod: string;
 	encryptedCredential: string | null;
 	storeCredential: boolean;
+	hostKeyFingerprint: string | null;
 };
 
 export type OwnedServerRecord = {
@@ -28,6 +29,8 @@ export type OwnedServerRecord = {
 	storeCredential: boolean;
 	status: string;
 	osInfo: Record<string, unknown>;
+	hostKeyFingerprint: string | null;
+	hostKeyAlgorithm: string | null;
 };
 
 export async function getOwnedServerRecord(input: {
@@ -46,6 +49,8 @@ export async function getOwnedServerRecord(input: {
 			storeCredential: servers.storeCredential,
 			status: servers.status,
 			osInfo: servers.osInfo,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
+			hostKeyAlgorithm: servers.hostKeyAlgorithm,
 		})
 		.from(servers)
 		.where(
@@ -156,6 +161,7 @@ export async function getServerById(
 			authMethod: servers.authMethod,
 			encryptedCredential: servers.encryptedCredential,
 			storeCredential: servers.storeCredential,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
 		})
 		.from(servers)
 		.where(eq(servers.id, serverId))

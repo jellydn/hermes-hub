@@ -5,8 +5,8 @@ import { getAuthSession } from "./auth";
 import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
-import { auditLogs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import { buildProviderEnvMap } from "./providers/config";
 import {
 	decryptApiKey,
@@ -24,6 +24,7 @@ type DeployComposeInput = {
 	credential: string;
 	composeContent: string;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
+	expectedFingerprint?: string;
 };
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
@@ -36,6 +37,7 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			username: input.username,
 			authMethod: input.authMethod,
 			credential: input.credential,
+			expectedFingerprint: input.expectedFingerprint,
 		},
 		async (ssh) => {
 			const writeResult = await ssh.execCommand(writeCmd);
@@ -142,6 +144,7 @@ export async function deployProviderToHermes(context: Context) {
 			authMethod,
 			credential,
 			composeContent,
+			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			extraSshCommands: async (ssh) => {
 				await ssh.execCommand("sleep 2");
 
@@ -156,9 +159,10 @@ export async function deployProviderToHermes(context: Context) {
 			},
 		});
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "provider.deploy.succeeded",
+			serverId: serverRecord.id,
 			details: {
 				provider: providerRecord.provider,
 				model: providerRecord.model,
@@ -177,9 +181,10 @@ export async function deployProviderToHermes(context: Context) {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "provider.deploy.failed",
+			serverId: serverRecord.id,
 			details: {
 				provider: providerRecord.provider,
 				model: providerRecord.model,

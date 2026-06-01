@@ -14,6 +14,7 @@ import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
 import { getServerDetail, runServerAction } from "./server-actions";
 import {
+	acceptHostKey,
 	connectServer,
 	deleteServer,
 	listServers,
@@ -206,6 +207,7 @@ apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
+apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
 apiApp.post("/logs/clear", clearLogs);

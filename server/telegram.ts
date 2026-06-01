@@ -7,9 +7,10 @@ import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { auditLogs, telegramConfigs } from "./db/schema";
+import { telegramConfigs } from "./db/schema";
 import { deployComposeViaSsh } from "./deploy";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import { getProviderDeployConfig } from "./providers";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { shellQuote, withSshConnection } from "./ssh";
@@ -112,7 +113,7 @@ export async function connectTelegram(context: Context) {
 			apiServerKey: null,
 		});
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "telegram.connected",
 			details: {
@@ -162,7 +163,7 @@ export async function disconnectTelegram(context: Context) {
 			.set({ isActive: false })
 			.where(eq(telegramConfigs.userId, session.user.id));
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "telegram.disconnected",
 			details: {
@@ -239,9 +240,10 @@ export async function deployTelegramToServer(context: Context) {
 				? error.message
 				: "Failed to resolve provider config";
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "telegram.deploy.failed",
+			serverId: serverRecord.id,
 			details: {
 				serverId: serverRecord.id,
 				error: message,
@@ -267,6 +269,7 @@ export async function deployTelegramToServer(context: Context) {
 			authMethod,
 			credential,
 			composeContent,
+			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 		});
 
 		// Persist deploy state in a single transaction so that the config update
@@ -288,9 +291,10 @@ export async function deployTelegramToServer(context: Context) {
 					),
 				);
 
-			await tx.insert(auditLogs).values({
+			await insertAuditLog(tx, {
 				userId: session.user.id,
 				action: "telegram.deployed",
+				serverId: serverRecord.id,
 				details: {
 					serverId: serverRecord.id,
 					serverHost: serverRecord.host,
@@ -308,9 +312,10 @@ export async function deployTelegramToServer(context: Context) {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "telegram.deploy.failed",
+			serverId: serverRecord.id,
 			details: {
 				serverId: serverRecord.id,
 				error: message,
@@ -404,6 +409,7 @@ export async function testTelegramBot(context: Context) {
 				username: serverRecord.username,
 				authMethod,
 				credential,
+				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
 				const execResult = await ssh.execCommand(curlCommand, {

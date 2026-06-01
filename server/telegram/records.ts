@@ -54,6 +54,7 @@ export async function findServerForDeploy(userId: string) {
 			authMethod: servers.authMethod,
 			encryptedCredential: servers.encryptedCredential,
 			storeCredential: servers.storeCredential,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
 		})
 		.from(installs)
 		.innerJoin(servers, eq(installs.serverId, servers.id))
