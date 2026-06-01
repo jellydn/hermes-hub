@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
-import { auditLogs, installs } from "./db/schema";
+import { auditLogs, installEvents, installs } from "./db/schema";
 import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
 	ensureInstallStream,
@@ -251,7 +251,6 @@ export async function getLatestServerInstallLog(context: Context) {
 			id: installs.id,
 			status: installs.status,
 			step: installs.step,
-			log: installs.log,
 			updatedAt: installs.updatedAt,
 		})
 		.from(installs)
@@ -269,11 +268,26 @@ export async function getLatestServerInstallLog(context: Context) {
 		});
 	}
 
+	const events = await getDb()
+		.select({
+			step: installEvents.step,
+			message: installEvents.message,
+			createdAt: installEvents.createdAt,
+		})
+		.from(installEvents)
+		.where(eq(installEvents.installId, installRecord.id))
+		.orderBy(installEvents.createdAt);
+
+	const logLines = events.map(
+		(event) =>
+			`${event.createdAt.toISOString()} [${event.step}] ${event.message}`,
+	);
+
 	return context.json({
 		installId: installRecord.id,
 		status: installRecord.status,
 		step: installRecord.step,
-		log: installRecord.log,
+		log: logLines.join("\n") || null,
 		updatedAt: installRecord.updatedAt,
 	});
 }

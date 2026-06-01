@@ -37,15 +37,13 @@ export const installSteps: InstallStep[] = [
 		id: "install-docker",
 		progress: 15,
 		message: "Installing Docker",
-		command:
-			"sudo apt-get update -y && sudo apt-get install -y ca-certificates curl gnupg && curl -fsSL https://get.docker.com | sudo sh",
+		command: buildDockerInstallCommand(),
 	},
 	{
-		id: "install-compose",
+		id: "verify-docker",
 		progress: 30,
-		message: "Installing Docker Compose",
-		command:
-			"sudo apt-get install -y docker-compose-plugin && sudo systemctl enable --now docker",
+		message: "Verifying Docker installation",
+		command: "docker compose version && sudo systemctl enable --now docker",
 	},
 	{
 		id: "create-hermes-directory",
@@ -166,6 +164,17 @@ function normalizeInstallError(error: unknown) {
 	}
 
 	return error instanceof Error ? error.message : "Install failed";
+}
+
+function buildDockerInstallCommand() {
+	return [
+		"sudo install -m 0755 -d /etc/apt/keyrings",
+		"curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
+		"sudo chmod a+r /etc/apt/keyrings/docker.gpg",
+		'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null',
+		"sudo apt-get update",
+		"sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+	].join(" && ");
 }
 
 function buildComposeWriteCommand() {

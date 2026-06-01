@@ -14,6 +14,7 @@ const insertServerReturning = vi.fn();
 const dbInsert = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
+const dbExecute = vi.fn();
 const updateServerSet = vi.fn();
 const updateServerWhere = vi.fn();
 const selectFrom = vi.fn();
@@ -36,6 +37,7 @@ vi.mock("./db", () => ({
 		insert: dbInsert,
 		select: dbSelect,
 		update: dbUpdate,
+		execute: dbExecute,
 	}),
 }));
 
@@ -100,6 +102,7 @@ describe("server handlers", () => {
 		selectWhere.mockReturnValue({ limit: selectLimit, orderBy: selectOrderBy });
 		selectLimit.mockResolvedValue([]);
 		selectOrderBy.mockResolvedValue([]);
+		dbExecute.mockResolvedValue([]);
 
 		dbUpdate.mockReturnValue({ set: updateServerSet });
 		updateServerSet.mockReturnValue({ where: updateServerWhere });
@@ -271,14 +274,14 @@ describe("server handlers", () => {
 					status: "succeeded",
 					updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 				},
-			])
-			.mockResolvedValueOnce([
-				{
-					action: "server.action.restart.succeeded",
-					details: { serverId: "server_123" },
-					createdAt: new Date("2026-05-26T05:00:00.000Z"),
-				},
 			]);
+		dbExecute.mockResolvedValueOnce([
+			{
+				action: "server.action.restart.succeeded",
+				details: { serverId: "server_123" },
+				created_at: new Date("2026-05-26T05:00:00.000Z"),
+			},
+		]);
 
 		const { listServers } = await import("./servers");
 		const response = await listServers(

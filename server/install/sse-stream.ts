@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { installs } from "../db/schema";
+import { installEvents, installs } from "../db/schema";
 
 export type InstallStatus = "pending" | "running" | "succeeded" | "failed";
 
@@ -43,7 +43,7 @@ export function normalizeInstallStatus(status?: string | null): InstallStatus {
 	return "pending";
 }
 
-export function hydrateInstallEvents(
+export async function hydrateInstallEvents(
 	serverId: string,
 	installRecord: {
 		id: string;
@@ -52,6 +52,34 @@ export function hydrateInstallEvents(
 		log: string | null;
 	},
 ) {
+	const events = await getDb()
+		.select({
+			installId: installEvents.installId,
+			step: installEvents.step,
+			progress: installEvents.progress,
+			message: installEvents.message,
+			status: installEvents.status,
+			timestamp: installEvents.createdAt,
+			error: installEvents.error,
+		})
+		.from(installEvents)
+		.where(eq(installEvents.installId, installRecord.id))
+		.orderBy(installEvents.createdAt);
+
+	if (events.length > 0) {
+		return events.map((event) => ({
+			installId: event.installId,
+			serverId,
+			step: event.step,
+			progress: event.progress,
+			message: event.message,
+			status: normalizeInstallStatus(event.status),
+			timestamp: event.timestamp.toISOString(),
+			...(event.error ? { error: event.error } : {}),
+		}));
+	}
+
+	// Fallback: parse legacy log blob for backward compatibility during transition.
 	if (!installRecord.log) {
 		return [];
 	}
@@ -146,7 +174,9 @@ export async function ensureInstallStream(serverId: string) {
 	const state: InstallStreamState = {
 		installId: installRecord?.id ?? randomUUID(),
 		serverId,
-		events: installRecord ? hydrateInstallEvents(serverId, installRecord) : [],
+		events: installRecord
+			? await hydrateInstallEvents(serverId, installRecord)
+			: [],
 		listeners: new Set(),
 		status: normalizeInstallStatus(installRecord?.status),
 		runId: randomUUID(),
@@ -191,6 +221,17 @@ export async function emitInstallEvent(input: {
 
 	state.events.push(event);
 	state.status = input.status;
+
+	await getDb()
+		.insert(installEvents)
+		.values({
+			installId: input.installId,
+			step: input.step,
+			progress: input.progress,
+			message: input.message,
+			status: input.status,
+			...(input.error ? { error: input.error } : {}),
+		});
 
 	await getDb()
 		.update(installs)

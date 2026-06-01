@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
+import { installEvents, installs } from "../db/schema";
+
 const selectLimit = vi.fn();
+const selectOrderBy = vi.fn();
+const insertValues = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
 const dbSelect = vi.fn();
+const dbInsert = vi.fn();
 const dbUpdate = vi.fn();
 
 vi.mock("../db", () => ({
 	getDb: () => ({
 		select: dbSelect,
+		insert: dbInsert,
 		update: dbUpdate,
 	}),
 }));
@@ -21,12 +24,47 @@ describe("install SSE stream helpers", () => {
 		vi.clearAllMocks();
 		vi.useRealTimers();
 
-		dbSelect.mockReturnValue({ from: selectFrom });
-		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy });
-		selectOrderBy.mockReturnValue({ limit: selectLimit });
+		dbSelect.mockImplementation(() => ({
+			from: (table: unknown) => {
+				if (table === installs) {
+					return {
+						where: () => ({
+							orderBy: () => ({ limit: selectLimit }),
+						}),
+					};
+				}
 
-		dbUpdate.mockReturnValue({ set: updateSet });
+				if (table === installEvents) {
+					return {
+						where: () => ({
+							orderBy: selectOrderBy,
+						}),
+					};
+				}
+
+				throw new Error("Unexpected table select");
+			},
+		}));
+
+		dbInsert.mockImplementation((table: unknown) => {
+			if (table === installEvents) {
+				return { values: insertValues };
+			}
+
+			throw new Error("Unexpected table insert");
+		});
+
+		dbUpdate.mockImplementation((table: unknown) => {
+			if (table === installs) {
+				return { set: updateSet };
+			}
+
+			throw new Error("Unexpected table update");
+		});
+
+		selectLimit.mockResolvedValue([]);
+		selectOrderBy.mockResolvedValue([]);
+		insertValues.mockResolvedValue(undefined);
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 	});
@@ -45,7 +83,7 @@ describe("install SSE stream helpers", () => {
 	it("hydrates persisted log lines into install events", async () => {
 		const { hydrateInstallEvents } = await import("./sse-stream");
 
-		const events = hydrateInstallEvents("server_123", {
+		const events = await hydrateInstallEvents("server_123", {
 			id: "install_123",
 			status: "running",
 			step: "install-docker",
@@ -150,6 +188,15 @@ describe("install SSE stream helpers", () => {
 			status: "running",
 			timestamp: "2026-05-29T12:00:00.000Z",
 		});
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				installId: "install_123",
+				step: "install-docker",
+				progress: 15,
+				message: "Installing Docker",
+				status: "running",
+			}),
+		);
 		expect(updateSet).toHaveBeenCalledWith(
 			expect.objectContaining({
 				status: "running",
