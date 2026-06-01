@@ -75,14 +75,21 @@ async function runHermesPairingJsonCommand(
 	const envArgs = Object.entries(env)
 		.map(([key, value]) => `-e ${shellQuote(`${key}=${value}`)}`)
 		.join(" ");
-	const command = [
-		"docker exec",
+	const repairPairingOwnershipCommand = [
+		"docker exec hermes sh -lc",
+		shellQuote(
+			'chown -R hermes:hermes "$HERMES_HOME/platforms/pairing" 2>/dev/null || chown -R hermes:hermes /opt/data/platforms/pairing 2>/dev/null || true',
+		),
+	].join(" ");
+	const pairingCommand = [
+		"docker exec --user hermes",
 		envArgs,
 		"hermes python -c",
 		shellQuote(pythonCode),
 	]
 		.filter(Boolean)
 		.join(" ");
+	const command = `${repairPairingOwnershipCommand} && ${pairingCommand}`;
 
 	return withSshConnection(
 		{

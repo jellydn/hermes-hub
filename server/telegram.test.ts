@@ -448,11 +448,13 @@ describe("telegram handlers", () => {
 
 		expect(response.status).toBe(200);
 
-		// The command should contain the python code wrapped in shellQuote and
-		// the env vars should not be injectable — the entire argument after
-		// `-e` is single-quoted.
-		// The command starts with "docker exec" and the python code is in single quotes
-		expect(capturedCommand).toMatch(/^docker exec hermes python -c '/);
+		// The command repairs any root-owned pairing files from older approvals,
+		// then runs the Python pairing store as the same `hermes` user as the
+		// live gateway so approved users are readable by Telegram polling.
+		expect(capturedCommand).toMatch(
+			/^docker exec hermes sh -lc 'chown -R hermes:hermes/,
+		);
+		expect(capturedCommand).toContain("&& docker exec --user hermes");
 		// The python code should be a complete, valid statement inside quotes
 		expect(capturedCommand).toContain(
 			"import json; from gateway.pairing import PairingStore",
