@@ -15,6 +15,34 @@
       "when": 1780241329806,
       "tag": "0001_overjoyed_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780350764135,
+      "tag": "0002_charming_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780350792319,
+      "tag": "0003_right_luminals",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780350818644,
+      "tag": "0004_complete_kang",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780496778000,
+      "tag": "0005_next_ultimatum",
+      "breakpoints": true
     }
   ]
 }
