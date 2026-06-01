@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import {
@@ -14,63 +14,30 @@ import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { aiProviders, auditLogs, servers, telegramConfigs } from "./db/schema";
+import { auditLogs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
-import { getLast4 } from "./lib/get-last-4";
-import { resolveServerSshConfig } from "./server-records";
+import {
+	buildProviderEnvMap,
+	isApiKeyRequired,
+	PROVIDER_ENV_CONFIGS,
+	type ProviderConfigSummary,
+	type ProviderRequest,
+	type StoredProviderRecord,
+} from "./providers/config";
+import {
+	ProviderConnectionError,
+	verifyProviderConnection,
+} from "./providers/connection";
+import {
+	decryptApiKey,
+	getApiKeyLast4,
+	getLatestProviderRecord,
+	getTelegramDeployInfo,
+} from "./providers/records";
+import { getServerById, resolveServerSshConfig } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 
-type ProviderRequest = {
-	provider: string;
-	model?: string;
-	apiKey?: string;
-	baseUrl?: string;
-};
-
-type StoredProviderRecord = {
-	provider: string;
-	model: string;
-	encryptedApiKey: string;
-	baseUrl: string | null;
-};
-
-export type ProviderConfigSummary = {
-	provider: AiProviderId;
-	model: string;
-	keyLast4: string | null;
-	hasStoredKey: boolean;
-	baseUrl?: string;
-};
-
-function decryptApiKey(encryptedStr: string): string {
-	try {
-		const decrypted = decryptSecret(encryptedStr);
-		// Keys saved before the explicit baseUrl column may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
-		if (decrypted.startsWith("{")) {
-			try {
-				const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-				if (typeof parsed.apiKey === "string") {
-					return parsed.apiKey;
-				}
-			} catch {
-				// Not valid JSON — treat as a raw key starting with '{'
-			}
-		}
-		return decrypted;
-	} catch {
-		return "";
-	}
-}
-
-class ProviderConnectionError extends Error {
-	constructor(
-		message: string,
-		readonly code: "invalid_api_key" | "connection_failed",
-	) {
-		super(message);
-		this.name = "ProviderConnectionError";
-	}
-}
+export type { ProviderConfigSummary };
 
 export async function getCurrentProviderConfig(userId: string) {
 	const record = await getLatestProviderRecord(userId);
@@ -209,367 +176,6 @@ export async function testProviderConfig(context: Context) {
 	}
 }
 
-function parseProviderRequest(payload: ProviderRequest) {
-	if (!isAiProviderId(payload.provider)) {
-		return { error: "Choose a valid provider." };
-	}
-
-	const model = payload.model?.trim() || getDefaultAiModel(payload.provider);
-	if (!isValidAiModel(payload.provider, model)) {
-		return { error: "Choose a valid model for the selected provider." };
-	}
-
-	return {
-		provider: payload.provider,
-		model,
-		apiKey: payload.apiKey?.trim() ?? "",
-		baseUrl: payload.baseUrl?.trim() ?? "",
-	};
-}
-
-function resolveProviderApiKey(
-	parsed: {
-		provider: AiProviderId;
-		model: string;
-		apiKey: string;
-		baseUrl?: string;
-	},
-	existingRecord: StoredProviderRecord | null,
-) {
-	let resolvedApiKey = parsed.apiKey;
-	let resolvedBaseUrl = parsed.baseUrl;
-
-	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
-		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
-		if (
-			!resolvedApiKey &&
-			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
-		) {
-			return { error: "Stored API key could not be read. Paste a new key." };
-		}
-		if (!resolvedBaseUrl) {
-			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
-		}
-	}
-
-	// API key is required for OpenAI/Anthropic/OpenRouter.
-	// Base URL is required for Ollama/Custom; API key is optional.
-	const option = getAiProviderOption(parsed.provider);
-	if (option?.requiresBaseUrl && !resolvedBaseUrl) {
-		return { error: "Base URL is required." };
-	}
-
-	if (!option?.requiresBaseUrl && !resolvedApiKey) {
-		return { error: "API key is required." };
-	}
-
-	return { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl };
-}
-
-async function getLatestProviderRecord(userId: string) {
-	const [record] = await getDb()
-		.select({
-			provider: aiProviders.provider,
-			model: aiProviders.model,
-			encryptedApiKey: aiProviders.encryptedApiKey,
-			baseUrl: aiProviders.baseUrl,
-		})
-		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
-		.orderBy(desc(aiProviders.createdAt))
-		.limit(1);
-
-	return record ?? null;
-}
-
-async function verifyProviderConnection(input: {
-	provider: AiProviderId;
-	apiKey: string;
-	baseUrl?: string;
-}) {
-	const request = createProviderTestRequest(input);
-
-	let response: Response;
-
-	try {
-		response = await fetch(request.url, request.init);
-	} catch {
-		throw new ProviderConnectionError("Connection failed", "connection_failed");
-	}
-
-	if (response.ok) {
-		return;
-	}
-
-	if (response.status === 401 || response.status === 403) {
-		throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
-	}
-
-	throw new ProviderConnectionError("Connection failed", "connection_failed");
-}
-
-function createProviderTestRequest(input: {
-	provider: AiProviderId;
-	apiKey: string;
-	baseUrl?: string;
-}): { url: string; init: RequestInit } {
-	if (input.provider === "anthropic") {
-		return {
-			url: "https://api.anthropic.com/v1/models",
-			init: {
-				method: "GET",
-				headers: {
-					"anthropic-version": "2023-06-01",
-					"x-api-key": input.apiKey,
-				},
-			},
-		};
-	}
-
-	if (input.provider === "openrouter") {
-		return {
-			url: "https://openrouter.ai/api/v1/models",
-			init: {
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${input.apiKey}`,
-				},
-			},
-		};
-	}
-
-	const option = getAiProviderOption(input.provider);
-	if (option?.requiresBaseUrl) {
-		const baseUrl = input.baseUrl || option.defaultBaseUrl || "";
-		const url = baseUrl.endsWith("/")
-			? `${baseUrl}models`
-			: `${baseUrl}/models`;
-		const headers: Record<string, string> = {};
-		if (input.apiKey) {
-			headers.Authorization = `Bearer ${input.apiKey}`;
-		}
-		return {
-			url,
-			init: {
-				method: "GET",
-				headers,
-			},
-		};
-	}
-
-	return {
-		url: "https://api.openai.com/v1/models",
-		init: {
-			method: "GET",
-			headers: {
-				Authorization: `Bearer ${input.apiKey}`,
-			},
-		},
-	};
-}
-
-async function getTelegramDeployInfo(userId: string) {
-	const [record] = await getDb()
-		.select({
-			botToken: telegramConfigs.botToken,
-			apiServerKey: telegramConfigs.apiServerKey,
-			deployedServerId: telegramConfigs.deployedServerId,
-			deployedServerHost: telegramConfigs.deployedServerHost,
-		})
-		.from(telegramConfigs)
-		.where(
-			and(
-				eq(telegramConfigs.userId, userId),
-				eq(telegramConfigs.isActive, true),
-			),
-		)
-		.orderBy(desc(telegramConfigs.createdAt))
-		.limit(1);
-
-	if (!record?.apiServerKey || !record.deployedServerId) {
-		return null;
-	}
-
-	return record as {
-		botToken: string;
-		apiServerKey: string;
-		deployedServerId: string;
-		deployedServerHost: string;
-	};
-}
-
-async function getServerById(serverId: string) {
-	const [row] = await getDb()
-		.select({
-			id: servers.id,
-			host: servers.host,
-			port: servers.port,
-			username: servers.username,
-			authMethod: servers.authMethod,
-			encryptedCredential: servers.encryptedCredential,
-			storeCredential: servers.storeCredential,
-		})
-		.from(servers)
-		.where(eq(servers.id, serverId))
-		.limit(1);
-
-	return row ?? null;
-}
-
-type ProviderEnvConfig = {
-	apiKeyEnvVar?: string;
-	baseUrlEnvVar?: string;
-	hermesProvider: string;
-	extraBaseUrlEnvVars?: string[];
-};
-
-const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
-	openai: { apiKeyEnvVar: "OPENAI_API_KEY", hermesProvider: "openai-api" },
-	anthropic: { apiKeyEnvVar: "ANTHROPIC_API_KEY", hermesProvider: "anthropic" },
-	openrouter: {
-		apiKeyEnvVar: "OPENROUTER_API_KEY",
-		hermesProvider: "openrouter",
-	},
-	ollama: {
-		baseUrlEnvVar: "CUSTOM_BASE_URL",
-		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
-		hermesProvider: "custom",
-	},
-	custom: {
-		apiKeyEnvVar: "OPENAI_API_KEY",
-		baseUrlEnvVar: "CUSTOM_BASE_URL",
-		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
-		hermesProvider: "custom",
-	},
-};
-
-function buildProviderEnvMap(
-	provider: AiProviderId,
-	apiKey: string,
-	baseUrl: string | null | undefined,
-): Record<string, string> {
-	const config = PROVIDER_ENV_CONFIGS[provider];
-	if (!config) {
-		return {};
-	}
-
-	const envVars: Record<string, string> = {};
-
-	envVars.HERMES_INFERENCE_PROVIDER = config.hermesProvider;
-
-	if (config.apiKeyEnvVar && apiKey) {
-		envVars[config.apiKeyEnvVar] = apiKey;
-	}
-
-	const customApiKeyEnvVar = deriveCustomProviderApiKeyEnvVar(baseUrl);
-	if (customApiKeyEnvVar && apiKey) {
-		envVars[customApiKeyEnvVar] = apiKey;
-	}
-
-	if (config.baseUrlEnvVar && baseUrl) {
-		envVars[config.baseUrlEnvVar] = baseUrl;
-		for (const extraEnvVar of config.extraBaseUrlEnvVars ?? []) {
-			envVars[extraEnvVar] = baseUrl;
-		}
-	}
-
-	return envVars;
-}
-
-function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
-	if (!baseUrl) {
-		return null;
-	}
-
-	let hostname: string;
-	try {
-		hostname = new URL(baseUrl).hostname.toLowerCase();
-	} catch {
-		return null;
-	}
-
-	if (!hostname || hostname === "localhost" || hostname.includes(":")) {
-		return null;
-	}
-
-	const labels = hostname
-		.split(".")
-		.map((label) => label.trim())
-		.filter(Boolean);
-	while (labels[0] === "api" || labels[0] === "www") {
-		labels.shift();
-	}
-
-	if (labels.length < 2 || /^\d/.test(labels.at(-1) ?? "")) {
-		return null;
-	}
-
-	const vendor = labels.at(-2) ?? "";
-	const sanitized = vendor
-		.toUpperCase()
-		.replace(/[^A-Z0-9]/g, "_")
-		.replace(/_+/g, "_");
-	if (!/^[A-Z]/.test(sanitized)) {
-		return null;
-	}
-
-	if (
-		sanitized === "OPENAI" ||
-		sanitized === "OPENROUTER" ||
-		sanitized === "OLLAMA"
-	) {
-		return null;
-	}
-
-	return `${sanitized}_API_KEY`;
-}
-
-export async function getProviderDeployConfig(
-	userId: string,
-): Promise<{ envVars: Record<string, string>; model: string } | null> {
-	const record = await getLatestProviderRecord(userId);
-	if (!record || !isAiProviderId(record.provider)) {
-		return null;
-	}
-
-	const config = PROVIDER_ENV_CONFIGS[record.provider];
-	const option = getAiProviderOption(record.provider);
-	let decryptedApiKey = "";
-
-	if (config?.apiKeyEnvVar) {
-		const isKeyRequired = !option?.requiresBaseUrl;
-
-		if (record.encryptedApiKey) {
-			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
-			if (!decryptedApiKey) {
-				throw new Error(
-					"Stored API key could not be decrypted. Paste a new key.",
-				);
-			}
-		}
-
-		if (isKeyRequired && !decryptedApiKey) {
-			throw new Error(`API key is required for provider ${record.provider}.`);
-		}
-	}
-
-	return {
-		envVars: buildProviderEnvMap(
-			record.provider,
-			decryptedApiKey,
-			record.baseUrl,
-		),
-		model: record.model,
-	};
-}
-
-export async function getProviderEnvVars(
-	userId: string,
-): Promise<Record<string, string> | null> {
-	const config = await getProviderDeployConfig(userId);
-	return config?.envVars ?? null;
-}
-
 export async function deployProviderToHermes(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
 	if (!session) {
@@ -670,7 +276,6 @@ export async function deployProviderToHermes(context: Context) {
 					throw new Error(restartResult.stderr || "Failed to restart Hermes");
 				}
 
-				// Give the container a brief moment to initialize before running CLI commands inside it
 				await ssh.execCommand("sleep 2");
 
 				const configResult = await ssh.execCommand(
@@ -721,6 +326,94 @@ export async function deployProviderToHermes(context: Context) {
 	}
 }
 
-function getApiKeyLast4(apiKey: string) {
-	return getLast4(apiKey);
+function parseProviderRequest(payload: ProviderRequest) {
+	if (!isAiProviderId(payload.provider)) {
+		return { error: "Choose a valid provider." };
+	}
+
+	const model = payload.model?.trim() || getDefaultAiModel(payload.provider);
+	if (!isValidAiModel(payload.provider, model)) {
+		return { error: "Choose a valid model for the selected provider." };
+	}
+
+	return {
+		provider: payload.provider,
+		model,
+		apiKey: payload.apiKey?.trim() ?? "",
+		baseUrl: payload.baseUrl?.trim() ?? "",
+	};
+}
+
+function resolveProviderApiKey(
+	parsed: {
+		provider: AiProviderId;
+		model: string;
+		apiKey: string;
+		baseUrl?: string;
+	},
+	existingRecord: StoredProviderRecord | null,
+) {
+	let resolvedApiKey = parsed.apiKey;
+	let resolvedBaseUrl = parsed.baseUrl;
+
+	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
+		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
+		if (
+			!resolvedApiKey &&
+			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
+		) {
+			return { error: "Stored API key could not be read. Paste a new key." };
+		}
+		if (!resolvedBaseUrl) {
+			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
+		}
+	}
+
+	if (!isApiKeyRequired(parsed.provider) && !resolvedBaseUrl) {
+		return { error: "Base URL is required." };
+	}
+
+	if (isApiKeyRequired(parsed.provider) && !resolvedApiKey) {
+		return { error: "API key is required." };
+	}
+
+	return { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl };
+}
+
+export async function getProviderDeployConfig(
+	userId: string,
+): Promise<{ envVars: Record<string, string>; model: string } | null> {
+	const record = await getLatestProviderRecord(userId);
+	if (!record || !isAiProviderId(record.provider)) {
+		return null;
+	}
+
+	const config = PROVIDER_ENV_CONFIGS[record.provider];
+	let decryptedApiKey = "";
+
+	if (config?.apiKeyEnvVar) {
+		const isKeyRequired = isApiKeyRequired(record.provider);
+
+		if (record.encryptedApiKey) {
+			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
+			if (!decryptedApiKey) {
+				throw new Error(
+					"Stored API key could not be decrypted. Paste a new key.",
+				);
+			}
+		}
+
+		if (isKeyRequired && !decryptedApiKey) {
+			throw new Error(`API key is required for provider ${record.provider}.`);
+		}
+	}
+
+	return {
+		envVars: buildProviderEnvMap(
+			record.provider,
+			decryptedApiKey,
+			record.baseUrl,
+		),
+		model: record.model,
+	};
 }
