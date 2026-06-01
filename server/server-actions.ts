@@ -15,7 +15,7 @@ import {
 import {
 	getOwnedServerRecord,
 	type OwnedServerRecord,
-	resolveServerSshConfig,
+	resolveServerSshConfigOrError,
 } from "./server-records";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
@@ -106,20 +106,14 @@ export async function runServerAction(context: Context) {
 		return context.json({ error: "Server not found" }, 404);
 	}
 
-	let authMethod: SshAuthMethod;
-	let credential: string;
-	try {
-		({ authMethod, credential } = resolveServerSshConfig(
-			serverRecord,
-			session.session.id,
-		));
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Temporary credential expired. Reconnect the server first.";
-		return context.json({ error: message }, 400);
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return context.json({ error: sshResult.error }, 400);
 	}
+	const { authMethod, credential } = sshResult;
 
 	const versionTarget =
 		action === "rollback"
