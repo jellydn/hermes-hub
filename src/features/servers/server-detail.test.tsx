@@ -323,7 +323,9 @@ async function flushAsyncWork() {
 	});
 }
 
-function formatActionLabel(action: ServerDetailSnapshot["actionHistory"][number]["action"]) {
+function formatActionLabel(
+	action: ServerDetailSnapshot["actionHistory"][number]["action"],
+) {
 	if (action === "update") {
 		return "Update Hermes";
 	}
