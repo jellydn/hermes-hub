@@ -19,7 +19,9 @@ const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
 const insertAuditValues = vi.fn();
 const buildHermesComposeContent = vi.fn();
+const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
+const resolveServerSshConfigOrError = vi.fn();
 const withSshConnection = vi.fn();
 const shellQuote = vi.fn(
 	(value: string) => `'${value.replace(/'/g, "'\\''")}'`,
@@ -50,7 +52,9 @@ vi.mock("./compose", () => ({
 }));
 
 vi.mock("./server-records", () => ({
+	getServerById: getServerByIdMock,
 	resolveServerSshConfig,
+	resolveServerSshConfigOrError,
 }));
 
 vi.mock("./ssh", () => ({
@@ -107,6 +111,11 @@ describe("provider settings", () => {
 			"services:\n  hermes:\n    image: hermes\n",
 		);
 		resolveServerSshConfig.mockReturnValue({
+			authMethod: "ssh-key",
+			credential: "mock-credential",
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
 			authMethod: "ssh-key",
 			credential: "mock-credential",
 		});
@@ -414,10 +423,14 @@ describe("provider settings", () => {
 			storeCredential: true,
 		};
 
+		beforeEach(() => {
+			getServerByIdMock.mockResolvedValue(serverRecord);
+		});
+
 		it("returns 401 when unauthenticated", async () => {
 			getAuthSession.mockResolvedValue(null);
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -428,7 +441,7 @@ describe("provider settings", () => {
 
 		it("returns 400 when no provider record exists", async () => {
 			// selectLimit already defaults to [] from beforeEach
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -444,7 +457,7 @@ describe("provider settings", () => {
 				.mockResolvedValueOnce([providerRecord])
 				.mockResolvedValueOnce([]);
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -457,12 +470,12 @@ describe("provider settings", () => {
 		});
 
 		it("returns 404 when deployed server is not found", async () => {
+			getServerByIdMock.mockResolvedValue(null);
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord])
-				.mockResolvedValueOnce([]);
+				.mockResolvedValueOnce([telegramRecord]);
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -476,13 +489,12 @@ describe("provider settings", () => {
 		it("returns 500 when bot token decryption fails", async () => {
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord])
-				.mockResolvedValueOnce([serverRecord]);
+				.mockResolvedValueOnce([telegramRecord]);
 			decryptSecret.mockImplementationOnce(() => {
 				throw new Error("decrypt failed");
 			});
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -503,10 +515,9 @@ describe("provider settings", () => {
 
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord])
-				.mockResolvedValueOnce([serverRecord]);
+				.mockResolvedValueOnce([telegramRecord]);
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -527,10 +538,9 @@ describe("provider settings", () => {
 
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord])
-				.mockResolvedValueOnce([serverRecord]);
+				.mockResolvedValueOnce([telegramRecord]);
 
-			const { deployProviderToHermes } = await import("./providers");
+			const { deployProviderToHermes } = await import("./deploy");
 			const response = await deployProviderToHermes(
 				createContext("http://localhost/api/providers/deploy", {}),
 			);
@@ -554,8 +564,8 @@ describe("provider settings", () => {
 				hermesModel: "gpt-4o",
 			});
 
-			// resolveServerSshConfig was called with the server ID and session ID
-			expect(resolveServerSshConfig).toHaveBeenCalledWith(
+			// resolveServerSshConfigOrError was called with the server ID and session ID
+			expect(resolveServerSshConfigOrError).toHaveBeenCalledWith(
 				expect.objectContaining({ id: "server_1", host: "1.2.3.4" }),
 				"session_123",
 			);
