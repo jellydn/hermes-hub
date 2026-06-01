@@ -60,6 +60,10 @@ export function decryptApiServerKey(payload: string): string {
 	try {
 		return decryptSecret(payload);
 	} catch {
-		return payload;
+		// Legacy unencrypted keys don't have the AES-GCM iv:tag:cipher structure
+		if (!payload.includes(".")) {
+			return payload;
+		}
+		throw new Error("API server key could not be decrypted.");
 	}
 }
