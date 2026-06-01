@@ -6,6 +6,17 @@ import { getDb } from "./db";
 import { servers } from "./db/schema";
 import type { SshAuthMethod, VerifiedServerInfo } from "./ssh";
 
+/** Minimal server fields needed for SSH connections (no ownership/status). */
+export type ServerConnectionRecord = {
+	id: string;
+	host: string;
+	port: number;
+	username: string;
+	authMethod: string;
+	encryptedCredential: string | null;
+	storeCredential: boolean;
+};
+
 export type OwnedServerRecord = {
 	id: string;
 	label: string;
@@ -126,4 +137,49 @@ export function resolveServerSshConfig(
 	const credential = resolveServerCredential(serverRecord, sessionId);
 
 	return { authMethod, credential };
+}
+
+/**
+ * Looks up a server by ID (without ownership check).
+ * Used by telegram deploy, provider deploy, and pairings to resolve a
+ * previously-stored deployedServerId.
+ */
+export async function getServerById(
+	serverId: string,
+): Promise<ServerConnectionRecord | null> {
+	const [row] = await getDb()
+		.select({
+			id: servers.id,
+			host: servers.host,
+			port: servers.port,
+			username: servers.username,
+			authMethod: servers.authMethod,
+			encryptedCredential: servers.encryptedCredential,
+			storeCredential: servers.storeCredential,
+		})
+		.from(servers)
+		.where(eq(servers.id, serverId))
+		.limit(1);
+
+	return row ?? null;
+}
+
+/**
+ * Resolves SSH config, returning a discriminated result instead of throwing.
+ * Eliminates the repeated try/catch boilerplate at every SSH call site.
+ */
+export function resolveServerSshConfigOrError(
+	serverRecord: Parameters<typeof resolveServerSshConfig>[0],
+	sessionId: string | null | undefined,
+):
+	| { ok: true; authMethod: SshAuthMethod; credential: string }
+	| { ok: false; error: string } {
+	try {
+		const config = resolveServerSshConfig(serverRecord, sessionId);
+		return { ok: true, ...config };
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Credential unavailable";
+		return { ok: false, error: message };
+	}
 }
