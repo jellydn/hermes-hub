@@ -8,6 +8,7 @@ Items that are genuine improvements but were deferred to focus on higher-impact 
 - **Exclude Vite Plugins selectively** — ✅ Done via lazy `await import()` in async config factory
 - **Cache Vitest** — ✅ Done via default Vite `cacheDir`
 - **Transpile-only Typechecks** — Partially done (incremental tsbuildinfo); full `ts-blank-space` integration is a larger project
+- **Replace deterministic `waitFor` polling in jsdom tests** — ✅ Done across the remaining React test files; test suites now use targeted microtask flushing instead of polling where async work is only resolved fetch/state updates.
 
 ## Database
 

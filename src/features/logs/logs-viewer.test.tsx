@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
 
-import {
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LogsSnapshot } from "@/lib/logs";
@@ -48,9 +42,9 @@ describe("LogsViewer", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /confirm clear/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/no logs yet/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
+
+		expect(screen.getByText(/no logs yet/i)).toBeTruthy();
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/logs/clear",
@@ -58,6 +52,13 @@ describe("LogsViewer", () => {
 		);
 	});
 });
+
+async function flushAsyncWork() {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
 
 function createLogs(): LogsSnapshot {
 	return {

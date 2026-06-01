@@ -1,13 +1,6 @@
 // @vitest-environment jsdom
 
-import {
-	act,
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardStatusSnapshot } from "@/lib/dashboard-status";
@@ -46,9 +39,9 @@ describe("DashboardStatusOverview", () => {
 
 		render(<DashboardStatusOverview initialStatus={null} />);
 
-		await waitFor(() => {
-			expect(screen.getAllByText(/unable to load/i)).toHaveLength(5);
-		});
+		await flushAsyncWork();
+
+		expect(screen.getAllByText(/unable to load/i)).toHaveLength(5);
 
 		expect(screen.getAllByRole("button", { name: /retry/i })).toHaveLength(5);
 	});
