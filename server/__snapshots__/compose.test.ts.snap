@@ -3,56 +3,57 @@
 exports[`buildHermesComposeContent > renders a compose with all options including api key and telegram token 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:latest
+    image: nousresearch/hermes-agent:v0.4.1
     container_name: hermes
     restart: unless-stopped
     command: gateway run
     ports:
-      - "8642:8642"
+      - 8642:8642
     volumes:
       - ~/.hermes:/opt/data
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
-      - "API_SERVER_KEY=test-api-key"
-      - "TELEGRAM_BOT_TOKEN=123456:abc-def"
-      - "API_SERVER_MODEL_NAME=gpt-4o"
-      - "HERMES_INFERENCE_PROVIDER=custom"
-      - "BASE_URL=https://api.example.com""
+      - API_SERVER_KEY=test-api-key
+      - TELEGRAM_BOT_TOKEN=123456:abc-def
+      - API_SERVER_MODEL_NAME=gpt-4o
+      - HERMES_INFERENCE_PROVIDER=custom
+      - BASE_URL=https://api.example.com
+"
 `;
 
 exports[`buildHermesComposeContent > renders a compose with provider env vars only 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:latest
+    image: nousresearch/hermes-agent:v0.4.1
     container_name: hermes
     restart: unless-stopped
     command: gateway run
     ports:
-      - "8642:8642"
+      - 8642:8642
     volumes:
       - ~/.hermes:/opt/data
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
-      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy
-      - "HERMES_INFERENCE_PROVIDER=openai"
-      - "OPENAI_API_KEY=sk-test""
+      - HERMES_INFERENCE_PROVIDER=openai
+      - OPENAI_API_KEY=sk-test
+"
 `;
 
 exports[`buildHermesComposeContent > renders a minimal compose with no optional inputs 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:latest
+    image: nousresearch/hermes-agent:v0.4.1
     container_name: hermes
     restart: unless-stopped
     command: gateway run
     ports:
-      - "8642:8642"
+      - 8642:8642
     volumes:
       - ~/.hermes:/opt/data
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
-      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy"
+"
 `;

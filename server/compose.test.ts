@@ -111,7 +111,7 @@ describe("buildHermesComposeContent", () => {
 		expect(env).not.toContain("EMPTY_VALUE=");
 	});
 
-	it("skips api key and telegram token when only one is provided", () => {
+	it("sets API_SERVER_KEY independently of TELEGRAM_BOT_TOKEN", () => {
 		const result = buildHermesComposeContent({
 			apiServerKey: "key-only",
 		});
@@ -119,7 +119,7 @@ describe("buildHermesComposeContent", () => {
 		const parsed = parse(result);
 		const env = parsed.services.hermes.environment as string[];
 
-		expect(env).not.toContain("API_SERVER_KEY=key-only");
-		expect(env).not.toContain("TELEGRAM_BOT_TOKEN=tok");
+		expect(env).toContain("API_SERVER_KEY=key-only");
+		expect(env).not.toContain(expect.stringContaining("TELEGRAM_BOT_TOKEN"));
 	});
 });

@@ -1,3 +1,4 @@
+import { stringify } from "yaml";
 import { defaultHermesImage } from "./constants";
 
 export function buildHermesComposeContent(input?: {
@@ -6,50 +7,36 @@ export function buildHermesComposeContent(input?: {
 	providerEnvVars?: Record<string, string>;
 	hermesModel?: string;
 }) {
-	const lines = [
-		"services:",
-		"  hermes:",
-		`    image: ${defaultHermesImage}`,
-		"    container_name: hermes",
-		"    restart: unless-stopped",
-		"    command: gateway run",
-		"    ports:",
-		'      - "8642:8642"',
-		"    volumes:",
-		"      - ~/.hermes:/opt/data",
-		"    environment:",
-		"      - API_SERVER_ENABLED=true",
-		"      - API_SERVER_HOST=0.0.0.0",
-	];
+	const env: string[] = ["API_SERVER_ENABLED=true", "API_SERVER_HOST=0.0.0.0"];
 
-	if (input?.apiServerKey && input?.telegramBotToken) {
-		lines.push(
-			`      - "API_SERVER_KEY=${input.apiServerKey.replace(/"/g, '\\"')}"`,
-		);
-		lines.push(
-			`      - "TELEGRAM_BOT_TOKEN=${input.telegramBotToken.replace(/"/g, '\\"')}"`,
-		);
-	} else {
-		lines.push(
-			"      # API_SERVER_KEY and TELEGRAM_BOT_TOKEN are set by telegram deploy",
-		);
+	if (input?.apiServerKey) {
+		env.push(`API_SERVER_KEY=${input.apiServerKey}`);
 	}
-
+	if (input?.telegramBotToken) {
+		env.push(`TELEGRAM_BOT_TOKEN=${input.telegramBotToken}`);
+	}
 	if (input?.hermesModel) {
-		// Double-quote the value to prevent YAML special characters (colons,
-		// octothorpes, brackets, etc.) from breaking the compose file.
-		lines.push(
-			`      - "API_SERVER_MODEL_NAME=${input.hermesModel.replace(/"/g, '\\"')}"`,
-		);
+		env.push(`API_SERVER_MODEL_NAME=${input.hermesModel}`);
 	}
-
 	if (input?.providerEnvVars) {
 		for (const [key, value] of Object.entries(input.providerEnvVars)) {
 			if (value) {
-				lines.push(`      - "${key}=${value.replace(/"/g, '\\"')}"`);
+				env.push(`${key}=${value}`);
 			}
 		}
 	}
 
-	return lines.join("\n");
+	return stringify({
+		services: {
+			hermes: {
+				image: defaultHermesImage,
+				container_name: "hermes",
+				restart: "unless-stopped",
+				command: "gateway run",
+				ports: ["8642:8642"],
+				volumes: ["~/.hermes:/opt/data"],
+				environment: env,
+			},
+		},
+	});
 }
