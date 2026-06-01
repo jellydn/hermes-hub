@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
 	screen,
-	waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,9 +65,9 @@ describe("ProviderSettings", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/provider connected/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
+
+		expect(screen.getByText(/^provider connected$/i)).toBeTruthy();
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/providers/test",
@@ -88,3 +88,10 @@ describe("ProviderSettings", () => {
 		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
 	});
 });
+
+async function flushAsyncWork() {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}

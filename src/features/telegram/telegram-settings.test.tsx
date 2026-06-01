@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
 
-import {
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TelegramSettings } from "./telegram-settings";
@@ -65,10 +59,9 @@ describe("TelegramSettings", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/telegram bot connected/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
 
+		expect(screen.getByText(/telegram bot connected/i)).toBeTruthy();
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/telegram/connect",
 			expect.objectContaining({
@@ -114,10 +107,9 @@ describe("TelegramSettings", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/telegram bot disconnected/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
 
+		expect(screen.getByText(/telegram bot disconnected/i)).toBeTruthy();
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/telegram/disconnect",
 			expect.objectContaining({
@@ -194,21 +186,21 @@ describe("TelegramSettings", () => {
 			/>,
 		);
 
-		await waitFor(() => {
-			expect(screen.getByText("ABCD2345")).toBeTruthy();
-		});
+		await flushAsyncWork();
+
+		expect(screen.getByText("ABCD2345")).toBeTruthy();
 
 		fireEvent.click(screen.getByRole("button", { name: /approve abcd2345/i }));
 
-		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith(
-				"/api/telegram/pairings/approve",
-				expect.objectContaining({
-					method: "POST",
-					body: JSON.stringify({ code: "ABCD2345" }),
-				}),
-			);
-		});
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/pairings/approve",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ code: "ABCD2345" }),
+			}),
+		);
 	});
 
 	it("approves a Telegram pairing code", async () => {
@@ -276,19 +268,24 @@ describe("TelegramSettings", () => {
 			target: { value: "rgts8s2r" },
 		});
 		const approveButton = screen.getByRole("button", { name: /^approve$/i });
-		await waitFor(() => {
-			expect((approveButton as HTMLButtonElement).disabled).toBe(false);
-		});
+		expect((approveButton as HTMLButtonElement).disabled).toBe(false);
 		fireEvent.click(approveButton);
 
-		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith(
-				"/api/telegram/pairings/approve",
-				expect.objectContaining({
-					method: "POST",
-					body: JSON.stringify({ code: "RGTS8S2R" }),
-				}),
-			);
-		});
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/pairings/approve",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ code: "RGTS8S2R" }),
+			}),
+		);
 	});
 });
+
+async function flushAsyncWork() {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
