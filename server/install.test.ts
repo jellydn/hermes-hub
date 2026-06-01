@@ -52,6 +52,11 @@ vi.mock("./db", () => ({
 		insert: dbInsert,
 		select: dbSelect,
 		update: dbUpdate,
+		transaction: (callback: (tx: unknown) => Promise<unknown>) =>
+			callback({
+				insert: dbInsert,
+				update: dbUpdate,
+			}),
 	}),
 }));
 
@@ -202,11 +207,22 @@ describe("server install", () => {
 					id: "install_123",
 					status: "failed",
 					step: "failed",
-					log: "2026-05-26T10:40:00.000Z [install-docker] Installing Docker",
 				},
 			],
 		];
-		installEventResults = [[]];
+		installEventResults = [
+			[
+				{
+					installId: "install_123",
+					step: "install-docker",
+					progress: 15,
+					message: "Installing Docker",
+					status: "failed",
+					timestamp: new Date("2026-05-26T10:40:00.000Z"),
+					error: null,
+				},
+			],
+		];
 
 		const { streamServerInstallEvents } = await import("./install");
 		const response = await streamServerInstallEvents(createContext("GET"));

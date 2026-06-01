@@ -49,7 +49,6 @@ export async function hydrateInstallEvents(
 		id: string;
 		status: string;
 		step: string;
-		log: string | null;
 	},
 ) {
 	const events = await getDb()
@@ -66,44 +65,16 @@ export async function hydrateInstallEvents(
 		.where(eq(installEvents.installId, installRecord.id))
 		.orderBy(installEvents.createdAt);
 
-	if (events.length > 0) {
-		return events.map((event) => ({
-			installId: event.installId,
-			serverId,
-			step: event.step,
-			progress: event.progress,
-			message: event.message,
-			status: normalizeInstallStatus(event.status),
-			timestamp: event.timestamp.toISOString(),
-			...(event.error ? { error: event.error } : {}),
-		}));
-	}
-
-	// Fallback: parse legacy log blob for backward compatibility during transition.
-	if (!installRecord.log) {
-		return [];
-	}
-
-	const lines = installRecord.log.split("\n").filter(Boolean);
-	if (lines.length === 0) {
-		return [];
-	}
-
-	return lines.map((line, index) => {
-		const timestamp = line.slice(0, 24);
-		const stepMatch = line.match(/\[(.+?)\]/);
-		const messageIndex = line.indexOf("] ");
-
-		return {
-			installId: installRecord.id,
-			serverId,
-			step: stepMatch?.[1] ?? installRecord.step,
-			progress: Math.round(((index + 1) / lines.length) * 100),
-			message: messageIndex >= 0 ? line.slice(messageIndex + 2) : line,
-			status: normalizeInstallStatus(installRecord.status),
-			timestamp,
-		};
-	});
+	return events.map((event) => ({
+		installId: event.installId,
+		serverId,
+		step: event.step,
+		progress: event.progress,
+		message: event.message,
+		status: normalizeInstallStatus(event.status),
+		timestamp: event.timestamp.toISOString(),
+		...(event.error ? { error: event.error } : {}),
+	}));
 }
 
 export function resetInstallStream(serverId: string, installId: string) {
@@ -164,7 +135,6 @@ export async function ensureInstallStream(serverId: string) {
 			id: installs.id,
 			status: installs.status,
 			step: installs.step,
-			log: installs.log,
 		})
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
@@ -195,7 +165,6 @@ export async function emitInstallEvent(input: {
 	message: string;
 	status: InstallStatus;
 	error?: string;
-	logLines: string[];
 }) {
 	const state = installStreams.get(input.serverId);
 	if (!state || state.runId !== input.runId) {
@@ -203,10 +172,6 @@ export async function emitInstallEvent(input: {
 	}
 
 	const timestamp = new Date().toISOString();
-	const logLine = `${timestamp} [${input.step}] ${
-		input.error ? `${input.message}: ${input.error}` : input.message
-	}`;
-	input.logLines.push(logLine);
 
 	const event: InstallEvent = {
 		installId: input.installId,
@@ -222,9 +187,8 @@ export async function emitInstallEvent(input: {
 	state.events.push(event);
 	state.status = input.status;
 
-	await getDb()
-		.insert(installEvents)
-		.values({
+	await getDb().transaction(async (tx) => {
+		await tx.insert(installEvents).values({
 			installId: input.installId,
 			step: input.step,
 			progress: input.progress,
@@ -233,16 +197,16 @@ export async function emitInstallEvent(input: {
 			...(input.error ? { error: input.error } : {}),
 		});
 
-	await getDb()
-		.update(installs)
-		.set({
-			status: input.status,
-			step: input.step,
-			log: input.logLines.join("\n"),
-			version: "latest",
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, input.installId));
+		await tx
+			.update(installs)
+			.set({
+				status: input.status,
+				step: input.step,
+				version: "latest",
+				updatedAt: new Date(),
+			})
+			.where(eq(installs.id, input.installId));
+	});
 
 	for (const listener of state.listeners) {
 		listener(event);

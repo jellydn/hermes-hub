@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
-import { auditLogs, installEvents, installs } from "./db/schema";
+import { installEvents, installs } from "./db/schema";
 import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
 	ensureInstallStream,
@@ -16,6 +16,7 @@ import {
 } from "./install/sse-stream";
 import { installSteps, runInstallWorkflow } from "./install/workflow";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
@@ -81,9 +82,10 @@ export async function startServerInstall(context: Context) {
 
 	const ipAddress = getClientIp(context);
 
-	await db.insert(auditLogs).values({
+	await insertAuditLog(db, {
 		userId: session.user.id,
 		action: "server.install.started",
+		serverId,
 		details: {
 			serverId,
 			installId: installRecord.id,
