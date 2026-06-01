@@ -1,6 +1,6 @@
 import { buildHermesComposeContent } from "../compose";
 import { getDb } from "../db";
-import { auditLogs } from "../db/schema";
+import { insertAuditLog } from "../lib/insert-audit-log";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "../ssh";
 import { emitInstallEvent } from "./sse-stream";
 
@@ -19,6 +19,7 @@ export type ServerCredentialRecord = {
 	authMethod: string;
 	encryptedCredential: string | null;
 	storeCredential: boolean;
+	hostKeyFingerprint: string | null;
 };
 
 type InstallWorkflowInput = {
@@ -71,9 +72,9 @@ export const installSteps: InstallStep[] = [
 	},
 ];
 
-export async function runInstallWorkflow(input: InstallWorkflowInput) {
-	const logLines: string[] = [];
+export const installStepIds = installSteps.map((step) => step.id);
 
+export async function runInstallWorkflow(input: InstallWorkflowInput) {
 	try {
 		await emitInstallEvent({
 			installId: input.installId,
@@ -83,7 +84,6 @@ export async function runInstallWorkflow(input: InstallWorkflowInput) {
 			progress: 0,
 			message: "Install queued",
 			status: "pending",
-			logLines,
 		});
 
 		await withSshConnection(
@@ -93,6 +93,7 @@ export async function runInstallWorkflow(input: InstallWorkflowInput) {
 				username: input.server.username,
 				authMethod: input.authMethod,
 				credential: input.credential,
+				expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
 				for (const step of installSteps) {
@@ -111,23 +112,21 @@ export async function runInstallWorkflow(input: InstallWorkflowInput) {
 						progress: step.progress,
 						message: detail ? `${step.message}: ${detail}` : step.message,
 						status: step.progress === 100 ? "succeeded" : "running",
-						logLines,
 					});
 				}
 			},
 		);
 
-		await getDb()
-			.insert(auditLogs)
-			.values({
-				userId: input.userId,
-				action: "server.install.succeeded",
-				details: {
-					serverId: input.serverId,
-					installId: input.installId,
-				},
-				ipAddress: input.ipAddress,
-			});
+		await insertAuditLog(getDb(), {
+			userId: input.userId,
+			action: "server.install.succeeded",
+			serverId: input.serverId,
+			details: {
+				serverId: input.serverId,
+				installId: input.installId,
+			},
+			ipAddress: input.ipAddress,
+		});
 	} catch (error) {
 		const message = normalizeInstallError(error);
 
@@ -140,21 +139,19 @@ export async function runInstallWorkflow(input: InstallWorkflowInput) {
 			message: "Install failed",
 			status: "failed",
 			error: message,
-			logLines,
 		});
 
-		await getDb()
-			.insert(auditLogs)
-			.values({
-				userId: input.userId,
-				action: "server.install.failed",
-				details: {
-					serverId: input.serverId,
-					installId: input.installId,
-					error: message,
-				},
-				ipAddress: input.ipAddress,
-			});
+		await insertAuditLog(getDb(), {
+			userId: input.userId,
+			action: "server.install.failed",
+			serverId: input.serverId,
+			details: {
+				serverId: input.serverId,
+				installId: input.installId,
+				error: message,
+			},
+			ipAddress: input.ipAddress,
+		});
 	}
 }
 
@@ -166,15 +163,32 @@ function normalizeInstallError(error: unknown) {
 	return error instanceof Error ? error.message : "Install failed";
 }
 
-function buildDockerInstallCommand() {
+export function buildDockerInstallCommand() {
+	const aptRepo = (distro: "ubuntu" | "debian") => `
+if [ "$ID" = "${distro}" ]; then
+  sudo install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/${distro}/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  sudo chmod a+r /etc/apt/keyrings/docker.gpg
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null <<DOCKER_EOF
+deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${distro} $(. /etc/os-release && echo "$VERSION_CODENAME") stable
+DOCKER_EOF
+  sudo apt-get update
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  exit 0
+fi`;
+
+	const fallback = `
+echo "WARNING: unsupported distro '$ID' for Docker apt repo; falling back to get.docker.com" >&2
+curl -fsSL https://get.docker.com | sudo sh
+sudo systemctl enable --now docker`;
+
 	return [
-		"sudo install -m 0755 -d /etc/apt/keyrings",
-		"curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
-		"sudo chmod a+r /etc/apt/keyrings/docker.gpg",
-		'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null',
-		"sudo apt-get update",
-		"sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
-	].join(" && ");
+		"if command -v docker >/dev/null 2>&1; then echo 'Docker already installed'; exit 0; fi",
+		". /etc/os-release",
+		aptRepo("ubuntu"),
+		aptRepo("debian"),
+		fallback.trim(),
+	].join("\n");
 }
 
 function buildComposeWriteCommand() {
