@@ -1,15 +1,17 @@
 import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { tableAuditLogs, tableInstallEvents, tableInstalls, tableServers } =
+	vi.hoisted(() => ({
+		tableInstalls: { kind: "installs" },
+		tableInstallEvents: { kind: "installEvents" },
+		tableServers: { kind: "servers" },
+		tableAuditLogs: { kind: "auditLogs" },
+	}));
+
 const getAuthSession = vi.fn();
-const selectFrom = vi.fn();
-const selectInnerJoin = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
-const selectLimit = vi.fn();
-const updateSet = vi.fn();
-const updateWhere = vi.fn();
 const deleteWhere = vi.fn();
+const selectFrom = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -18,57 +20,20 @@ vi.mock("./auth", () => ({
 vi.mock("./db", () => ({
 	getDb: () => ({
 		select: () => ({ from: selectFrom }),
-		update: () => ({ set: updateSet }),
 		delete: () => ({ where: deleteWhere }),
 	}),
 }));
 
 vi.mock("./db/schema", () => ({
-	installs: {
-		id: Symbol("installs.id"),
-		log: Symbol("installs.log"),
-		status: Symbol("installs.status"),
-		step: Symbol("installs.step"),
-		createdAt: Symbol("installs.createdAt"),
-		updatedAt: Symbol("installs.updatedAt"),
-		serverId: Symbol("installs.serverId"),
-	},
-	servers: {
-		id: Symbol("servers.id"),
-		label: Symbol("servers.label"),
-		userId: Symbol("servers.userId"),
-	},
-	auditLogs: {
-		id: Symbol("auditLogs.id"),
-		action: Symbol("auditLogs.action"),
-		details: Symbol("auditLogs.details"),
-		createdAt: Symbol("auditLogs.createdAt"),
-		userId: Symbol("auditLogs.userId"),
-	},
+	installs: tableInstalls,
+	installEvents: tableInstallEvents,
+	servers: tableServers,
+	auditLogs: tableAuditLogs,
 }));
 
 describe("logs handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-
-		selectFrom.mockReset();
-		selectInnerJoin.mockReset();
-		selectWhere.mockReset();
-		selectOrderBy.mockReset();
-		selectLimit.mockReset();
-		updateSet.mockReset();
-		updateWhere.mockReset();
-		deleteWhere.mockReset();
-
-		selectFrom.mockReturnValue({
-			innerJoin: selectInnerJoin,
-			where: selectWhere,
-		});
-		selectInnerJoin.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy });
-		selectOrderBy.mockReturnValue({ limit: selectLimit });
-		updateSet.mockReturnValue({ where: updateWhere });
-		updateWhere.mockResolvedValue(undefined);
 		deleteWhere.mockResolvedValue(undefined);
 	});
 
@@ -85,33 +50,77 @@ describe("logs handlers", () => {
 
 	it("returns install and action logs for the signed-in user", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
-		selectWhere
-			.mockReturnValueOnce({ orderBy: selectOrderBy })
-			.mockReturnValueOnce({ orderBy: selectOrderBy })
-			.mockResolvedValueOnce([{ id: "server_123", label: "Production VPS" }]);
-		selectLimit
-			.mockResolvedValueOnce([
-				{
-					id: "install_1",
-					log: "2026-05-26T03:00:00.000Z [install-docker] Installing Docker",
-					status: "succeeded",
-					step: "start-containers",
-					createdAt: new Date("2026-05-26T03:00:00.000Z"),
-					updatedAt: new Date("2026-05-26T03:05:00.000Z"),
-					serverLabel: "Production VPS",
-				},
-			])
-			.mockResolvedValueOnce([
-				{
-					id: "audit_1",
-					action: "server.action.restart.failed",
-					details: {
-						serverId: "server_123",
-						message: "Action failed: host unreachable",
-					},
-					createdAt: new Date("2026-05-26T04:00:00.000Z"),
-				},
-			]);
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () =>
+									Promise.resolve([
+										{
+											id: "install_1",
+											status: "succeeded",
+											step: "start-containers",
+											createdAt: new Date("2026-05-26T03:00:00.000Z"),
+											updatedAt: new Date("2026-05-26T03:05:00.000Z"),
+											serverLabel: "Production VPS",
+										},
+									]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () =>
+								Promise.resolve([
+									{
+										installId: "install_1",
+										stepName: "install-docker",
+										message: "Installing Docker",
+										createdAt: new Date("2026-05-26T03:00:00.000Z"),
+									},
+								]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () =>
+								Promise.resolve([
+									{
+										id: "audit_1",
+										action: "server.action.restart.failed",
+										details: {
+											message: "Action failed: host unreachable",
+										},
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T04:00:00.000Z"),
+									},
+								]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () =>
+						Promise.resolve([{ id: "server_123", label: "Production VPS" }]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
 
 		const { getLogs } = await import("./logs");
 		const response = await getLogs(createContext());
@@ -129,11 +138,14 @@ describe("logs handlers", () => {
 		});
 	});
 
-	it("clears persisted install and action logs", async () => {
+	it("clears persisted action logs and install events", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
-		selectWhere.mockResolvedValueOnce([
-			{ id: "server_123", label: "Production VPS" },
-		]);
+		selectFrom.mockReturnValueOnce({
+			innerJoin: () => ({
+				where: () =>
+					Promise.resolve([{ id: "install_1" }, { id: "install_2" }]),
+			}),
+		});
 
 		const { clearLogs } = await import("./logs");
 		const response = await clearLogs(createContext());
@@ -141,8 +153,7 @@ describe("logs handlers", () => {
 
 		expect(response.status).toBe(200);
 		expect(payload).toEqual({ status: "cleared" });
-		expect(updateSet).toHaveBeenCalledWith({ log: null });
-		expect(deleteWhere).toHaveBeenCalledTimes(1);
+		expect(deleteWhere).toHaveBeenCalledTimes(2);
 	});
 });
 
