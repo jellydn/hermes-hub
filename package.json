@@ -17,9 +17,9 @@
 		"@better-auth/drizzle-adapter": "^1.6.11",
 		"@hookform/resolvers": "^5.4.0",
 		"@radix-ui/react-slot": "^1.2.4",
-		"@tanstack/react-router": "^1.170.8",
-		"@tanstack/react-router-ssr-query": "^1.167.0",
-		"@tanstack/react-start": "^1.168.13",
+		"@tanstack/react-router": "^1.170.10",
+		"@tanstack/react-router-ssr-query": "^1.167.1",
+		"@tanstack/react-start": "^1.168.18",
 		"better-auth": "^1.6.11",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
@@ -42,7 +42,7 @@
 		"@tanstack/devtools-vite": "^0.7.0",
 		"@tanstack/react-devtools": "^0.10.5",
 		"@tanstack/react-router-devtools": "^1.167.0",
-		"@tanstack/router-plugin": "^1.132.0",
+		"@tanstack/router-plugin": "^1.168.13",
 		"@testing-library/dom": "^10.4.1",
 		"@testing-library/react": "^16.3.0",
 		"@types/node": "^22.10.2",
@@ -53,6 +53,7 @@
 		"jsdom": "^28.1.0",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.0",
-		"vitest": "^4.1.5"
+		"vitest": "^4.1.5",
+		"yaml": "^2.9.0"
 	}
 }
