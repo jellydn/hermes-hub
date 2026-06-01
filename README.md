@@ -7,7 +7,7 @@
 
 > **Your personal AI agent in 5 minutes. Zero terminal required.**
 
-HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/anomalyco/hermes) on any VPS — no SSH, Docker, or Linux knowledge needed.
+HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/nousresearch/hermes-agent) on any VPS — no SSH, Docker, or Linux knowledge needed.
 
 ## ✨ Features
 
@@ -17,11 +17,12 @@ HermesHub is a web application that lets non-technical users deploy and manage a
 - 🚀 **Hermes Install** — Automated Docker + Compose setup and container launch over SSH
 - 📊 **Live Install Progress** — SSE-based real-time streaming logs with replay
 - 📈 **Dashboard** — Aggregated status cards with live VPS metrics (CPU/memory/disk)
-- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter with encrypted key storage
+- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints with encrypted key storage
+- 🚀 **Hermes Provider Deploy** — Push provider config to your Hermes VPS over SSH; sets API keys, base URLs, and default model inside the running container
 - 💬 **Telegram Integration** — Bot token verification via Telegram API; connect/disconnect flow
 - 🔄 **Server Actions** — One-click restart, update, rollback with audit-based history
 - 📋 **Logs Viewer** — Aggregated install logs and operational action history
-- ✅ **20+ tests** — Vitest + Testing Library for components and server integration
+- ✅ **58 tests** — Vitest + Testing Library for components and server integration
 
 ## 📹 Demo
 
@@ -32,6 +33,7 @@ HermesHub is a web application that lets non-technical users deploy and manage a
 - **Node.js >= 20** — JavaScript runtime
 - **Bun** — Fast package manager and runtime (preferred)
 - **PostgreSQL** — Running locally for development
+- **Docker & Docker Compose** — For local full-stack testing with an email server
 
 ## 🚀 Quick Start
 
@@ -56,6 +58,66 @@ bun run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## 🐳 Local Full-Stack Testing with Docker Compose
+
+The project includes a `compose.yaml` that spins up the full stack locally with **PostgreSQL** and **Mailpit** (a fake SMTP server for viewing magic link emails in the browser). This is the recommended way to test the complete auth and onboarding flow end-to-end.
+
+### Setup
+
+```bash
+# 1. Set required environment variables
+export APP_IMAGE=hermes-hub:local
+export BETTER_AUTH_SECRET=dev-only-better-auth-secret-for-local-development
+export BETTER_AUTH_URL=http://localhost:3000
+export ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+
+# 2. Build the Docker image
+docker build -t hermes-hub:local .
+
+# 3. Start the stack (Postgres + Mailpit + App)
+docker compose up -d
+
+# 4. Check that all services are healthy
+docker compose ps
+```
+
+### Login Flow
+
+The app runs in development mode (`NODE_ENV=development`) inside the container, so magic link emails are logged to stdout when no `RESEND_API_KEY` is set:
+
+```bash
+# 1. Request a magic link via the API
+curl -X POST http://localhost:3000/api/auth/send-magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com"}'
+
+# 2. Retrieve the magic link URL from the app logs
+docker compose logs app --tail=5
+# Look for: Magic link for test@example.com: http://localhost:3000/api/auth/...
+
+# 3. Open the magic link URL in your browser to log in
+# Alternatively, use Mailpit to see the email (if RESEND_API_KEY is set):
+open http://localhost:8025
+```
+
+### Service URLs
+
+| Service  | URL                               |
+| -------- | --------------------------------- |
+| App      | http://localhost:3000             |
+| Mailpit  | http://localhost:8025             |
+| Postgres | localhost:5432 (via port mapping) |
+
+### Resetting the Stack
+
+```bash
+# Stop and remove all containers (data persists in volumes)
+docker compose down
+
+# Stop and remove everything including volumes (fresh start)
+docker compose down -v
+```
+
 ## 🧪 Running Tests
 
 ```bash
@@ -71,13 +133,20 @@ bun run build
 
 ## 📦 Scripts
 
-| Command               | Description                       |
-| --------------------- | --------------------------------- |
+| Command               | Description                        |
+| --------------------- | ---------------------------------- |
 | `bun run dev`         | Start Vite dev server on port 3000 |
-| `bun run build`       | Build for production              |
-| `bun run test`        | Run Vitest test suite             |
-| `bun run typecheck`   | Run TypeScript type checking      |
-| `bun run db:generate` | Generate Drizzle migrations       |
+| `bun run build`       | Build for production               |
+| `bun run test`        | Run Vitest test suite              |
+| `bun run typecheck`   | Run TypeScript type checking       |
+| `bun run db:generate` | Generate Drizzle migrations        |
+| `just dev`            | Thin wrapper: `bun run dev`        |
+| `just test`           | Thin wrapper: `bun run test`       |
+| `just typecheck`      | Thin wrapper: `bun run typecheck`  |
+| `just check`          | Runs typecheck + test in parallel  |
+| `just lint`           | Biome check (no auto-fix)          |
+| `just format`         | Biome auto-format (`--write`)      |
+| `just ci`             | Full pipeline: lint → typecheck → test → build |
 
 ## 🔧 Environment Variables
 
@@ -87,6 +156,41 @@ bun run build
 | `ENCRYPTION_KEY`     | 32-byte hex key for AES-256 credential encryption |
 | `BETTER_AUTH_SECRET` | Secret for Better Auth session signing            |
 | `BETTER_AUTH_URL`    | Public URL of the app for magic link emails       |
+| `API_SERVER_MODEL_NAME` | Model ID injected into Hermes Docker Compose on deploy |
+| `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
+| `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
+
+## Troubleshooting
+
+### Telegram says the user is not recognized
+
+When Hermes replies in Telegram with a pairing code and asks the owner to run `hermes pairing approve telegram <code>`, approve the code from HermesHub instead:
+
+1. Open `/telegram`.
+2. Make sure the Telegram bot has been deployed to the Hermes VPS.
+3. Paste the 8-character code into **Pair Telegram users**.
+4. Click **Approve**.
+
+HermesHub runs the approval against the deployed Hermes container over SSH and uses Hermes' own pairing store. You do not need to run `hermes setup` for the managed install path.
+
+If the same Telegram user is asked to approve again after a successful approval, the pairing files may have been written by an older root-run approval command. Refresh the **Pair Telegram users** panel or approve the next code from HermesHub again. HermesHub repairs `$HERMES_HOME/platforms/pairing` ownership and runs the pairing command as the container's `hermes` user so the live Telegram gateway can read the approved-user file.
+
+### Telegram test returns a Hermes API 401 or 502
+
+Check the deployed Hermes container logs on the VPS first:
+
+```bash
+docker logs hermes --tail=100
+```
+
+If the raw provider API works but Hermes returns an authentication error, redeploy the AI provider from HermesHub. For custom OpenAI-compatible providers, the deployed container must receive both the generic base URL variables and the host-derived API key variable. For example:
+
+| Custom base URL | Required vendor key |
+| --------------- | ------------------- |
+| `https://crof.ai/v1` | `CROF_API_KEY` |
+| `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+
+HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
 
 ## 🏗️ Architecture
 
@@ -122,17 +226,17 @@ server/               — Hono API routes and business logic
 
 ### Stack
 
-| Layer      | Choice                                                                  |
-| ---------- | ----------------------------------------------------------------------- |
-| Frontend   | [TanStack Start](https://tanstack.com/start/latest) (file-based routing) |
+| Layer      | Choice                                                                           |
+| ---------- | -------------------------------------------------------------------------------- |
+| Frontend   | [TanStack Start](https://tanstack.com/start/latest) (file-based routing)         |
 | UI         | [TailwindCSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
-| Backend    | [Hono](https://hono.dev/) REST API on `/api/*`                          |
-| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                   |
-| Auth       | [Better Auth](https://www.better-auth.com/) (magic link only)           |
-| SSH        | [node-ssh](https://github.com/steelbrain/node-ssh)                      |
-| Realtime   | Server-Sent Events (Hono `streamSSE`)                                   |
-| Encryption | AES-256-GCM (built-in Node `crypto`)                                    |
-| Tests      | [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/) |
+| Backend    | [Hono](https://hono.dev/) REST API on `/api/*`                                   |
+| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/)                            |
+| Auth       | [Better Auth](https://www.better-auth.com/) (magic link only)                    |
+| SSH        | [node-ssh](https://github.com/steelbrain/node-ssh)                               |
+| Realtime   | Server-Sent Events (Hono `streamSSE`)                                            |
+| Encryption | AES-256-GCM (built-in Node `crypto`)                                             |
+| Tests      | [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)  |
 
 ## 📚 API Reference
 

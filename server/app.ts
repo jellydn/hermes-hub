@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { createMiddleware } from "hono/factory";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { getAuth, hasDatabaseUrl } from "./auth";
 import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
+import { deployProviderToHermes } from "./deploy";
 import {
 	getLatestServerInstallLog,
 	startServerInstall,
@@ -17,7 +19,14 @@ import {
 	listServers,
 	updateServer,
 } from "./servers";
-import { connectTelegram, disconnectTelegram } from "./telegram";
+import {
+	approveTelegramPairing,
+	connectTelegram,
+	deployTelegramToServer,
+	disconnectTelegram,
+	listTelegramPairings,
+	testTelegramBot,
+} from "./telegram";
 
 // 3 requests per 5 minutes per email for magic link sending
 const magicLinkRateLimiter = new RateLimiterMemory({
@@ -61,7 +70,15 @@ function requireHttps(context: {
 	req: { raw: Request };
 	json: (obj: unknown, status?: number) => Response;
 }) {
-	if (process.env.NODE_ENV !== "production") {
+	/**
+	 * NOTE: Uses globalThis.process to avoid Vite's build-time replacement
+	 * of `process.env.NODE_ENV`. The Dockerfile bakes ENV NODE_ENV=production,
+	 * which causes the compiler to inline the literal and tree-shake this
+	 * dev-only early return away.
+	 */
+	const nodeEnv =
+		typeof globalThis !== "undefined" && globalThis.process?.env?.NODE_ENV;
+	if (nodeEnv !== "production") {
 		return;
 	}
 
@@ -83,6 +100,14 @@ function requireHttps(context: {
 		);
 	}
 }
+
+const httpsMiddleware = createMiddleware(async (c, next) => {
+	const result = requireHttps(c);
+	if (result) {
+		return result;
+	}
+	await next();
+});
 
 async function applyMagicLinkRateLimit(request: Request) {
 	let email: unknown = null;
@@ -173,66 +198,27 @@ apiApp.get("/health", async (context) => {
 });
 
 apiApp.get("/servers", listServers);
-apiApp.post("/servers/connect", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return connectServer(c);
-});
+apiApp.post("/servers/connect", httpsMiddleware, connectServer);
 apiApp.get("/servers/:id", getServerDetail);
-apiApp.patch("/servers/:id", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return updateServer(c);
-});
-apiApp.delete("/servers/:id", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return deleteServer(c);
-});
-apiApp.post("/servers/:id/install", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return startServerInstall(c);
-});
+apiApp.patch("/servers/:id", httpsMiddleware, updateServer);
+apiApp.delete("/servers/:id", httpsMiddleware, deleteServer);
+apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
-apiApp.post("/servers/:id/actions", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return runServerAction(c);
-});
+apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
 apiApp.post("/logs/clear", clearLogs);
-apiApp.post("/providers", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return saveProviderConfig(c);
-});
-apiApp.post("/providers/test", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return testProviderConfig(c);
-});
-apiApp.post("/telegram/connect", (c) => {
-	const httpsResult = requireHttps(c);
-	if (httpsResult) {
-		return httpsResult;
-	}
-	return connectTelegram(c);
-});
+apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
+apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
+apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
+apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", disconnectTelegram);
+apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);
+apiApp.post("/telegram/test", httpsMiddleware, testTelegramBot);
+apiApp.get("/telegram/pairings", listTelegramPairings);
+apiApp.post(
+	"/telegram/pairings/approve",
+	httpsMiddleware,
+	approveTelegramPairing,
+);

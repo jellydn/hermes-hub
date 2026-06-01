@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import {
@@ -9,39 +9,30 @@ import {
 	isValidAiModel,
 } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
-import { decryptSecret, encryptSecret } from "./crypto";
+import { encryptSecret } from "./crypto";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { aiProviders, auditLogs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import {
+	buildProviderEnvMap,
+	isApiKeyRequired,
+	PROVIDER_ENV_CONFIGS,
+	type ProviderConfigSummary,
+	type ProviderRequest,
+	type StoredProviderRecord,
+} from "./providers/config";
+import {
+	ProviderConnectionError,
+	verifyProviderConnection,
+} from "./providers/connection";
+import {
+	decryptApiKey,
+	getApiKeyLast4,
+	getLatestProviderRecord,
+} from "./providers/records";
 
-type ProviderRequest = {
-	provider: string;
-	model?: string;
-	apiKey?: string;
-};
-
-type StoredProviderRecord = {
-	provider: string;
-	model: string;
-	encryptedApiKey: string;
-};
-
-export type ProviderConfigSummary = {
-	provider: AiProviderId;
-	model: string;
-	keyLast4: string | null;
-	hasStoredKey: boolean;
-};
-
-class ProviderConnectionError extends Error {
-	constructor(
-		message: string,
-		readonly code: "invalid_api_key" | "connection_failed",
-	) {
-		super(message);
-		this.name = "ProviderConnectionError";
-	}
-}
+export type { ProviderConfigSummary };
 
 export async function getCurrentProviderConfig(userId: string) {
 	const record = await getLatestProviderRecord(userId);
@@ -49,11 +40,14 @@ export async function getCurrentProviderConfig(userId: string) {
 		return null;
 	}
 
+	const parsedApiKey = decryptApiKey(record.encryptedApiKey);
+
 	return {
 		provider: record.provider,
 		model: record.model,
-		keyLast4: getKeyLast4(record.encryptedApiKey),
+		keyLast4: getApiKeyLast4(parsedApiKey),
 		hasStoredKey: true,
+		baseUrl: record.baseUrl ?? undefined,
 	} satisfies ProviderConfigSummary;
 }
 
@@ -95,6 +89,7 @@ export async function saveProviderConfig(context: Context) {
 			userId: session.user.id,
 			provider: parsed.provider,
 			encryptedApiKey: encryptSecret(resolvedApiKey.apiKey),
+			baseUrl: resolvedApiKey.baseUrl || null,
 			model: parsed.model,
 			label: formatAiProviderLabel(parsed.provider),
 			isActive: true,
@@ -110,12 +105,15 @@ export async function saveProviderConfig(context: Context) {
 			ipAddress,
 		});
 
+		clearDashboardCache();
+
 		return context.json({
 			provider: {
 				provider: parsed.provider,
 				model: parsed.model,
 				keyLast4: getApiKeyLast4(resolvedApiKey.apiKey),
 				hasStoredKey: true,
+				baseUrl: resolvedApiKey.baseUrl || undefined,
 			} satisfies ProviderConfigSummary,
 		});
 	} catch (error) {
@@ -157,6 +155,7 @@ export async function testProviderConfig(context: Context) {
 		await verifyProviderConnection({
 			provider: parsed.provider,
 			apiKey: resolvedApiKey.apiKey,
+			baseUrl: resolvedApiKey.baseUrl,
 		});
 
 		return context.json({ status: "connected" });
@@ -174,12 +173,10 @@ export async function testProviderConfig(context: Context) {
 
 function parseProviderRequest(payload: ProviderRequest) {
 	if (!isAiProviderId(payload.provider)) {
-		return { error: "Choose OpenAI, Anthropic, or OpenRouter." };
+		return { error: "Choose a valid provider." };
 	}
 
-	const model = (
-		payload.model?.trim() || getDefaultAiModel(payload.provider)
-	).trim();
+	const model = payload.model?.trim() || getDefaultAiModel(payload.provider);
 	if (!isValidAiModel(payload.provider, model)) {
 		return { error: "Choose a valid model for the selected provider." };
 	}
@@ -188,121 +185,80 @@ function parseProviderRequest(payload: ProviderRequest) {
 		provider: payload.provider,
 		model,
 		apiKey: payload.apiKey?.trim() ?? "",
+		baseUrl: payload.baseUrl?.trim() ?? "",
 	};
 }
 
 function resolveProviderApiKey(
-	parsed: { provider: AiProviderId; model: string; apiKey: string },
+	parsed: {
+		provider: AiProviderId;
+		model: string;
+		apiKey: string;
+		baseUrl?: string;
+	},
 	existingRecord: StoredProviderRecord | null,
 ) {
-	if (parsed.apiKey) {
-		return { apiKey: parsed.apiKey };
+	let resolvedApiKey = parsed.apiKey;
+	let resolvedBaseUrl = parsed.baseUrl;
+
+	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
+		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
+		if (
+			!resolvedApiKey &&
+			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
+		) {
+			return { error: "Stored API key could not be read. Paste a new key." };
+		}
+		if (!resolvedBaseUrl) {
+			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
+		}
 	}
 
-	if (!existingRecord || existingRecord.provider !== parsed.provider) {
+	if (!isApiKeyRequired(parsed.provider) && !resolvedBaseUrl) {
+		return { error: "Base URL is required." };
+	}
+
+	if (isApiKeyRequired(parsed.provider) && !resolvedApiKey) {
 		return { error: "API key is required." };
 	}
 
-	try {
-		return { apiKey: decryptSecret(existingRecord.encryptedApiKey) };
-	} catch {
-		return { error: "Stored API key could not be read. Paste a new key." };
-	}
+	return { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl };
 }
 
-async function getLatestProviderRecord(userId: string) {
-	const [record] = await getDb()
-		.select({
-			provider: aiProviders.provider,
-			model: aiProviders.model,
-			encryptedApiKey: aiProviders.encryptedApiKey,
-		})
-		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
-		.orderBy(desc(aiProviders.createdAt))
-		.limit(1);
-
-	return record ?? null;
-}
-
-async function verifyProviderConnection(input: {
-	provider: AiProviderId;
-	apiKey: string;
-}) {
-	const request = createProviderTestRequest(input);
-
-	let response: Response;
-
-	try {
-		response = await fetch(request.url, request.init);
-	} catch {
-		throw new ProviderConnectionError("Connection failed", "connection_failed");
+export async function getProviderDeployConfig(
+	userId: string,
+): Promise<{ envVars: Record<string, string>; model: string } | null> {
+	const record = await getLatestProviderRecord(userId);
+	if (!record || !isAiProviderId(record.provider)) {
+		return null;
 	}
 
-	if (response.ok) {
-		return;
-	}
+	const config = PROVIDER_ENV_CONFIGS[record.provider];
+	let decryptedApiKey = "";
 
-	if (response.status === 401 || response.status === 403) {
-		throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
-	}
+	if (config?.apiKeyEnvVar) {
+		const isKeyRequired = isApiKeyRequired(record.provider);
 
-	throw new ProviderConnectionError("Connection failed", "connection_failed");
-}
+		if (record.encryptedApiKey) {
+			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
+			if (!decryptedApiKey) {
+				throw new Error(
+					"Stored API key could not be decrypted. Paste a new key.",
+				);
+			}
+		}
 
-function createProviderTestRequest(input: {
-	provider: AiProviderId;
-	apiKey: string;
-}): { url: string; init: RequestInit } {
-	if (input.provider === "anthropic") {
-		return {
-			url: "https://api.anthropic.com/v1/models",
-			init: {
-				method: "GET",
-				headers: {
-					"anthropic-version": "2023-06-01",
-					"x-api-key": input.apiKey,
-				},
-			},
-		};
-	}
-
-	if (input.provider === "openrouter") {
-		return {
-			url: "https://openrouter.ai/api/v1/models",
-			init: {
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${input.apiKey}`,
-				},
-			},
-		};
+		if (isKeyRequired && !decryptedApiKey) {
+			throw new Error(`API key is required for provider ${record.provider}.`);
+		}
 	}
 
 	return {
-		url: "https://api.openai.com/v1/models",
-		init: {
-			method: "GET",
-			headers: {
-				Authorization: `Bearer ${input.apiKey}`,
-			},
-		},
+		envVars: buildProviderEnvMap(
+			record.provider,
+			decryptedApiKey,
+			record.baseUrl,
+		),
+		model: record.model,
 	};
-}
-
-function getKeyLast4(encryptedApiKey: string) {
-	try {
-		return getApiKeyLast4(decryptSecret(encryptedApiKey));
-	} catch {
-		return null;
-	}
-}
-
-function getApiKeyLast4(apiKey: string) {
-	const trimmedKey = apiKey.trim();
-	if (!trimmedKey) {
-		return null;
-	}
-
-	return trimmedKey.slice(-4);
 }

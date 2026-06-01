@@ -1,7 +1,13 @@
 {
-	"include": ["**/*.ts", "**/*.tsx"],
+	"include": [
+		"src/**/*",
+		"server/**/*",
+		"scripts/**/*",
+		"drizzle.config.ts",
+		"vite.config.ts"
+	],
 	"compilerOptions": {
-		"target": "ES2022",
+		"target": "ESNext",
 		"jsx": "react-jsx",
 		"module": "ESNext",
 		"paths": {
@@ -15,10 +21,13 @@
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
 		"skipLibCheck": true,
+		"skipDefaultLibCheck": true,
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true
+		"noUncheckedSideEffectImports": true,
+		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo"
 	}
 }

@@ -1,11 +1,16 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	CheckCircle2,
+	CloudUpload,
 	KeyRound,
 	LoaderCircle,
 	Radio,
+	Server,
 	ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,43 +26,72 @@ export type ProviderSettingsSummary = {
 	model: string;
 	keyLast4: string | null;
 	hasStoredKey: boolean;
+	baseUrl?: string | null;
+};
+
+type TelegramDeployInfo = {
+	deployedServerHost: string;
 };
 
 type ProviderSettingsProps = {
 	initialConfig: ProviderSettingsSummary | null;
+	telegramDeploy?: TelegramDeployInfo | null;
 };
 
 type ProviderFormState = {
 	provider: AiProviderId;
 	model: string;
 	apiKey: string;
+	baseUrl: string;
 };
 
 const initialProvider = aiProviderOptions[0]?.id ?? "openai";
 
-export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
+const providerSchema = z.object({
+	provider: z.custom<AiProviderId>(),
+	model: z.string(),
+	apiKey: z.string(),
+	baseUrl: z.string(),
+});
+
+export function ProviderSettings({
+	initialConfig,
+	telegramDeploy,
+}: ProviderSettingsProps) {
 	const [savedConfig, setSavedConfig] =
 		useState<ProviderSettingsSummary | null>(initialConfig);
-	const [form, setForm] = useState<ProviderFormState>(() =>
-		createInitialFormState(initialConfig),
-	);
+
+	const { register, watch, setValue } = useForm<ProviderFormState>({
+		resolver: zodResolver(providerSchema),
+		defaultValues: createInitialFormState(initialConfig),
+	});
+
+	const form = watch();
 	const [isSaving, setIsSaving] = useState(false);
 	const [isTesting, setIsTesting] = useState(false);
 	const [saveMessage, setSaveMessage] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [testError, setTestError] = useState<string | null>(null);
 	const [isConnected, setIsConnected] = useState(false);
+	const [isDeploying, setIsDeploying] = useState(false);
+	const [deployError, setDeployError] = useState<string | null>(null);
+	const [deployResult, setDeployResult] = useState<string | null>(null);
 
 	const providerOption = getAiProviderOption(form.provider);
 	const existingKeyLast4 =
 		savedConfig?.provider === form.provider ? savedConfig.keyLast4 : null;
 
 	function updateProvider(provider: AiProviderId) {
-		setForm({
-			provider,
-			model: getDefaultAiModel(provider),
-			apiKey: "",
-		});
+		const option = getAiProviderOption(provider);
+		setValue("provider", provider);
+		setValue("model", getDefaultAiModel(provider));
+		setValue("apiKey", "");
+		setValue(
+			"baseUrl",
+			option?.id === savedConfig?.provider && savedConfig?.baseUrl
+				? savedConfig.baseUrl
+				: (option?.defaultBaseUrl ?? ""),
+		);
 		setSaveMessage(null);
 		setSaveError(null);
 		setTestError(null);
@@ -88,7 +122,7 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 			}
 
 			setSavedConfig(payload.provider);
-			setForm((currentForm) => ({ ...currentForm, apiKey: "" }));
+			setValue("apiKey", "");
 			setSaveMessage("Provider settings saved.");
 		} finally {
 			setIsSaving(false);
@@ -121,6 +155,37 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 			setIsConnected(payload?.status === "connected");
 		} finally {
 			setIsTesting(false);
+		}
+	}
+
+	async function handleDeployToHermes() {
+		setIsDeploying(true);
+		setDeployError(null);
+		setDeployResult(null);
+
+		try {
+			const response = await fetch("/api/providers/deploy", {
+				method: "POST",
+			});
+
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+				status?: string;
+				model?: string;
+			} | null;
+
+			if (!response.ok) {
+				setDeployError(payload?.error ?? "Deploy failed");
+				return;
+			}
+
+			setDeployResult(
+				payload?.model
+					? `Model "${payload.model}" deployed successfully.`
+					: "Deployed successfully.",
+			);
+		} finally {
+			setIsDeploying(false);
 		}
 	}
 
@@ -197,20 +262,15 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							hint={
 								existingKeyLast4
 									? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
-									: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
+									: providerOption?.requiresBaseUrl
+										? "API Key (optional for providers using a base URL)."
+										: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
 							}
 						>
 							<input
 								id="apiKey"
-								name="apiKey"
 								type="password"
-								value={form.apiKey}
-								onChange={(event) =>
-									setForm((currentForm) => ({
-										...currentForm,
-										apiKey: event.currentTarget.value,
-									}))
-								}
+								{...register("apiKey")}
 								className={inputClassName}
 								placeholder={
 									existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
@@ -218,25 +278,37 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							/>
 						</Field>
 
+						{providerOption?.requiresBaseUrl ? (
+							<Field
+								label="Base URL"
+								name="baseUrl"
+								hint={`The base URL for the ${providerOption?.label ?? ""} endpoint.`}
+							>
+								<input
+									id="baseUrl"
+									type="text"
+									{...register("baseUrl")}
+									className={inputClassName}
+									placeholder={
+										providerOption?.defaultBaseUrl ??
+										"https://api.yourprovider.com/v1"
+									}
+								/>
+							</Field>
+						) : null}
+
 						{providerOption?.requiresCustomModel ? (
 							<Field
 								label="Custom model ID"
 								name="model"
-								hint="Enter the exact OpenRouter model identifier Hermes should call."
+								hint={`Enter the model ID or name for ${providerOption?.label ?? ""}.`}
 							>
 								<input
 									id="model"
-									name="model"
 									type="text"
-									value={form.model}
-									onChange={(event) =>
-										setForm((currentForm) => ({
-											...currentForm,
-											model: event.currentTarget.value,
-										}))
-									}
+									{...register("model")}
 									className={inputClassName}
-									placeholder="openai/gpt-4o-mini"
+									placeholder={providerOption?.defaultModel || "deepseek-chat"}
 								/>
 							</Field>
 						) : (
@@ -247,14 +319,7 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 							>
 								<select
 									id="model"
-									name="model"
-									value={form.model}
-									onChange={(event) =>
-										setForm((currentForm) => ({
-											...currentForm,
-											model: event.currentTarget.value,
-										}))
-									}
+									{...register("model")}
 									className={inputClassName}
 								>
 									{providerOption?.models.map((model) => (
@@ -336,6 +401,11 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 								? `Model: ${savedConfig.model}`
 								: "Save a provider configuration to power Hermes responses."}
 						</p>
+						{savedConfig?.baseUrl ? (
+							<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
+								Base URL: {savedConfig.baseUrl}
+							</p>
+						) : null}
 						{savedConfig?.keyLast4 ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
 								Stored key ending in {savedConfig.keyLast4}
@@ -344,11 +414,69 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 					</section>
 
 					<section className="island-shell rounded-[2rem] p-6">
+						<p className="island-kicker mb-2">Hermes deployment</p>
+						{telegramDeploy ? (
+							<>
+								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+									Push your current provider config to the Hermes server.
+								</p>
+								{savedConfig ? (
+									<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+										Model:{" "}
+										<span className="font-semibold text-[var(--sea-ink)]">
+											{savedConfig.model}
+										</span>
+									</p>
+								) : null}
+								<div className="mt-4">
+									<Button
+										type="button"
+										onClick={() => void handleDeployToHermes()}
+										disabled={isDeploying || !savedConfig}
+									>
+										{isDeploying ? (
+											<LoaderCircle className="h-4 w-4 animate-spin" />
+										) : (
+											<CloudUpload className="h-4 w-4" />
+										)}
+										<span>
+											{isDeploying ? "Deploying..." : "Deploy to Hermes Server"}
+										</span>
+									</Button>
+								</div>
+								{deployError ? (
+									<p className="mt-3 mb-0 text-sm text-red-600">
+										{deployError}
+									</p>
+								) : null}
+								{deployResult ? (
+									<p className="mt-3 mb-0 text-sm text-emerald-600">
+										{deployResult}
+									</p>
+								) : null}
+							</>
+						) : (
+							<>
+								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+									Deploy a Telegram bot to a VPS first to enable Hermes
+									deployment.
+								</p>
+								<div className="mt-4 flex items-center gap-2 text-sm text-[var(--sea-ink-soft)]">
+									<Server className="h-4 w-4" />
+									<span>Not deployed</span>
+								</div>
+							</>
+						)}
+					</section>
+
+					<section className="island-shell rounded-[2rem] p-6">
 						<p className="island-kicker mb-2">Model notes</p>
 						<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
 							<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
 							<li>Anthropic: Sonnet and Haiku variants.</li>
 							<li>OpenRouter accepts any model ID.</li>
+							<li>Ollama: Run local open-weight models (e.g. llama3).</li>
+							<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
 						</ul>
 					</section>
 				</aside>
@@ -359,11 +487,13 @@ export function ProviderSettings({ initialConfig }: ProviderSettingsProps) {
 
 function createInitialFormState(initialConfig: ProviderSettingsSummary | null) {
 	const provider = initialConfig?.provider ?? initialProvider;
+	const option = getAiProviderOption(provider);
 
 	return {
 		provider,
 		model: initialConfig?.model ?? getDefaultAiModel(provider),
 		apiKey: "",
+		baseUrl: initialConfig?.baseUrl ?? option?.defaultBaseUrl ?? "",
 	};
 }
 

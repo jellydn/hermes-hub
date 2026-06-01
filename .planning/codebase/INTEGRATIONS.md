@@ -1,150 +1,104 @@
 # External Integrations
 
-**Analysis Date:** 2026-05-28
+**Analysis Date:** 2026-05-31
 
 ## APIs & External Services
+
 **AI Providers:**
-- OpenAI - GPT-4o, GPT-4o-mini, GPT-4-turbo models for AI features
-- Anthropic - Claude Sonnet 4, Claude Haiku 3.5 models for AI features
-- OpenRouter - Custom model routing with user-specified model IDs
-- SDK/Client: Native `fetch` calls to provider APIs (no SDK dependencies)
-- Auth: User-provided API keys stored encrypted in `ai_providers` table
+- OpenAI Models API - validate provider API key/connectivity (`server/providers.ts`)
+- SDK/Client: native `fetch` in server handlers (`server/providers.ts`)
+- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/crypto.ts`, `server/db/schema.ts`)
 
-**Email Service:**
-- Resend - Magic link email delivery for authentication
-- SDK/Client: Native `fetch` to Resend HTTP API (`https://api.resend.com/emails`)
-- Auth: `RESEND_API_KEY` environment variable
+**AI Providers:**
+- Anthropic Models API - validate Anthropic key/connectivity (`server/providers.ts`)
+- SDK/Client: native `fetch` (`server/providers.ts`)
+- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/db/schema.ts`)
 
-**Telegram:**
-- Telegram Bot API - Bot configuration and verification
-- SDK/Client: Native `fetch` to `https://api.telegram.org/bot{token}/{method}`
-- Auth: User-provided bot tokens stored encrypted in `telegram_configs` table
+**AI Providers:**
+- OpenRouter API - validate OpenRouter key/connectivity (`server/providers.ts`)
+- SDK/Client: native `fetch` (`server/providers.ts`)
+- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/db/schema.ts`)
+
+**AI Providers:**
+- Ollama/custom OpenAI-compatible endpoint - `/models` probe against configured base URL (`src/lib/ai-providers.ts`, `server/providers.ts`)
+- SDK/Client: native `fetch` (`server/providers.ts`)
+- Auth: optional bearer key + base URL from user config, persisted encrypted (`server/providers.ts`, `server/db/schema.ts`)
+
+**Email Delivery:**
+- Resend API - send Better Auth magic-link emails (`server/lib/send-magic-link-email.ts`, `server/auth.ts`)
+- SDK/Client: native `fetch` (`server/lib/send-magic-link-email.ts`)
+- Auth: `RESEND_API_KEY` (+ optional `RESEND_FROM`) (`.env.example`, `compose.yaml`, `.github/workflows/deploy.yml`)
+
+**Messaging:**
+- Telegram Bot API - bot token verification (`getMe`) and connect flow (`server/telegram.ts`)
+- SDK/Client: native `fetch` (`server/telegram.ts`)
+- Auth: user-supplied bot token, encrypted at rest (`server/telegram.ts`, `server/db/schema.ts`, `server/crypto.ts`)
+
+**Remote Infra Control:**
+- SSH to user VPS for install/deploy/restart/update/rollback (`server/ssh.ts`, `server/install.ts`, `server/server-actions.ts`, `server/telegram.ts`, `server/providers.ts`)
+- SDK/Client: `node-ssh` (`package.json`, `server/ssh.ts`)
+- Auth: stored encrypted SSH credential or ephemeral session credential (`server/server-records.ts`, `server/credentials.ts`, `server/db/schema.ts`)
 
 ## Data Storage
-**Databases:**
-- PostgreSQL 17 (Alpine) - Primary data store
-- Connection: `DATABASE_URL` environment variable
-- Client: Drizzle ORM with `postgres` (postgres.js) driver
-- Connection pooling: Configurable via `DB_POOL_MAX` (default: 5)
 
-**Schema Tables:**
-- `health_checks` - System health monitoring
-- `user` - Better Auth user accounts
-- `session` - Better Auth sessions
-- `account` - Better Auth linked accounts
-- `verification` - Magic link verification tokens
-- `servers` - Managed server configurations (encrypted credentials)
-- `installs` - Installation tracking and logs
-- `ai_providers` - Encrypted AI provider API keys
-- `telegram_configs` - Encrypted Telegram bot tokens
-- `audit_logs` - System audit trail
+**Databases:**
+- PostgreSQL (primary relational store for auth, servers, installs, providers, telegram config, audit logs) (`server/db/schema.ts`, `compose.yaml`)
+- Connection: `DATABASE_URL` (`.env.example`, `server/db/index.ts`, `drizzle.config.ts`)
+- Client: `drizzle-orm` + `postgres` (`package.json`, `server/db/index.ts`)
 
 **File Storage:**
-- Local filesystem only - No cloud storage integrations
+- Local filesystem only for built static assets and deployment artifacts; no external object storage integration (`scripts/start-production.mjs`, `Dockerfile`)
 
 **Caching:**
-- None - No Redis or external caching layer
+- No external cache service; uses in-memory stores for rate limiting and ephemeral credentials (`server/app.ts`, `server/credentials.ts`)
 
 ## Authentication & Identity
+
 **Auth Provider:**
-- Better Auth - Custom magic link authentication
-- Implementation:
-  - Lazy initialization in `server/auth.ts` (avoids crashes when `DATABASE_URL` missing)
-  - Magic link plugin with configurable email delivery
-  - Session management via cookies (TanStack Start integration)
-  - Database adapter via `@better-auth/drizzle-adapter`
-
-**Session Management:**
-- Cookie-based sessions with `better-auth/tanstack-start` integration
-- Session validation via `getAuthSession(headers)` helper
-- Automatic session expiration handling
-
-**Credential Encryption:**
-- AES-256-GCM encryption for sensitive data
-- `ENCRYPTION_KEY` environment variable (32-byte hex)
-- Used for: server SSH credentials, AI provider API keys, Telegram bot tokens
+- Better Auth (magic-link passwordless auth) (`server/auth.ts`, `server/app.ts`)
+- Implementation: Better Auth + Drizzle adapter + Postgres-backed session/user tables + magic-link email sender (`server/auth.ts`, `server/db/schema.ts`, `server/lib/send-magic-link-email.ts`)
 
 ## Monitoring & Observability
+
 **Error Tracking:**
-- None - No external error tracking service (Sentry, etc.)
+- None (no Sentry/Datadog/etc. integration found) (`package.json`, `server/**/*`)
 
 **Logs:**
-- Structured audit logs in `audit_logs` database table
-- Actions tracked: `provider.saved`, `telegram.connected`, `telegram.disconnected`, `server.install.started`, `server.install.succeeded`, `server.install.failed`
-- API request logging via Hono middleware
-
-**Health Checks:**
-- `/api/health` endpoint - Database connection status
-- Docker container healthcheck - HTTP polling every 30s
+- Application-level logging via console + persisted operational/audit/install logs in Postgres (`server/lib/send-magic-link-email.ts`, `server/install.ts`, `server/server-actions.ts`, `server/db/schema.ts`)
 
 ## CI/CD & Deployment
+
 **Hosting:**
-- Primary: VPS with Docker Compose (self-managed)
-- Alternative: Dokku (PaaS deployment)
-- Container registry: GitHub Container Registry (GHCR)
+- Self-hosted VPS via Docker Compose and optional Dokku deployment path (`.github/workflows/deploy.yml`, `compose.yaml`, `Dockerfile`)
 
 **CI Pipeline:**
-- GitHub Actions (`ci.yml`, `deploy.yml`)
-- Pipeline stages:
-  1. Code validation (Biome linting)
-  2. Type checking (TypeScript)
-  3. Test execution (Vitest)
-  4. Production build (Vite)
-  5. Docker image build and push (VPS only)
-  6. Deployment (SSH to VPS or Dokku git push)
-
-**Deployment Targets:**
-- VPS: Docker image pulled from GHCR, Docker Compose orchestration
-- Dokku: Git push deployment with config sync via SSH
+- GitHub Actions (validate + build + deploy workflows) (`.github/workflows/ci.yml`, `.github/workflows/deploy.yml`)
+- Image registry integration: GitHub Container Registry (GHCR) (`.github/workflows/deploy.yml`)
 
 ## Environment Configuration
-**Required env vars:**
-- `DATABASE_URL` - PostgreSQL connection string (required for all operations)
-- `ENCRYPTION_KEY` - 32-byte hex key for AES-256 credential encryption
-- `BETTER_AUTH_SECRET` - Secret for Better Auth session signing
-- `BETTER_AUTH_URL` - Public application URL (for magic links)
 
-**Optional env vars:**
-- `RESEND_API_KEY` - Resend email API key (required for magic links in production)
-- `RESEND_FROM` - Sender email address (defaults to `HermesHub <onboarding@resend.dev>`)
-- `DB_POOL_MAX` - PostgreSQL connection pool size (default: 5)
-- `TRUSTED_PROXY_COUNT` - Number of trusted proxies (default: 1)
-- `APP_PORT` - Application port (default: 3000)
+**Required env vars:**
+- Core app/runtime: `DATABASE_URL`, `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (`.env.example`, `server/auth.ts`, `server/crypto.ts`, `server/db/index.ts`)
+- Integration/runtime tuning: `RESEND_API_KEY`, `RESEND_FROM`, `TRUSTED_PROXY_COUNT`, `DB_POOL_MAX`, `PORT`, `HOST` (`server/lib/send-magic-link-email.ts`, `server/lib/get-client-ip.ts`, `server/db/index.ts`, `scripts/start-production.mjs`, `compose.yaml`)
 
 **Secrets location:**
-- Local development: `.env` file (gitignored)
-- Production: Docker environment variables or Dokku config
-- CI/CD: GitHub Actions secrets and variables
+- Local development: `.env` values loaded from `.env.example` template (`.env.example`)
+- CI/CD deployment: GitHub Actions Secrets/Variables (`.github/workflows/deploy.yml`)
+- User-supplied provider keys, Telegram bot token, and SSH credentials encrypted before DB persistence (`server/crypto.ts`, `server/providers.ts`, `server/telegram.ts`, `server/server-records.ts`)
 
 ## Webhooks & Callbacks
+
 **Incoming:**
-- None - No webhook endpoints configured
+- No third-party webhook receiver endpoints detected; API is user/client initiated (`server/app.ts`)
+- Auth callback-style routes are internal Better Auth handlers (`/api/auth/*`) rather than external webhook processors (`server/app.ts`, `server/auth.ts`)
 
 **Outgoing:**
-- Telegram Bot API calls (token verification)
-- AI Provider API calls (connection testing)
-- Resend email API calls (magic link delivery)
-
-## SSH & Remote Server Management
-**Integration:**
-- `node-ssh` library for remote server operations
-- Supported authentication methods: password, SSH key
-- Operations performed:
-  - Server connection verification
-  - OS detection and validation (Ubuntu 22.04+, Debian 12+)
-  - Docker installation and configuration
-  - Hermes agent deployment via docker-compose
-
-**Security:**
-- Credentials stored encrypted in database (when `storeCredential=true`)
-- Session-based ephemeral credentials (30-minute TTL) for non-stored credentials
-- Automatic credential cleanup every 5 minutes
-
-## Rate Limiting
-**Implementation:**
-- `rate-limiter-flexible` library for API rate limiting
-- Magic link endpoint: 3 requests per 5 minutes per email
-- In-memory rate limiter (no Redis dependency)
+- `https://api.resend.com/emails` (magic-link delivery) (`server/lib/send-magic-link-email.ts`)
+- `https://api.telegram.org/bot.../getMe` (bot token verification) (`server/telegram.ts`)
+- `https://api.openai.com/v1/models`, `https://api.anthropic.com/v1/models`, `https://openrouter.ai/api/v1/models`, and configurable custom base URL `/models` checks (`server/providers.ts`, `src/lib/ai-providers.ts`)
+- SSH-executed Docker/CLI commands on user VPS for Hermes deployment/operations (`server/install.ts`, `server/server-actions.ts`, `server/telegram.ts`, `server/providers.ts`)
 
 ---
-*Integration audit: 2026-05-28*
+
+*Integration audit: 2026-05-31*
+

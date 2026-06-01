@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
 import { hermesImageRepository } from "./constants";
+import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { auditLogs, installs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
@@ -13,11 +14,10 @@ import {
 } from "./server-detail-snapshot";
 import {
 	getOwnedServerRecord,
-	normalizeAuthMethod,
 	type OwnedServerRecord,
-	resolveServerCredential,
+	resolveServerSshConfigOrError,
 } from "./server-records";
-import { SshConnectError, withSshConnection } from "./ssh";
+import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 export { getRollbackTargetFromHistory, getServerDetailSnapshot };
 
@@ -106,21 +106,14 @@ export async function runServerAction(context: Context) {
 		return context.json({ error: "Server not found" }, 404);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return context.json({ error: sshResult.error }, 400);
 	}
-
-	let credential: string;
-	try {
-		credential = resolveServerCredential(serverRecord, session.session.id);
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Temporary credential expired. Reconnect the server first.";
-		return context.json({ error: message }, 400);
-	}
+	const { authMethod, credential } = sshResult;
 
 	const versionTarget =
 		action === "rollback"
@@ -150,22 +143,45 @@ export async function runServerAction(context: Context) {
 			command,
 		});
 
-		await db.insert(auditLogs).values({
-			userId: session.user.id,
-			action: `server.action.${action}.succeeded`,
-			details: {
-				serverId,
-				host: serverRecord.host,
-				message: actionSuccessMessage(action, versionTarget),
-				output: commandOutput || null,
-				...(versionTarget ? { imageRef: versionTarget } : {}),
-			},
-			ipAddress,
+		// Persist success audit log and (for update/rollback) install version in
+		// a single transaction so both writes commit atomically. If the version
+		// update fails, the audit log also rolls back, keeping the install
+		// history consistent with the action record.
+		await db.transaction(async (tx) => {
+			await tx.insert(auditLogs).values({
+				userId: session.user.id,
+				action: `server.action.${action}.succeeded`,
+				details: {
+					serverId,
+					host: serverRecord.host,
+					message: actionSuccessMessage(action, versionTarget),
+					output: commandOutput || null,
+					...(versionTarget ? { imageRef: versionTarget } : {}),
+				},
+				ipAddress,
+			});
+
+			if (action === "update" || action === "rollback") {
+				const [latestInstall] = await tx
+					.select({ id: installs.id })
+					.from(installs)
+					.where(eq(installs.serverId, serverId))
+					.orderBy(desc(installs.createdAt))
+					.limit(1);
+
+				if (latestInstall) {
+					await tx
+						.update(installs)
+						.set({
+							version: versionTarget ?? "latest",
+							updatedAt: new Date(),
+						})
+						.where(eq(installs.id, latestInstall.id));
+				}
+			}
 		});
 
-		if (action === "update" || action === "rollback") {
-			await updateLatestInstallVersion(serverId, versionTarget ?? "latest");
-		}
+		clearDashboardCache();
 
 		return context.json({
 			status: "succeeded",
@@ -217,7 +233,7 @@ export async function getServerDetail(context: Context) {
 
 async function executeServerAction(input: {
 	server: OwnedServerRecord;
-	authMethod: NonNullable<ReturnType<typeof normalizeAuthMethod>>;
+	authMethod: SshAuthMethod;
 	credential: string;
 	command: string;
 }) {
@@ -252,15 +268,14 @@ function actionSuccessMessage(
 	action: ServerActionType,
 	versionTarget: string | null,
 ) {
-	if (action === "restart") {
-		return "Restarted Hermes successfully.";
+	switch (action) {
+		case "restart":
+			return "Restarted Hermes successfully.";
+		case "update":
+			return "Updated Hermes to the latest image successfully.";
+		default:
+			return `Rolled Hermes back to ${versionTarget ?? "the previous image"}.`;
 	}
-
-	if (action === "update") {
-		return "Updated Hermes to the latest image successfully.";
-	}
-
-	return `Rolled Hermes back to ${versionTarget ?? "the previous image"}.`;
 }
 
 async function getRollbackTarget(serverId: string) {
@@ -272,25 +287,4 @@ async function getRollbackTarget(serverId: string) {
 		.limit(1);
 
 	return latestInstall?.version ?? null;
-}
-
-async function updateLatestInstallVersion(serverId: string, version: string) {
-	const [latestInstall] = await getDb()
-		.select({ id: installs.id })
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	if (!latestInstall) {
-		return;
-	}
-
-	await getDb()
-		.update(installs)
-		.set({
-			version,
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, latestInstall.id));
 }

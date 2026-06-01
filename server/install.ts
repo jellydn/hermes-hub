@@ -1,14 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
-import { defaultHermesImage } from "./constants";
-import { getSessionCredential } from "./credentials";
-import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
-import { auditLogs, installs, servers } from "./db/schema";
+import { auditLogs, installs } from "./db/schema";
+import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
-	emitInstallEvent,
 	ensureInstallStream,
 	HEARTBEAT_INTERVAL_MS,
 	IDLE_TIMEOUT_MS,
@@ -17,67 +14,12 @@ import {
 	releaseInstallStream,
 	tryClaimInstallStream,
 } from "./install/sse-stream";
+import { installSteps, runInstallWorkflow } from "./install/workflow";
 import { getClientIp } from "./lib/get-client-ip";
-import { getOwnedServerRecord } from "./server-records";
-import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
-
-type InstallStep = {
-	id: string;
-	progress: number;
-	message: string;
-	command: string;
-};
-
-type ServerCredentialRecord = {
-	id: string;
-	host: string;
-	port: number;
-	username: string;
-	authMethod: string;
-	encryptedCredential: string | null;
-	storeCredential: boolean;
-};
-
-const installSteps: InstallStep[] = [
-	{
-		id: "install-docker",
-		progress: 15,
-		message: "Installing Docker",
-		command:
-			"sudo apt-get update -y && sudo apt-get install -y ca-certificates curl gnupg && curl -fsSL https://get.docker.com | sudo sh",
-	},
-	{
-		id: "install-compose",
-		progress: 30,
-		message: "Installing Docker Compose",
-		command:
-			"sudo apt-get install -y docker-compose-plugin && sudo systemctl enable --now docker",
-	},
-	{
-		id: "create-hermes-directory",
-		progress: 45,
-		message: "Creating Hermes workspace",
-		command: "mkdir -p ~/hermes",
-	},
-	{
-		id: "write-compose-file",
-		progress: 60,
-		message: "Writing docker-compose.yml",
-		command: buildComposeWriteCommand(),
-	},
-	{
-		id: "pull-image",
-		progress: 80,
-		message: "Pulling Hermes image",
-		command: "cd ~/hermes && sudo docker compose pull",
-	},
-	{
-		id: "start-containers",
-		progress: 100,
-		message: "Starting Hermes containers",
-		command: "cd ~/hermes && sudo docker compose up -d",
-	},
-];
+import {
+	getOwnedServerRecord,
+	resolveServerSshConfigOrError,
+} from "./server-records";
 
 export async function startServerInstall(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
@@ -101,23 +43,14 @@ export async function startServerInstall(context: Context) {
 		return context.json({ error: "Server not found" }, 404);
 	}
 
-	const authMethod = normalizeAuthMethod(serverRecord.authMethod);
-	if (!authMethod) {
-		return context.json({ error: "Unsupported authentication method" }, 400);
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return context.json({ error: sshResult.error }, 400);
 	}
-
-	let credential: string;
-
-	try {
-		credential = getInstallCredential({
-			server: serverRecord,
-			sessionId: session.session.id,
-		});
-	} catch (error) {
-		const message =
-			error instanceof Error ? error.message : "Install credential unavailable";
-		return context.json({ error: message }, 400);
-	}
+	const { authMethod, credential } = sshResult;
 
 	// Claim the in-process install slot synchronously before any await so
 	// two near-simultaneous requests cannot both start an install workflow
@@ -343,215 +276,4 @@ export async function getLatestServerInstallLog(context: Context) {
 		log: installRecord.log,
 		updatedAt: installRecord.updatedAt,
 	});
-}
-
-async function runInstallWorkflow(input: {
-	server: ServerCredentialRecord;
-	authMethod: SshAuthMethod;
-	credential: string;
-	userId: string;
-	installId: string;
-	serverId: string;
-	runId: string;
-	ipAddress: string | null;
-}) {
-	const logLines: string[] = [];
-
-	try {
-		await emitInstallEvent({
-			installId: input.installId,
-			serverId: input.serverId,
-			runId: input.runId,
-			step: installSteps[0]?.id ?? "pending",
-			progress: 0,
-			message: "Install queued",
-			status: "pending",
-			logLines,
-		});
-
-		await withSshConnection(
-			{
-				host: input.server.host,
-				port: input.server.port,
-				username: input.server.username,
-				authMethod: input.authMethod,
-				credential: input.credential,
-			},
-			async (ssh) => {
-				for (const step of installSteps) {
-					const result = await ssh.execCommand(step.command);
-
-					if (result.code !== 0) {
-						throw new Error(result.stderr || `Command failed: ${step.id}`);
-					}
-
-					const detail = result.stdout.trim();
-					await emitInstallEvent({
-						installId: input.installId,
-						serverId: input.serverId,
-						runId: input.runId,
-						step: step.id,
-						progress: step.progress,
-						message: detail ? `${step.message}: ${detail}` : step.message,
-						status: step.progress === 100 ? "succeeded" : "running",
-						logLines,
-					});
-				}
-			},
-		);
-
-		await getDb()
-			.insert(auditLogs)
-			.values({
-				userId: input.userId,
-				action: "server.install.succeeded",
-				details: {
-					serverId: input.serverId,
-					installId: input.installId,
-				},
-				ipAddress: input.ipAddress,
-			});
-	} catch (error) {
-		const message = normalizeInstallError(error);
-
-		await emitInstallEvent({
-			installId: input.installId,
-			serverId: input.serverId,
-			runId: input.runId,
-			step: "failed",
-			progress: 100,
-			message: "Install failed",
-			status: "failed",
-			error: message,
-			logLines,
-		});
-
-		await getDb()
-			.insert(auditLogs)
-			.values({
-				userId: input.userId,
-				action: "server.install.failed",
-				details: {
-					serverId: input.serverId,
-					installId: input.installId,
-					error: message,
-				},
-				ipAddress: input.ipAddress,
-			});
-	}
-}
-
-async function upsertInstallRecord(serverId: string) {
-	const db = getDb();
-	const [existingInstall] = await db
-		.select({ id: installs.id })
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	if (!existingInstall) {
-		const [createdInstall] = await db
-			.insert(installs)
-			.values({
-				serverId,
-				status: "pending",
-				step: installSteps[0]?.id ?? "pending",
-				log: null,
-				version: "latest",
-			})
-			.returning({ id: installs.id });
-
-		return createdInstall;
-	}
-
-	const [updatedInstall] = await db
-		.update(installs)
-		.set({
-			status: "pending",
-			step: installSteps[0]?.id ?? "pending",
-			log: null,
-			version: "latest",
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, existingInstall.id))
-		.returning({ id: installs.id });
-
-	return updatedInstall;
-}
-
-async function getServerForInstall(input: {
-	serverId: string;
-	userId: string;
-}) {
-	const [serverRecord] = await getDb()
-		.select({
-			id: servers.id,
-			host: servers.host,
-			port: servers.port,
-			username: servers.username,
-			authMethod: servers.authMethod,
-			encryptedCredential: servers.encryptedCredential,
-			storeCredential: servers.storeCredential,
-		})
-		.from(servers)
-		.where(
-			and(eq(servers.id, input.serverId), eq(servers.userId, input.userId)),
-		)
-		.limit(1);
-
-	return serverRecord ?? null;
-}
-
-function getInstallCredential(input: {
-	server: ServerCredentialRecord;
-	sessionId?: string | null;
-}) {
-	if (input.server.storeCredential) {
-		if (!input.server.encryptedCredential) {
-			throw new Error("Stored credential is missing");
-		}
-
-		return decryptSecret(input.server.encryptedCredential);
-	}
-
-	if (!input.sessionId) {
-		throw new Error("Session is required for ephemeral credentials");
-	}
-
-	const ephemeral = getSessionCredential(input.server.id, input.sessionId);
-	if (!ephemeral) {
-		throw new Error(
-			"Temporary credential expired. Reconnect the server first.",
-		);
-	}
-
-	return ephemeral.credential;
-}
-
-function normalizeAuthMethod(authMethod: string): SshAuthMethod | null {
-	if (authMethod === "password" || authMethod === "ssh-key") {
-		return authMethod;
-	}
-
-	return null;
-}
-
-function normalizeInstallError(error: unknown) {
-	if (error instanceof SshConnectError) {
-		return error.message;
-	}
-
-	return error instanceof Error ? error.message : "Install failed";
-}
-
-function buildComposeWriteCommand() {
-	const composeFile = [
-		"services:",
-		"  hermes:",
-		`    image: ${defaultHermesImage}`,
-		"    restart: unless-stopped",
-	].join("\n");
-
-	return `cat <<'EOF' > ~/hermes/docker-compose.yml\n${composeFile}\nEOF`;
 }

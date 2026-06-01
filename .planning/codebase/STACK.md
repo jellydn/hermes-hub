@@ -1,109 +1,78 @@
 # Technology Stack
 
-**Analysis Date:** 2026-05-28
+**Analysis Date:** 2026-05-31
 
 ## Languages
+
 **Primary:**
-- TypeScript 6.0.2 - All application code (frontend routes, backend logic, database schema, tests)
+- TypeScript (ESNext, strict mode) - app, API, and scripts (`tsconfig.json`, `src/**/*`, `server/**/*`, `scripts/start-production.mjs`)
 
 **Secondary:**
-- JavaScript (ESM) - Vite configuration, build tooling
+- SQL (PostgreSQL schema/migrations via Drizzle) - relational schema and migrations (`server/db/schema.ts`, `drizzle.config.ts`, `drizzle/`)
+- YAML - container orchestration and CI/CD workflows (`compose.yaml`, `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`)
 
 ## Runtime
+
 **Environment:**
-- Bun - Primary runtime and package manager (used for dev, build, test, typecheck)
-- Node.js compatibility layer via Bun for production deployment (Docker)
+- Node.js 22 (production runtime image) (`Dockerfile`, `scripts/start-production.mjs`)
+- Bun 1 (dependency install and build stages) (`Dockerfile`)
 
 **Package Manager:**
-- Bun (latest) - `bun install`, `bun run` scripts
-- Lockfile: `bun.lock` (present)
+- Bun (install/run workflows and local task runner) (`package.json`, `justfile`, `.github/workflows/ci.yml`)
+- Lockfile: present (`bun.lock`)
 
 ## Frameworks
+
 **Core:**
-- TanStack Start 1.168.13 - Full-stack React framework with SSR, file-based routing
-- TanStack React Router 1.170.8 - Client-side routing
-- Hono 4.12.23 - Lightweight web framework for `/api/*` endpoints
-- React 19.2.0 - UI library
-- Drizzle ORM 0.45.2 - TypeScript ORM for PostgreSQL
+- TanStack Start + TanStack Router (React full-stack app shell/routing) (`package.json`, `vite.config.ts`)
+- React 19 + React DOM 19 (UI runtime) (`package.json`)
+- Hono (REST API under `/api`) (`package.json`, `server/app.ts`)
+- Better Auth + Drizzle adapter (magic-link auth/session) (`package.json`, `server/auth.ts`)
+- Drizzle ORM + postgres client (database access) (`package.json`, `server/db/index.ts`, `drizzle.config.ts`)
 
 **Testing:**
-- Vitest 4.1.5 - Unit and integration testing
-- Testing Library 16.3.0 (React) - Component testing utilities
-- jsdom 28.1.0 - Browser environment simulation
+- Vitest (unit/integration test runner) (`package.json`, `vite.config.ts`)
+- Testing Library + jsdom (component/runtime test utilities) (`package.json`)
 
 **Build/Dev:**
-- Vite 8.0.0 - Build tool and dev server
-- @vitejs/plugin-react 6.0.1 - React Fast Refresh
-- @tailwindcss/vite 4.1.18 - Tailwind CSS integration
-- TypeScript 6.0.2 - Type checking with strict mode
-
-**UI/Styling:**
-- Tailwind CSS 4.1.18 - Utility-first CSS framework
-- class-variance-authority 0.7.1 - Component variant management
-- clsx 2.1.1 - Conditional class names
-- tailwind-merge 3.6.0 - Tailwind class deduplication
-- lucide-react 1.16.0 - Icon library
-- Radix UI (via @radix-ui/react-slot 1.2.4) - Primitive components
-
-**Database:**
-- Drizzle Kit 0.31.10 - Database migrations and schema management
-- postgres 3.4.9 - PostgreSQL client (via postgres.js)
+- Vite 8 + React/TanStack/Tailwind plugins (build/dev server) (`package.json`, `vite.config.ts`)
+- Biome (lint/format) (`biome.json`, `justfile`, `.github/workflows/ci.yml`)
+- Drizzle Kit (migration generation/execution) (`package.json`, `drizzle.config.ts`, `scripts/start-production.mjs`)
 
 ## Key Dependencies
+
 **Critical:**
-- better-auth 1.6.11 - Authentication with magic link support
-- @better-auth/drizzle-adapter 1.6.11 - Drizzle ORM adapter for Better Auth
-- node-ssh 13.2.1 - SSH client for remote server management
-- rate-limiter-flexible 11.1.0 - Rate limiting for API endpoints
+- `hono` - API routing and request handling (`package.json`, `server/app.ts`)
+- `better-auth` + `@better-auth/drizzle-adapter` - authentication and session persistence (`package.json`, `server/auth.ts`)
+- `drizzle-orm` + `postgres` - PostgreSQL ORM and driver (`package.json`, `server/db/index.ts`)
+- `node-ssh` - remote VPS install/deploy/action execution (`package.json`, `server/ssh.ts`, `server/install.ts`, `server/server-actions.ts`)
+- `rate-limiter-flexible` - magic-link request throttling (`package.json`, `server/app.ts`)
 
 **Infrastructure:**
-- @tanstack/react-start/plugin/vite - Vite plugin for TanStack Start SSR
-- @tanstack/devtools-vite 0.7.0 - Development tools integration
-- @tanstack/react-devtools 0.10.5 - React DevTools integration
+- `tailwindcss` + `@tailwindcss/vite` - styling pipeline (`package.json`, `vite.config.ts`)
+- `drizzle-kit` - schema migration tooling (`package.json`, `drizzle.config.ts`)
+- Docker multi-stage images (Bun build + Node runtime) (`Dockerfile`)
 
 ## Configuration
+
 **Environment:**
-- `.env` file for local development (copy from `.env.example`)
-- Required variables:
-  - `DATABASE_URL` - PostgreSQL connection string (required for all operations)
-  - `ENCRYPTION_KEY` - 32-byte hex key for AES-256 credential encryption
-  - `BETTER_AUTH_SECRET` - Secret for session signing
-  - `BETTER_AUTH_URL` - Public URL (defaults to `http://localhost:3000` in dev)
-  - `RESEND_API_KEY` - Optional email service for magic links (falls back to console in dev)
-  - `RESEND_FROM` - Optional sender email address
+- Environment-variable driven setup with required core settings (`DATABASE_URL`, `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`) and optional integrations (`RESEND_API_KEY`, `RESEND_FROM`, `DB_POOL_MAX`, `TRUSTED_PROXY_COUNT`) (`.env.example`, `server/auth.ts`, `server/crypto.ts`, `server/db/index.ts`, `server/lib/send-magic-link-email.ts`)
+- Runtime env injection via Compose and GitHub Actions deploy (`compose.yaml`, `.github/workflows/deploy.yml`)
 
 **Build:**
-- `vite.config.ts` - Vite configuration with TanStack Start, Tailwind, and React plugins
-- `tsconfig.json` - TypeScript configuration (ES2022, strict mode, bundler resolution)
-- `drizzle.config.ts` - Drizzle Kit configuration (requires `DATABASE_URL`)
-- `biome.json` - Biome linter/formatter configuration (excludes generated files)
-- `app.json` - Empty scripts placeholder for deployment
+- Build/type/test configuration in `vite.config.ts`, `tsconfig.json`, and workflow jobs (`vite.config.ts`, `tsconfig.json`, `.github/workflows/ci.yml`)
+- Production packaging and startup in Docker + Node launcher (`Dockerfile`, `scripts/start-production.mjs`)
 
 ## Platform Requirements
+
 **Development:**
-- Bun runtime (latest version)
-- PostgreSQL database (local or remote)
-- Port 3000 (default for Vite dev server)
+- Node.js >=20, Bun, PostgreSQL for local development (`README.md`, `.env.example`)
+- Optional local full stack with Docker Compose (app + postgres + mailpit) (`compose.yaml`, `README.md`)
 
 **Production:**
-- Docker container (built from Dockerfile)
-- PostgreSQL 14+ (managed or self-hosted)
-- Reverse proxy (Caddy/nginx) for HTTPS termination
-- Deployment targets: VPS with Docker Compose, or Dokku
-
-## CI/CD Pipeline
-**GitHub Actions:**
-- `ci.yml` - Runs on PRs and pushes to main/master
-  - Bun setup, dependency install, Biome check, typecheck, test, build
-- `deploy.yml` - Deploys to VPS or Dokku on push to main/master
-  - VPS: Docker image build -> GHCR push -> SSH deploy with Docker Compose
-  - Dokku: Git push deployment with config sync
-
-**Quality Gates:**
-1. Biome code formatting and linting
-2. TypeScript type checking
-3. Vitest test suite
-4. Production build verification
+- Containerized deployment to VPS (Docker Compose) or Dokku (`.github/workflows/deploy.yml`, `Dockerfile`, `compose.yaml`)
+- HTTPS reverse-proxy setup expected for sensitive server operations (`server/app.ts`)
 
 ---
-*Stack analysis: 2026-05-28*
+
+*Stack analysis: 2026-05-31*

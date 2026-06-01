@@ -16,10 +16,15 @@ const getLatestServerInstallLog = vi.fn();
 const getDashboardStatus = vi.fn();
 const getLogs = vi.fn();
 const clearLogs = vi.fn();
+const deployProviderToHermes = vi.fn();
 const saveProviderConfig = vi.fn();
 const testProviderConfig = vi.fn();
 const connectTelegram = vi.fn();
 const disconnectTelegram = vi.fn();
+const deployTelegramToServer = vi.fn();
+const testTelegramBot = vi.fn();
+const listTelegramPairings = vi.fn();
+const approveTelegramPairing = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
@@ -49,13 +54,18 @@ vi.mock("./logs", () => ({
 }));
 
 vi.mock("./providers", () => ({
+	deployProviderToHermes,
 	saveProviderConfig,
 	testProviderConfig,
 }));
 
 vi.mock("./telegram", () => ({
+	approveTelegramPairing,
 	connectTelegram,
 	disconnectTelegram,
+	deployTelegramToServer,
+	listTelegramPairings,
+	testTelegramBot,
 }));
 
 const authHandler = vi.fn();

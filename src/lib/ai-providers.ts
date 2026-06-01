@@ -1,4 +1,9 @@
-export type AiProviderId = "openai" | "anthropic" | "openrouter";
+export type AiProviderId =
+	| "openai"
+	| "anthropic"
+	| "openrouter"
+	| "ollama"
+	| "custom";
 
 type AiProviderOption = {
 	id: AiProviderId;
@@ -7,6 +12,8 @@ type AiProviderOption = {
 	models: readonly string[];
 	defaultModel: string;
 	requiresCustomModel?: boolean;
+	requiresBaseUrl?: boolean;
+	defaultBaseUrl?: string;
 };
 
 export const aiProviderOptions: readonly AiProviderOption[] = [
@@ -35,6 +42,27 @@ export const aiProviderOptions: readonly AiProviderOption[] = [
 		defaultModel: "openai/gpt-4o-mini",
 		requiresCustomModel: true,
 	},
+	{
+		id: "ollama",
+		label: "Ollama / Local",
+		description:
+			"Run open-weight models locally or via a private Ollama cluster.",
+		models: [],
+		defaultModel: "llama3",
+		requiresCustomModel: true,
+		requiresBaseUrl: true,
+		defaultBaseUrl: "http://localhost:11434/v1",
+	},
+	{
+		id: "custom",
+		label: "Custom / BYO",
+		description:
+			"Connect to any OpenAI-compatible API endpoint (e.g. OllamaCloud, DeepSeek, Together, etc.).",
+		models: [],
+		defaultModel: "",
+		requiresCustomModel: true,
+		requiresBaseUrl: true,
+	},
 ] as const;
 
 export function isAiProviderId(value: string): value is AiProviderId {
@@ -49,14 +77,32 @@ export function getDefaultAiModel(provider: AiProviderId) {
 	return getAiProviderOption(provider)?.defaultModel ?? "";
 }
 
+/**
+ * Regex for validating custom model identifiers.
+ *
+ * Accepted characters: alphanumeric, dots, underscores, colons, forward
+ * slashes, and hyphens. Length must be between 1 and 120 characters.
+ * This covers all known production model IDs (OpenAI, Anthropic,
+ * OpenRouter, Ollama, etc.) while rejecting inputs that could carry
+ * shell metacharacters or break YAML/JSON structure.
+ */
+export const MODEL_VALIDATION_REGEX = /^[A-Za-z0-9._:/-]{1,120}$/;
+
+export function isValidModelString(model: string): boolean {
+	return MODEL_VALIDATION_REGEX.test(model);
+}
+
 export function isValidAiModel(provider: AiProviderId, model: string) {
 	const option = getAiProviderOption(provider);
 	if (!option) {
 		return false;
 	}
 
-	const trimmedModel = model.trim();
-	if (!trimmedModel) {
+	if (!model) {
+		return false;
+	}
+
+	if (!isValidModelString(model)) {
 		return false;
 	}
 
@@ -64,7 +110,7 @@ export function isValidAiModel(provider: AiProviderId, model: string) {
 		return true;
 	}
 
-	return option.models.includes(trimmedModel);
+	return option.models.includes(model);
 }
 
 export function formatAiProviderLabel(provider: AiProviderId) {

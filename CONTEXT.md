@@ -22,6 +22,8 @@
 
 **Dashboard Caching**: Two-tier in-memory cache on the server. **Static data** (server info, provider, telegram, install status) cached for 60 seconds. **Live metrics** (SSH: cpu, memory, disk, uptime) cached for 15 seconds. Each tier is a module-level variable with a timestamp check. SSH only runs once per 15s expiry regardless of client count. The 30-second client poll hits cached data most of the time.
 
+**Single-Instance Boundary**: Near-term deployments are intentionally single-instance. In-memory state (install streams, session credentials, rate limiting, dashboard caches) is accepted as a temporary constraint and must be documented as non-shared across nodes.
+
 **OS Validation**: Ubuntu 22.04+ and Debian 12+ are officially supported and pass validation. All other Linux distributions are allowed through with a `warning` status instead of rejection. The dashboard displays a note: "This OS is not officially supported; Hermes runs via Docker but some features may not work." The validation function returns a `supportLevel: "supported" | "untested"` field alongside the OS info, so the UI can show the warning without blocking the user.
 
 **Install Module Decomposition**: `server/install.ts` splits its SSE infrastructure into `server/install/sse-stream.ts` (stream state map, heartbeat, idle timeout, event hydration). The install workflow orchestration and step definitions stay in `server/install.ts`. This isolates ~150 lines of pure SSE plumbing from the business logic.
@@ -49,3 +51,5 @@
 **DB Pool**: Connection pool size of 5 (configurable via `DB_POOL_MAX` env var, default 5). Enough for a single-user self-hosted deployment: dashboard queries, SSE stream, and auth running concurrently.
 
 **SSE Timeout**: Install progress streams close after 90 seconds of no data (idle timeout). Heartbeat events (SSE comment `:` lines) are sent every 30 seconds during active installs, so the timeout only triggers when both the client is gone and the install is idle.
+
+**DB Transaction Boundaries**: Two deploy-path write sequences use `db.transaction()` to ensure local DB and remote Hermes state stay in sync. `deployTelegramToServer` wraps the config update (`deployedServerId`, `deployedServerHost`, `apiServerKey`) and success audit log in a single transaction — if the transaction fails, deploy state is not persisted, so a retry starts clean without a stale "deployed" record. `runServerAction` wraps the success audit log and install version update (SELECT then UPDATE on `installs`) in a single transaction — if the version update fails, the audit log also rolls back, keeping action history consistent with the tracked version. Single-write audit logs (connect, disconnect, provider save, install start) are intentionally sequential, not transactional — the audit trail is historical, and a failed audit insert doesn't corrupt the primary data.

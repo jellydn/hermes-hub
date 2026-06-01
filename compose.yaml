@@ -12,8 +12,8 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM: ${RESEND_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
       DB_POOL_MAX: ${DB_POOL_MAX:-5}
     ports:
@@ -35,6 +35,13 @@ services:
       retries: 5
     volumes:
       - postgres-data:/var/lib/postgresql/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
 volumes:
   postgres-data:

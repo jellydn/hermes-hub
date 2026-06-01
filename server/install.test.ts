@@ -216,7 +216,7 @@ describe("server install", () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "Stored credential is missing",
+			error: "Stored credential is missing.",
 		});
 		expect(withSshConnection).not.toHaveBeenCalled();
 	});
@@ -240,7 +240,7 @@ describe("server install", () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "Unsupported authentication method",
+			error: "Unsupported authentication method.",
 		});
 		expect(withSshConnection).not.toHaveBeenCalled();
 	});

@@ -36,7 +36,7 @@ function TelegramPage() {
 		<AppShell
 			userEmail={session.user.email}
 			title="Telegram"
-			description="Connect your Telegram bot, verify the token with Telegram, and keep the dashboard ready for chat-channel status."
+			description="Connect your Telegram bot, deploy it to Hermes, and test the integration."
 			kicker="Chat Channels"
 		>
 			<TelegramSettings initialConfig={telegramConfig ?? null} />

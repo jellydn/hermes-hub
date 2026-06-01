@@ -570,6 +570,37 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 
 ---
 
+### POST `/api/providers/deploy`
+
+Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegram bot to already be deployed to a server. Over SSH, writes a new `docker-compose.yml` with provider env vars, restarts the Hermes container (with `--force-recreate`), and runs `hermes config set model` inside the container.
+
+**Auth required:** Yes
+
+**Request body:** None (uses the latest saved provider config)
+
+**Response (200):**
+```json
+{
+  "status": "deployed",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "serverHost": "192.168.1.100"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | No provider config saved yet                                 |
+| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | Credential unavailable / expired                             |
+| 401    | Unauthorized                                                 |
+| 404    | Deployed server not found                                    |
+| 502    | SSH connect or deploy command failed                         |
+
+---
+
 ## Telegram
 
 ### POST `/api/telegram/connect`
@@ -626,6 +657,80 @@ Deactivates the currently active Telegram configuration.
 | 400    | Telegram bot is not connected        |
 | 401    | Unauthorized                         |
 | 500    | Unable to disconnect Telegram        |
+
+---
+
+### GET `/api/telegram/pairings`
+
+Lists pending and approved Telegram pairing records from the deployed Hermes container. Requires Telegram to be deployed to a server.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "pairings": {
+    "pending": [
+      {
+        "code": "ABCD2345",
+        "userId": "123456789",
+        "userName": "Example User",
+        "ageMinutes": 2
+      }
+    ],
+    "approved": [
+      {
+        "userId": "123456789",
+        "userName": "Example User",
+        "approvedAt": 1780272000000
+      }
+    ]
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                      |
+| ------ | ---------------------------------------------- |
+| 400    | Telegram is not deployed / credential unavailable |
+| 401    | Unauthorized                                   |
+| 404    | Deployed server not found                      |
+| 502    | SSH command or Hermes pairing command failed   |
+
+---
+
+### POST `/api/telegram/pairings/approve`
+
+Approves a Telegram pairing code by running Hermes' pairing store approval inside the deployed Hermes container. This is the web UI replacement for running `hermes pairing approve telegram <code>` manually on the VPS.
+
+**Auth required:** Yes
+
+**Request body:**
+```json
+{
+  "code": "ABCD2345"
+}
+```
+
+**Response (200):**
+```json
+{
+  "approved": {
+    "userId": "123456789",
+    "userName": "Example User"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                      |
+| ------ | ---------------------------------------------- |
+| 400    | Invalid code / code expired / approval lockout / Telegram not deployed / credential unavailable |
+| 401    | Unauthorized                                   |
+| 404    | Deployed server not found                      |
+| 502    | SSH command or Hermes pairing command failed   |
 
 ---
 

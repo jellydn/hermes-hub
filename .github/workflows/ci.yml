@@ -23,6 +23,13 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Cache TypeScript
+        uses: actions/cache@v4
+        with:
+          path: .tsbuildinfo
+          key: tsbuildinfo-${{ github.sha }}
+          restore-keys: tsbuildinfo-
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 

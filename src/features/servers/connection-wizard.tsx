@@ -8,6 +8,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
+import { type Path, useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,8 +25,6 @@ type ConnectionDraft = {
 	privateKey: string;
 	storeCredential: boolean;
 };
-
-type ValidationErrors = Partial<Record<keyof ConnectionDraft, string>>;
 
 type ConnectionWizardProps = {
 	onSubmit: (draft: ConnectionDraft) => void | Promise<void>;
@@ -71,69 +70,127 @@ export function ConnectionWizard({
 	isSubmitting = false,
 }: ConnectionWizardProps) {
 	const [currentStep, setCurrentStep] = useState(1);
-	const [draft, setDraft] = useState<ConnectionDraft>(initialDraft);
-	const [errors, setErrors] = useState<ValidationErrors>({});
 
+	const {
+		register,
+		watch,
+		setValue,
+		setError,
+		clearErrors,
+		formState: { errors },
+	} = useForm<ConnectionDraft>({
+		defaultValues: initialDraft,
+	});
+
+	const draft = watch();
 	const currentStepConfig = wizardSteps[currentStep - 1];
 
-	function updateDraft<Key extends keyof ConnectionDraft>(
-		field: Key,
-		value: ConnectionDraft[Key],
-	) {
-		setDraft((currentDraft) => ({
-			...currentDraft,
-			[field]: value,
-		}));
-		setErrors((currentErrors) => {
-			if (!currentErrors[field]) {
-				return currentErrors;
-			}
-
-			const nextErrors = { ...currentErrors };
-			delete nextErrors[field];
-			return nextErrors;
-		});
-	}
-
 	function handleAuthMethodChange(authMethod: AuthMethod) {
-		setDraft((currentDraft) => ({
-			...currentDraft,
-			authMethod,
-			password: authMethod === "password" ? currentDraft.password : "",
-			privateKey: authMethod === "ssh-key" ? currentDraft.privateKey : "",
-		}));
-		setErrors((currentErrors) => {
-			const nextErrors = { ...currentErrors };
-			delete nextErrors.password;
-			delete nextErrors.privateKey;
-			return nextErrors;
-		});
+		setValue("authMethod", authMethod);
+		setValue("password", authMethod === "password" ? draft.password : "");
+		setValue("privateKey", authMethod === "ssh-key" ? draft.privateKey : "");
+		clearErrors(["password", "privateKey"]);
 	}
 
 	function goToNextStep() {
-		const nextErrors = validateStep(draft, currentStep);
-		if (Object.keys(nextErrors).length > 0) {
-			setErrors(nextErrors);
+		const stepErrors: Record<string, string> = {};
+
+		if (currentStep === 1) {
+			if (!draft.label.trim()) {
+				stepErrors.label = "Enter a label so you can recognize this VPS later.";
+			}
+			if (!draft.host.trim()) {
+				stepErrors.host = "Enter a hostname or IP address.";
+			} else if (!isValidHost(draft.host)) {
+				stepErrors.host = "Use a valid hostname or IP address.";
+			}
+			if (!draft.port.trim()) {
+				stepErrors.port = "Enter the SSH port.";
+			} else {
+				const numericPort = Number(draft.port);
+				if (
+					!Number.isInteger(numericPort) ||
+					numericPort < 1 ||
+					numericPort > 65535
+				) {
+					stepErrors.port = "Port must be between 1 and 65535.";
+				}
+			}
+			if (!draft.username.trim()) {
+				stepErrors.username = "Enter the SSH username.";
+			}
+		} else if (currentStep === 2) {
+			if (draft.authMethod === "password" && !draft.password.trim()) {
+				stepErrors.password = "Enter the SSH password.";
+			}
+			if (draft.authMethod === "ssh-key" && !draft.privateKey.trim()) {
+				stepErrors.privateKey = "Paste the private key for this server.";
+			}
+		}
+
+		if (Object.keys(stepErrors).length > 0) {
+			for (const [key, msg] of Object.entries(stepErrors)) {
+				setError(key as Path<ConnectionDraft>, {
+					type: "manual",
+					message: msg,
+				});
+			}
 			return;
 		}
 
-		setErrors({});
+		clearErrors();
 		setCurrentStep((step) => Math.min(step + 1, wizardSteps.length));
 	}
 
 	function goToPreviousStep() {
-		setErrors({});
+		clearErrors();
 		setCurrentStep((step) => Math.max(step - 1, 1));
 	}
 
 	async function handleSubmit() {
-		const nextErrors = validateStep(draft, currentStep);
-		if (Object.keys(nextErrors).length > 0) {
-			setErrors(nextErrors);
+		const stepErrors: Record<string, string> = {};
+
+		if (!draft.label.trim()) {
+			stepErrors.label = "Enter a label so you can recognize this VPS later.";
+		}
+		if (!draft.host.trim()) {
+			stepErrors.host = "Enter a hostname or IP address.";
+		} else if (!isValidHost(draft.host)) {
+			stepErrors.host = "Use a valid hostname or IP address.";
+		}
+		if (!draft.port.trim()) {
+			stepErrors.port = "Enter the SSH port.";
+		} else {
+			const numericPort = Number(draft.port);
+			if (
+				!Number.isInteger(numericPort) ||
+				numericPort < 1 ||
+				numericPort > 65535
+			) {
+				stepErrors.port = "Port must be between 1 and 65535.";
+			}
+		}
+		if (!draft.username.trim()) {
+			stepErrors.username = "Enter the SSH username.";
+		}
+		if (draft.authMethod === "password" && !draft.password.trim()) {
+			stepErrors.password = "Enter the SSH password.";
+		}
+		if (draft.authMethod === "ssh-key" && !draft.privateKey.trim()) {
+			stepErrors.privateKey = "Paste the private key for this server.";
+		}
+
+		if (Object.keys(stepErrors).length > 0) {
+			for (const [key, msg] of Object.entries(stepErrors)) {
+				setError(key as Path<ConnectionDraft>, {
+					type: "manual",
+					message: msg,
+				});
+			}
 			return;
 		}
 
-		setErrors({});
+		clearErrors();
 		await onSubmit(draft);
 	}
 
@@ -198,17 +255,13 @@ export function ConnectionWizard({
 						<Field
 							label="Server label"
 							name="label"
-							error={errors.label}
+							error={errors.label?.message}
 							hint="A friendly name like Production VPS or Paris Node."
 						>
 							<input
 								id="label"
-								name="label"
 								type="text"
-								value={draft.label}
-								onChange={(event) =>
-									updateDraft("label", event.currentTarget.value)
-								}
+								{...register("label")}
 								className={inputClassName}
 								placeholder="Production VPS"
 							/>
@@ -217,17 +270,13 @@ export function ConnectionWizard({
 						<Field
 							label="Host"
 							name="host"
-							error={errors.host}
+							error={errors.host?.message}
 							hint="Hostname or IP address that HermesHub will reach over SSH."
 						>
 							<input
 								id="host"
-								name="host"
 								type="text"
-								value={draft.host}
-								onChange={(event) =>
-									updateDraft("host", event.currentTarget.value)
-								}
+								{...register("host")}
 								className={inputClassName}
 								placeholder="203.0.113.42"
 							/>
@@ -236,20 +285,16 @@ export function ConnectionWizard({
 						<Field
 							label="Port"
 							name="port"
-							error={errors.port}
+							error={errors.port?.message}
 							hint="Default SSH port is 22."
 						>
 							<input
 								id="port"
-								name="port"
 								type="number"
 								inputMode="numeric"
 								min="1"
 								max="65535"
-								value={draft.port}
-								onChange={(event) =>
-									updateDraft("port", event.currentTarget.value)
-								}
+								{...register("port")}
 								className={inputClassName}
 							/>
 						</Field>
@@ -257,17 +302,13 @@ export function ConnectionWizard({
 						<Field
 							label="Username"
 							name="username"
-							error={errors.username}
+							error={errors.username?.message}
 							hint="The SSH user HermesHub should use during setup."
 						>
 							<input
 								id="username"
-								name="username"
 								type="text"
-								value={draft.username}
-								onChange={(event) =>
-									updateDraft("username", event.currentTarget.value)
-								}
+								{...register("username")}
 								className={inputClassName}
 								placeholder="root"
 							/>
@@ -298,17 +339,13 @@ export function ConnectionWizard({
 							<Field
 								label="Server password"
 								name="password"
-								error={errors.password}
+								error={errors.password?.message}
 								hint="Used only for the secure SSH verification flow."
 							>
 								<input
 									id="password"
-									name="password"
 									type="password"
-									value={draft.password}
-									onChange={(event) =>
-										updateDraft("password", event.currentTarget.value)
-									}
+									{...register("password")}
 									className={inputClassName}
 									placeholder="Enter the SSH password"
 								/>
@@ -317,17 +354,13 @@ export function ConnectionWizard({
 							<Field
 								label="Private key"
 								name="privateKey"
-								error={errors.privateKey}
+								error={errors.privateKey?.message}
 								hint="Paste the complete private key. HermesHub will validate the connection before storing anything."
 							>
 								<textarea
 									id="privateKey"
-									name="privateKey"
 									rows={8}
-									value={draft.privateKey}
-									onChange={(event) =>
-										updateDraft("privateKey", event.currentTarget.value)
-									}
+									{...register("privateKey")}
 									className={cn(
 										inputClassName,
 										"min-h-44 rounded-[1.5rem] py-4",
@@ -340,10 +373,7 @@ export function ConnectionWizard({
 						<label className="flex items-start gap-4 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
 							<input
 								type="checkbox"
-								checked={draft.storeCredential}
-								onChange={(event) =>
-									updateDraft("storeCredential", event.currentTarget.checked)
-								}
+								{...register("storeCredential")}
 								className="mt-1 h-4 w-4 rounded border-[var(--chip-line)] text-[var(--lagoon-deep)]"
 							/>
 							<span className="space-y-1">
@@ -540,51 +570,6 @@ function ReviewCard({ label, value }: { label: string; value: string }) {
 
 const inputClassName =
 	"w-full rounded-full border border-[var(--chip-line)] bg-white/80 px-4 py-3 text-sm text-[var(--sea-ink)] outline-none focus:border-[color:var(--lagoon)] focus:ring-2 focus:ring-[rgba(79,184,178,0.18)]";
-
-function validateStep(draft: ConnectionDraft, step: number): ValidationErrors {
-	const errors: ValidationErrors = {};
-
-	if (step === 1 || step === 3) {
-		if (!draft.label.trim()) {
-			errors.label = "Enter a label so you can recognize this VPS later.";
-		}
-
-		if (!draft.host.trim()) {
-			errors.host = "Enter a hostname or IP address.";
-		} else if (!isValidHost(draft.host)) {
-			errors.host = "Use a valid hostname or IP address.";
-		}
-
-		if (!draft.port.trim()) {
-			errors.port = "Enter the SSH port.";
-		} else {
-			const numericPort = Number(draft.port);
-			if (
-				!Number.isInteger(numericPort) ||
-				numericPort < 1 ||
-				numericPort > 65535
-			) {
-				errors.port = "Port must be between 1 and 65535.";
-			}
-		}
-
-		if (!draft.username.trim()) {
-			errors.username = "Enter the SSH username.";
-		}
-	}
-
-	if (step === 2 || step === 3) {
-		if (draft.authMethod === "password" && !draft.password.trim()) {
-			errors.password = "Enter the SSH password.";
-		}
-
-		if (draft.authMethod === "ssh-key" && !draft.privateKey.trim()) {
-			errors.privateKey = "Paste the private key for this server.";
-		}
-	}
-
-	return errors;
-}
 
 function isValidHost(host: string) {
 	const trimmedHost = host.trim();

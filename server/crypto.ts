@@ -52,3 +52,18 @@ export function decryptSecret(payload: string) {
 		decipher.final(),
 	]).toString("utf8");
 }
+
+export function decryptApiServerKey(payload: string): string {
+	if (!payload) {
+		return "";
+	}
+	try {
+		return decryptSecret(payload);
+	} catch {
+		// Legacy unencrypted keys don't have the AES-GCM iv:tag:cipher structure
+		if (!payload.includes(".")) {
+			return payload;
+		}
+		throw new Error("API server key could not be decrypted.");
+	}
+}

@@ -49,6 +49,17 @@
 - Drizzle schema lives in `server/db/schema.ts`.
 - App-owned primary keys generally use `text(...).primaryKey().default(sql\`gen_random_uuid()::text\`)`. Follow that pattern for new app tables unless an external integration forces a different key shape.
 
+## DB Transaction Boundaries
+
+Use `db.transaction()` when a write path touches multiple Drizzle statements that must commit or roll back together to maintain consistency. The current transaction boundaries are:
+
+- **`server/telegram.ts` — `deployTelegramToServer`:** SSH deploy succeeds, then config update + success audit log insert are wrapped in a single transaction. If the transaction fails, deploy state (`deployedServerId`, `deployedServerHost`, `apiServerKey`) is not persisted, keeping local DB consistent with the remote Hermes container.
+- **`server/server-actions.ts` — `runServerAction`:** SSH action succeeds, then success audit log + install version update (SELECT then UPDATE on `installs`) are wrapped in a single transaction. If the version update fails, the audit log also rolls back, so rollout history and install version stay in sync.
+
+**When to use transactions:** When a secondary write (e.g., audit log) is coupled to a primary write (e.g., config update), and the primary write being committed without the secondary would cause an inconsistent or unrecoverable state. Examples: deploy state changes, version tracking updates.
+
+**When sequential writes are fine:** Primary data → audit log sequences where the audit log is purely historical and its absence doesn't affect correctness (e.g., server connect/disconnect, provider save, `server.install.started`). If the audit insert fails, the primary operation is still valid — no data divergence.
+
 ## Existing Instruction Chain
 
 - `CLAUDE.md` only points at this file. Keep repo-specific agent guidance here.

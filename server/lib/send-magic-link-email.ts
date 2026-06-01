@@ -15,7 +15,9 @@ export async function sendMagicLinkEmail(input: {
 	const apiKey = process.env.RESEND_API_KEY;
 
 	if (!apiKey) {
-		if (process.env.NODE_ENV === "production") {
+		const nodeEnv =
+			typeof globalThis !== "undefined" && globalThis.process?.env?.NODE_ENV;
+		if (nodeEnv === "production") {
 			throw new Error(
 				"RESEND_API_KEY is required to send magic-link emails in production.",
 			);
