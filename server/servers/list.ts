@@ -22,10 +22,7 @@ export async function getServerListSnapshot(
 		getLatestServerActionRecords(userId, serverIds),
 	]);
 	const installsByServerId = collectLatestInstalls(installRecords);
-	const actionsByServerId = collectLatestActions(
-		actionRecords,
-		new Set(serverIds),
-	);
+	const actionsByServerId = collectLatestActions(actionRecords);
 
 	return serverRecords.map((serverRecord) => {
 		const installRecord = installsByServerId.get(serverRecord.id) ?? null;
@@ -68,23 +65,15 @@ function collectLatestInstalls(records: InstallListRecord[]) {
 	return installsByServerId;
 }
 
-function collectLatestActions(
-	records: ServerActionRecord[],
-	serverIds: Set<string>,
-) {
+function collectLatestActions(records: ServerActionRecord[]) {
 	const actionsByServerId = new Map<string, ServerActionRecord>();
 
 	for (const record of records) {
-		const serverId = readServerId(record.details);
-		if (
-			!serverId ||
-			!serverIds.has(serverId) ||
-			actionsByServerId.has(serverId)
-		) {
+		if (actionsByServerId.has(record.serverId)) {
 			continue;
 		}
 
-		actionsByServerId.set(serverId, record);
+		actionsByServerId.set(record.serverId, record);
 	}
 
 	return actionsByServerId;
@@ -100,17 +89,4 @@ function latestTimestampIso(values: Array<Date | null | undefined>) {
 	}
 
 	return new Date(Math.max(...timestamps)).toISOString();
-}
-
-function readServerId(details: unknown) {
-	if (!isRecord(details)) {
-		return null;
-	}
-
-	const value = details.serverId;
-	return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }

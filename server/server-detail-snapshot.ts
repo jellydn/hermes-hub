@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type {
 	ServerActionHistoryItem,
@@ -117,7 +117,7 @@ async function getServerActionHistory(serverId: string) {
 		.where(
 			and(
 				inArray(auditLogs.action, [...finishedActionNames]),
-				sql`${auditLogs.details} ->> 'serverId' = ${serverId}`,
+				eq(auditLogs.serverId, serverId),
 			),
 		)
 		.orderBy(desc(auditLogs.createdAt))

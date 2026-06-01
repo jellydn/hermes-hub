@@ -232,11 +232,14 @@ export const auditLogs = pgTable(
 	},
 	(table) => [
 		index("audit_logs_user_id_idx").on(table.userId),
-		index("audit_logs_user_created_idx").on(table.userId, table.createdAt),
+		index("audit_logs_user_created_idx").on(
+			table.userId,
+			table.createdAt.desc(),
+		),
 		index("audit_logs_server_id_idx").on(
 			table.userId,
 			table.serverId,
-			table.createdAt,
+			table.createdAt.desc(),
 		),
 	],
 );

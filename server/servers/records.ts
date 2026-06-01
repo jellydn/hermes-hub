@@ -31,6 +31,7 @@ export type InstallListRecord = {
 };
 
 export type ServerActionRecord = {
+	serverId: string;
 	action: string;
 	details: unknown;
 	createdAt: Date;
@@ -94,11 +95,12 @@ export async function getLatestServerActionRecords(
 	// Use DISTINCT ON to get the latest action per server, eliminating the
 	// previous LIMIT 100 + JSON filter approach that could miss recency.
 	const records = await getDb().execute<{
+		server_id: string;
 		action: string;
 		details: unknown;
 		created_at: Date;
 	}>(sql`
-		SELECT DISTINCT ON (server_id) action, details, created_at
+		SELECT DISTINCT ON (server_id) server_id, action, details, created_at
 		FROM audit_logs
 		WHERE user_id = ${userId}
 			AND action IN ${sql.join(relevantServerActionNames.map((name) => sql`${name}`))}
@@ -107,6 +109,7 @@ export async function getLatestServerActionRecords(
 	`);
 
 	return records.map((record) => ({
+		serverId: record.server_id,
 		action: record.action,
 		details: record.details,
 		createdAt: record.created_at,
