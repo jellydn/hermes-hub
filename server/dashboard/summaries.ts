@@ -1,4 +1,7 @@
-import { formatAiProviderLabel, isAiProviderId } from "../../src/lib/ai-providers";
+import {
+	formatAiProviderLabel,
+	isAiProviderId,
+} from "../../src/lib/ai-providers";
 import type {
 	DashboardAgentSummary,
 	DashboardProviderSummary,
@@ -142,7 +145,9 @@ export function getHealthTone(
 		: "healthy";
 }
 
-export function toServerSummary(serverRecord: ServerRecord): DashboardServerSummary {
+export function toServerSummary(
+	serverRecord: ServerRecord,
+): DashboardServerSummary {
 	const osName = readOsInfoValue(serverRecord.osInfo, "name");
 	const osVersion = readOsInfoValue(serverRecord.osInfo, "version");
 	const supportLevel = readOsInfoValue(

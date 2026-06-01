@@ -15,14 +15,13 @@ import {
 	getOwnedServerRecord,
 	resolveServerSshConfig,
 } from "./server-records";
+import { getServerListSnapshot as getServerListSnapshotImpl } from "./servers/list";
 import {
 	type SshAuthMethod,
 	SshConnectError,
 	type VerifiedServerInfo,
 	verifyServerConnection,
 } from "./ssh";
-
-import { getServerListSnapshot as getServerListSnapshotImpl } from "./servers/list";
 
 // Re-export for server-fn usage in src/routes/servers.index.tsx
 export { getServerListSnapshotImpl as getServerListSnapshot };

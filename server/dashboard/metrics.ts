@@ -1,7 +1,15 @@
 import type { DashboardVpsSummary } from "../../src/lib/dashboard-status";
-import { normalizeAuthMethod, resolveServerCredential } from "../server-records";
+import {
+	normalizeAuthMethod,
+	resolveServerCredential,
+} from "../server-records";
 import { withSshConnection } from "../ssh";
-import { getHealthTone, parsePercentValue, type ServerMetrics, type ServerRecord } from "./summaries";
+import {
+	getHealthTone,
+	parsePercentValue,
+	type ServerMetrics,
+	type ServerRecord,
+} from "./summaries";
 
 type CacheEntry<T> = {
 	data: T;

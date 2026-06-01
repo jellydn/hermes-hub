@@ -1,7 +1,7 @@
 import { NodeSSH } from "node-ssh";
 import { normalizeSshError } from "./errors";
-import { parseAndValidateOs } from "./os";
 import type { VerifiedServerInfo } from "./os";
+import { parseAndValidateOs } from "./os";
 
 export type SshAuthMethod = "password" | "ssh-key";
 
