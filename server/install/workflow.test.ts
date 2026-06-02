@@ -38,5 +38,9 @@ describe("install workflow", () => {
 			expect(command).toContain("WARNING: unsupported distro");
 			expect(command).toContain("get.docker.com | sudo sh");
 		});
+
+		it("uses --yes when dearmoring the Docker apt key for non-interactive sessions", () => {
+			expect(command).toContain("sudo gpg --yes --dearmor");
+		});
 	});
 });
