@@ -96,6 +96,30 @@ describe("buildHermesComposeContent", () => {
 		expect(env).toContain("BACKTICK=`command`");
 	});
 
+	it("round-trips values containing backslashes and dollar signs", () => {
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: literal $ placeholder, not a template string
+		const shellVar = "before${HOME}after";
+		const result = buildHermesComposeContent({
+			apiServerKey: "C:\\path\\to\\key",
+			providerEnvVars: {
+				WINDOWS_PATH: "C:\\Users\\runner",
+				SHELL_VAR: shellVar,
+				BACKSLASH: "single\\back",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services.hermes.environment as string[];
+
+		// yaml.stringify must quote values containing backslashes so the
+		// literal backslashes survive a parse() round-trip without being
+		// collapsed into YAML escape sequences.
+		expect(env).toContain("API_SERVER_KEY=C:\\path\\to\\key");
+		expect(env).toContain("WINDOWS_PATH=C:\\Users\\runner");
+		expect(env).toContain(`SHELL_VAR=before\${HOME}after`);
+		expect(env).toContain("BACKSLASH=single\\back");
+	});
+
 	it("skips provider env vars with empty values", () => {
 		const result = buildHermesComposeContent({
 			providerEnvVars: {
