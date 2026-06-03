@@ -1,104 +1,122 @@
 # External Integrations
 
-**Analysis Date:** 2026-05-31
+**Analysis Date:** 2026-06-02
 
 ## APIs & External Services
 
-**AI Providers:**
-- OpenAI Models API - validate provider API key/connectivity (`server/providers.ts`)
-- SDK/Client: native `fetch` in server handlers (`server/providers.ts`)
-- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/crypto.ts`, `server/db/schema.ts`)
+**Email (transactional):**
+- Resend - sends Better Auth magic-link login emails
+- SDK/Client: raw `fetch` to `https://api.resend.com/emails` in `server/lib/send-magic-link-email.ts`
+- Auth: `RESEND_API_KEY` (Bearer), `RESEND_FROM` (default `HermesHub <onboarding@resend.dev>`)
+- Failure mode: in production a missing key throws; in development it falls back to `console.log` so devs can click the link from terminal output
 
-**AI Providers:**
-- Anthropic Models API - validate Anthropic key/connectivity (`server/providers.ts`)
-- SDK/Client: native `fetch` (`server/providers.ts`)
-- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/db/schema.ts`)
-
-**AI Providers:**
-- OpenRouter API - validate OpenRouter key/connectivity (`server/providers.ts`)
-- SDK/Client: native `fetch` (`server/providers.ts`)
-- Auth: user-provided key stored encrypted (`server/providers.ts`, `server/db/schema.ts`)
-
-**AI Providers:**
-- Ollama/custom OpenAI-compatible endpoint - `/models` probe against configured base URL (`src/lib/ai-providers.ts`, `server/providers.ts`)
-- SDK/Client: native `fetch` (`server/providers.ts`)
-- Auth: optional bearer key + base URL from user config, persisted encrypted (`server/providers.ts`, `server/db/schema.ts`)
-
-**Email Delivery:**
-- Resend API - send Better Auth magic-link emails (`server/lib/send-magic-link-email.ts`, `server/auth.ts`)
-- SDK/Client: native `fetch` (`server/lib/send-magic-link-email.ts`)
-- Auth: `RESEND_API_KEY` (+ optional `RESEND_FROM`) (`.env.example`, `compose.yaml`, `.github/workflows/deploy.yml`)
+**AI providers (managed by Hermes, configured via HermesHub):**
+- Catalog declared in `src/lib/ai-providers.ts`: `openai`, `anthropic`, `openrouter`, `ollama`, `custom`
+- Outbound *connectivity tests* (key validation) run from `server/providers/connection.ts`:
+  - OpenAI: `GET https://api.openai.com/v1/models`
+  - Anthropic: `GET https://api.anthropic.com/v1/models`
+  - Custom/OpenRouter: `GET {baseUrl}/models` (e.g. `https://api.deepseek.com/v1/models` per `server/providers.test.ts`)
+  - Ollama: local base URL probe
+- HermesHub does NOT call the inference endpoints itself; it stores the encrypted key + base URL and deploys them into a remote Hermes container via SSH (`server/deploy.ts`, `server/compose.ts`)
+- Auth: per-provider API keys encrypted at rest with `ENCRYPTION_KEY` (AES-256, `server/crypto.ts`)
 
 **Messaging:**
-- Telegram Bot API - bot token verification (`getMe`) and connect flow (`server/telegram.ts`)
-- SDK/Client: native `fetch` (`server/telegram.ts`)
-- Auth: user-supplied bot token, encrypted at rest (`server/telegram.ts`, `server/db/schema.ts`, `server/crypto.ts`)
+- Telegram Bot API - validates bot tokens via `getMe`, sends test messages, and the deployed Hermes container talks back to Telegram
+- SDK/Client: raw `fetch` to `https://api.telegram.org/bot{token}/{method}` in `server/telegram/config.ts`
+- Auth: bot token supplied by the user, stored encrypted; only last 4 digits are surfaced to the UI (`getTokenLast4`)
+- Pairing flow: `server/telegram/pairings.ts` + `server/telegram.ts` (`approveTelegramPairing`, `connectTelegram`, `deployTelegramToServer`)
 
-**Remote Infra Control:**
-- SSH to user VPS for install/deploy/restart/update/rollback (`server/ssh.ts`, `server/install.ts`, `server/server-actions.ts`, `server/telegram.ts`, `server/providers.ts`)
-- SDK/Client: `node-ssh` (`package.json`, `server/ssh.ts`)
-- Auth: stored encrypted SSH credential or ephemeral session credential (`server/server-records.ts`, `server/credentials.ts`, `server/db/schema.ts`)
+**Hermes (downstream agent runtime):**
+- Hermes is the user's own container that HermesHub installs/manages on a remote VPS over SSH; the SSH side uses `node-ssh` (`server/ssh/connection.ts`) wrapping `ssh2`
+- `server/telegram.ts` also calls a chat-completion endpoint on the deployed Hermes instance (`apiServerKey` decrypted via `decryptApiServerKey`) - the "Hermes API" referenced by `parseChatCompletion`
 
 ## Data Storage
 
 **Databases:**
-- PostgreSQL (primary relational store for auth, servers, installs, providers, telegram config, audit logs) (`server/db/schema.ts`, `compose.yaml`)
-- Connection: `DATABASE_URL` (`.env.example`, `server/db/index.ts`, `drizzle.config.ts`)
-- Client: `drizzle-orm` + `postgres` (`package.json`, `server/db/index.ts`)
+- PostgreSQL (17 in `compose.yaml`; only "postgresql" dialect declared in `drizzle.config.ts`)
+- Connection: `DATABASE_URL` (constructed in `compose.yaml` from `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`)
+- Client: `postgres` (postgres-js) + `drizzle-orm/postgres-js` in `server/db/index.ts`; pool size from `DB_POOL_MAX` (default 5), `prepare: false`
+- Schema: `server/db/schema.ts` (Better Auth tables `user`/`session`/`account`/`verification` plus app tables for servers, installs, install_events, audit_logs, providers, telegram_configs, etc.)
+- Migrations: `drizzle/` directory generated by `drizzle-kit generate` (`bun run db:generate`); applied at deploy time via `docker compose run --rm app ./node_modules/.bin/drizzle-kit migrate` in `.github/workflows/deploy.yml`
 
 **File Storage:**
-- Local filesystem only for built static assets and deployment artifacts; no external object storage integration (`scripts/start-production.mjs`, `Dockerfile`)
+- Local filesystem only (no S3/object-store SDK present); SSH-uploaded compose files land on the target VPS via `node-ssh` in `server/deploy.ts`
 
 **Caching:**
-- No external cache service; uses in-memory stores for rate limiting and ephemeral credentials (`server/app.ts`, `server/credentials.ts`)
+- In-process only:
+  - `clearDashboardCache()` referenced in `server/dashboard.ts` / `server/telegram.ts` (no Redis)
+  - `RateLimiterMemory` (in-memory) for magic-link rate limit in `server/app.ts`
+- In-memory SSE stream for install progress in `server/install/sse-stream.ts` (paired with persistent `install_events` rows per `AGENTS.md`)
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Better Auth (magic-link passwordless auth) (`server/auth.ts`, `server/app.ts`)
-- Implementation: Better Auth + Drizzle adapter + Postgres-backed session/user tables + magic-link email sender (`server/auth.ts`, `server/db/schema.ts`, `server/lib/send-magic-link-email.ts`)
+- Better Auth ^1.6.11 (self-hosted), configured in `server/auth.ts`
+- Implementation: `betterAuth({...})` with `drizzleAdapter(getDb(), { provider: "pg", schema })`, `tanstackStartCookies()`, and `magicLink({ sendMagicLink })` plugin → Resend
+- Lazy initialization (memoized `authInstance`) so pages do not crash when `DATABASE_URL` is unset in dev — AGENTS.md explicitly forbids moving this to module scope
+- Client: `src/lib/auth-client.ts` uses absolute SSR base URL from `BETTER_AUTH_URL` (fallback `http://localhost:3000/api/auth`)
+- Magic-link rate limit: 3 sends per email per 5 minutes (`server/app.ts` `magicLinkRateLimiter`)
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (no Sentry/Datadog/etc. integration found) (`package.json`, `server/**/*`)
+- None (no Sentry, Datadog, OpenTelemetry, etc. in `package.json`)
 
 **Logs:**
-- Application-level logging via console + persisted operational/audit/install logs in Postgres (`server/lib/send-magic-link-email.ts`, `server/install.ts`, `server/server-actions.ts`, `server/db/schema.ts`)
+- Plain `console.*` to stdout (e.g. `server/lib/send-magic-link-email.ts` `console.error` on Resend failure)
+- App-level audit trail persisted to the `audit_logs` table via `server/lib/insert-audit-log.ts`; server action history reads `audit_logs` rows named `server.action.*.succeeded|failed` (AGENTS.md, `server/server-actions.ts`)
+- Install lifecycle: persistent `install_events` rows + in-memory SSE stream (`server/install/sse-stream.ts`)
+- Health endpoint: `/api/health` (used by `Dockerfile` HEALTHCHECK and `app.json` startup/liveness probes), backed by `server/db/health.ts` `checkDatabaseConnection`
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Self-hosted VPS via Docker Compose and optional Dokku deployment path (`.github/workflows/deploy.yml`, `compose.yaml`, `Dockerfile`)
+- Two interchangeable targets selected by GitHub `vars.DEPLOY_TARGET` in `.github/workflows/deploy.yml`:
+  - **VPS** running Docker Compose (image from GHCR, app + `postgres:17-alpine`) — see `compose.yaml`
+  - **Dokku** (`git push dokku HEAD:master` after `dokku config:set --no-restart`)
+- Local dev compose includes Mailpit on ports 1025/8025 for SMTP capture (`compose.yaml`)
 
 **CI Pipeline:**
-- GitHub Actions (validate + build + deploy workflows) (`.github/workflows/ci.yml`, `.github/workflows/deploy.yml`)
-- Image registry integration: GitHub Container Registry (GHCR) (`.github/workflows/deploy.yml`)
+- GitHub Actions on `ubuntu-latest`, Bun via `oven-sh/setup-bun@v2`
+- `.github/workflows/ci.yml`: install (`bun install --frozen-lockfile`) → `bunx @biomejs/biome check .` → `bun run typecheck` → `bun run test` → `bun run build` (matches the order required by `AGENTS.md`)
+- `.github/workflows/deploy.yml`: same validate job, then either `docker/build-push-action@v6` → SCP `compose.yaml`+`.env` → SSH `docker compose pull / up / drizzle-kit migrate`, or Dokku git push
+- Container registry: GHCR (`ghcr.io/${{ github.repository }}`), authenticated with `GHCR_USERNAME`/`GHCR_TOKEN`
 
 ## Environment Configuration
 
-**Required env vars:**
-- Core app/runtime: `DATABASE_URL`, `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (`.env.example`, `server/auth.ts`, `server/crypto.ts`, `server/db/index.ts`)
-- Integration/runtime tuning: `RESEND_API_KEY`, `RESEND_FROM`, `TRUSTED_PROXY_COUNT`, `DB_POOL_MAX`, `PORT`, `HOST` (`server/lib/send-magic-link-email.ts`, `server/lib/get-client-ip.ts`, `server/db/index.ts`, `scripts/start-production.mjs`, `compose.yaml`)
+**Required env vars (production):**
+- `DATABASE_URL` - PostgreSQL connection string (Drizzle, Better Auth, all of `server/db`)
+- `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` - Better Auth session signing + absolute base URL (`server/auth.ts`, `src/lib/auth-client.ts`)
+- `ENCRYPTION_KEY` - 32-byte hex, AES-256 for stored SSH/API/bot credentials (`server/crypto.ts`, `.env.example`)
+- `RESEND_API_KEY`, `RESEND_FROM` - magic-link email delivery (`server/lib/send-magic-link-email.ts`)
+- `TRUSTED_PROXY_COUNT` (default 1) - forwarded-IP/proto parsing for `requireHttps()` (`server/app.ts`)
+- `DB_POOL_MAX` (default 5) - postgres-js pool (`server/db/index.ts`)
+- `NODE_ENV=production`, `PORT=3000` - set by `compose.yaml`
+
+**Deploy-target-specific:**
+- VPS: `VPS_HOST`, `VPS_PORT`, `VPS_USER`, `VPS_SSH_PRIVATE_KEY`, `VPS_DEPLOY_PATH`, `APP_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `GHCR_USERNAME`, `GHCR_TOKEN`
+- Dokku: `DOKKU_HOST`, `DOKKU_APP`, `DOKKU_SSH_PRIVATE_KEY`
 
 **Secrets location:**
-- Local development: `.env` values loaded from `.env.example` template (`.env.example`)
-- CI/CD deployment: GitHub Actions Secrets/Variables (`.github/workflows/deploy.yml`)
-- User-supplied provider keys, Telegram bot token, and SSH credentials encrypted before DB persistence (`server/crypto.ts`, `server/providers.ts`, `server/telegram.ts`, `server/server-records.ts`)
+- GitHub Actions encrypted secrets (`secrets.*`) and repo/env variables (`vars.*`) per `.github/workflows/deploy.yml`
+- App-managed secrets (per-server SSH credentials, AI provider API keys, Telegram bot tokens) are encrypted at rest in PostgreSQL using `ENCRYPTION_KEY` (`server/crypto.ts`)
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- No third-party webhook receiver endpoints detected; API is user/client initiated (`server/app.ts`)
-- Auth callback-style routes are internal Better Auth handlers (`/api/auth/*`) rather than external webhook processors (`server/app.ts`, `server/auth.ts`)
+- `GET /api/health` - liveness/startup probes (`Dockerfile`, `app.json`)
+- `POST /api/auth/*` - Better Auth (magic link request/verify, sessions); request goes through `requireHttps()` and the magic-link rate limiter in `server/app.ts`
+- `GET /api/servers/:id/install/events` - Server-Sent Events stream for install progress (`server/install/sse-stream.ts`, consumed by `src/routes/servers.$id.tsx`)
+- Standard CRUD/action endpoints under `/api/*` mounted in `server/app.ts` (servers, providers, telegram, logs, dashboard) - mutating endpoints all pass through `requireHttps()` in production
+- Note: no inbound webhook from Telegram to HermesHub itself - Telegram talks to the deployed *Hermes* container, not HermesHub
 
 **Outgoing:**
-- `https://api.resend.com/emails` (magic-link delivery) (`server/lib/send-magic-link-email.ts`)
-- `https://api.telegram.org/bot.../getMe` (bot token verification) (`server/telegram.ts`)
-- `https://api.openai.com/v1/models`, `https://api.anthropic.com/v1/models`, `https://openrouter.ai/api/v1/models`, and configurable custom base URL `/models` checks (`server/providers.ts`, `src/lib/ai-providers.ts`)
-- SSH-executed Docker/CLI commands on user VPS for Hermes deployment/operations (`server/install.ts`, `server/server-actions.ts`, `server/telegram.ts`, `server/providers.ts`)
+- `https://api.resend.com/emails` - magic-link email send (`server/lib/send-magic-link-email.ts`)
+- `https://api.telegram.org/bot{token}/{getMe|sendMessage}` - bot token validation + test messages (`server/telegram/config.ts`, `server/telegram.ts`)
+- `https://api.openai.com/v1/models`, `https://api.anthropic.com/v1/models`, `{customBaseUrl}/models` - AI provider key-validation pings (`server/providers/connection.ts`)
+- SSH (port from server record, default 22) - `node-ssh` connections from `server/ssh/connection.ts` and `server/deploy.ts` for OS detection, host-key fingerprinting, compose deployment, and server actions
+- Chat completion call to the user's deployed Hermes container ("Hermes API") in `server/telegram.ts` (`parseChatCompletion`)
 
 ---
 
-*Integration audit: 2026-05-31*
-
+*Integration audit: 2026-06-02*
