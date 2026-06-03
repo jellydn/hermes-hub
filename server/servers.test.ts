@@ -113,7 +113,13 @@ describe("server handlers", () => {
 
 		dbSelect.mockReturnValue({ from: selectFrom });
 		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ limit: selectLimit, orderBy: selectOrderBy });
+		selectWhere.mockImplementation(() => {
+			return Object.assign(Promise.resolve([]), {
+				limit: selectLimit,
+				orderBy: selectOrderBy,
+				as: vi.fn().mockReturnValue({}),
+			});
+		});
 		selectLimit.mockResolvedValue([]);
 		selectOrderBy.mockResolvedValue([]);
 		dbExecute.mockResolvedValue([]);
@@ -455,14 +461,23 @@ describe("server handlers", () => {
 					updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 				},
 			]);
-		dbExecute.mockResolvedValueOnce([
-			{
-				server_id: "server_123",
-				action: "server.action.restart.succeeded",
-				details: { serverId: "server_123" },
-				created_at: new Date("2026-05-26T05:00:00.000Z"),
-			},
-		]);
+		selectWhere.mockImplementation(() => {
+			return Object.assign(
+				Promise.resolve([
+					{
+						serverId: "server_123",
+						action: "server.action.restart.succeeded",
+						details: { serverId: "server_123" },
+						createdAt: new Date("2026-05-26T05:00:00.000Z"),
+					},
+				]),
+				{
+					limit: selectLimit,
+					orderBy: selectOrderBy,
+					as: vi.fn().mockReturnValue({}),
+				},
+			);
+		});
 
 		const { listServers } = await import("./servers");
 		const response = await listServers(

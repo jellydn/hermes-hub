@@ -4,6 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { installEvents, installs } from "./db/schema";
+import { buildLogLinesFromEvents } from "./install/legacy-log";
 import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
 	ensureInstallStream,
@@ -254,6 +255,8 @@ export async function getLatestServerInstallLog(context: Context) {
 			status: installs.status,
 			step: installs.step,
 			updatedAt: installs.updatedAt,
+			createdAt: installs.createdAt,
+			legacyLog: installs.log,
 		})
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
@@ -280,9 +283,10 @@ export async function getLatestServerInstallLog(context: Context) {
 		.where(eq(installEvents.installId, installRecord.id))
 		.orderBy(installEvents.createdAt);
 
-	const logLines = events.map(
-		(event) =>
-			`${event.createdAt.toISOString()} [${event.step}] ${event.message}`,
+	const logLines = buildLogLinesFromEvents(
+		events,
+		installRecord.legacyLog,
+		installRecord.createdAt,
 	);
 
 	return context.json({

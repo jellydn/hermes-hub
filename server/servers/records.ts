@@ -1,19 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { FINISHED_SERVER_ACTION_NAMES } from "../audit-log-actions";
 import { getDb } from "../db";
-import { installs, servers } from "../db/schema";
-
-const relevantServerActionNames = [
-	"server.connect.succeeded",
-	"server.connect.failed",
-	"server.update.succeeded",
-	"server.update.failed",
-	"server.action.restart.succeeded",
-	"server.action.restart.failed",
-	"server.action.update.succeeded",
-	"server.action.update.failed",
-	"server.action.rollback.succeeded",
-	"server.action.rollback.failed",
-] as const;
+import { auditLogs, installs, servers } from "../db/schema";
 
 export type ServerListRecord = {
 	id: string;
@@ -91,27 +79,40 @@ export async function getLatestInstallRecords(serverIds: string[]) {
 export async function getLatestServerActionRecords(
 	userId: string,
 	serverIds: string[],
-) {
-	// Use DISTINCT ON to get the latest action per server, eliminating the
-	// previous LIMIT 100 + JSON filter approach that could miss recency.
-	const records = await getDb().execute<{
-		server_id: string;
-		action: string;
-		details: unknown;
-		created_at: Date;
-	}>(sql`
-		SELECT DISTINCT ON (server_id) server_id, action, details, created_at
-		FROM audit_logs
-		WHERE user_id = ${userId}
-			AND action IN ${sql.join(relevantServerActionNames.map((name) => sql`${name}`))}
-			AND server_id IN ${sql.join(serverIds.map((id) => sql`${id}`))}
-		ORDER BY server_id, created_at DESC
-	`);
+): Promise<ServerActionRecord[]> {
+	const db = getDb();
+	const ranked = db
+		.select({
+			serverId: auditLogs.serverId,
+			action: auditLogs.action,
+			details: auditLogs.details,
+			createdAt: auditLogs.createdAt,
+			rowNum:
+				sql<number>`row_number() over (partition by ${auditLogs.serverId} order by ${auditLogs.createdAt} desc)`.as(
+					"rn",
+				),
+		})
+		.from(auditLogs)
+		.where(
+			and(
+				eq(auditLogs.userId, userId),
+				inArray(auditLogs.action, FINISHED_SERVER_ACTION_NAMES),
+				inArray(auditLogs.serverId, serverIds),
+			),
+		)
+		.as("ranked");
 
-	return records.map((record) => ({
-		serverId: record.server_id,
-		action: record.action,
-		details: record.details,
-		createdAt: record.created_at,
-	})) as ServerActionRecord[];
+	const records = await db
+		.select({
+			serverId: ranked.serverId,
+			action: ranked.action,
+			details: ranked.details,
+			createdAt: ranked.createdAt,
+		})
+		.from(ranked)
+		.where(eq(ranked.rowNum, 1));
+
+	return records.filter(
+		(r): r is typeof r & { serverId: string } => r.serverId !== null,
+	);
 }

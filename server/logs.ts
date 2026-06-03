@@ -6,18 +6,13 @@ import type {
 	InstallLogEntry,
 	LogsSnapshot,
 } from "../src/lib/logs";
+import { USER_INITIATED_ACTION_NAMES } from "./audit-log-actions";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installEvents, installs, servers } from "./db/schema";
+import { buildLogLinesFromEvents } from "./install/legacy-log";
 
-const finishedActionNames = [
-	"server.action.restart.succeeded",
-	"server.action.restart.failed",
-	"server.action.update.succeeded",
-	"server.action.update.failed",
-	"server.action.rollback.succeeded",
-	"server.action.rollback.failed",
-] as const;
+const finishedActionNames = USER_INITIATED_ACTION_NAMES;
 
 type InstallLogRecord = {
 	id: string;
@@ -157,26 +152,17 @@ async function getInstallLogs(userId: string) {
 	return recentInstallRows
 		.map((install) => {
 			const events = eventsByInstall.get(install.id) ?? [];
-			if (events.length > 0) {
-				return {
-					id: install.id,
-					serverLabel: install.serverLabel,
-					status: install.status,
-					step: install.step,
-					createdAt: install.createdAt,
-					updatedAt: install.updatedAt,
-					lines: events.map(
-						(event) =>
-							`${event.createdAt.toISOString()} [${event.stepName}] ${event.message}`,
-					),
-				};
-			}
-
-			const legacyLines = parseLegacyLogBlob(
+			const logLines = buildLogLinesFromEvents(
+				events.map((e) => ({
+					step: e.stepName,
+					message: e.message,
+					createdAt: e.createdAt,
+				})),
 				install.legacyLog,
 				install.createdAt,
 			);
-			if (legacyLines.length === 0) {
+
+			if (logLines.length === 0) {
 				return null;
 			}
 
@@ -187,28 +173,10 @@ async function getInstallLogs(userId: string) {
 				step: install.step,
 				createdAt: install.createdAt,
 				updatedAt: install.updatedAt,
-				lines: legacyLines,
+				lines: logLines,
 			};
 		})
 		.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-}
-
-function parseLegacyLogBlob(
-	blob: string | null,
-	fallbackTimestamp: Date,
-): string[] {
-	if (!blob) {
-		return [];
-	}
-	const lines = blob
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0);
-	if (lines.length === 0) {
-		return [];
-	}
-	const timestamp = fallbackTimestamp.toISOString();
-	return lines.map((line) => `${timestamp} [legacy] ${line}`);
 }
 
 async function getActionLogs(userId: string) {
