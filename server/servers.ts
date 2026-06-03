@@ -22,7 +22,10 @@ import {
 	SshConnectError,
 	verifyServerConnection,
 } from "./ssh";
-import { isValidSha256HostKeyFingerprint } from "./ssh/host-key-fingerprint";
+import {
+	INVALID_FINGERPRINT_MESSAGE,
+	isValidSha256HostKeyFingerprint,
+} from "./ssh/host-key-fingerprint";
 
 // Re-export for server-fn usage in src/routes/servers.index.tsx
 export { getServerListSnapshotImpl as getServerListSnapshot };
@@ -431,8 +434,7 @@ export async function acceptHostKey(context: Context) {
 	if (!fingerprint || !isValidSha256HostKeyFingerprint(fingerprint)) {
 		return context.json(
 			{
-				error:
-					"Fingerprint must be a SHA256-prefixed OpenSSH fingerprint (SHA256: followed by 43 base64 characters).",
+				error: INVALID_FINGERPRINT_MESSAGE,
 			},
 			400,
 		);

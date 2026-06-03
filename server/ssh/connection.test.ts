@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildEd25519WireKey } from "./__tests__/build-ed25519-wire-key";
 import { verifyServerConnection, withSshConnection } from "./connection";
 import { normalizeSshError, SshConnectError } from "./errors";
 
@@ -10,37 +11,31 @@ const execCommand = vi.fn();
 vi.mock("node-ssh", () => {
 	return {
 		NodeSSH: class {
-			connection: unknown = {
-				hostFingerprint:
-					"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-				hostKeyAlgorithm: "ssh-ed25519",
-			};
-			connect = (config: { hostVerifier?: (keyHex: string) => boolean }) =>
-				sshConnect(config);
+			connection: unknown = {};
+			connect = (config: {
+				hostVerifier?: (key: Buffer | string) => boolean;
+			}) => sshConnect(config);
 			dispose = dispose;
 			execCommand = execCommand;
 		},
 	};
 });
 
-const expected = `SHA256:${createHash("sha256").update(Buffer.from("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "hex")).digest("base64")}`;
+const hostKeyBuffer = buildEd25519WireKey();
+const expected = `SHA256:${createHash("sha256").update(hostKeyBuffer).digest("base64").replace(/=+$/, "")}`;
 
 describe("withSshConnection host key fingerprint", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		sshConnect.mockImplementation(
-			async (config: { hostVerifier?: (keyHex: string) => boolean }) => {
-				if (config?.hostVerifier) {
-					config.hostVerifier(
-						"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-					);
-				}
+			async (config: { hostVerifier?: (key: Buffer | string) => boolean }) => {
+				config.hostVerifier?.(hostKeyBuffer);
 			},
 		);
 		execCommand.mockResolvedValue({ code: 0, stdout: "ok", stderr: "" });
 	});
 
-	it("passes through when no expected fingerprint is set", async () => {
+	it("always installs a hostVerifier and never sets hostHash", async () => {
 		await withSshConnection(
 			{
 				host: "203.0.113.1",
@@ -53,8 +48,11 @@ describe("withSshConnection host key fingerprint", () => {
 				await ssh.execCommand("uptime");
 			},
 		);
-		const connectArgs = sshConnect.mock.calls[0]?.[0];
-		expect(connectArgs?.hostVerifier).toBeUndefined();
+		const connectArgs = sshConnect.mock.calls[0]?.[0] as
+			| { hostVerifier?: unknown; hostHash?: unknown }
+			| undefined;
+		expect(typeof connectArgs?.hostVerifier).toBe("function");
+		expect(connectArgs?.hostHash).toBeUndefined();
 	});
 
 	it("rejects with host_key_mismatch and includes the observed key", async () => {
@@ -74,17 +72,17 @@ describe("withSshConnection host key fingerprint", () => {
 			code: "host_key_mismatch",
 			hostKey: {
 				fingerprint: expected,
-				algorithm: "unknown",
+				algorithm: "ssh-ed25519",
 			},
 		});
 
-		const connectArgs = sshConnect.mock.calls[0]?.[0];
+		const connectArgs = sshConnect.mock.calls[0]?.[0] as {
+			hostVerifier?: (key: Buffer) => boolean;
+		};
 		expect(typeof connectArgs?.hostVerifier).toBe("function");
-		expect(() =>
-			connectArgs?.hostVerifier?.(
-				"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-			),
-		).toThrow(SshConnectError);
+		expect(() => connectArgs.hostVerifier?.(hostKeyBuffer)).toThrow(
+			SshConnectError,
+		);
 	});
 
 	it("accepts when expected fingerprint matches the actual key", async () => {
@@ -111,6 +109,7 @@ describe("withSshConnection host key fingerprint", () => {
 			expectedFingerprint: expected,
 		});
 		expect(result.hostKey.fingerprint).toBe(expected);
+		expect(result.hostKey.algorithm).toBe("ssh-ed25519");
 		expect(result.verified.osName).toContain("Ubuntu");
 
 		await withSshConnection(
@@ -126,6 +125,71 @@ describe("withSshConnection host key fingerprint", () => {
 				await ssh.execCommand("echo hi");
 			},
 		);
+	});
+
+	it("captures the host key on first-time connects without a pinned fingerprint", async () => {
+		execCommand.mockImplementation(async (command: string) => {
+			if (command === "cat /etc/os-release") {
+				return {
+					code: 0,
+					stdout: 'NAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\n',
+					stderr: "",
+				};
+			}
+			if (command === "uname -m") {
+				return { code: 0, stdout: "x86_64\n", stderr: "" };
+			}
+			return { code: 0, stdout: "ok", stderr: "" };
+		});
+
+		const result = await verifyServerConnection({
+			host: "203.0.113.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			credential: "secret",
+		});
+
+		expect(result.hostKey.fingerprint).toBe(expected);
+		expect(result.hostKey.algorithm).toBe("ssh-ed25519");
+	});
+
+	it("accepts a stored fingerprint that omits base64 padding (OpenSSH no-padding form)", async () => {
+		const noPaddingExpected = expected;
+
+		await withSshConnection(
+			{
+				host: "203.0.113.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "secret",
+				expectedFingerprint: noPaddingExpected,
+			},
+			async (ssh) => {
+				await ssh.execCommand("echo hi");
+			},
+		);
+		// If we reach here without a host_key_mismatch error, the comparison succeeded
+	});
+
+	it("accepts a stored fingerprint that has base64 padding", async () => {
+		const paddedExpected = `${expected}=`;
+
+		await withSshConnection(
+			{
+				host: "203.0.113.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "secret",
+				expectedFingerprint: paddedExpected,
+			},
+			async (ssh) => {
+				await ssh.execCommand("echo hi");
+			},
+		);
+		// If we reach here without a host_key_mismatch error, the comparison succeeded
 	});
 });
 

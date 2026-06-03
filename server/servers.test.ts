@@ -5,6 +5,8 @@ import { auditLogs, servers } from "./db/schema";
 const observedHostKeyFingerprint = `SHA256:${createHash("sha256").update(Buffer.from("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "hex")).digest("base64")}`;
 const acceptedHostKeyFingerprint = `SHA256:${createHash("sha256").update("rotated-host-key").digest("base64")}`;
 
+import { INVALID_FINGERPRINT_MESSAGE } from "./ssh/host-key-fingerprint";
+
 // Allow mock promises to chain .limit()
 // @ts-expect-error
 Promise.prototype.limit = function () {
@@ -424,8 +426,7 @@ describe("server handlers", () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error:
-				"Fingerprint must be a SHA256-prefixed OpenSSH fingerprint (SHA256: followed by 43 base64 characters).",
+			error: INVALID_FINGERPRINT_MESSAGE,
 		});
 		expect(updateServerSet).not.toHaveBeenCalled();
 	});

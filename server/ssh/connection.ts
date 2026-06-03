@@ -3,7 +3,7 @@ import type { Config as NodeSshConfig } from "node-ssh";
 import { NodeSSH } from "node-ssh";
 import { normalizeSshError, SshConnectError } from "./errors";
 import {
-	fingerprintFromKeyHex,
+	fingerprintFromKeyBuffer,
 	type HostKeyFingerprint,
 } from "./host-key-fingerprint";
 import type { VerifiedServerInfo } from "./os";
@@ -35,23 +35,31 @@ export type VerifiedServerConnection = {
 export async function verifyServerConnection(
 	input: SshConnectionInput,
 ): Promise<VerifiedServerConnection> {
-	return withSshConnection(input, async (ssh) => {
+	return withSshConnection(input, async (ssh, hostKey) => {
 		const osRelease = await execStrict(ssh, "cat /etc/os-release");
 		const architecture = await execStrict(ssh, "uname -m");
 
 		const verified = parseAndValidateOs(osRelease.stdout, architecture.stdout);
-		const hostKey = captureHostKey(ssh);
 
 		return { verified, hostKey };
 	});
 }
 
+/**
+ * Executes an SSH workflow with automatic lifecycle management of the connection.
+ *
+ * Rationale on hostVerifier config:
+ * Always install a hostVerifier so we can capture the host key (needed for
+ * first-time connects to store the fingerprint) and enforce pinning on update/deploy/action paths.
+ * Do NOT set `hostHash` here: ssh2 would pre-hash the raw key before calling the verifier,
+ * but we need the raw Buffer to derive the OpenSSH SHA256 fingerprint ourselves.
+ */
 export async function withSshConnection<T>(
 	input: SshConnectionInput,
-	run: (ssh: NodeSSH) => Promise<T>,
+	run: (ssh: NodeSSH, hostKey: HostKeyInfo) => Promise<T>,
 ): Promise<T> {
 	const ssh = new NodeSSH();
-	let observedKey: HostKeyInfo | undefined;
+	let capturedHostKey: HostKeyInfo | undefined;
 
 	try {
 		const connectOptions: NodeSshConfig = {
@@ -61,18 +69,12 @@ export async function withSshConnection<T>(
 			password: input.authMethod === "password" ? input.credential : undefined,
 			privateKey: input.authMethod === "ssh-key" ? input.credential : undefined,
 			readyTimeout: 15_000,
-		};
-
-		if (input.expectedFingerprint) {
-			connectOptions.hostHash = "sha256";
-			connectOptions.hostVerifier = (keyHex: string) => {
-				const observed = fingerprintFromKeyHex(keyHex);
-				observedKey = observed;
+			hostVerifier: (rawKey: Buffer) => {
+				const observed = fingerprintFromKeyBuffer(rawKey);
+				capturedHostKey = observed;
 				if (
-					!fingerprintsMatch(
-						observed.fingerprint,
-						input.expectedFingerprint as string,
-					)
+					input.expectedFingerprint &&
+					!fingerprintsMatch(observed.fingerprint, input.expectedFingerprint)
 				) {
 					throw new SshConnectError(
 						"host key mismatch",
@@ -81,8 +83,8 @@ export async function withSshConnection<T>(
 					);
 				}
 				return true;
-			};
-		}
+			},
+		};
 
 		await ssh.connect(connectOptions);
 	} catch (error) {
@@ -92,37 +94,31 @@ export async function withSshConnection<T>(
 			normalized instanceof SshConnectError &&
 			normalized.code === "host_key_mismatch" &&
 			!normalized.hostKey &&
-			observedKey
+			capturedHostKey
 		) {
 			throw new SshConnectError(
 				normalized.message,
 				"host_key_mismatch",
-				observedKey,
+				capturedHostKey,
 			);
 		}
 		throw normalized;
 	}
 
 	try {
-		return await run(ssh);
+		if (!capturedHostKey) {
+			throw new Error("Host key fingerprint not available");
+		}
+		return await run(ssh, capturedHostKey);
 	} finally {
 		ssh.dispose();
 	}
 }
 
-function captureHostKey(ssh: NodeSSH): HostKeyInfo {
-	const keyHex = ssh.connection?.hostFingerprint;
-	if (!keyHex) {
-		throw new Error("Host key fingerprint not available");
-	}
-	return fingerprintFromKeyHex(
-		keyHex,
-		ssh.connection?.hostKeyAlgorithm ?? "ssh-rsa",
-	);
-}
-
 function fingerprintsMatch(actual: string, expected: string): boolean {
-	const expectedBuf = Buffer.from(expected);
+	// expected (from the DB) may have base64 padding, whereas actual is already
+	// normalized at the boundary in fingerprintFromKeyBuffer.
+	const expectedBuf = Buffer.from(expected.replace(/=+$/, ""));
 	const actualBuf = Buffer.from(actual);
 	if (expectedBuf.length !== actualBuf.length) {
 		return false;
