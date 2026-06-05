@@ -227,7 +227,10 @@ function toActionLogEntry(
 	record: ActionLogRecord,
 	serverLabels: Map<string, string>,
 ): ActionLogEntry {
-	const details = isRecord(record.details) ? record.details : {};
+	const details =
+		record.details !== null && typeof record.details === "object"
+			? (record.details as Record<string, unknown>)
+			: {};
 	const action = readActionType(record.action);
 	const failed = record.action.endsWith(".failed");
 	const serverLabel = record.serverId
