@@ -179,7 +179,10 @@ async function getServerActionHistory(serverId: string) {
 function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 	const action = readActionType(record.action);
 	const result = record.action.endsWith(".failed") ? "failed" : "succeeded";
-	const details = isRecord(record.details) ? record.details : {};
+	const details =
+		record.details !== null && typeof record.details === "object"
+			? (record.details as Record<string, unknown>)
+			: {};
 
 	return {
 		id: record.id,
