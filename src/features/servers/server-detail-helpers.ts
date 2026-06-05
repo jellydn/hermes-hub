@@ -142,22 +142,6 @@ export function badgeIconType(
 	return result === "succeeded" ? "success" : "error";
 }
 
-export function createHistoryEntry(input: {
-	action: ServerActionType;
-	result: ServerActionResult;
-	message: string;
-	imageRef: string | null;
-}): ServerActionHistoryItem {
-	return {
-		id: `${input.action}-${Date.now()}`,
-		action: input.action,
-		result: input.result,
-		createdAt: new Date().toISOString(),
-		message: input.message,
-		imageRef: input.imageRef,
-	};
-}
-
 export function confirmationMessage(
 	action: ServerActionType,
 	rollbackTarget: string | null,
