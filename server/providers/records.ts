@@ -3,6 +3,7 @@ import { decryptSecret } from "../crypto";
 import { getDb } from "../db";
 import { aiProviders, telegramConfigs } from "../db/schema";
 import { getLast4 } from "../lib/get-last-4";
+import { getNonEmptyString } from "../lib/non-empty-string";
 
 export type StoredApiKeyDecryptResult =
 	| { ok: true; apiKey: string }
@@ -15,8 +16,9 @@ function unwrapLegacyApiKeyPayload(decrypted: string) {
 
 	try {
 		const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-		if (typeof parsed.apiKey === "string") {
-			return parsed.apiKey;
+		const legacyKey = getNonEmptyString(parsed.apiKey);
+		if (legacyKey) {
+			return legacyKey;
 		}
 	} catch {
 		// Not valid JSON — treat as a raw key starting with '{'
