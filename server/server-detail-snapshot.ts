@@ -177,8 +177,13 @@ async function getServerActionHistory(serverId: string) {
 }
 
 function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
-	const action = readActionType(record.action);
-	const result = record.action.endsWith(".failed") ? "failed" : "succeeded";
+	const actionName = record.action;
+	const action: ServerActionType = actionName.includes(".update.")
+		? "update"
+		: actionName.includes(".rollback.")
+			? "rollback"
+			: "restart";
+	const result = actionName.endsWith(".failed") ? "failed" : "succeeded";
 	const details =
 		record.details !== null && typeof record.details === "object"
 			? (record.details as Record<string, unknown>)
@@ -192,18 +197,6 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		message: readActionMessage(details, action, result),
 		imageRef: getNonEmptyString(details.imageRef),
 	};
-}
-
-function readActionType(actionName: string): ServerActionType {
-	if (actionName.includes(".update.")) {
-		return "update";
-	}
-
-	if (actionName.includes(".rollback.")) {
-		return "rollback";
-	}
-
-	return "restart";
 }
 
 function readActionMessage(
