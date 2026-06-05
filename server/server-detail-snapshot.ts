@@ -1,7 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type {
 	ServerActionHistoryItem,
-	ServerActionResult,
 	ServerActionType,
 	ServerDetailSnapshot,
 } from "#/lib/server-detail";
