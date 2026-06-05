@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type {
 	ServerActionHistoryItem,
+	ServerActionResult,
 	ServerActionType,
 	ServerDetailSnapshot,
 } from "#/lib/server-detail";
@@ -182,7 +183,9 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		: actionName.includes(".rollback.")
 			? "rollback"
 			: "restart";
-	const result = actionName.endsWith(".failed") ? "failed" : "succeeded";
+	const result: ServerActionResult = actionName.endsWith(".failed")
+		? "failed"
+		: "succeeded";
 	const details =
 		record.details !== null && typeof record.details === "object"
 			? (record.details as Record<string, unknown>)
