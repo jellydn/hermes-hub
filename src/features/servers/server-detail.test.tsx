@@ -37,7 +37,13 @@ vi.mock("./server-detail-aside", () => ({
 		<aside data-testid="server-detail-aside">
 			{detail.actionHistory.map((item) => (
 				<div key={item.id}>
-					<p>{formatActionLabel(item.action)}</p>
+					<p>
+						{item.action === "update"
+							? "Update Hermes"
+							: item.action === "rollback"
+								? "Rollback"
+								: "Restart Agent"}
+					</p>
 					<p>{item.message}</p>
 				</div>
 			))}
