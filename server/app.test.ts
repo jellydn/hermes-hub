@@ -8,6 +8,7 @@ const connectServer = vi.fn();
 const listServers = vi.fn();
 const updateServer = vi.fn();
 const deleteServer = vi.fn();
+const acceptHostKey = vi.fn();
 const getServerDetail = vi.fn();
 const runServerAction = vi.fn();
 const startServerInstall = vi.fn();
@@ -31,6 +32,7 @@ vi.mock("./servers", () => ({
 	listServers,
 	updateServer,
 	deleteServer,
+	acceptHostKey,
 }));
 
 vi.mock("./server-actions", () => ({

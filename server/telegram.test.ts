@@ -20,6 +20,7 @@ const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
 const buildHermesComposeContent = vi.fn();
+const deployComposeViaSsh = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -83,6 +84,10 @@ vi.mock("./server-records", () => ({
 
 vi.mock("./compose", () => ({
 	buildHermesComposeContent,
+}));
+
+vi.mock("./deploy", () => ({
+	deployComposeViaSsh,
 }));
 
 describe("telegram handlers", () => {
@@ -346,7 +351,7 @@ describe("telegram handlers", () => {
 		]);
 
 		// SSH fails
-		withSshConnection.mockRejectedValueOnce(
+		deployComposeViaSsh.mockRejectedValueOnce(
 			new Error("SSH connection refused"),
 		);
 
@@ -379,6 +384,113 @@ describe("telegram handlers", () => {
 				action: "telegram.deploy.failed",
 				details: expect.objectContaining({
 					serverId: "server_1",
+				}),
+			}),
+		);
+	});
+
+	it("deployTelegramToServer persists deploy state and audit log in a single transaction", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		// getLatestTelegramRecord — active bot
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: null,
+				deployedServerHost: null,
+				apiServerKey: null,
+			},
+		]);
+
+		// findServerForDeploy
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: "enc:credential",
+				storeCredential: true,
+				hostKeyFingerprint: "SHA256:abc",
+			},
+		]);
+
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "decrypted-credential",
+		});
+
+		deployComposeViaSsh.mockResolvedValueOnce(undefined);
+
+		let txInsertCalls = 0;
+		let txUpdateCalls = 0;
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				update: () => {
+					txUpdateCalls += 1;
+					return { set: () => ({ where: updateWhere }) };
+				},
+				insert: () => {
+					txInsertCalls += 1;
+					return { values: insertValues };
+				},
+			};
+			return fn(tx);
+		});
+
+		const { deployTelegramToServer } = await import("./telegram");
+		const response = await deployTelegramToServer(
+			createContext() as unknown as Context,
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "deployed",
+			serverHost: "1.2.3.4",
+		});
+
+		// deployComposeViaSsh was invoked with the rendered compose content.
+		expect(deployComposeViaSsh).toHaveBeenCalledTimes(1);
+		const deployArgs = deployComposeViaSsh.mock.calls[0]?.[0];
+		expect(deployArgs).toMatchObject({
+			host: "1.2.3.4",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			credential: "decrypted-credential",
+			expectedFingerprint: "SHA256:abc",
+		});
+		expect(deployArgs.composeContent).toBe("# mocked compose content");
+
+		// buildHermesComposeContent received the env vars.
+		expect(buildHermesComposeContent).toHaveBeenCalledWith(
+			expect.objectContaining({
+				telegramBotToken: "123456:secret-token",
+				providerEnvVars: { HERMES_INFERENCE_PROVIDER: "openai" },
+				hermesModel: "gpt-4o",
+			}),
+		);
+
+		// Single transaction containing both the update and the audit log.
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(txUpdateCalls).toBe(1);
+		expect(txInsertCalls).toBe(1);
+
+		// The audit row was inserted with the explicit serverId column.
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "telegram.deployed",
+				serverId: "server_1",
+				details: expect.objectContaining({
+					serverId: "server_1",
+					serverHost: "1.2.3.4",
 				}),
 			}),
 		);

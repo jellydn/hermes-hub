@@ -3,7 +3,8 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
-import { auditLogs, installs } from "./db/schema";
+import { installEvents, installs } from "./db/schema";
+import { buildLogLinesFromEvents } from "./install/legacy-log";
 import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
 	ensureInstallStream,
@@ -16,6 +17,7 @@ import {
 } from "./install/sse-stream";
 import { installSteps, runInstallWorkflow } from "./install/workflow";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
@@ -81,9 +83,10 @@ export async function startServerInstall(context: Context) {
 
 	const ipAddress = getClientIp(context);
 
-	await db.insert(auditLogs).values({
+	await insertAuditLog(db, {
 		userId: session.user.id,
 		action: "server.install.started",
+		serverId,
 		details: {
 			serverId,
 			installId: installRecord.id,
@@ -251,8 +254,9 @@ export async function getLatestServerInstallLog(context: Context) {
 			id: installs.id,
 			status: installs.status,
 			step: installs.step,
-			log: installs.log,
 			updatedAt: installs.updatedAt,
+			createdAt: installs.createdAt,
+			legacyLog: installs.log,
 		})
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
@@ -269,11 +273,27 @@ export async function getLatestServerInstallLog(context: Context) {
 		});
 	}
 
+	const events = await getDb()
+		.select({
+			step: installEvents.step,
+			message: installEvents.message,
+			createdAt: installEvents.createdAt,
+		})
+		.from(installEvents)
+		.where(eq(installEvents.installId, installRecord.id))
+		.orderBy(installEvents.createdAt);
+
+	const logLines = buildLogLinesFromEvents(
+		events,
+		installRecord.legacyLog,
+		installRecord.createdAt,
+	);
+
 	return context.json({
 		installId: installRecord.id,
 		status: installRecord.status,
 		step: installRecord.step,
-		log: installRecord.log,
+		log: logLines.join("\n") || null,
 		updatedAt: installRecord.updatedAt,
 	});
 }

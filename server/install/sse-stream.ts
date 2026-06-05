@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { installs } from "../db/schema";
+import { installEvents, installs } from "../db/schema";
 
 export type InstallStatus = "pending" | "running" | "succeeded" | "failed";
 
@@ -43,39 +43,38 @@ export function normalizeInstallStatus(status?: string | null): InstallStatus {
 	return "pending";
 }
 
-export function hydrateInstallEvents(
+export async function hydrateInstallEvents(
 	serverId: string,
 	installRecord: {
 		id: string;
 		status: string;
 		step: string;
-		log: string | null;
 	},
 ) {
-	if (!installRecord.log) {
-		return [];
-	}
+	const events = await getDb()
+		.select({
+			installId: installEvents.installId,
+			step: installEvents.step,
+			progress: installEvents.progress,
+			message: installEvents.message,
+			status: installEvents.status,
+			timestamp: installEvents.createdAt,
+			error: installEvents.error,
+		})
+		.from(installEvents)
+		.where(eq(installEvents.installId, installRecord.id))
+		.orderBy(installEvents.createdAt);
 
-	const lines = installRecord.log.split("\n").filter(Boolean);
-	if (lines.length === 0) {
-		return [];
-	}
-
-	return lines.map((line, index) => {
-		const timestamp = line.slice(0, 24);
-		const stepMatch = line.match(/\[(.+?)\]/);
-		const messageIndex = line.indexOf("] ");
-
-		return {
-			installId: installRecord.id,
-			serverId,
-			step: stepMatch?.[1] ?? installRecord.step,
-			progress: Math.round(((index + 1) / lines.length) * 100),
-			message: messageIndex >= 0 ? line.slice(messageIndex + 2) : line,
-			status: normalizeInstallStatus(installRecord.status),
-			timestamp,
-		};
-	});
+	return events.map((event) => ({
+		installId: event.installId,
+		serverId,
+		step: event.step,
+		progress: event.progress,
+		message: event.message,
+		status: normalizeInstallStatus(event.status),
+		timestamp: event.timestamp.toISOString(),
+		...(event.error ? { error: event.error } : {}),
+	}));
 }
 
 export function resetInstallStream(serverId: string, installId: string) {
@@ -136,7 +135,6 @@ export async function ensureInstallStream(serverId: string) {
 			id: installs.id,
 			status: installs.status,
 			step: installs.step,
-			log: installs.log,
 		})
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
@@ -146,7 +144,9 @@ export async function ensureInstallStream(serverId: string) {
 	const state: InstallStreamState = {
 		installId: installRecord?.id ?? randomUUID(),
 		serverId,
-		events: installRecord ? hydrateInstallEvents(serverId, installRecord) : [],
+		events: installRecord
+			? await hydrateInstallEvents(serverId, installRecord)
+			: [],
 		listeners: new Set(),
 		status: normalizeInstallStatus(installRecord?.status),
 		runId: randomUUID(),
@@ -165,7 +165,6 @@ export async function emitInstallEvent(input: {
 	message: string;
 	status: InstallStatus;
 	error?: string;
-	logLines: string[];
 }) {
 	const state = installStreams.get(input.serverId);
 	if (!state || state.runId !== input.runId) {
@@ -173,10 +172,6 @@ export async function emitInstallEvent(input: {
 	}
 
 	const timestamp = new Date().toISOString();
-	const logLine = `${timestamp} [${input.step}] ${
-		input.error ? `${input.message}: ${input.error}` : input.message
-	}`;
-	input.logLines.push(logLine);
 
 	const event: InstallEvent = {
 		installId: input.installId,
@@ -192,16 +187,26 @@ export async function emitInstallEvent(input: {
 	state.events.push(event);
 	state.status = input.status;
 
-	await getDb()
-		.update(installs)
-		.set({
-			status: input.status,
+	await getDb().transaction(async (tx) => {
+		await tx.insert(installEvents).values({
+			installId: input.installId,
 			step: input.step,
-			log: input.logLines.join("\n"),
-			version: "latest",
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, input.installId));
+			progress: input.progress,
+			message: input.message,
+			status: input.status,
+			...(input.error ? { error: input.error } : {}),
+		});
+
+		await tx
+			.update(installs)
+			.set({
+				status: input.status,
+				step: input.step,
+				version: "latest",
+				updatedAt: new Date(),
+			})
+			.where(eq(installs.id, input.installId));
+	});
 
 	for (const listener of state.listeners) {
 		listener(event);

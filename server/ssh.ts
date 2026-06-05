@@ -1,6 +1,8 @@
 export {
+	type HostKeyInfo,
 	type SshAuthMethod,
 	type SshConnectionInput,
+	type VerifiedServerConnection,
 	verifyServerConnection,
 	withSshConnection,
 } from "./ssh/connection";

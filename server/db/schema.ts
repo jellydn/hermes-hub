@@ -118,6 +118,8 @@ export const servers = pgTable(
 		storeCredential: boolean("store_credential").default(true).notNull(),
 		status: text("status").notNull(),
 		osInfo: jsonb("os_info").notNull(),
+		hostKeyFingerprint: text("host_key_fingerprint"),
+		hostKeyAlgorithm: text("host_key_algorithm"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -149,6 +151,30 @@ export const installs = pgTable(
 			.notNull(),
 	},
 	(table) => [index("installs_server_id_idx").on(table.serverId)],
+);
+
+export const installEvents = pgTable(
+	"install_events",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		installId: text("install_id")
+			.notNull()
+			.references(() => installs.id, { onDelete: "cascade" }),
+		step: text("step").notNull(),
+		progress: integer("progress").notNull(),
+		message: text("message").notNull(),
+		status: text("status").notNull(),
+		error: text("error"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("install_events_install_id_created_at_idx").on(
+			table.installId,
+			table.createdAt,
+		),
+	],
 );
 
 export const aiProviders = pgTable(
@@ -199,11 +225,23 @@ export const auditLogs = pgTable(
 		action: text("action").notNull(),
 		details: jsonb("details"),
 		ipAddress: text("ip_address"),
+		serverId: text("server_id"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
 	},
-	(table) => [index("audit_logs_user_id_idx").on(table.userId)],
+	(table) => [
+		index("audit_logs_user_id_idx").on(table.userId),
+		index("audit_logs_user_created_idx").on(
+			table.userId,
+			table.createdAt.desc(),
+		),
+		index("audit_logs_server_id_idx").on(
+			table.userId,
+			table.serverId,
+			table.createdAt.desc(),
+		),
+	],
 );
 
 // Better Auth looks up schema models by singular names (user, session, account, verification).

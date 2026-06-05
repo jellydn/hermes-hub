@@ -6,8 +6,9 @@ import { getAuthSession } from "./auth";
 import { hermesImageRepository } from "./constants";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { auditLogs, installs } from "./db/schema";
+import { installs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	getRollbackTargetFromHistory,
 	getServerDetailSnapshot,
@@ -123,9 +124,10 @@ export async function runServerAction(context: Context) {
 			: null;
 	const ipAddress = getClientIp(context);
 
-	await db.insert(auditLogs).values({
+	await insertAuditLog(db, {
 		userId: session.user.id,
 		action: `server.action.${action}.started`,
+		serverId,
 		details: {
 			serverId,
 			host: serverRecord.host,
@@ -148,9 +150,10 @@ export async function runServerAction(context: Context) {
 		// update fails, the audit log also rolls back, keeping the install
 		// history consistent with the action record.
 		await db.transaction(async (tx) => {
-			await tx.insert(auditLogs).values({
+			await insertAuditLog(tx, {
 				userId: session.user.id,
 				action: `server.action.${action}.succeeded`,
+				serverId,
 				details: {
 					serverId,
 					host: serverRecord.host,
@@ -192,9 +195,10 @@ export async function runServerAction(context: Context) {
 	} catch (error) {
 		const message = normalizeServerActionError(error);
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: `server.action.${action}.failed`,
+			serverId,
 			details: {
 				serverId,
 				host: serverRecord.host,
@@ -244,6 +248,7 @@ async function executeServerAction(input: {
 			username: input.server.username,
 			authMethod: input.authMethod,
 			credential: input.credential,
+			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
 		},
 		async (ssh) => {
 			const result = await ssh.execCommand(input.command);

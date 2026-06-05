@@ -1,19 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { FINISHED_SERVER_ACTION_NAMES } from "../audit-log-actions";
 import { getDb } from "../db";
 import { auditLogs, installs, servers } from "../db/schema";
-
-const relevantServerActionNames = [
-	"server.connect.succeeded",
-	"server.connect.failed",
-	"server.update.succeeded",
-	"server.update.failed",
-	"server.action.restart.succeeded",
-	"server.action.restart.failed",
-	"server.action.update.succeeded",
-	"server.action.update.failed",
-	"server.action.rollback.succeeded",
-	"server.action.rollback.failed",
-] as const;
 
 export type ServerListRecord = {
 	id: string;
@@ -31,6 +19,7 @@ export type InstallListRecord = {
 };
 
 export type ServerActionRecord = {
+	serverId: string;
 	action: string;
 	details: unknown;
 	createdAt: Date;
@@ -90,26 +79,40 @@ export async function getLatestInstallRecords(serverIds: string[]) {
 export async function getLatestServerActionRecords(
 	userId: string,
 	serverIds: string[],
-) {
-	const records = await getDb()
+): Promise<ServerActionRecord[]> {
+	const db = getDb();
+	const ranked = db
 		.select({
+			serverId: auditLogs.serverId,
 			action: auditLogs.action,
 			details: auditLogs.details,
 			createdAt: auditLogs.createdAt,
+			rowNum:
+				sql<number>`row_number() over (partition by ${auditLogs.serverId} order by ${auditLogs.createdAt} desc)`.as(
+					"rn",
+				),
 		})
 		.from(auditLogs)
 		.where(
 			and(
 				eq(auditLogs.userId, userId),
-				inArray(auditLogs.action, [...relevantServerActionNames]),
-				sql`${auditLogs.details}->>'serverId' IN (${sql.join(
-					serverIds.map((id) => sql`${id}`),
-					sql`,`,
-				)})`,
+				inArray(auditLogs.action, FINISHED_SERVER_ACTION_NAMES),
+				inArray(auditLogs.serverId, serverIds),
 			),
 		)
-		.orderBy(desc(auditLogs.createdAt))
-		.limit(100);
+		.as("ranked");
 
-	return records as ServerActionRecord[];
+	const records = await db
+		.select({
+			serverId: ranked.serverId,
+			action: ranked.action,
+			details: ranked.details,
+			createdAt: ranked.createdAt,
+		})
+		.from(ranked)
+		.where(eq(ranked.rowNum, 1));
+
+	return records.filter(
+		(r): r is typeof r & { serverId: string } => r.serverId !== null,
+	);
 }

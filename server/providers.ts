@@ -12,8 +12,9 @@ import { getAuthSession } from "./auth";
 import { encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { aiProviders, auditLogs } from "./db/schema";
+import { aiProviders } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	buildProviderEnvMap,
 	isApiKeyRequired,
@@ -95,7 +96,7 @@ export async function saveProviderConfig(context: Context) {
 			isActive: true,
 		});
 
-		await db.insert(auditLogs).values({
+		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "provider.saved",
 			details: {

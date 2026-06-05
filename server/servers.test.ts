@@ -1,5 +1,11 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auditLogs, servers } from "./db/schema";
+
+const observedHostKeyFingerprint = `SHA256:${createHash("sha256").update(Buffer.from("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "hex")).digest("base64")}`;
+const acceptedHostKeyFingerprint = `SHA256:${createHash("sha256").update("rotated-host-key").digest("base64")}`;
+
+import { INVALID_FINGERPRINT_MESSAGE } from "./ssh/host-key-fingerprint";
 
 // Allow mock promises to chain .limit()
 // @ts-expect-error
@@ -14,8 +20,10 @@ const insertServerReturning = vi.fn();
 const dbInsert = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
+const dbExecute = vi.fn();
 const updateServerSet = vi.fn();
 const updateServerWhere = vi.fn();
+const updateServerReturning = vi.fn();
 const selectFrom = vi.fn();
 const selectWhere = vi.fn();
 const selectOrderBy = vi.fn();
@@ -36,6 +44,7 @@ vi.mock("./db", () => ({
 		insert: dbInsert,
 		select: dbSelect,
 		update: dbUpdate,
+		execute: dbExecute,
 	}),
 }));
 
@@ -62,9 +71,18 @@ vi.mock("./ssh", () => {
 	}
 
 	class SshConnectError extends Error {
-		constructor(message: string) {
+		readonly code: string;
+		readonly hostKey?: { fingerprint: string; algorithm: string };
+
+		constructor(
+			message: string,
+			code = "host_unreachable",
+			hostKey?: { fingerprint: string; algorithm: string },
+		) {
 			super(message);
 			this.name = "SshConnectError";
+			this.code = code;
+			this.hostKey = hostKey;
 		}
 	}
 
@@ -97,13 +115,30 @@ describe("server handlers", () => {
 
 		dbSelect.mockReturnValue({ from: selectFrom });
 		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ limit: selectLimit, orderBy: selectOrderBy });
+		selectWhere.mockImplementation(() => {
+			return Object.assign(Promise.resolve([]), {
+				limit: selectLimit,
+				orderBy: selectOrderBy,
+				as: vi.fn().mockReturnValue({}),
+			});
+		});
 		selectLimit.mockResolvedValue([]);
 		selectOrderBy.mockResolvedValue([]);
+		dbExecute.mockResolvedValue([]);
 
 		dbUpdate.mockReturnValue({ set: updateServerSet });
 		updateServerSet.mockReturnValue({ where: updateServerWhere });
-		updateServerWhere.mockResolvedValue(undefined);
+		updateServerWhere.mockImplementation(() => {
+			const query: {
+				returning: typeof updateServerReturning;
+			} & Promise<unknown> = Object.assign(Promise.resolve(undefined), {
+				returning: updateServerReturning,
+			});
+			return query;
+		});
+		updateServerReturning.mockResolvedValue([
+			{ id: "server_123", host: "203.0.113.10" },
+		]);
 
 		insertServerValues.mockReturnValue({
 			returning: insertServerReturning,
@@ -131,11 +166,17 @@ describe("server handlers", () => {
 			user: { id: "user_123", email: "test@example.com" },
 		});
 		verifyServerConnection.mockResolvedValue({
-			osName: "Ubuntu 22.04.4 LTS",
-			osVersion: "22.04",
-			architecture: "x86_64",
-			supportLevel: "supported",
-			raw: { ID: "ubuntu", VERSION_ID: "22.04" },
+			verified: {
+				osName: "Ubuntu 22.04.4 LTS",
+				osVersion: "22.04",
+				architecture: "x86_64",
+				supportLevel: "supported",
+				raw: { ID: "ubuntu", VERSION_ID: "22.04" },
+			},
+			hostKey: {
+				fingerprint: "SHA256:abc",
+				algorithm: "ssh-ed25519",
+			},
 		});
 		getServerDetailSnapshot.mockResolvedValue({
 			server: {
@@ -241,6 +282,155 @@ describe("server handlers", () => {
 		expect(insertAuditValues).toHaveBeenCalled();
 	});
 
+	it("persists the host key fingerprint on first connect", async () => {
+		const { connectServer } = await import("./servers");
+		const response = await connectServer(
+			createContext({
+				label: "Production",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				password: "secret",
+				storeCredential: true,
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(insertServerValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				hostKeyFingerprint: "SHA256:abc",
+				hostKeyAlgorithm: "ssh-ed25519",
+			}),
+		);
+	});
+
+	it("returns 409 with host_key_mismatch when the second connect presents a different key", async () => {
+		const { SshConnectError } = await import("./ssh");
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_123",
+				label: "Production",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: "encrypted-secret",
+				storeCredential: true,
+				status: "connected",
+				osInfo: {},
+				hostKeyFingerprint: "SHA256:old",
+				hostKeyAlgorithm: "ssh-ed25519",
+			},
+		]);
+		verifyServerConnection.mockRejectedValueOnce(
+			new SshConnectError("host key mismatch", "host_key_mismatch", {
+				fingerprint: observedHostKeyFingerprint,
+				algorithm: "ssh-ed25519",
+			}),
+		);
+
+		const { updateServer } = await import("./servers");
+		const response = await updateServer(
+			createContext(
+				{ host: "198.51.100.25" },
+				{
+					method: "PATCH",
+					url: "http://localhost/api/servers/server_123",
+					serverId: "server_123",
+				},
+			),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: "host key mismatch",
+			code: "host_key_mismatch",
+			hostKey: {
+				expectedFingerprint: "SHA256:old",
+				algorithm: "ssh-ed25519",
+				observedFingerprint: observedHostKeyFingerprint,
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(verifyServerConnection).toHaveBeenCalledWith({
+			host: "198.51.100.25",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			credential: "secret",
+			expectedFingerprint: "SHA256:old",
+		});
+		expect(updateServerSet).not.toHaveBeenCalled();
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "server.host_key.mismatch",
+				details: expect.objectContaining({
+					serverId: "server_123",
+					host: "198.51.100.25",
+					expectedFingerprint: "SHA256:old",
+				}),
+			}),
+		);
+	});
+
+	it("rotates the stored fingerprint when acceptHostKey is called", async () => {
+		const { acceptHostKey } = await import("./servers");
+		const response = await acceptHostKey(
+			createContext(
+				{
+					fingerprint: acceptedHostKeyFingerprint,
+					algorithm: "ssh-ed25519",
+				},
+				{
+					method: "POST",
+					url: "http://localhost/api/servers/server_123/host-key/accept",
+					serverId: "server_123",
+				},
+			),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			ok: true,
+			fingerprint: acceptedHostKeyFingerprint,
+		});
+		expect(updateServerSet).toHaveBeenCalledWith({
+			hostKeyFingerprint: acceptedHostKeyFingerprint,
+			hostKeyAlgorithm: "ssh-ed25519",
+		});
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "server.host_key.rotated",
+				details: expect.objectContaining({
+					serverId: "server_123",
+					host: "203.0.113.10",
+					fingerprint: acceptedHostKeyFingerprint,
+				}),
+			}),
+		);
+	});
+
+	it("rejects acceptHostKey payloads that are not SHA256: prefixed", async () => {
+		const { acceptHostKey } = await import("./servers");
+		const response = await acceptHostKey(
+			createContext(
+				{ fingerprint: "MD5:abcd" },
+				{
+					method: "POST",
+					url: "http://localhost/api/servers/server_123/host-key/accept",
+					serverId: "server_123",
+				},
+			),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: INVALID_FINGERPRINT_MESSAGE,
+		});
+		expect(updateServerSet).not.toHaveBeenCalled();
+	});
+
 	it("lists the current user's servers with install and action summaries", async () => {
 		selectOrderBy
 			.mockResolvedValueOnce([
@@ -271,14 +461,24 @@ describe("server handlers", () => {
 					status: "succeeded",
 					updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 				},
-			])
-			.mockResolvedValueOnce([
-				{
-					action: "server.action.restart.succeeded",
-					details: { serverId: "server_123" },
-					createdAt: new Date("2026-05-26T05:00:00.000Z"),
-				},
 			]);
+		selectWhere.mockImplementation(() => {
+			return Object.assign(
+				Promise.resolve([
+					{
+						serverId: "server_123",
+						action: "server.action.restart.succeeded",
+						details: { serverId: "server_123" },
+						createdAt: new Date("2026-05-26T05:00:00.000Z"),
+					},
+				]),
+				{
+					limit: selectLimit,
+					orderBy: selectOrderBy,
+					as: vi.fn().mockReturnValue({}),
+				},
+			);
+		});
 
 		const { listServers } = await import("./servers");
 		const response = await listServers(

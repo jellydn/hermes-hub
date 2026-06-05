@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 
 import { getDb } from "../db";
-import { installs, servers } from "../db/schema";
+import { installEvents, installs, servers } from "../db/schema";
 import { installSteps } from "./workflow";
 
 export async function upsertInstallRecord(serverId: string) {
@@ -20,7 +20,6 @@ export async function upsertInstallRecord(serverId: string) {
 				serverId,
 				status: "pending",
 				step: installSteps[0]?.id ?? "pending",
-				log: null,
 				version: "latest",
 			})
 			.returning({ id: installs.id });
@@ -28,17 +27,24 @@ export async function upsertInstallRecord(serverId: string) {
 		return createdInstall;
 	}
 
-	const [updatedInstall] = await db
-		.update(installs)
-		.set({
-			status: "pending",
-			step: installSteps[0]?.id ?? "pending",
-			log: null,
-			version: "latest",
-			updatedAt: new Date(),
-		})
-		.where(eq(installs.id, existingInstall.id))
-		.returning({ id: installs.id });
+	const [updatedInstall] = await db.transaction(async (tx) => {
+		// Retry path: wipe the prior run's events so SSE replay starts clean
+		// instead of re-streaming the previous failure before the new run.
+		await tx
+			.delete(installEvents)
+			.where(eq(installEvents.installId, existingInstall.id));
+
+		return tx
+			.update(installs)
+			.set({
+				status: "pending",
+				step: installSteps[0]?.id ?? "pending",
+				version: "latest",
+				updatedAt: new Date(),
+			})
+			.where(eq(installs.id, existingInstall.id))
+			.returning({ id: installs.id });
+	});
 
 	return updatedInstall;
 }
@@ -56,6 +62,7 @@ export async function getServerForInstall(input: {
 			authMethod: servers.authMethod,
 			encryptedCredential: servers.encryptedCredential,
 			storeCredential: servers.storeCredential,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
 		})
 		.from(servers)
 		.where(

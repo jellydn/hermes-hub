@@ -1,18 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
+import { installEvents, installs } from "../db/schema";
+
 const selectLimit = vi.fn();
+const selectOrderBy = vi.fn();
+const insertValues = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
 const dbSelect = vi.fn();
+const dbInsert = vi.fn();
 const dbUpdate = vi.fn();
+const dbTransaction = vi.fn();
+const txInsert = vi.fn();
+const txUpdate = vi.fn();
+const txSet = vi.fn();
+const txWhere = vi.fn();
+const txInsertValues = vi.fn();
 
 vi.mock("../db", () => ({
 	getDb: () => ({
 		select: dbSelect,
+		insert: dbInsert,
 		update: dbUpdate,
+		transaction: dbTransaction,
 	}),
 }));
 
@@ -21,12 +31,72 @@ describe("install SSE stream helpers", () => {
 		vi.clearAllMocks();
 		vi.useRealTimers();
 
-		dbSelect.mockReturnValue({ from: selectFrom });
-		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy });
-		selectOrderBy.mockReturnValue({ limit: selectLimit });
+		dbSelect.mockImplementation(() => ({
+			from: (table: unknown) => {
+				if (table === installs) {
+					return {
+						where: () => ({
+							orderBy: () => ({ limit: selectLimit }),
+						}),
+					};
+				}
 
-		dbUpdate.mockReturnValue({ set: updateSet });
+				if (table === installEvents) {
+					return {
+						where: () => ({
+							orderBy: selectOrderBy,
+						}),
+					};
+				}
+
+				throw new Error("Unexpected table select");
+			},
+		}));
+
+		dbInsert.mockImplementation((table: unknown) => {
+			if (table === installEvents) {
+				return { values: insertValues };
+			}
+
+			throw new Error("Unexpected table insert");
+		});
+
+		dbUpdate.mockImplementation((table: unknown) => {
+			if (table === installs) {
+				return { set: updateSet };
+			}
+
+			throw new Error("Unexpected table update");
+		});
+
+		dbTransaction.mockImplementation(
+			async (callback: (tx: unknown) => Promise<unknown>) => {
+				const tx = {
+					insert: txInsert,
+					update: txUpdate,
+				};
+				txInsert.mockImplementation((table: unknown) => {
+					if (table === installEvents) {
+						return { values: txInsertValues };
+					}
+					throw new Error("Unexpected table tx insert");
+				});
+				txUpdate.mockImplementation((table: unknown) => {
+					if (table === installs) {
+						return { set: txSet };
+					}
+					throw new Error("Unexpected table tx update");
+				});
+				txSet.mockReturnValue({ where: txWhere });
+				txWhere.mockResolvedValue(undefined);
+				txInsertValues.mockResolvedValue(undefined);
+				return callback(tx);
+			},
+		);
+
+		selectLimit.mockResolvedValue([]);
+		selectOrderBy.mockResolvedValue([]);
+		insertValues.mockResolvedValue(undefined);
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 	});
@@ -45,31 +115,13 @@ describe("install SSE stream helpers", () => {
 	it("hydrates persisted log lines into install events", async () => {
 		const { hydrateInstallEvents } = await import("./sse-stream");
 
-		const events = hydrateInstallEvents("server_123", {
+		const events = await hydrateInstallEvents("server_123", {
 			id: "install_123",
 			status: "running",
 			step: "install-docker",
-			log: [
-				"2026-05-29T10:00:00.000Z [install-docker] Installing Docker",
-				"2026-05-29T10:01:00.000Z [install-compose] Installing Compose",
-			].join("\n"),
 		});
 
-		expect(events).toHaveLength(2);
-		expect(events[0]).toMatchObject({
-			installId: "install_123",
-			serverId: "server_123",
-			step: "install-docker",
-			message: "Installing Docker",
-			status: "running",
-			progress: 50,
-			timestamp: "2026-05-29T10:00:00.000Z",
-		});
-		expect(events[1]).toMatchObject({
-			step: "install-compose",
-			message: "Installing Compose",
-			progress: 100,
-		});
+		expect(events).toEqual([]);
 	});
 
 	it("resetInstallStream stores a pending in-memory stream and ensureInstallStream reuses it", async () => {
@@ -96,7 +148,17 @@ describe("install SSE stream helpers", () => {
 				id: "install_123",
 				status: "failed",
 				step: "failed",
-				log: "2026-05-29T10:00:00.000Z [install-docker] Installing Docker",
+			},
+		]);
+		selectOrderBy.mockResolvedValueOnce([
+			{
+				installId: "install_123",
+				step: "install-docker",
+				progress: 15,
+				message: "Installing Docker",
+				status: "failed",
+				timestamp: new Date("2026-05-29T10:00:00.000Z"),
+				error: null,
 			},
 		]);
 
@@ -123,7 +185,6 @@ describe("install SSE stream helpers", () => {
 		const state = resetInstallStream("server_123", "install_123");
 		const listener = vi.fn();
 		state.listeners.add(listener);
-		const logLines: string[] = [];
 
 		await emitInstallEvent({
 			installId: "install_123",
@@ -133,12 +194,8 @@ describe("install SSE stream helpers", () => {
 			progress: 15,
 			message: "Installing Docker",
 			status: "running",
-			logLines,
 		});
 
-		expect(logLines).toEqual([
-			"2026-05-29T12:00:00.000Z [install-docker] Installing Docker",
-		]);
 		expect(state.status).toBe("running");
 		expect(state.events).toHaveLength(1);
 		expect(state.events[0]).toMatchObject({
@@ -150,14 +207,24 @@ describe("install SSE stream helpers", () => {
 			status: "running",
 			timestamp: "2026-05-29T12:00:00.000Z",
 		});
-		expect(updateSet).toHaveBeenCalledWith(
+		expect(dbTransaction).toHaveBeenCalledTimes(1);
+		expect(txInsertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				installId: "install_123",
+				step: "install-docker",
+				progress: 15,
+				message: "Installing Docker",
+				status: "running",
+			}),
+		);
+		expect(txSet).toHaveBeenCalledWith(
 			expect.objectContaining({
 				status: "running",
 				step: "install-docker",
-				log: logLines.join("\n"),
 				version: "latest",
 			}),
 		);
+		expect(txSet.mock.calls[0]?.[0]).not.toHaveProperty("log");
 		expect(listener).toHaveBeenCalledWith(
 			expect.objectContaining({
 				message: "Installing Docker",

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
 	screen,
-	waitFor,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,23 @@ vi.mock("@tanstack/react-router", () => ({
 		<a href={to} {...props}>
 			{children}
 		</a>
+	),
+}));
+
+vi.mock("./install-log-card", () => ({
+	InstallLogCard: () => <div data-testid="install-log-card" />,
+}));
+
+vi.mock("./server-detail-aside", () => ({
+	ServerDetailAside: ({ detail }: { detail: ServerDetailSnapshot }) => (
+		<aside data-testid="server-detail-aside">
+			{detail.actionHistory.map((item) => (
+				<div key={item.id}>
+					<p>{formatActionLabel(item.action)}</p>
+					<p>{item.message}</p>
+				</div>
+			))}
+		</aside>
 	),
 }));
 
@@ -88,11 +105,11 @@ describe("ServerDetail", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
-		await waitFor(() => {
-			expect(
-				screen.getAllByText(/restarted hermes successfully/i).length,
-			).toBeGreaterThanOrEqual(1);
-		});
+		await flushAsyncWork();
+
+		expect(
+			screen.getAllByText(/restarted hermes successfully/i).length,
+		).toBeGreaterThanOrEqual(1);
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/servers/server_123/actions",
@@ -123,9 +140,11 @@ describe("ServerDetail", () => {
 		fireEvent.click(screen.getByRole("button", { name: /update hermes/i }));
 		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/action failed: host unreachable/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
+
+		expect(
+			screen.getAllByText(/action failed: host unreachable/i).length,
+		).toBeGreaterThanOrEqual(1);
 	});
 
 	it("updates server basics from the readonly fields", async () => {
@@ -159,9 +178,9 @@ describe("ServerDetail", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-		await waitFor(() => {
-			expect(screen.getByText(/server basics updated/i)).toBeTruthy();
-		});
+		await flushAsyncWork();
+
+		expect(screen.getByText(/server basics updated/i)).toBeTruthy();
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/servers/server_123",
@@ -194,9 +213,9 @@ describe("ServerDetail", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /install hermes/i }));
 
-		await waitFor(() => {
-			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
-		});
+		await flushAsyncWork();
+
+		expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
 	});
 
 	it("retries a failed install from manage server", async () => {
@@ -225,13 +244,13 @@ describe("ServerDetail", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /retry install/i }));
 
-		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith(
-				"/api/servers/server_123/install",
-				expect.objectContaining({ method: "POST" }),
-			);
-			expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
-		});
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/servers/server_123/install",
+			expect.objectContaining({ method: "POST" }),
+		);
+		expect(handleGoToInstall).toHaveBeenCalledWith("server_123");
 	});
 
 	it("blocks delete confirmation until the server label is typed", () => {
@@ -287,15 +306,36 @@ describe("ServerDetail", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
-		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith(
-				"/api/servers/server_123",
-				expect.objectContaining({ method: "DELETE" }),
-			);
-			expect(handleDeleted).toHaveBeenCalled();
-		});
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/servers/server_123",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(handleDeleted).toHaveBeenCalled();
 	});
 });
+
+async function flushAsyncWork() {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
+
+function formatActionLabel(
+	action: ServerDetailSnapshot["actionHistory"][number]["action"],
+) {
+	if (action === "update") {
+		return "Update Hermes";
+	}
+
+	if (action === "rollback") {
+		return "Rollback";
+	}
+
+	return "Restart Agent";
+}
 
 function createDetail(overrides?: {
 	server?: Partial<ServerDetailSnapshot["server"]>;

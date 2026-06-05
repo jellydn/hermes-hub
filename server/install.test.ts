@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auditLogs, installs } from "./db/schema";
+
+import { auditLogs, installEvents, installs, servers } from "./db/schema";
 import { installStreams } from "./install/sse-stream";
 
 const getAuthSession = vi.fn();
@@ -9,15 +10,16 @@ const withSshConnection = vi.fn();
 const insertInstallValues = vi.fn();
 const insertInstallReturning = vi.fn();
 const insertAuditValues = vi.fn();
+const insertInstallEventValues = vi.fn();
 const updateInstallSet = vi.fn();
 const updateInstallWhere = vi.fn();
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
-const selectLimit = vi.fn();
 const dbInsert = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
+
+let serverSelectResults: Array<unknown[]> = [];
+let installLimitResults: Array<unknown[]> = [];
+let installEventResults: Array<unknown[]> = [];
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -50,6 +52,11 @@ vi.mock("./db", () => ({
 		insert: dbInsert,
 		select: dbSelect,
 		update: dbUpdate,
+		transaction: (callback: (tx: unknown) => Promise<unknown>) =>
+			callback({
+				insert: dbInsert,
+				update: dbUpdate,
+			}),
 	}),
 }));
 
@@ -58,12 +65,16 @@ describe("server install", () => {
 		vi.clearAllMocks();
 		installStreams.clear();
 
+		serverSelectResults = [[defaultServerRecord()]];
+		installLimitResults = [[]];
+		installEventResults = [[]];
+
 		getAuthSession.mockResolvedValue({
 			session: { id: "session_123" },
 			user: { id: "user_123", email: "test@example.com" },
 		});
 
-		dbInsert.mockImplementation((table) => {
+		dbInsert.mockImplementation((table: unknown) => {
 			if (table === installs) {
 				return {
 					values: insertInstallValues,
@@ -76,6 +87,12 @@ describe("server install", () => {
 				};
 			}
 
+			if (table === installEvents) {
+				return {
+					values: insertInstallEventValues,
+				};
+			}
+
 			throw new Error("Unexpected table insert");
 		});
 
@@ -84,34 +101,52 @@ describe("server install", () => {
 		});
 		insertInstallReturning.mockResolvedValue([{ id: "install_123" }]);
 		insertAuditValues.mockResolvedValue(undefined);
+		insertInstallEventValues.mockResolvedValue(undefined);
 
-		dbSelect.mockReturnValue({
-			from: selectFrom,
-		});
-		selectFrom.mockReturnValue({ where: selectWhere });
-		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
-		selectOrderBy.mockReturnValue({ limit: selectLimit });
+		dbSelect.mockImplementation(() => ({
+			from: (table: unknown) => {
+				if (table === servers) {
+					return {
+						where: () => ({
+							limit: async () => serverSelectResults.shift() ?? [],
+						}),
+					};
+				}
 
-		selectLimit
-			.mockResolvedValueOnce([
-				{
-					id: "server_123",
-					host: "203.0.113.10",
-					port: 22,
-					username: "root",
-					authMethod: "password",
-					encryptedCredential: "encrypted-secret",
-					storeCredential: true,
-				},
-			])
-			.mockResolvedValueOnce([]);
+				if (table === installs) {
+					return {
+						where: () => ({
+							orderBy: () => ({
+								limit: async () => installLimitResults.shift() ?? [],
+							}),
+						}),
+					};
+				}
 
-		decryptSecret.mockReturnValue("secret");
-		getSessionCredential.mockReturnValue(null);
+				if (table === installEvents) {
+					return {
+						where: () => ({
+							orderBy: async () => installEventResults.shift() ?? [],
+						}),
+					};
+				}
+
+				throw new Error("Unexpected table select");
+			},
+		}));
 
 		updateInstallWhere.mockResolvedValue([{ id: "install_123" }]);
 		updateInstallSet.mockReturnValue({ where: updateInstallWhere });
-		dbUpdate.mockReturnValue({ set: updateInstallSet });
+		dbUpdate.mockImplementation((table: unknown) => {
+			if (table === installs) {
+				return { set: updateInstallSet };
+			}
+
+			throw new Error("Unexpected table update");
+		});
+
+		decryptSecret.mockReturnValue("secret");
+		getSessionCredential.mockReturnValue(null);
 
 		withSshConnection.mockImplementation(async (_input, run) => {
 			const execCommand = vi
@@ -143,18 +178,16 @@ describe("server install", () => {
 	});
 
 	it("returns a validation error when ephemeral credentials are unavailable", async () => {
-		selectLimit.mockReset();
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_123",
-				host: "203.0.113.10",
-				port: 22,
-				username: "root",
-				authMethod: "ssh-key",
-				encryptedCredential: null,
-				storeCredential: false,
-			},
-		]);
+		serverSelectResults = [
+			[
+				{
+					...defaultServerRecord(),
+					authMethod: "ssh-key",
+					encryptedCredential: null,
+					storeCredential: false,
+				},
+			],
+		];
 
 		const { startServerInstall } = await import("./install");
 		const response = await startServerInstall(createContext("POST"));
@@ -167,26 +200,29 @@ describe("server install", () => {
 	});
 
 	it("replays persisted install events over SSE", async () => {
-		selectLimit.mockReset();
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_123",
-				host: "203.0.113.10",
-				port: 22,
-				username: "root",
-				authMethod: "password",
-				encryptedCredential: "encrypted-secret",
-				storeCredential: true,
-			},
-		]);
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "install_123",
-				status: "failed",
-				step: "failed",
-				log: "2026-05-26T10:40:00.000Z [install-docker] Installing Docker",
-			},
-		]);
+		serverSelectResults = [[defaultServerRecord()]];
+		installLimitResults = [
+			[
+				{
+					id: "install_123",
+					status: "failed",
+					step: "failed",
+				},
+			],
+		];
+		installEventResults = [
+			[
+				{
+					installId: "install_123",
+					step: "install-docker",
+					progress: 15,
+					message: "Installing Docker",
+					status: "failed",
+					timestamp: new Date("2026-05-26T10:40:00.000Z"),
+					error: null,
+				},
+			],
+		];
 
 		const { streamServerInstallEvents } = await import("./install");
 		const response = await streamServerInstallEvents(createContext("GET"));
@@ -198,18 +234,15 @@ describe("server install", () => {
 	});
 
 	it("returns an error when stored credential data is missing", async () => {
-		selectLimit.mockReset();
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_123",
-				host: "203.0.113.10",
-				port: 22,
-				username: "root",
-				authMethod: "password",
-				encryptedCredential: null,
-				storeCredential: true,
-			},
-		]);
+		serverSelectResults = [
+			[
+				{
+					...defaultServerRecord(),
+					encryptedCredential: null,
+					storeCredential: true,
+				},
+			],
+		];
 
 		const { startServerInstall } = await import("./install");
 		const response = await startServerInstall(createContext("POST"));
@@ -222,18 +255,16 @@ describe("server install", () => {
 	});
 
 	it("returns an error for unsupported authentication methods", async () => {
-		selectLimit.mockReset();
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_123",
-				host: "203.0.113.10",
-				port: 22,
-				username: "root",
-				authMethod: "invalid-key",
-				encryptedCredential: null,
-				storeCredential: false,
-			},
-		]);
+		serverSelectResults = [
+			[
+				{
+					...defaultServerRecord(),
+					authMethod: "invalid-key",
+					encryptedCredential: null,
+					storeCredential: false,
+				},
+			],
+		];
 
 		const { startServerInstall } = await import("./install");
 		const response = await startServerInstall(createContext("POST"));
@@ -259,8 +290,6 @@ describe("server install", () => {
 		const response = await startServerInstall(createContext("POST"));
 
 		expect(response.status).toBe(202);
-
-		// flush microtasks so runInstallWorkflow completes
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(insertAuditValues).toHaveBeenCalledWith(
@@ -271,8 +300,6 @@ describe("server install", () => {
 	});
 
 	it("rejects a second install request while one is already running", async () => {
-		// Make the first install's upsertInstallRecord block so the slot stays
-		// claimed while the second request runs.
 		let resolveFirstInstall: ((value: unknown) => void) | undefined;
 		insertInstallReturning.mockImplementationOnce(
 			() =>
@@ -281,23 +308,11 @@ describe("server install", () => {
 				}),
 		);
 
-		// Second request: server lookup returns the same record again.
-		selectLimit.mockResolvedValueOnce([
-			{
-				id: "server_123",
-				host: "203.0.113.10",
-				port: 22,
-				username: "root",
-				authMethod: "password",
-				encryptedCredential: "encrypted-secret",
-				storeCredential: true,
-			},
-		]);
+		serverSelectResults = [[defaultServerRecord()], [defaultServerRecord()]];
+		installLimitResults = [[]];
 
 		const { startServerInstall } = await import("./install");
 		const firstPromise = startServerInstall(createContext("POST"));
-		// Yield so the first request can claim the slot before the second
-		// request reaches `tryClaimInstallStream`.
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		const secondResponse = await startServerInstall(createContext("POST"));
@@ -321,8 +336,6 @@ describe("server install", () => {
 		const response = await startServerInstall(createContext("POST"));
 
 		expect(response.status).toBe(202);
-
-		// flush microtasks so runInstallWorkflow completes
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(insertAuditValues).toHaveBeenCalledWith(
@@ -342,26 +355,14 @@ describe("server install", () => {
 			return run({ execCommand });
 		});
 
+		serverSelectResults = [[defaultServerRecord()], [defaultServerRecord()]];
+		installLimitResults = [[], []];
+
 		const { startServerInstall } = await import("./install");
 		const firstResponse = await startServerInstall(createContext("POST"));
 
 		expect(firstResponse.status).toBe(202);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		selectLimit.mockReset();
-		selectLimit
-			.mockResolvedValueOnce([
-				{
-					id: "server_123",
-					host: "203.0.113.10",
-					port: 22,
-					username: "root",
-					authMethod: "password",
-					encryptedCredential: "encrypted-secret",
-					storeCredential: true,
-				},
-			])
-			.mockResolvedValueOnce([]);
 
 		withSshConnection.mockImplementationOnce(async (_input, run) => {
 			const execCommand = vi.fn().mockResolvedValue({
@@ -379,6 +380,18 @@ describe("server install", () => {
 		expect(withSshConnection).toHaveBeenCalledTimes(2);
 	});
 });
+
+function defaultServerRecord() {
+	return {
+		id: "server_123",
+		host: "203.0.113.10",
+		port: 22,
+		username: "root",
+		authMethod: "password",
+		encryptedCredential: "encrypted-secret",
+		storeCredential: true,
+	};
+}
 
 function createContext(method: "GET" | "POST") {
 	const headers = new Headers();

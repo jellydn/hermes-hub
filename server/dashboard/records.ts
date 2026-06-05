@@ -17,6 +17,7 @@ export async function getLatestServer(userId: string) {
 			status: servers.status,
 			osInfo: servers.osInfo,
 			updatedAt: servers.updatedAt,
+			hostKeyFingerprint: servers.hostKeyFingerprint,
 		})
 		.from(servers)
 		.where(eq(servers.userId, userId))
