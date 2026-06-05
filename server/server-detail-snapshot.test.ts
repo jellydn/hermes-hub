@@ -57,19 +57,13 @@ vi.mock("./install/records", () => ({
 	getLatestInstallForServer,
 }));
 
-vi.mock("./server-records", () => ({
-	getOwnedServerRecord: vi.fn().mockResolvedValue(ownedServerRecord),
-	readOsInfoValue: (
-		osInfo: Record<string, unknown> | null | undefined,
-		key: string,
-	) => {
-		if (!osInfo) {
-			return null;
-		}
-		const value = osInfo[key];
-		return typeof value === "string" && value.length > 0 ? value : null;
-	},
-}));
+vi.mock("./server-records", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./server-records")>();
+	return {
+		...actual,
+		getOwnedServerRecord: vi.fn().mockResolvedValue(ownedServerRecord),
+	};
+});
 
 const { getResolvedServerWebUiRecord } = vi.hoisted(() => ({
 	getResolvedServerWebUiRecord: vi.fn().mockResolvedValue(null),
