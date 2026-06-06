@@ -15,6 +15,7 @@ const selectFrom = vi.fn();
 const selectWhere = vi.fn();
 const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
+const getLatestInstallForServer = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -49,6 +50,10 @@ vi.mock("./db", () => ({
 		update: dbUpdate,
 		transaction,
 	}),
+}));
+
+vi.mock("./install/records", () => ({
+	getLatestInstallForServer,
 }));
 
 vi.mock("./web-ui/records", () => ({
@@ -98,6 +103,7 @@ describe("server actions", () => {
 		selectFrom.mockReturnValue({ where: selectWhere });
 		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
 		selectOrderBy.mockReturnValue({ limit: selectLimit });
+		getLatestInstallForServer.mockResolvedValue(null);
 
 		// reset to clear stale _onceImpl chains from prior tests
 		selectLimit.mockReset();
@@ -120,7 +126,7 @@ describe("server actions", () => {
 					},
 				},
 			])
-			.mockResolvedValueOnce([{ version: "latest" }])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([{ id: "install_123" }]);
 
 		decryptSecret.mockReturnValue("secret");
@@ -200,6 +206,11 @@ describe("server actions", () => {
 
 	it("builds a server detail snapshot with the latest action history", async () => {
 		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version: "latest",
+			updatedAt: new Date("2026-05-26T03:00:00.000Z"),
+		});
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -217,13 +228,6 @@ describe("server actions", () => {
 						version: "24.04",
 						architecture: "x86_64",
 					},
-				},
-			])
-			.mockResolvedValueOnce([
-				{
-					status: "succeeded",
-					version: "latest",
-					updatedAt: new Date("2026-05-26T03:00:00.000Z"),
 				},
 			])
 			.mockResolvedValueOnce([
@@ -351,8 +355,13 @@ describe("server actions", () => {
 	});
 
 	it("rollback auto-resolves the version from the installs table when no target is given", async () => {
-		// selectLimit returns: [server], [audit history], [install version], [install id]
+		// selectLimit returns: [server], [audit history], [install id]
 		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version: "v1.0.0",
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -369,7 +378,6 @@ describe("server actions", () => {
 				},
 			])
 			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ version: "v1.0.0" }])
 			.mockResolvedValueOnce([{ id: "install_123" }]);
 
 		const { runServerAction } = await import("./server-actions");
@@ -388,6 +396,11 @@ describe("server actions", () => {
 	it("rollback prefers audit history over installs.version when no target is given", async () => {
 		// selectLimit returns: [server], [audit history], [install id for version update]
 		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version: "v1.0.0",
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -480,6 +493,11 @@ describe("server actions", () => {
 
 	it("serves server detail through the HTTP endpoint", async () => {
 		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version: "latest",
+			updatedAt: new Date(),
+		});
 		selectLimit
 			.mockResolvedValueOnce([
 				{
@@ -493,13 +511,6 @@ describe("server actions", () => {
 					storeCredential: true,
 					status: "connected",
 					osInfo: { name: "Ubuntu" },
-				},
-			])
-			.mockResolvedValueOnce([
-				{
-					status: "succeeded",
-					version: "latest",
-					updatedAt: new Date(),
 				},
 			])
 			.mockResolvedValueOnce([]);

@@ -67,19 +67,13 @@ export async function resolveRollbackTarget(input: {
 	serverId: string;
 	requestedVersion?: string;
 }): Promise<string> {
-	const requested = input.requestedVersion?.trim();
-	if (requested) {
-		return requested;
-	}
+	const [actionHistory, installRecord] = await Promise.all([
+		getServerActionHistory(input.serverId),
+		getLatestInstallForServer(input.serverId),
+	]);
 
-	const actionHistory = await getServerActionHistory(input.serverId);
-	const historyTarget = getRollbackTargetFromHistory(actionHistory);
-	if (historyTarget) {
-		return historyTarget;
-	}
-
-	const installRecord = await getLatestInstallForServer(input.serverId);
 	return resolveRollbackTargetFromSources({
+		requestedVersion: input.requestedVersion,
 		actionHistory,
 		installVersion: installRecord?.version,
 	});
