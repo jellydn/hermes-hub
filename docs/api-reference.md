@@ -869,7 +869,7 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 
 ## Settings
 
-HermesHub stores agent persona content in the database and can push it to the deployed Hermes container as `SOUL.md`. The Settings page (`/settings`) exposes a markdown editor for save and deploy. Deploy uses the same Telegram-linked VPS target as AI provider and Telegram deploy.
+HermesHub stores agent persona content in the database and can push it to the deployed Hermes container as `SOUL.md`. The Settings page (`/settings`) exposes a markdown editor for save and deploy. Deploy targets any owned VPS with a successful Hermes install. When multiple servers qualify, the UI exposes a **Deploy target** selector; the API accepts an optional `serverId` and otherwise defaults to the server with the most recent successful install.
 
 ### POST `/api/settings/persona`
 
@@ -912,16 +912,26 @@ Saves the authenticated user's Hermes agent persona. Content is trimmed, validat
 
 ### POST `/api/settings/persona/deploy`
 
-Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over SSH, then restarts the Hermes gateway so the new persona takes effect.
+Writes the saved persona to `SOUL.md` on a selected Hermes VPS over SSH, then restarts the Hermes gateway so the new persona takes effect.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
-**Request body:** None (uses the latest saved persona for the user)
+**Request body (optional):**
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Owned server with a successful Hermes install. Defaults to the server with the most recent successful install when omitted. |
 
 **Response (200):**
 ```json
 {
   "status": "deployed",
+  "serverId": "uuid",
   "serverHost": "192.168.1.100",
   "deployedAt": "2026-06-06T12:00:00.000Z"
 }
@@ -932,19 +942,20 @@ Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over S
 | Status | Condition                                                    |
 | ------ | ------------------------------------------------------------ |
 | 400    | No persona saved yet                                         |
-| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | No deployed Hermes agent found (install Hermes on a server first) |
+| 400    | Selected server does not have a successful Hermes install    |
 | 400    | Credential unavailable / expired                             |
 | 401    | Unauthorized                                                 |
-| 404    | Deployed server not found                                    |
+| 404    | Server not found                                             |
 | 502    | SSH connect, SOUL.md write, or gateway restart failed        |
 
 ---
 
 ## MCP Servers
 
-HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to the Telegram-linked Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; create, update, and settings-page responses return keys with masked `valueLast4` metadata only. Server names are unique per user.
+HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to a selected Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; create, update, and settings-page responses return keys with masked `valueLast4` metadata only. Server names are unique per user.
 
-The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway. The page loader reads saved MCP servers server-side (same pattern as persona); there is no list GET endpoint for v1. Switching a server between stdio and HTTP clears inactive transport fields (command/args/env vs URL/headers) on save.
+The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway. Recommended presets (Memory, Sequential Thinking, GitHub, and others) pre-fill common stdio servers; advanced setup supports custom stdio or HTTP transports. The page loader reads saved MCP servers and eligible deploy targets server-side (same pattern as persona); there is no list GET endpoint for v1. Switching a server between stdio and HTTP clears inactive transport fields (command/args/env vs URL/headers) on save.
 
 ### POST `/api/settings/mcp-servers`
 
@@ -1077,12 +1088,22 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 
 **Auth required:** Yes (HTTPS enforced in production)
 
-**Request body:** None
+**Request body (optional):**
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Owned server with a successful Hermes install. Defaults to the server with the most recent successful install when omitted. |
 
 **Response (200):**
 ```json
 {
   "status": "deployed",
+  "serverId": "uuid",
   "serverHost": "192.168.1.100",
   "serverCount": 2,
   "deployedAt": "2026-06-06T12:00:00.000Z"
@@ -1093,10 +1114,11 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 
 | Status | Condition                                                    |
 | ------ | ------------------------------------------------------------ |
-| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | No deployed Hermes agent found (install Hermes on a server first) |
+| 400    | Selected server does not have a successful Hermes install    |
 | 400    | Credential unavailable / expired                             |
 | 401    | Unauthorized                                                 |
-| 404    | Deployed server not found                                    |
+| 404    | Server not found                                             |
 | 502    | SSH connect, invalid existing `config.yaml`, config read/write, or gateway restart failed |
 
 ---
@@ -1237,9 +1259,9 @@ The following tables are used by the API:
 | `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
 | `ai_providers`     | AI provider configuration with encrypted API keys |
 | `telegram_configs` | Telegram bot connections                     |
-| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram) |
+| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram, persona, MCP) |
 | `hermes_settings`  | Per-user Hermes agent persona (`SOUL.md` source) |
-| `audit_logs`       | Action audit trail (connect, install, actions, provider, telegram, persona) |
+| `mcp_servers`      | Per-user MCP server definitions with encrypted secrets |
 | `user`, `session`, `account`, `verification` | Better Auth user management tables |
 
 ---

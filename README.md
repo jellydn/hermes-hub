@@ -30,8 +30,8 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🚀 **One-click Hermes deployment** — Install Docker, Compose, and Hermes from the dashboard with live progress
 - 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints without editing env files
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
-- 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to your VPS
-- 🔌 **MCP server manager** — Add stdio or HTTP MCP servers on the Settings page, then deploy them to Hermes `config.yaml`
+- 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to a chosen VPS
+- 🔌 **MCP server manager** — Add stdio or HTTP MCP servers (including recommended presets) on the Settings page, then deploy them to Hermes `config.yaml`
 - 📈 **Live server monitoring** — Dashboard with install logs and VPS metrics (CPU, memory, disk)
 - ✅ **VPS setup check** — On-demand readiness check on the server detail page (Docker, Hermes workspace, agent health) with plain-language results
 - 🔄 **One-click restart, update, and rollback** — Manage the running agent with audit history
@@ -245,9 +245,11 @@ server/               — Hono API routes and business logic
 ├── telegram.ts       — Telegram bot token verification + connect/disconnect
 ├── settings.ts       — Agent persona save and SOUL.md deploy
 ├── settings/mcp.ts   — MCP server CRUD and config.yaml deploy
+├── hermes/deploy.ts  — Shared Hermes deploy orchestration (SSH, audit, gateway restart)
+├── hermes/deploy-targets.ts — Eligible VPS targets (successful Hermes installs)
 ├── hermes/persona.ts — Persona validation and SOUL.md SSH write helper
 ├── hermes/mcp-config.ts — Hermes config.yaml SSH read/write helper
-├── hermes/telegram-deploy.ts — Shared Telegram-linked Hermes deploy (SSH, audit, restart)
+├── hermes/telegram-deploy.ts — Telegram-linked provider deploy (SSH, audit, restart)
 ├── logs.ts           — Install + action log queries and clearing
 └── db/               — Drizzle schema, connection, health check
 ```
