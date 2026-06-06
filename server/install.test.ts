@@ -345,6 +345,85 @@ describe("server install", () => {
 		);
 	});
 
+	it("returns null install log fields when no install exists", async () => {
+		installLimitResults = [[]];
+
+		const { getLatestServerInstallLog } = await import("./install");
+		const response = await getLatestServerInstallLog(
+			createContext("GET", "/install/log"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			installId: null,
+			status: null,
+			step: null,
+			log: null,
+			updatedAt: null,
+		});
+	});
+
+	it("returns event-only install log text", async () => {
+		installLimitResults = [
+			[
+				{
+					id: "install_123",
+					status: "succeeded",
+					step: "start-containers",
+					updatedAt: new Date("2026-05-26T03:05:00.000Z"),
+				},
+			],
+		];
+		installEventResults = [
+			[
+				{
+					step: "install-docker",
+					message: "Installing Docker",
+					createdAt: new Date("2026-05-26T03:00:00.000Z"),
+				},
+			],
+		];
+
+		const { getLatestServerInstallLog } = await import("./install");
+		const response = await getLatestServerInstallLog(
+			createContext("GET", "/install/log"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			installId: "install_123",
+			status: "succeeded",
+			step: "start-containers",
+			log: "2026-05-26T03:00:00.000Z [install-docker] Installing Docker",
+			updatedAt: "2026-05-26T03:05:00.000Z",
+		});
+	});
+
+	it("returns null log text when an install has no persisted events", async () => {
+		installLimitResults = [
+			[
+				{
+					id: "install_123",
+					status: "succeeded",
+					step: "start-containers",
+					updatedAt: new Date("2026-05-26T03:05:00.000Z"),
+				},
+			],
+		];
+		installEventResults = [[]];
+
+		const { getLatestServerInstallLog } = await import("./install");
+		const response = await getLatestServerInstallLog(
+			createContext("GET", "/install/log"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			installId: "install_123",
+			log: null,
+		});
+	});
+
 	it("allows retrying after a failed install", async () => {
 		withSshConnection.mockImplementationOnce(async (_input, run) => {
 			const execCommand = vi.fn().mockResolvedValue({
@@ -393,17 +472,17 @@ function defaultServerRecord() {
 	};
 }
 
-function createContext(method: "GET" | "POST") {
+function createContext(
+	method: "GET" | "POST",
+	path = method === "GET" ? "/install/events" : "",
+) {
 	const headers = new Headers();
 
 	return {
 		req: {
-			raw: new Request(
-				`http://localhost/api/servers/server_123/install${method === "GET" ? "/events" : ""}`,
-				{
-					method,
-				},
-			),
+			raw: new Request(`http://localhost/api/servers/server_123${path}`, {
+				method,
+			}),
 			header: () => null,
 			param: (name: string) => (name === "id" ? "server_123" : undefined),
 		},

@@ -140,7 +140,6 @@ export const installs = pgTable(
 			.references(() => servers.id, { onDelete: "cascade" }),
 		status: text("status").notNull(),
 		step: text("step").notNull(),
-		log: text("log"),
 		version: text("version"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()

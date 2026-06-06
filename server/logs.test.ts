@@ -144,6 +144,67 @@ describe("logs handlers", () => {
 		});
 	});
 
+	it("omits installs with no persisted events", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () =>
+									Promise.resolve([
+										{
+											id: "install_empty",
+											status: "succeeded",
+											step: "start-containers",
+											createdAt: new Date("2026-05-26T03:00:00.000Z"),
+											updatedAt: new Date("2026-05-26T03:05:00.000Z"),
+											serverLabel: "Staging VPS",
+										},
+									]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () => Promise.resolve([]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
+
+		const response = await getLogs(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload.logs.installLogs).toEqual([]);
+	});
+
 	it("clears persisted action logs and install events", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
 		selectFrom.mockReturnValueOnce({

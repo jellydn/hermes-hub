@@ -50,6 +50,13 @@
       "when": 1780580000000,
       "tag": "0006_server_web_ui",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780660000000,
+      "tag": "0007_drop_installs_log",
+      "breakpoints": true
     }
   ]
 }

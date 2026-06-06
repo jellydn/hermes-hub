@@ -6,11 +6,12 @@ import type {
 	InstallLogEntry,
 	LogsSnapshot,
 } from "../src/lib/logs";
+import { formatActionLabel } from "../src/lib/server-detail";
 import { USER_INITIATED_ACTION_NAMES } from "./audit-log-actions";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installEvents, installs, servers } from "./db/schema";
-import { buildLogLinesFromEvents } from "./install/legacy-log";
+import { buildLogLinesFromEvents } from "./install/log-lines";
 
 const finishedActionNames = USER_INITIATED_ACTION_NAMES;
 
@@ -113,7 +114,6 @@ async function getInstallLogs(userId: string) {
 			step: installs.step,
 			createdAt: installs.createdAt,
 			updatedAt: installs.updatedAt,
-			legacyLog: installs.log,
 			serverLabel: servers.label,
 		})
 		.from(installs)
@@ -158,8 +158,6 @@ async function getInstallLogs(userId: string) {
 					message: e.message,
 					createdAt: e.createdAt,
 				})),
-				install.legacyLog,
-				install.createdAt,
 			);
 
 			if (logLines.length === 0) {
@@ -258,18 +256,6 @@ function readActionType(action: string): ActionLogEntry["action"] {
 	}
 
 	return "restart";
-}
-
-function formatActionLabel(action: ActionLogEntry["action"]) {
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	if (action === "rollback") {
-		return "Rollback";
-	}
-
-	return "Restart Agent";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
