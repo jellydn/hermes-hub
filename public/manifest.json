@@ -1,6 +1,6 @@
 {
-	"short_name": "TanStack App",
-	"name": "Create TanStack App Sample",
+	"short_name": "HermesHub",
+	"name": "HermesHub — Deploy Hermes without the terminal",
 	"icons": [
 		{
 			"src": "favicon.ico",
@@ -20,6 +20,6 @@
 	],
 	"start_url": ".",
 	"display": "standalone",
-	"theme_color": "#000000",
-	"background_color": "#ffffff"
+	"theme_color": "#4fb8b2",
+	"background_color": "#e7f3ec"
 }

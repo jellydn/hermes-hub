@@ -9,6 +9,12 @@
 
 HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/nousresearch/hermes-agent) on any VPS — no SSH, Docker, or Linux knowledge needed.
 
+## Who is HermesHub for?
+
+HermesHub is for people who want the power of a self-hosted Hermes AI Agent but do not want to manage SSH commands, Docker setup, Linux administration, provider configuration, or Telegram onboarding manually.
+
+It transforms Hermes deployment into a guided web wizard.
+
 ## 🔗 Hermes ecosystem
 
 HermesHub focuses on the VPS setup path: connect your server, install Hermes with live progress, deploy your AI provider, finish Telegram onboarding, and manage restart, update, and rollback from the dashboard.
@@ -19,19 +25,15 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 
 ## ✨ Features
 
-- 🔑 **Magic Link Auth** — Passwordless email sign-in via Better Auth
-- 🖥️ **VPS Connection** — SSH connection wizard with password or private-key auth
-- 🔒 **Credential Security** — AES-256-GCM encryption at rest; ephemeral in-memory option
-- 🚀 **Hermes Install** — Automated Docker + Compose setup and container launch over SSH
-- 📊 **Live Install Progress** — SSE-based real-time streaming logs with replay
-- 📈 **Dashboard** — Aggregated status cards with live VPS metrics (CPU/memory/disk)
-- 🤖 **AI Provider Config** — OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints with encrypted key storage
-- 🚀 **Hermes Provider Deploy** — Push provider config to your Hermes VPS over SSH; sets API keys, base URLs, and default model inside the running container
-- 💬 **Telegram Integration** — Bot token verification via Telegram API; connect/disconnect flow
-- 🔄 **Server Actions** — One-click restart, update, rollback with audit-based history
-- 🖥️ **Hermes Web UI** — Deploy and open the Hermes browser UI from the server detail page via an authenticated proxy (no SSH tunnels)
-- 📋 **Logs Viewer** — Aggregated install logs and operational action history
-- ✅ **263 tests** — Vitest + Testing Library for components and server integration
+- 🔑 **Passwordless login** — Sign in with a magic link, no passwords to manage
+- 🖥️ **Guided VPS setup** — Step-by-step server connection wizard for non-technical users
+- 🚀 **One-click Hermes deployment** — Install Docker, Compose, and Hermes from the dashboard with live progress
+- 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints without editing env files
+- 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
+- 📈 **Live server monitoring** — Dashboard with install logs and VPS metrics (CPU, memory, disk)
+- 🔄 **One-click restart, update, and rollback** — Manage the running agent with audit history
+- 🖥️ **Built-in Hermes Web UI** — Deploy and open the Hermes browser interface from your server detail page
+- 📋 **Operational logs** — Review install history and server action records in one place
 
 ## 📹 Demo
 
