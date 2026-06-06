@@ -207,9 +207,12 @@ function App() {
 						A guided path from server access to first chat.
 					</h2>
 					<p className="mt-3 max-w-3xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-						The community Hermes site shows what the agent can become. HermesHub
-						is the onboarding layer that gets users there without SSH, Docker,
-						or Linux guesswork.
+						The{" "}
+						<HermesCommunityTextLink>
+							community Hermes site
+						</HermesCommunityTextLink>{" "}
+						shows what the agent can become. HermesHub is the onboarding layer
+						that gets users there without SSH, Docker, or Linux guesswork.
 					</p>
 				</div>
 
@@ -255,7 +258,7 @@ function App() {
 						</p>
 					</div>
 
-					<div className="rounded-[1.75rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-5 py-5">
+					<div className="rounded-[1.75rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-5">
 						<p className="island-kicker mb-3">What each tool does</p>
 						<ul className="space-y-4 text-sm text-[var(--sea-ink-soft)]">
 							<li>
