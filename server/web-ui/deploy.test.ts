@@ -46,6 +46,10 @@ vi.mock("./records", () => ({
 	getResolvedServerWebUiRecord,
 	getServerWebUiRecord: getResolvedServerWebUiRecord,
 	upsertServerWebUiRecord,
+	getWebUiProxyPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy/`,
+	decryptWebUiPassword: (value: string | null) =>
+		value ? decryptSecret(value) : null,
 }));
 
 vi.mock("./deploy-lock", () => ({
@@ -64,7 +68,7 @@ vi.mock("../db", () => ({
 }));
 
 import type { OwnedServerSshContext } from "../request-guards";
-import { cancelDeploy, DeployError, getStatus, startDeploy } from "./deploy";
+import { getStatus, startDeploy } from "./deploy";
 
 const baseCtx = {
 	session: {
@@ -102,11 +106,8 @@ describe("startDeploy", () => {
 	});
 
 	it("rejects deploy when install is missing", async () => {
-		getLatestInstallForServer.mockResolvedValueOnce(null);
+		getLatestInstallForServer.mockResolvedValue(null);
 
-		await expect(startDeploy(baseCtx, "127.0.0.1")).rejects.toThrow(
-			DeployError,
-		);
 		await expect(startDeploy(baseCtx, "127.0.0.1")).rejects.toMatchObject({
 			statusCode: 400,
 			message: expect.stringMatching(/install hermes/i),
@@ -182,15 +183,15 @@ describe("startDeploy", () => {
 		expect(upsertServerWebUiRecord).not.toHaveBeenCalled();
 	});
 
-	it("returns 202 when lock cannot be acquired", async () => {
+	it("returns 202 when lock cannot be acquired (deploy in progress elsewhere)", async () => {
 		tryAcquireWebUiDeployLock.mockReturnValue(false);
 		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: false,
+			enabled: true,
 			encryptedPassword: "enc:password",
 			port: 8787,
-			deployStatus: "deploying",
+			deployStatus: "succeeded",
 			deployError: null,
-			deployStartedAt: new Date(),
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 
@@ -219,6 +220,74 @@ describe("startDeploy", () => {
 		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
 	});
 
+	it("releases lock when upsert fails during deploying transition", async () => {
+		upsertServerWebUiRecord.mockRejectedValueOnce(new Error("DB write error"));
+
+		await expect(startDeploy(baseCtx, "127.0.0.1")).rejects.toThrow(
+			"DB write error",
+		);
+		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+	});
+
+	it("starts a fresh deploy when the previous deploy failed", async () => {
+		// records.ts resolved a stale deploying→failed record before we see it
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: false,
+			encryptedPassword: "enc:old-password",
+			port: 8787,
+			deployStatus: "failed",
+			deployError: "Web UI deploy timed out.",
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		deployManagedCompose.mockReturnValue(new Promise(() => {}));
+
+		const result = await startDeploy(baseCtx, "127.0.0.1");
+
+		expect(result.status).toBe("deploying");
+		expect(upsertServerWebUiRecord).toHaveBeenCalled();
+	});
+
+	it("passes correct params to deployManagedCompose via background work", async () => {
+		await startDeploy(baseCtx, "127.0.0.1");
+
+		await vi.waitFor(() => {
+			expect(deployManagedCompose).toHaveBeenCalled();
+		});
+
+		expect(deployManagedCompose).toHaveBeenCalledWith(
+			expect.objectContaining({
+				intent: "web-ui",
+				userId: "user_123",
+				serverId: "server_123",
+				host: "203.0.113.10",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "ssh-secret",
+				webUiPort: 8787,
+			}),
+		);
+	});
+
+	it("handles non-Error deployManagedCompose rejections in background", async () => {
+		deployManagedCompose.mockRejectedValue("Network failure");
+
+		await startDeploy(baseCtx, "127.0.0.1");
+
+		await vi.waitFor(() => {
+			expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({
+					deployStatus: "failed",
+					deployError: "Deploy failed",
+				}),
+			);
+
+			expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+		});
+	});
+
 	it("marks deploy succeeded in background", async () => {
 		await startDeploy(baseCtx, "127.0.0.1");
 
@@ -232,16 +301,16 @@ describe("startDeploy", () => {
 					deployError: null,
 				}),
 			);
-		});
 
-		expect(insertAuditLog).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				action: "server.web_ui.deploy.succeeded",
-				serverId: "server_123",
-			}),
-		);
-		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+			expect(insertAuditLog).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({
+					action: "server.web_ui.deploy.succeeded",
+					serverId: "server_123",
+				}),
+			);
+			expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+		});
 	});
 
 	it("marks deploy failed in background and preserves enabled state", async () => {
@@ -268,9 +337,9 @@ describe("startDeploy", () => {
 					deployError: "SSH timeout",
 				}),
 			);
-		});
 
-		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+			expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
+		});
 	});
 });
 
@@ -300,13 +369,5 @@ describe("getStatus", () => {
 		const result = await getStatus("server_123");
 		expect(result?.deployStatus).toBe("succeeded");
 		expect(result?.enabled).toBe(true);
-	});
-});
-
-describe("cancelDeploy", () => {
-	it("throws not implemented", async () => {
-		await expect(cancelDeploy("server_123")).rejects.toThrow(
-			"cancelDeploy is not yet implemented.",
-		);
 	});
 });

@@ -20,9 +20,9 @@ import { buildWebUiSnapshot } from "./snapshot";
 import { invalidatePooledSsh } from "./ssh-pool";
 
 export class DeployError extends Error {
-	readonly statusCode: number;
+	readonly statusCode: 400 | 500;
 
-	constructor(message: string, statusCode: number) {
+	constructor(message: string, statusCode: 400 | 500) {
 		super(message);
 		this.name = "DeployError";
 		this.statusCode = statusCode;
@@ -131,39 +131,14 @@ export async function startDeploy(
 		updatedAt: now,
 	};
 
+	// Fire background deploy. runDeployInBackground is the single owner of
+	// failure persistence and lock release — no outer .catch needed.
 	void runDeployInBackground({
 		ctx,
 		password,
 		webUiPort,
 		existingEnabled,
 		ipAddress,
-	}).catch(async (error: unknown) => {
-		console.error("Web UI background deploy task failed", {
-			serverId: ctx.serverId,
-			error,
-		});
-
-		const message = error instanceof Error ? error.message : "Deploy failed";
-
-		try {
-			const db = getDb();
-			await upsertServerWebUiRecord(db, {
-				serverId: ctx.serverId,
-				enabled: existingEnabled,
-				port: webUiPort,
-				deployStatus: "failed",
-				deployError: message,
-				deployStartedAt: null,
-				updatedAt: new Date(),
-			});
-		} catch (persistError: unknown) {
-			console.error("Failed to persist Web UI deploy failure", {
-				serverId: ctx.serverId,
-				persistError,
-			});
-		} finally {
-			releaseWebUiDeployLock(ctx.serverId);
-		}
 	});
 
 	return {
@@ -172,9 +147,7 @@ export async function startDeploy(
 	};
 }
 
-export async function cancelDeploy(_serverId: string): Promise<void> {
-	throw new DeployError("cancelDeploy is not yet implemented.", 501);
-}
+// ── Internal helpers ──────────────────────────────────────────────
 
 type BackgroundDeployInput = {
 	ctx: OwnedServerSshContext;

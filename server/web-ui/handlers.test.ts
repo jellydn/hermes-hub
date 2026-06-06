@@ -47,29 +47,13 @@ vi.mock("./ssh-forward", () => ({
 	proxyRequestOverSsh,
 }));
 
-vi.mock("./deploy", () => ({
-	startDeploy,
-	getStatus: async (serverId: string) => {
-		const record = await getResolvedServerWebUiRecord(serverId);
-		if (!record) return null;
-		return {
-			enabled: record.enabled,
-			port: record.port,
-			proxyPath: `/api/servers/${serverId}/web-ui/proxy/`,
-			deployStatus: record.deployStatus,
-			deployError: record.deployError,
-			deployStartedAt: record.deployStartedAt?.toISOString() ?? null,
-			updatedAt: record.updatedAt.toISOString(),
-		};
-	},
-	DeployError: class extends Error {
-		readonly statusCode: number;
-		constructor(message: string, statusCode: number) {
-			super(message);
-			this.statusCode = statusCode;
-		}
-	},
-}));
+vi.mock("./deploy", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./deploy")>();
+	return {
+		...actual,
+		startDeploy,
+	};
+});
 
 vi.mock("../lib/get-client-ip", () => ({
 	getClientIp: () => "127.0.0.1",

@@ -36,10 +36,7 @@ export async function deployServerWebUi(context: Context) {
 		return context.json(result, 202 as const);
 	} catch (error) {
 		if (error instanceof DeployError) {
-			return context.json(
-				{ error: error.message },
-				error.statusCode as 400 | 500,
-			);
+			return context.json({ error: error.message }, error.statusCode);
 		}
 
 		throw error;
