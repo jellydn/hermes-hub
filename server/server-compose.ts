@@ -4,7 +4,11 @@ import { getProviderDeployConfig } from "./providers";
 import { getTelegramDeployInfo } from "./providers/records";
 import { decryptWebUiPassword, getServerWebUiRecord } from "./web-ui/records";
 
-export type ManagedComposeWebUiMode = "preserve" | "force" | "omit";
+/** Include web-ui when an explicit password is provided or a stored password exists. */
+export type ManagedComposeWebUiMode = "preserve" | "explicit" | "omit";
+
+export const DEFAULT_MANAGED_COMPOSE_WEB_UI_MODE: ManagedComposeWebUiMode =
+	"preserve";
 
 export type ManagedComposeSecrets = {
 	telegramInfo: Awaited<ReturnType<typeof getTelegramDeployInfo>>;
@@ -17,7 +21,7 @@ export async function resolveManagedComposeSecrets(input: {
 	serverId: string;
 	webUiMode?: ManagedComposeWebUiMode;
 }): Promise<ManagedComposeSecrets> {
-	const webUiMode = input.webUiMode ?? "preserve";
+	const webUiMode = input.webUiMode ?? DEFAULT_MANAGED_COMPOSE_WEB_UI_MODE;
 	const [telegramInfo, providerConfig, webUiRecord] = await Promise.all([
 		getTelegramDeployInfo(input.userId),
 		getProviderDeployConfig(input.userId),
@@ -30,14 +34,13 @@ export async function resolveManagedComposeSecrets(input: {
 }
 
 export function buildManagedComposeContentFromSecrets(input: {
-	userId: string;
 	serverId: string;
 	secrets: ManagedComposeSecrets;
 	apiServerKey?: string;
 	webUiPassword?: string;
 	webUiMode?: ManagedComposeWebUiMode;
 }) {
-	const webUiMode = input.webUiMode ?? "preserve";
+	const webUiMode = input.webUiMode ?? DEFAULT_MANAGED_COMPOSE_WEB_UI_MODE;
 	const { telegramInfo, providerConfig, webUiRecord } = input.secrets;
 
 	let apiServerKey = input.apiServerKey;
@@ -87,9 +90,16 @@ export async function buildManagedComposeContent(input: {
 	webUiPassword?: string;
 	webUiMode?: ManagedComposeWebUiMode;
 }) {
-	const secrets = await resolveManagedComposeSecrets(input);
+	const secrets = await resolveManagedComposeSecrets({
+		userId: input.userId,
+		serverId: input.serverId,
+		webUiMode: input.webUiMode,
+	});
 	return buildManagedComposeContentFromSecrets({
-		...input,
+		serverId: input.serverId,
+		apiServerKey: input.apiServerKey,
+		webUiPassword: input.webUiPassword,
+		webUiMode: input.webUiMode,
 		secrets,
 	});
 }
@@ -107,7 +117,7 @@ function resolveManagedWebUiPassword(input: {
 		return input.webUiPassword;
 	}
 
-	if (input.mode === "force") {
+	if (input.mode === "explicit") {
 		return null;
 	}
 

@@ -77,7 +77,6 @@ export async function deployServerWebUi(context: Context) {
 			serverId: ctx.serverId,
 		});
 		composeContent = buildManagedComposeContentFromSecrets({
-			userId: ctx.session.user.id,
 			serverId: ctx.serverId,
 			secrets,
 			webUiPassword: password,
@@ -121,22 +120,24 @@ export async function deployServerWebUi(context: Context) {
 		});
 
 		const updatedAt = new Date();
+		const encryptedPassword = encryptSecret(password);
+		const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
 		await db.transaction(async (tx) => {
 			await tx
 				.insert(serverWebUi)
 				.values({
 					serverId: ctx.serverId,
 					enabled: true,
-					encryptedPassword: encryptSecret(password),
-					port: existingRecord?.port ?? defaultHermesWebUiPort,
+					encryptedPassword,
+					port: webUiPort,
 					updatedAt,
 				})
 				.onConflictDoUpdate({
 					target: serverWebUi.serverId,
 					set: {
 						enabled: true,
-						encryptedPassword: encryptSecret(password),
-						port: existingRecord?.port ?? defaultHermesWebUiPort,
+						encryptedPassword,
+						port: webUiPort,
 						updatedAt,
 					},
 				});
