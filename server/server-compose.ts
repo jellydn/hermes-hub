@@ -65,7 +65,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 		hermesModel = providerConfig.model;
 	}
 
-	const resolvedWebUiPassword = resolveManagedWebUiPassword({
+	const resolvedWebUiPassword = requireManagedWebUiPasswordForCompose({
 		mode: webUiMode,
 		webUiPassword: input.webUiPassword,
 		webUiRecord,
@@ -108,7 +108,7 @@ export async function buildManagedComposeContent(input: {
 	});
 }
 
-function resolveManagedWebUiPassword(input: {
+function requireManagedWebUiPasswordForCompose(input: {
 	mode: ManagedComposeWebUiMode;
 	webUiPassword?: string;
 	webUiRecord: Awaited<ReturnType<typeof getServerWebUiRecord>>;
