@@ -23,6 +23,13 @@ import {
 } from "./servers";
 import { deployPersonaToHermes, savePersonaSettings } from "./settings";
 import {
+	createMcpServer,
+	deleteMcpServer,
+	deployMcpServersToHermes,
+	listMcpServers,
+	updateMcpServer,
+} from "./settings/mcp";
+import {
 	approveTelegramPairing,
 	connectTelegram,
 	deployTelegramToServer,
@@ -235,6 +242,15 @@ apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
 apiApp.post("/settings/persona", httpsMiddleware, savePersonaSettings);
 apiApp.post("/settings/persona/deploy", httpsMiddleware, deployPersonaToHermes);
+apiApp.get("/settings/mcp-servers", listMcpServers);
+apiApp.post("/settings/mcp-servers", httpsMiddleware, createMcpServer);
+apiApp.put("/settings/mcp-servers/:id", httpsMiddleware, updateMcpServer);
+apiApp.delete("/settings/mcp-servers/:id", httpsMiddleware, deleteMcpServer);
+apiApp.post(
+	"/settings/mcp-servers/deploy",
+	httpsMiddleware,
+	deployMcpServersToHermes,
+);
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", disconnectTelegram);
 apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);

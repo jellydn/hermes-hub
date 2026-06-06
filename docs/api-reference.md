@@ -940,6 +940,195 @@ Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over S
 
 ---
 
+## MCP Servers
+
+HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to the Telegram-linked Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; list and edit responses return keys with masked value metadata only.
+
+The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway.
+
+### GET `/api/settings/mcp-servers`
+
+Returns the authenticated user's saved MCP servers with masked secret metadata.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "servers": [
+    {
+      "id": "mcp_123",
+      "name": "github",
+      "transport": "stdio",
+      "enabled": true,
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "url": null,
+      "env": [
+        {
+          "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "valueLast4": "1234",
+          "hasStoredValue": true
+        }
+      ],
+      "headers": [],
+      "toolsInclude": [],
+      "toolsExclude": [],
+      "toolsResources": true,
+      "toolsPrompts": true,
+      "timeout": null,
+      "connectTimeout": null,
+      "supportsParallelToolCalls": false,
+      "createdAt": "2026-06-06T12:00:00.000Z",
+      "updatedAt": "2026-06-06T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error responses:**
+
+| Status | Condition    |
+| ------ | ------------ |
+| 401    | Unauthorized |
+
+---
+
+### POST `/api/settings/mcp-servers`
+
+Creates a new MCP server for the authenticated user.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (stdio example):**
+```json
+{
+  "name": "github",
+  "transport": "stdio",
+  "enabled": true,
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-github"],
+  "env": [
+    { "key": "GITHUB_PERSONAL_ACCESS_TOKEN", "value": "ghp_..." }
+  ],
+  "toolsInclude": ["create_issue"],
+  "toolsResources": false,
+  "timeout": 120,
+  "connectTimeout": 60,
+  "supportsParallelToolCalls": false
+}
+```
+
+**Request body (HTTP example):**
+```json
+{
+  "name": "stripe",
+  "transport": "http",
+  "url": "https://mcp.stripe.com",
+  "headers": [
+    { "key": "Authorization", "value": "Bearer ..." }
+  ],
+  "toolsExclude": ["delete_customer"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "server": { "...": "same shape as list entries" }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                         |
+| ------ | ----------------------------------------------------------------- |
+| 400    | Invalid JSON body / validation error / duplicate server name        |
+| 401    | Unauthorized                                                      |
+| 500    | Failed to create MCP server                                       |
+
+---
+
+### PUT `/api/settings/mcp-servers/:id`
+
+Updates an owned MCP server. Blank secret values preserve existing encrypted env/header values.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** Partial MCP server fields (same shape as create)
+
+**Response (200):**
+```json
+{
+  "server": { "...": "updated server summary" }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                         |
+| ------ | ----------------------------------------------------------------- |
+| 400    | Invalid JSON body / validation error / duplicate server name      |
+| 401    | Unauthorized                                                      |
+| 404    | MCP server not found                                              |
+| 500    | Failed to update MCP server                                       |
+
+---
+
+### DELETE `/api/settings/mcp-servers/:id`
+
+Deletes an owned MCP server from HermesHub. Remote Hermes config is unchanged until deploy is called.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Response (200):**
+```json
+{
+  "status": "deleted",
+  "id": "mcp_123"
+}
+```
+
+**Error responses:**
+
+| Status | Condition              |
+| ------ | ---------------------- |
+| 401    | Unauthorized           |
+| 404    | MCP server not found   |
+| 500    | Failed to delete MCP server |
+
+---
+
+### POST `/api/settings/mcp-servers/deploy`
+
+Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with the user's saved HermesHub state, preserves all other config keys, fixes readable ownership where possible, and restarts the Hermes gateway.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None
+
+**Response (200):**
+```json
+{
+  "status": "deployed",
+  "serverHost": "192.168.1.100",
+  "serverCount": 2,
+  "deployedAt": "2026-06-06T12:00:00.000Z"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | Credential unavailable / expired                             |
+| 401    | Unauthorized                                                 |
+| 404    | Deployed server not found                                    |
+| 502    | SSH connect, config read/write, or gateway restart failed    |
+
+---
+
 ## Hermes Web UI
 
 HermesHub can deploy the [Hermes Web UI](https://get-hermes.ai/) alongside the Hermes agent on a connected VPS. After setup, the UI is reachable through an authenticated reverse proxy at `/api/servers/:id/web-ui/proxy/` — traffic is forwarded over SSH to the Web UI container on the VPS (default port `8787`). No manual SSH tunnels are required.

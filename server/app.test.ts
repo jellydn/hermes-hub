@@ -30,6 +30,11 @@ const {
 	proxyServerWebUi,
 	savePersonaSettings,
 	deployPersonaToHermes,
+	listMcpServers,
+	createMcpServer,
+	updateMcpServer,
+	deleteMcpServer,
+	deployMcpServersToHermes,
 	authHandler,
 	hasDatabaseUrl,
 } = vi.hoisted(() => ({
@@ -62,6 +67,11 @@ const {
 	proxyServerWebUi: vi.fn(),
 	savePersonaSettings: vi.fn(),
 	deployPersonaToHermes: vi.fn(),
+	listMcpServers: vi.fn(),
+	createMcpServer: vi.fn(),
+	updateMcpServer: vi.fn(),
+	deleteMcpServer: vi.fn(),
+	deployMcpServersToHermes: vi.fn(),
 	authHandler: vi.fn(),
 	hasDatabaseUrl: vi.fn(() => true),
 }));
@@ -127,6 +137,14 @@ vi.mock("./web-ui", () => ({
 vi.mock("./settings", () => ({
 	savePersonaSettings,
 	deployPersonaToHermes,
+}));
+
+vi.mock("./settings/mcp", () => ({
+	listMcpServers,
+	createMcpServer,
+	updateMcpServer,
+	deleteMcpServer,
+	deployMcpServersToHermes,
 }));
 
 vi.mock("./auth", () => ({
@@ -643,6 +661,73 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(deployPersonaToHermes).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes MCP list requests through the MCP settings handler", async () => {
+		listMcpServers.mockResolvedValueOnce(
+			new Response(JSON.stringify({ servers: [] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/settings/mcp-servers",
+		);
+
+		expect(response.status).toBe(200);
+		expect(listMcpServers).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes MCP deploy requests through the MCP settings handler", async () => {
+		deployMcpServersToHermes.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					status: "deployed",
+					serverHost: "1.2.3.4",
+					serverCount: 1,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/settings/mcp-servers/deploy",
+			{ method: "POST" },
+		);
+
+		expect(response.status).toBe(200);
+		expect(deployMcpServersToHermes).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects mutating MCP routes over plain HTTP in production", async () => {
+		const previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+
+		try {
+			const createResponse = await apiApp.request(
+				"http://localhost/api/settings/mcp-servers",
+				{
+					method: "POST",
+					body: JSON.stringify({ name: "github", transport: "stdio" }),
+					headers: { "content-type": "application/json" },
+				},
+			);
+			const deployResponse = await apiApp.request(
+				"http://localhost/api/settings/mcp-servers/deploy",
+				{ method: "POST" },
+			);
+
+			expect(createResponse.status).toBe(426);
+			expect(deployResponse.status).toBe(426);
+			expect(createMcpServer).not.toHaveBeenCalled();
+			expect(deployMcpServersToHermes).not.toHaveBeenCalled();
+		} finally {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
 	});
 
 	it("rejects mutating persona routes over plain HTTP in production", async () => {

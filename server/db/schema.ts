@@ -258,6 +258,63 @@ export const serverWebUi = pgTable(
 	() => [],
 );
 
+export type EncryptedSecretEntry = {
+	encrypted: string;
+	last4: string;
+};
+
+export type EncryptedSecretMap = Record<string, EncryptedSecretEntry>;
+
+export const mcpServers = pgTable(
+	"mcp_servers",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		transport: text("transport").notNull(),
+		enabled: boolean("enabled").default(true).notNull(),
+		command: text("command"),
+		args: jsonb("args").$type<string[]>().default([]).notNull(),
+		url: text("url"),
+		encryptedEnv: jsonb("encrypted_env")
+			.$type<EncryptedSecretMap>()
+			.default({})
+			.notNull(),
+		encryptedHeaders: jsonb("encrypted_headers")
+			.$type<EncryptedSecretMap>()
+			.default({})
+			.notNull(),
+		toolsInclude: jsonb("tools_include")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
+		toolsExclude: jsonb("tools_exclude")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
+		toolsResources: boolean("tools_resources").default(true).notNull(),
+		toolsPrompts: boolean("tools_prompts").default(true).notNull(),
+		timeout: integer("timeout"),
+		connectTimeout: integer("connect_timeout"),
+		supportsParallelToolCalls: boolean("supports_parallel_tool_calls")
+			.default(false)
+			.notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("mcp_servers_user_id_idx").on(table.userId),
+		index("mcp_servers_user_name_idx").on(table.userId, table.name),
+	],
+);
+
 export const auditLogs = pgTable(
 	"audit_logs",
 	{
