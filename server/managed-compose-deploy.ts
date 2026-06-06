@@ -78,13 +78,9 @@ export function resolveManagedComposeDeployPolicy(
 				preSshCommands: async (ssh) => {
 					const prepResult = await ssh.execCommand(
 						[
-							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
-							`${managedComposeVolumeHome}/.hermes/webui`,
-							`${managedComposeVolumeHome}/workspace`,
-							`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid}`,
-							`${managedComposeVolumeHome}/.hermes`,
-							`${managedComposeVolumeHome}/workspace`,
-						].join(" "),
+							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
+							`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
+						].join(" && "),
 					);
 					if (prepResult.code !== 0) {
 						throw new Error(

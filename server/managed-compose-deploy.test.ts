@@ -86,13 +86,9 @@ describe("resolveManagedComposeDeployPolicy", () => {
 
 		expect(execCommand).toHaveBeenCalledWith(
 			[
-				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
-				`${managedComposeVolumeHome}/.hermes/webui`,
-				`${managedComposeVolumeHome}/workspace`,
-				`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid}`,
-				`${managedComposeVolumeHome}/.hermes`,
-				`${managedComposeVolumeHome}/workspace`,
-			].join(" "),
+				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
+				`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
+			].join(" && "),
 		);
 	});
 });
