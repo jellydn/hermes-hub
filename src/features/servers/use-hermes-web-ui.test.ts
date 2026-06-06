@@ -70,6 +70,7 @@ function createWebUi(
 		enabled: false,
 		port: 8787,
 		proxyPath: "/api/servers/server_123/web-ui/proxy/",
+		landingPath: "/api/servers/server_123/web-ui/proxy/chat",
 		deployStatus: "idle",
 		deployError: null,
 		deployStartedAt: null,

@@ -39,6 +39,8 @@ vi.mock("./records", () => ({
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
+	getWebUiProxyLandingPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy/chat`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
 }));
@@ -118,6 +120,7 @@ describe("web-ui handlers", () => {
 				enabled: false,
 				port: 8787,
 				proxyPath: "/api/servers/server_123/web-ui/proxy/",
+				landingPath: "/api/servers/server_123/web-ui/proxy/chat",
 				deployStatus: "deploying",
 				deployError: null,
 				deployStartedAt: new Date().toISOString(),
@@ -239,7 +242,10 @@ describe("web-ui handlers", () => {
 	});
 
 	describe("proxy", () => {
-		it("redirects proxy root without trailing slash to chat", async () => {
+		it.each([
+			["without trailing slash", "/api/servers/server_123/web-ui/proxy"],
+			["with trailing slash", "/api/servers/server_123/web-ui/proxy/"],
+		])("redirects proxy root %s to chat", async (_label, proxyRootPath) => {
 			getAuthSession.mockResolvedValue({
 				user: { id: "user_123" },
 				session: { id: "session_123" },
@@ -256,35 +262,7 @@ describe("web-ui handlers", () => {
 
 			const response = await proxyServerWebUi(
 				createContext({
-					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy",
-				}),
-			);
-
-			expect(response.status).toBe(302);
-			expect(response.headers.get("location")).toBe(
-				"/api/servers/server_123/web-ui/proxy/chat",
-			);
-			expect(proxyRequestOverSsh).not.toHaveBeenCalled();
-		});
-
-		it("redirects proxy root with trailing slash to chat", async () => {
-			getAuthSession.mockResolvedValue({
-				user: { id: "user_123" },
-				session: { id: "session_123" },
-			});
-			getResolvedServerWebUiRecord.mockResolvedValue({
-				enabled: true,
-				encryptedPassword: "enc:generated-password",
-				port: 8787,
-				deployStatus: "succeeded",
-				deployError: null,
-				deployStartedAt: null,
-				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-			});
-
-			const response = await proxyServerWebUi(
-				createContext({
-					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+					url: `http://localhost:3000${proxyRootPath}`,
 				}),
 			);
 
@@ -323,6 +301,42 @@ describe("web-ui handlers", () => {
 			expect(response.status).toBe(502);
 			expect(payload.error).toContain(
 				"Hermes Web UI is not reachable on the server (127.0.0.1:8787)",
+			);
+		});
+
+		it("rewrites upstream root redirects to the chat landing path", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
+
+			proxyRequestOverSsh.mockResolvedValue(
+				new Response(null, {
+					status: 302,
+					headers: {
+						Location: "/",
+					},
+				}),
+			);
+
+			const response = await proxyServerWebUi(
+				createContext({
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/login",
+				}),
+			);
+
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe(
+				"/api/servers/server_123/web-ui/proxy/chat",
 			);
 		});
 

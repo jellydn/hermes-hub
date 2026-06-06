@@ -4,37 +4,62 @@ import {
 	buildUpstreamProxyHeaders,
 	getPublicRequestEndpoint,
 	getUpstreamPath,
+	resolveProxyRequestTarget,
 	rewriteLocationHeader,
 	rewriteSetCookieHeader,
 } from "./proxy-http";
 
+const proxyBasePath = "/api/servers/server_123/web-ui/proxy/";
+const landingPath = "/api/servers/server_123/web-ui/proxy/chat";
+
 describe("web-ui proxy helpers", () => {
-	it("maps the proxy root to the upstream root", () => {
+	it.each([
+		["without trailing slash", "/api/servers/server_123/web-ui/proxy"],
+		["with trailing slash", "/api/servers/server_123/web-ui/proxy/"],
+	])("redirects proxy root %s to the landing path", (_label, proxyRootPath) => {
 		expect(
-			getUpstreamPath(
-				"http://localhost:3000/api/servers/server_123/web-ui/proxy/",
-				"/api/servers/server_123/web-ui/proxy/",
+			resolveProxyRequestTarget(
+				`http://localhost:3000${proxyRootPath}`,
+				proxyBasePath,
+				landingPath,
 			),
-		).toBe("/");
+		).toEqual({ kind: "redirect", location: landingPath });
 	});
 
-	it("forwards nested paths under the proxy base", () => {
+	it("forwards nested proxy paths to the upstream web UI", () => {
+		expect(
+			resolveProxyRequestTarget(
+				"http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
+				proxyBasePath,
+				landingPath,
+			),
+		).toEqual({ kind: "forward", upstreamPath: "/chat" });
+	});
+
+	it("maps nested paths under the proxy base to upstream paths", () => {
 		expect(
 			getUpstreamPath(
 				"http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
-				"/api/servers/server_123/web-ui/proxy/",
+				proxyBasePath,
 			),
 		).toBe("/chat");
 	});
 
 	it("rewrites Location headers to the proxy path", () => {
 		expect(
-			rewriteLocationHeader(
-				"/login",
-				"/api/servers/server_123/web-ui/proxy/",
-				"http://127.0.0.1:8787",
-			),
+			rewriteLocationHeader("/login", proxyBasePath, "http://127.0.0.1:8787"),
 		).toBe("/api/servers/server_123/web-ui/proxy/login");
+	});
+
+	it("rewrites upstream root redirects to the landing path", () => {
+		expect(
+			rewriteLocationHeader(
+				"/",
+				proxyBasePath,
+				"http://127.0.0.1:8787",
+				landingPath,
+			),
+		).toBe(landingPath);
 	});
 
 	it("rewrites upstream origin redirects to the proxy path", () => {

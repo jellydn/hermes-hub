@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { assertWebUiReachable } from "../hermes/runtime";
 import {
-	assertWebUiReachable,
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
-} from "../hermes/runtime";
-import { formatWebUiProxyError, isRemotePortUnreachable } from "./reachability";
+} from "../hermes/diagnostics-formatting";
+import { formatWebUiProxyError, isRemotePortUnreachable } from "./handlers";
 
 describe("isRemotePortUnreachable", () => {
 	it("detects SSH channel and connection refused errors", () => {

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+	formatHermesCliImportFailure,
+	formatWebUiContainerFailureDetails,
+} from "./diagnostics-formatting";
+import {
 	assertValidComposeServiceNames,
 	assertWebUiReachable,
 	buildComposeUpCommand,
@@ -8,8 +12,6 @@ import {
 	composePull,
 	composeUp,
 	composeUpAll,
-	formatHermesCliImportFailure,
-	formatWebUiContainerFailureDetails,
 	hermesContainerName,
 	isContainerRunning,
 	isValidDockerTag,

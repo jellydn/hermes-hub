@@ -34,27 +34,66 @@ export class WebUiProxyError extends Error {
 	}
 }
 
-export function getUpstreamPath(requestUrl: string, proxyBasePath: string) {
-	const url = new URL(requestUrl);
-	const normalizedBase = proxyBasePath.endsWith("/")
+export type ProxyRequestTarget =
+	| { kind: "redirect"; location: string }
+	| { kind: "forward"; upstreamPath: string };
+
+function normalizeProxyBasePath(proxyBasePath: string) {
+	return proxyBasePath.endsWith("/")
 		? proxyBasePath.slice(0, -1)
 		: proxyBasePath;
+}
+
+export function resolveProxyRequestTarget(
+	requestUrl: string,
+	proxyBasePath: string,
+	landingPath: string,
+): ProxyRequestTarget {
+	const url = new URL(requestUrl);
+	const normalizedBase = normalizeProxyBasePath(proxyBasePath);
+	if (url.pathname === normalizedBase || url.pathname === proxyBasePath) {
+		return { kind: "redirect", location: landingPath };
+	}
+
+	return {
+		kind: "forward",
+		upstreamPath: getUpstreamPath(requestUrl, proxyBasePath),
+	};
+}
+
+export function getUpstreamPath(requestUrl: string, proxyBasePath: string) {
+	const url = new URL(requestUrl);
+	const normalizedBase = normalizeProxyBasePath(proxyBasePath);
 	const prefix = `${normalizedBase}/`;
-	const pathname = url.pathname.startsWith(prefix)
-		? `/${url.pathname.slice(prefix.length)}`
-		: url.pathname === normalizedBase
-			? "/"
-			: url.pathname;
-	return pathname === "" ? "/" : pathname;
+	if (!url.pathname.startsWith(prefix)) {
+		throw new Error(
+			`Request path is not nested under proxy base: ${url.pathname}`,
+		);
+	}
+
+	const subpath = url.pathname.slice(prefix.length);
+	// Root paths are intercepted by resolveProxyRequestTarget before this
+	// is ever called; a bare proxy-root arriving here is a bug.
+	if (subpath === "") {
+		throw new Error(
+			`Proxy root reached getUpstreamPath unexpectedly: ${url.pathname}`,
+		);
+	}
+	return `/${subpath}`;
 }
 
 export function rewriteLocationHeader(
 	value: string,
 	proxyBasePath: string,
 	upstreamOrigin: string,
+	landingPath?: string,
 ) {
 	const trimmed = value.trim();
 	if (trimmed.startsWith("/")) {
+		if (trimmed === "/" && landingPath) {
+			return landingPath;
+		}
+
 		return joinProxyPath(proxyBasePath, trimmed);
 	}
 
@@ -81,6 +120,7 @@ export function rewriteProxyResponseHeaders(
 	headers: Headers,
 	proxyBasePath: string,
 	upstreamOrigin: string,
+	landingPath?: string,
 ) {
 	const rewritten = new Headers();
 
@@ -93,7 +133,12 @@ export function rewriteProxyResponseHeaders(
 		if (lowerName === "location") {
 			rewritten.set(
 				name,
-				rewriteLocationHeader(value, proxyBasePath, upstreamOrigin),
+				rewriteLocationHeader(
+					value,
+					proxyBasePath,
+					upstreamOrigin,
+					landingPath,
+				),
 			);
 			continue;
 		}

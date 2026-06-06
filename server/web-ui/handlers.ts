@@ -4,14 +4,44 @@ import { getClientIp } from "../lib/get-client-ip";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
 import { DeployError, getStatus, startDeploy } from "./deploy";
 import { requireEnabledWebUi } from "./enabled-context";
-import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
-import { formatWebUiProxyError } from "./reachability";
+import {
+	resolveProxyRequestTarget,
+	rewriteProxyResponseHeaders,
+} from "./proxy-http";
 import {
 	decryptWebUiPassword,
 	getResolvedServerWebUiRecord,
+	getWebUiProxyLandingPath,
 	getWebUiProxyPath,
 } from "./records";
 import { proxyRequestOverSsh } from "./ssh-forward";
+
+// ── Proxy error formatting ───────────────────────────────────────
+
+const REMOTE_PORT_UNREACHABLE_MARKERS = [
+	"Connection refused",
+	"Channel open failure",
+] as const;
+
+const WEB_UI_UNREACHABLE_PROXY_MESSAGE =
+	"Hermes Web UI is not reachable on the server (127.0.0.1:{port}). The container may have stopped or was removed during a later deploy. Open the server page and run Redeploy Web UI.";
+
+export function isRemotePortUnreachable(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error);
+	return REMOTE_PORT_UNREACHABLE_MARKERS.some((marker) =>
+		message.includes(marker),
+	);
+}
+
+export function formatWebUiProxyError(error: unknown, port: number) {
+	if (isRemotePortUnreachable(error)) {
+		return WEB_UI_UNREACHABLE_PROXY_MESSAGE.replace("{port}", String(port));
+	}
+
+	return error instanceof Error ? error.message : String(error);
+}
+
+// ── Handlers ─────────────────────────────────────────────────────
 
 export async function getServerWebUiStatus(context: Context) {
 	const owned = await requireOwnedServer(context);
@@ -75,18 +105,20 @@ export async function proxyServerWebUi(context: Context) {
 	}
 
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
-	const requestUrl = new URL(context.req.url);
-	const proxyRoot = proxyBasePath.replace(/\/$/, "");
-	if (
-		requestUrl.pathname === proxyRoot ||
-		requestUrl.pathname === proxyBasePath
-	) {
+	const landingPath = getWebUiProxyLandingPath(ctx.serverId);
+	const target = resolveProxyRequestTarget(
+		context.req.url,
+		proxyBasePath,
+		landingPath,
+	);
+	if (target.kind === "redirect") {
 		return new Response(null, {
 			status: 302,
-			headers: { Location: `${proxyBasePath}chat` },
+			headers: { Location: target.location },
 		});
 	}
-	const upstreamPath = getUpstreamPath(context.req.url, proxyBasePath);
+
+	const upstreamPath = target.upstreamPath;
 	const upstreamOrigin = `http://127.0.0.1:${ctx.webUi.port}`;
 
 	try {
@@ -114,6 +146,7 @@ export async function proxyServerWebUi(context: Context) {
 				upstreamResponse.headers,
 				proxyBasePath,
 				upstreamOrigin,
+				landingPath,
 			),
 		});
 	} catch (error) {

@@ -11,6 +11,10 @@ import {
 	managedComposeVolumeHome,
 } from "../constants";
 import { shellQuote } from "../ssh";
+import {
+	formatHermesCliImportFailure,
+	formatWebUiContainerFailureDetails,
+} from "./diagnostics-formatting";
 
 // ── Container names ──────────────────────────────────────────────
 
@@ -105,7 +109,6 @@ export async function syncAgentSourceForWebUi(ssh: NodeSSH): Promise<void> {
 
 const WEB_UI_STARTUP_ATTEMPTS = 60;
 const WEB_UI_STARTUP_DELAY_SECONDS = 5;
-const WEB_UI_DIAGNOSTICS_MAX_LENGTH = 2000;
 
 export async function assertWebUiReachable(
 	ssh: NodeSSH,
@@ -154,65 +157,6 @@ async function probeWebUiStartup(
 	}
 
 	return "retry";
-}
-
-export function formatWebUiContainerFailureDetails(
-	state: string | undefined,
-	logs: string | undefined,
-	maxLength = WEB_UI_DIAGNOSTICS_MAX_LENGTH,
-): string {
-	const statePart = state?.trim();
-	const logsPart = logs?.trim();
-	const prefix = statePart
-		? `${statePart}. Recent logs: `
-		: logsPart
-			? "Recent logs: "
-			: "";
-
-	if (!prefix && !logsPart) {
-		return "";
-	}
-
-	const remaining = maxLength - prefix.length;
-	if (remaining <= 0) {
-		return prefix.slice(0, maxLength);
-	}
-
-	if (!logsPart) {
-		return prefix.slice(0, maxLength);
-	}
-
-	if (logsPart.length <= remaining) {
-		return `${prefix}${logsPart}`;
-	}
-
-	return `${prefix}...${logsPart.slice(-(remaining - 3))}`;
-}
-
-export function formatHermesCliImportFailure(
-	importError: string | undefined,
-	state: string | undefined,
-	logs: string | undefined,
-	maxLength = WEB_UI_DIAGNOSTICS_MAX_LENGTH,
-): string {
-	const importPart = importError?.trim() || "unknown import error";
-	const details = formatWebUiContainerFailureDetails(state, logs, maxLength);
-	const prefix = `Hermes Web UI cannot import hermes_cli (${importPart}).`;
-
-	if (!details) {
-		return prefix;
-	}
-
-	const remaining = maxLength - prefix.length - 1;
-	if (remaining <= 0) {
-		return prefix.slice(0, maxLength);
-	}
-
-	if (details.length <= remaining) {
-		return `${prefix} ${details}`;
-	}
-
-	return `${prefix} ${details.slice(0, remaining)}`;
 }
 
 async function buildContainerFailureError(ssh: NodeSSH): Promise<Error> {

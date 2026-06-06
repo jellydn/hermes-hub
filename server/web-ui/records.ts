@@ -30,8 +30,14 @@ export type ServerWebUiUpsertPatch = {
 	updatedAt?: Date;
 };
 
+export const WEB_UI_LANDING_SEGMENT = "chat";
+
 export function getWebUiProxyPath(serverId: string) {
 	return `/api/servers/${serverId}/web-ui/proxy/`;
+}
+
+export function getWebUiProxyLandingPath(serverId: string) {
+	return `${getWebUiProxyPath(serverId)}${WEB_UI_LANDING_SEGMENT}`;
 }
 
 export async function getServerWebUiRecord(
