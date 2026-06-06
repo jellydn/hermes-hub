@@ -9,6 +9,14 @@
 
 HermesHub is a web application that lets non-technical users deploy and manage a self-hosted [Hermes AI Agent](https://github.com/nousresearch/hermes-agent) on any VPS — no SSH, Docker, or Linux knowledge needed.
 
+## 🔗 Hermes ecosystem
+
+HermesHub focuses on the VPS setup path: connect your server, install Hermes with live progress, deploy your AI provider, finish Telegram onboarding, and manage restart, update, and rollback from the dashboard.
+
+After setup, the **Hermes Web UI** is the browser interface for using Hermes day to day — sessions, chat, workspace files, and tool calls. The community Hermes site at [get-hermes.ai](https://get-hermes.ai/) describes that Web UI and the broader Hermes ecosystem.
+
+HermesHub is a separate product and is not affiliated with [get-hermes.ai](https://get-hermes.ai/).
+
 ## ✨ Features
 
 - 🔑 **Magic Link Auth** — Passwordless email sign-in via Better Auth
@@ -197,7 +205,7 @@ HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_
 ```
 src/routes/           — TanStack Start file-based routes (11 pages)
 ├── __root.tsx         — Root layout (theme init, devtools, header/footer)
-├── index.tsx          — Landing page
+├── index.tsx          — Landing page (Hermes ecosystem links)
 ├── login.tsx          — Magic link email login
 ├── dashboard.tsx      — Authenticated shell + aggregated status
 ├── servers.tsx        — VPS connection wizard + install trigger
@@ -206,7 +214,7 @@ src/routes/           — TanStack Start file-based routes (11 pages)
 ├── ai-provider.tsx    — AI provider selection and API key config
 ├── telegram.tsx       — Telegram bot connection wizard
 ├── logs.tsx           — Install + action log viewer
-└── about.tsx          — About page
+└── about.tsx          — About page (Hermes ecosystem context)
 
 server/               — Hono API routes and business logic
 ├── app.ts            — Hono router with all API route bindings

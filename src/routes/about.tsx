@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
 
 export const Route = createFileRoute("/about")({
 	head: () => ({
@@ -23,11 +24,24 @@ function About() {
 					The easiest way to self-host Hermes Agent.
 				</h1>
 				<p className="max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
-					Hermes Agent from Nous Research is an open-source personal agent that
-					lives on your server and grows with you. HermesHub adds the guided MVP
-					layer around it: magic-link sign in, VPS verification, one-click
+					Hermes Agent is an open-source personal agent that lives on your
+					server and grows with you. HermesHub is a separate product focused on
+					the setup path: magic-link sign in, VPS verification, one-click
 					installation, AI provider setup, Telegram onboarding, and simple
 					ongoing controls for restart, update, and rollback.
+				</p>
+				<p className="mt-4 max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
+					For the broader Hermes ecosystem — including the browser-based Hermes
+					Web UI — visit the community site at{" "}
+					<a
+						href={hermesCommunitySiteUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-semibold text-[var(--sea-ink)] underline decoration-[var(--chip-line)] underline-offset-4"
+					>
+						get-hermes.ai
+					</a>
+					. HermesHub is not affiliated with that site and does not replace it.
 				</p>
 
 				<div className="mt-8 flex flex-wrap gap-3">
@@ -39,11 +53,11 @@ function About() {
 					</Button>
 					<Button asChild variant="secondary">
 						<a
-							href="https://hermes-agent.nousresearch.com/"
+							href={hermesCommunitySiteUrl}
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							Visit Hermes Agent
+							Visit the Hermes community site
 							<ExternalLink />
 						</a>
 					</Button>
