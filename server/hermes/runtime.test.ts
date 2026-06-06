@@ -45,16 +45,12 @@ function mockSsh(
 	return { execCommand };
 }
 
-// ── Container names ──────────────────────────────────────────────
-
 describe("constants", () => {
 	it("exports canonical container names", () => {
 		expect(hermesContainerName).toBe("hermes");
 		expect(WEB_UI_CONTAINER).toBe("hermes-webui");
 	});
 });
-
-// ── Shared diagnostics ───────────────────────────────────────────
 
 describe("isContainerRunning", () => {
 	it("returns true when the container name appears in docker ps output", async () => {
@@ -172,8 +168,6 @@ describe("readWebUiContainerDiagnostics", () => {
 	});
 });
 
-// ── Web UI agent source sync ─────────────────────────────────────
-
 describe("buildWebUiAgentSourceSyncCommand", () => {
 	it("builds the mkdir + cp + chown chain", () => {
 		const cmd = buildWebUiAgentSourceSyncCommand();
@@ -259,8 +253,6 @@ describe("syncAgentSourceForWebUi", () => {
 	});
 });
 
-// ── Web UI reachability ──────────────────────────────────────────
-
 describe("formatWebUiContainerFailureDetails", () => {
 	it("combines container state and recent logs", () => {
 		expect(
@@ -280,9 +272,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 	it("truncates long output and preserves the tail with ellipsis", () => {
 		const start = "[EARLY_STARTUP_NOISE]";
 		const fatal = "!! CRITICAL: subscription crashed";
-		// Pad so the total exceeds the 2000-char diagnostics limit: ~2400 chars.
-		// The function keeps the tail via slice(-1959), so the start marker gets
-		// dropped but the fatal message (and some preceding content) stays.
 		const logs = start + "x".repeat(2400) + fatal;
 		const result = formatWebUiContainerFailureDetails(
 			"restarting exit=1 error=",
@@ -291,7 +280,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 
 		expect(result).toContain(fatal);
 		expect(result).toContain("...");
-		// The start marker should have been truncated out
 		expect(result).not.toContain(start);
 	});
 
@@ -390,8 +378,6 @@ describe("assertWebUiReachable", () => {
 		expect(execCommand).toHaveBeenCalledWith("sleep 5");
 	});
 });
-
-// ── Gateway lifecycle ────────────────────────────────────────────
 
 describe("restartGateway", () => {
 	it("restarts the Hermes container via docker compose", async () => {
@@ -531,8 +517,6 @@ describe("rollbackGateway", () => {
 	});
 });
 
-// ── Provider config ──────────────────────────────────────────────
-
 describe("setProviderModel", () => {
 	it("sleeps then sets the model inside the Hermes container", async () => {
 		const { execCommand } = mockSsh(() => ({
@@ -563,8 +547,6 @@ describe("setProviderModel", () => {
 		).rejects.toThrow("Hermes not running");
 	});
 });
-
-// ── Telegram pairing ─────────────────────────────────────────────
 
 describe("runPairingCommand", () => {
 	it("executes python via docker and returns parsed JSON", async () => {
@@ -643,8 +625,6 @@ describe("runPairingCommand", () => {
 		).rejects.toThrow(/Invalid pairing response/);
 	});
 });
-
-// ── Compose deployment ───────────────────────────────────────────
 
 describe("assertValidComposeServiceNames", () => {
 	it("accepts valid docker compose service names", () => {

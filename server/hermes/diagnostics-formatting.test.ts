@@ -5,11 +5,7 @@ import {
 	formatWebUiContainerFailureDetails,
 } from "./diagnostics-formatting";
 
-// ── formatWebUiContainerFailureDetails ────────────────────────────
-
 describe("formatWebUiContainerFailureDetails", () => {
-	// -- happy paths (duplicated from integration-level tests for module ownership) --
-
 	it("combines state and short logs in full", () => {
 		expect(
 			formatWebUiContainerFailureDetails("exited exit=1 error=", "startup failed"),
@@ -19,8 +15,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 	it("returns empty string when both state and logs are undefined", () => {
 		expect(formatWebUiContainerFailureDetails(undefined, undefined)).toBe("");
 	});
-
-	// -- logs-only path --
 
 	it("prepends 'Recent logs:' when state is missing", () => {
 		expect(
@@ -40,8 +34,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 		).toBe("Recent logs: segfault at 0x0");
 	});
 
-	// -- state-only path --
-
 	it("returns the state prefix when logs are undefined", () => {
 		expect(
 			formatWebUiContainerFailureDetails("restarting exit=2 error=", undefined),
@@ -54,8 +46,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 		).toBe("restarting exit=2 error=. Recent logs: ");
 	});
 
-	// -- all inputs empty / whitespace --
-
 	it("returns empty string when both inputs are empty strings", () => {
 		expect(formatWebUiContainerFailureDetails("", "")).toBe("");
 	});
@@ -64,11 +54,8 @@ describe("formatWebUiContainerFailureDetails", () => {
 		expect(formatWebUiContainerFailureDetails("   ", "\n\t ")).toBe("");
 	});
 
-	// -- truncation boundaries --
-
 	it("keeps the full message when logs fit exactly in the remaining space", () => {
-		// Prefix "state. Recent logs: " = 20 chars. With maxLength=42, remaining=22.
-		const logs = "1234567890123456789012"; // exactly 22 chars
+		const logs = "1234567890123456789012";
 		const result = formatWebUiContainerFailureDetails("state", logs, 42);
 
 		expect(result).toBe("state. Recent logs: 1234567890123456789012");
@@ -76,9 +63,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 
 	it("truncates with ellipsis when logs exceed remaining by one char", () => {
-		// Prefix "state. Recent logs: " = 20 chars.  With maxLength=40, remaining=20.
-		// Ellipsis eats 3 chars from remaining: 20-3=17 chars of tail preserved.
-		// 21-char logs => 1 over, triggers truncation.
 		const logs = "x".repeat(21);
 		const result = formatWebUiContainerFailureDetails("state", logs, 40);
 
@@ -87,7 +71,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 
 	it("returns only truncated prefix when maxLength is smaller than the prefix itself", () => {
-		// Prefix: "restarting exit=0 error=. Recent logs: " = 38 chars
 		const result = formatWebUiContainerFailureDetails(
 			"restarting exit=0 error=",
 			"some logs",
@@ -99,13 +82,11 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 
 	it("returns the full prefix when maxLength equals prefix length", () => {
-		const state = "abc"; // "abc. Recent logs: " = 18 chars
+		const state = "abc";
 		const result = formatWebUiContainerFailureDetails(state, "some logs", 18);
 
 		expect(result).toBe("abc. Recent logs: ");
 	});
-
-	// -- truncation preserves the tail (meaningful error at end) --
 
 	it("drops the early noise and keeps the final fatal line", () => {
 		const start = "[EARLY_STARTUP_NOISE]";
@@ -121,8 +102,6 @@ describe("formatWebUiContainerFailureDetails", () => {
 		expect(result).not.toContain(start);
 	});
 
-	// -- custom maxLength --
-
 	it("respects a small custom maxLength", () => {
 		const result = formatWebUiContainerFailureDetails(
 			"exited exit=1 error=",
@@ -136,11 +115,7 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 });
 
-// ── formatHermesCliImportFailure ──────────────────────────────────
-
 describe("formatHermesCliImportFailure", () => {
-	// -- happy path --
-
 	it("includes the import error and container diagnostics", () => {
 		const msg = formatHermesCliImportFailure(
 			"ModuleNotFoundError: No module named 'hermes_cli'",
@@ -152,8 +127,6 @@ describe("formatHermesCliImportFailure", () => {
 		expect(msg).toContain("import failed");
 		expect(msg).toContain("running exit=0 error=");
 	});
-
-	// -- fallbacks --
 
 	it("falls back to 'unknown import error' when importError is undefined", () => {
 		expect(
@@ -179,8 +152,6 @@ describe("formatHermesCliImportFailure", () => {
 		);
 	});
 
-	// -- logs-only diagnostics --
-
 	it("appends logs-only diagnostics when state is missing", () => {
 		const msg = formatHermesCliImportFailure(
 			"SyntaxError",
@@ -192,11 +163,7 @@ describe("formatHermesCliImportFailure", () => {
 		expect(msg).toContain("line 42");
 	});
 
-	// -- truncation boundaries --
-
 	it("keeps full diagnostics when they fit in remaining space", () => {
-		// Prefix: ~55 chars. With maxLength=200, remaining ~144 chars.
-		// Details: "Recent logs: OK" = 17 chars, well within remaining.
 		const msg = formatHermesCliImportFailure(
 			"ImportError",
 			undefined,
@@ -210,7 +177,6 @@ describe("formatHermesCliImportFailure", () => {
 	});
 
 	it("truncates details when they exceed remaining space", () => {
-		// Prefix: ~55 chars. With maxLength=70, remaining=70-55-1=14 chars for details.
 		const msg = formatHermesCliImportFailure(
 			"ImportError",
 			undefined,
@@ -219,16 +185,11 @@ describe("formatHermesCliImportFailure", () => {
 		);
 
 		expect(msg).toContain("cannot import hermes_cli (ImportError)");
-		// Should be truncated to fit: 14 chars of details preserved
 		expect(msg.length).toBeLessThanOrEqual(70);
 	});
 
-	// -- very long importError (defensive: docker exec stderr is bounded, but guard anyway) --
-
 	it("returns full prefix when importError is long and diagnostics are missing", () => {
-		// When !details the function returns prefix as-is — no maxLength guard
-		// in that branch.  This mirrors formatWebUiContainerFailureDetails
-		// returning the full state prefix when logs are absent.
+		// When !details the function returns prefix without maxLength guard.
 		const longError = "x".repeat(500);
 		const msg = formatHermesCliImportFailure(longError, undefined, undefined, 200);
 
@@ -236,21 +197,17 @@ describe("formatHermesCliImportFailure", () => {
 		expect(msg.startsWith("Hermes Web UI cannot import hermes_cli (xxxx")).toBe(true);
 	});
 
-	// -- maxLength exactly consumed by prefix --
-
 	it("returns only the prefix when maxLength allows no room for details", () => {
 		const prefix = "Hermes Web UI cannot import hermes_cli (ImportError).";
 		const msg = formatHermesCliImportFailure(
 			"ImportError",
 			"running",
 			"some logs",
-			prefix.length, // exactly the prefix length, no room for space+details
+			prefix.length,
 		);
 
 		expect(msg).toBe(prefix);
 	});
-
-	// -- details are whitespace / empty --
 
 	it("treats whitespace-only details as missing", () => {
 		expect(

@@ -90,8 +90,6 @@ describe("web-ui proxy helpers", () => {
 		expect(headers["X-Forwarded-Host"]).toBe("hermes-hub.itman.fyi");
 		expect(headers["X-Forwarded-Proto"]).toBe("https");
 		expect(headers["X-Forwarded-For"]).toBe("203.0.113.10");
-		// The browser Origin must reach the Web UI unchanged so its CSRF guard
-		// can match it against the advertised allowed origins / forwarded host.
 		expect(headers.origin).toBe("https://hermes-hub.itman.fyi");
 	});
 
