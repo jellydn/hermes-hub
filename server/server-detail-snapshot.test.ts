@@ -59,6 +59,16 @@ vi.mock("./install/records", () => ({
 
 vi.mock("./server-records", () => ({
 	getOwnedServerRecord: vi.fn().mockResolvedValue(ownedServerRecord),
+	readOsInfoValue: (
+		osInfo: Record<string, unknown> | null | undefined,
+		key: string,
+	) => {
+		if (!osInfo) {
+			return null;
+		}
+		const value = osInfo[key];
+		return typeof value === "string" && value.length > 0 ? value : null;
+	},
 }));
 
 vi.mock("./web-ui/records", () => ({

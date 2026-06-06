@@ -11,6 +11,16 @@ export type ServerActionHistoryItem = {
 	imageRef: string | null;
 };
 
+export function formatActionLabel(action: ServerActionType): string {
+	if (action === "update") {
+		return "Update Hermes";
+	}
+	if (action === "rollback") {
+		return "Rollback";
+	}
+	return "Restart Agent";
+}
+
 export type ServerWebUiSnapshot = {
 	enabled: boolean;
 	port: number;

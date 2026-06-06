@@ -1,14 +1,20 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import type {
-	ServerActionHistoryItem,
-	ServerActionResult,
-	ServerActionType,
-	ServerDetailSnapshot,
+import {
+	formatActionLabel,
+	type ServerActionHistoryItem,
+	type ServerActionResult,
+	type ServerActionType,
+	type ServerDetailSnapshot,
 } from "../src/lib/server-detail";
 import { getDb } from "./db";
 import { auditLogs } from "./db/schema";
 import { getLatestInstallForServer } from "./install/records";
-import { getOwnedServerRecord, type OwnedServerRecord } from "./server-records";
+import { getNonEmptyString } from "./lib/non-empty-string";
+import {
+	getOwnedServerRecord,
+	type OwnedServerRecord,
+	readOsInfoValue,
+} from "./server-records";
 import { getServerWebUiRecord, getWebUiProxyPath } from "./web-ui/records";
 
 type AuditRecord = {
@@ -128,7 +134,7 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		result,
 		createdAt: record.createdAt.toISOString(),
 		message: readActionMessage(details, action, result),
-		imageRef: readStringValue(details, "imageRef"),
+		imageRef: getNonEmptyString(details.imageRef),
 	};
 }
 
@@ -149,7 +155,7 @@ function readActionMessage(
 	action: ServerActionType,
 	result: ServerActionResult,
 ) {
-	const explicitMessage = readStringValue(details, "message");
+	const explicitMessage = getNonEmptyString(details.message);
 	if (explicitMessage) {
 		return explicitMessage;
 	}
@@ -159,28 +165,6 @@ function readActionMessage(
 	}
 
 	return `${formatActionLabel(action)} completed.`;
-}
-
-function formatActionLabel(action: ServerActionType) {
-	if (action === "restart") {
-		return "Restart agent";
-	}
-
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	return "Rollback";
-}
-
-function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function readStringValue(details: Record<string, unknown>, key: string) {
-	const value = details[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

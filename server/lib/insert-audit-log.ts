@@ -1,5 +1,6 @@
 import type { getDb } from "../db";
 import { auditLogs } from "../db/schema";
+import { getNonEmptyString } from "./non-empty-string";
 
 export type InsertAuditLogInput = {
 	userId: string;
@@ -19,7 +20,7 @@ export async function insertAuditLog(
 	const resolvedServerId =
 		input.serverId ??
 		(details && typeof details === "object" && "serverId" in details
-			? extractString(details.serverId)
+			? getNonEmptyString(details.serverId)
 			: null);
 
 	await writer.insert(auditLogs).values({
@@ -29,8 +30,4 @@ export async function insertAuditLog(
 		ipAddress: input.ipAddress ?? null,
 		serverId: resolvedServerId,
 	});
-}
-
-function extractString(value: unknown): string | null {
-	return typeof value === "string" && value.length > 0 ? value : null;
 }

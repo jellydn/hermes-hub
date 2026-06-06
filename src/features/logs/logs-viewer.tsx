@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "@/lib/logs";
+import { formatActionLabel } from "@/lib/server-detail";
 
 type LogsViewerProps = {
 	initialLogs: LogsSnapshot;
@@ -225,16 +226,4 @@ function flattenActionLogLines(actionLogs: ActionLogEntry[]) {
 		(entry) =>
 			`${entry.createdAt} [${entry.serverLabel}] ${formatActionLabel(entry.action)} ${entry.result}: ${entry.message}`,
 	);
-}
-
-function formatActionLabel(action: ActionLogEntry["action"]) {
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	if (action === "rollback") {
-		return "Rollback";
-	}
-
-	return "Restart Agent";
 }

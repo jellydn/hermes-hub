@@ -1,8 +1,9 @@
-import type {
-	ServerActionHistoryItem,
-	ServerActionResult,
-	ServerActionType,
-	ServerDetailSnapshot,
+import {
+	formatActionLabel,
+	type ServerActionHistoryItem,
+	type ServerActionResult,
+	type ServerActionType,
+	type ServerDetailSnapshot,
 } from "@/lib/server-detail";
 
 export type ServerBasicsDraft = {
@@ -99,17 +100,9 @@ export function formatOsSummary(detail: ServerDetailSnapshot) {
 	return summary || "Verified";
 }
 
-export function formatActionTitle(action: ServerActionType) {
-	if (action === "restart") {
-		return "Restart Agent";
-	}
+const formatActionTitle = formatActionLabel;
 
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	return "Rollback";
-}
+export { formatActionTitle };
 
 /** Keep action history readable; full failure output lives in Logs. */
 export function formatActionHistorySummary(item: ServerActionHistoryItem) {
@@ -143,6 +136,12 @@ export function badgeClassName(result: ServerActionHistoryItem["result"]) {
 		: "rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-700";
 }
 
+export function badgeIconType(
+	result: ServerActionHistoryItem["result"],
+): "success" | "error" {
+	return result === "succeeded" ? "success" : "error";
+}
+
 export function createHistoryEntry(input: {
 	action: ServerActionType;
 	result: ServerActionResult;
@@ -164,11 +163,11 @@ export function confirmationMessage(
 	rollbackTarget: string | null,
 ) {
 	if (action === "restart") {
-		return "HermesHub will restart the running containers on this VPS.";
+		return "HermesHub will restart the Hermes gateway container on this VPS.";
 	}
 
 	if (action === "update") {
-		return "HermesHub will pull the latest image and recreate the containers.";
+		return "HermesHub will pull the latest Hermes gateway image and restart it. The Telegram gateway will be briefly unavailable and active Telegram tasks may be interrupted.";
 	}
 
 	return rollbackTarget

@@ -10,7 +10,10 @@ import {
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import {
+	formatActionLabel,
+	type ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 type MockLinkProps = {
 	children?: ReactNode;
@@ -353,20 +356,6 @@ async function flushAsyncWork() {
 		await Promise.resolve();
 		await Promise.resolve();
 	});
-}
-
-function formatActionLabel(
-	action: ServerDetailSnapshot["actionHistory"][number]["action"],
-) {
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	if (action === "rollback") {
-		return "Rollback";
-	}
-
-	return "Restart Agent";
 }
 
 function createDetail(overrides?: {
