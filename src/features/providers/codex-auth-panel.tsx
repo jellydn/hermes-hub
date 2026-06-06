@@ -25,6 +25,13 @@ export function CodexAuthPanel({
 		createInitialCodexAuthPanelState,
 	);
 	const pollIntervalSecondsRef = useRef(5);
+	const abortControllerRef = useRef<AbortController | null>(null);
+
+	useMountEffect(() => {
+		return () => {
+			abortControllerRef.current?.abort();
+		};
+	});
 
 	async function refreshStatus() {
 		if (!telegramDeployed) {
@@ -114,7 +121,10 @@ export function CodexAuthPanel({
 	async function pollUntilAuthenticated(attempt = 0): Promise<void> {
 		if (attempt === 0) {
 			dispatch({ type: "complete_auth_started" });
+			abortControllerRef.current = new AbortController();
 		}
+
+		const signal = abortControllerRef.current?.signal;
 
 		try {
 			if (attempt >= 180) {
@@ -127,6 +137,7 @@ export function CodexAuthPanel({
 
 			const response = await fetch("/api/providers/codex-auth/complete", {
 				method: "POST",
+				signal,
 			});
 			const payload = (await response.json().catch(() => null)) as {
 				error?: string;
@@ -140,9 +151,16 @@ export function CodexAuthPanel({
 			}
 
 			if (response.ok && payload?.status === "pending") {
-				await new Promise((resolve) =>
-					setTimeout(resolve, pollIntervalSecondsRef.current * 1000),
-				);
+				await new Promise<void>((resolve, reject) => {
+					const timeout = setTimeout(
+						resolve,
+						pollIntervalSecondsRef.current * 1000,
+					);
+					signal?.addEventListener("abort", () => {
+						clearTimeout(timeout);
+						reject(new DOMException("Aborted", "AbortError"));
+					});
+				});
 				await pollUntilAuthenticated(attempt + 1);
 				return;
 			}
@@ -151,7 +169,11 @@ export function CodexAuthPanel({
 				type: "complete_auth_failed",
 				error: payload?.error ?? "Codex authentication failed.",
 			});
-		} catch {
+		} catch (error) {
+			if (error instanceof Error && error.name === "AbortError") {
+				return;
+			}
+
 			dispatch({
 				type: "complete_auth_failed",
 				error:
