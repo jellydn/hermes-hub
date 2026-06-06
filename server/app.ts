@@ -218,6 +218,7 @@ apiApp.get(
 	httpsMiddleware,
 	revealServerWebUiPassword,
 );
+// Root path issues a trailing-slash redirect; the catch-all handles proxied assets.
 apiApp.all("/servers/:id/web-ui/proxy", httpsMiddleware, proxyServerWebUi);
 apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
