@@ -39,7 +39,7 @@ export async function savePersonaSettings(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	if (typeof payload.agentPersona !== "string") {
+	if (!payload || typeof payload.agentPersona !== "string") {
 		return context.json({ error: "Persona content is required." }, 400);
 	}
 
@@ -100,7 +100,7 @@ export async function deployPersonaToHermes(context: Context) {
 	}
 
 	const telegramInfo = await getTelegramDeployInfo(session.user.id);
-	if (!telegramInfo) {
+	if (!telegramInfo?.deployedServerId) {
 		return context.json(
 			{
 				error:

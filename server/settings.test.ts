@@ -155,6 +155,16 @@ describe("persona settings", () => {
 			});
 		});
 
+		it("returns 400 when the JSON body is null", async () => {
+			const { savePersonaSettings } = await import("./settings");
+			const response = await savePersonaSettings(createContext(null));
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error: "Persona content is required.",
+			});
+		});
+
 		it("returns 400 for empty content", async () => {
 			const { savePersonaSettings } = await import("./settings");
 			const response = await savePersonaSettings(
@@ -267,6 +277,27 @@ describe("persona settings", () => {
 				error:
 					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
 			});
+		});
+
+		it("returns 400 when Telegram deploy info is missing deployedServerId", async () => {
+			selectLimit.mockResolvedValueOnce([personaRecord]).mockResolvedValueOnce([
+				{
+					botToken: "encrypted-bot-token",
+					apiServerKey: "encrypted-api-server-key",
+					deployedServerId: null,
+					deployedServerHost: null,
+				},
+			]);
+
+			const { deployPersonaToHermes } = await import("./settings");
+			const response = await deployPersonaToHermes(createContext({}));
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error:
+					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
+			});
+			expect(withSshConnection).not.toHaveBeenCalled();
 		});
 
 		it("writes SOUL.md, restarts Hermes, and records deploy metadata", async () => {
