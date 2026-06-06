@@ -14,5 +14,17 @@
 				"noDangerouslySetInnerHtml": "off"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["src/lib/use-mount-effect.ts"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useExhaustiveDependencies": "off"
+					}
+				}
+			}
+		}
+	]
 }
