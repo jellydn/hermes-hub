@@ -71,6 +71,13 @@
       "when": 1780721037900,
       "tag": "0009_same_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780725298672,
+      "tag": "0010_thankful_black_knight",
+      "breakpoints": true
     }
   ]
 }

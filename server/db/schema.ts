@@ -229,6 +229,7 @@ export const serverWebUi = pgTable(
 		port: integer("port").notNull().default(8787),
 		deployStatus: text("deploy_status").notNull().default("idle"),
 		deployError: text("deploy_error"),
+		deployStartedAt: timestamp("deploy_started_at", { withTimezone: true }),
 		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.$onUpdate(() => new Date())
