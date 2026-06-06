@@ -1,0 +1,80 @@
+import type { NodeSSH } from "node-ssh";
+
+import { type SshAuthMethod, withSshConnection } from "./ssh";
+
+export type DeployComposeInput = {
+	host: string;
+	port: number;
+	username: string;
+	authMethod: SshAuthMethod;
+	credential: string;
+	composeContent: string;
+	/** When set, only recreate these services so the Hermes gateway keeps running. */
+	composeServices?: string[];
+	/** Pull service images before `docker compose up` when targeting specific services. */
+	pullImages?: boolean;
+	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
+	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
+	expectedFingerprint?: string;
+};
+
+export function buildComposeUpCommand(input?: {
+	composeServices?: string[];
+	pull?: boolean;
+}) {
+	const parts = ["cd ~/hermes"];
+	const services = input?.composeServices ?? [];
+
+	if (input?.pull && services.length > 0) {
+		parts.push(`sudo docker compose pull ${services.join(" ")}`);
+	}
+
+	const upCommand = ["sudo docker compose up", "-d"];
+	if (services.length > 0) {
+		upCommand.push("--no-deps", ...services);
+	}
+	parts.push(upCommand.join(" "));
+
+	return parts.join(" && ");
+}
+
+export async function deployComposeViaSsh(input: DeployComposeInput) {
+	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${input.composeContent}\nDOCKER_EOF`;
+
+	await withSshConnection(
+		{
+			host: input.host,
+			port: input.port,
+			username: input.username,
+			authMethod: input.authMethod,
+			credential: input.credential,
+			expectedFingerprint: input.expectedFingerprint,
+		},
+		async (ssh) => {
+			if (input.preSshCommands) {
+				await input.preSshCommands(ssh);
+			}
+
+			const writeResult = await ssh.execCommand(writeCmd);
+			if (writeResult.code !== 0) {
+				throw new Error(
+					writeResult.stderr || "Failed to write docker-compose.yml",
+				);
+			}
+
+			const restartResult = await ssh.execCommand(
+				buildComposeUpCommand({
+					composeServices: input.composeServices,
+					pull: input.pullImages,
+				}),
+			);
+			if (restartResult.code !== 0) {
+				throw new Error(restartResult.stderr || "Failed to restart Hermes");
+			}
+
+			if (input.extraSshCommands) {
+				await input.extraSshCommands(ssh);
+			}
+		},
+	);
+}

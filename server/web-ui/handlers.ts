@@ -8,11 +8,8 @@ import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { deployManagedCompose } from "../managed-compose-deploy";
-import {
-	requireEnabledWebUi,
-	requireOwnedServer,
-	requireOwnedServerSsh,
-} from "./context";
+import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
+import { requireEnabledWebUi } from "./enabled-context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
 import { formatWebUiProxyError } from "./reachability";

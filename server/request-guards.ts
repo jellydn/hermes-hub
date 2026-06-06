@@ -1,13 +1,12 @@
 import type { Context } from "hono";
 
-import { getAuthSession } from "../auth";
+import { getAuthSession } from "./auth";
 import {
 	getOwnedServerRecord,
 	type OwnedServerRecord,
 	resolveServerSshConfigOrError,
-} from "../server-records";
-import type { SshAuthMethod } from "../ssh";
-import { getServerWebUiRecord, type ServerWebUiRecord } from "./records";
+} from "./server-records";
+import type { SshAuthMethod } from "./ssh";
 
 export type AuthSession = NonNullable<
 	Awaited<ReturnType<typeof getAuthSession>>
@@ -22,10 +21,6 @@ export type OwnedServerContext = {
 export type OwnedServerSshContext = OwnedServerContext & {
 	authMethod: SshAuthMethod;
 	credential: string;
-};
-
-export type EnabledWebUiContext = OwnedServerSshContext & {
-	webUi: ServerWebUiRecord;
 };
 
 function isResponse(value: unknown): value is Response {
@@ -109,23 +104,4 @@ export async function requireOwnedServerSsh(
 	}
 
 	return requireOwnedServerSshById(context, serverId);
-}
-
-export async function requireEnabledWebUi(
-	context: Context,
-): Promise<EnabledWebUiContext | Response> {
-	const owned = await requireOwnedServerSsh(context);
-	if (isResponse(owned)) {
-		return owned;
-	}
-
-	const webUi = await getServerWebUiRecord(owned.serverId);
-	if (!webUi?.enabled) {
-		return context.json(
-			{ error: "Hermes Web UI is not enabled on this server." },
-			400,
-		);
-	}
-
-	return { ...owned, webUi };
 }

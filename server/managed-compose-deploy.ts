@@ -1,10 +1,7 @@
 import type { NodeSSH } from "node-ssh";
 
-import { deployComposeViaSsh } from "./deploy";
-import {
-	buildManagedComposeContent,
-	type ManagedComposeWebUiMode,
-} from "./server-compose";
+import { deployComposeViaSsh } from "./compose-deploy-ssh";
+import { buildManagedComposeContent } from "./server-compose";
 import { type SshAuthMethod, shellQuote } from "./ssh";
 import { assertWebUiReachable } from "./web-ui/reachability";
 
@@ -14,16 +11,16 @@ export type ManagedComposeDeployIntent = "telegram" | "provider" | "web-ui";
  * Managed compose deploy policy matrix. Callers should use `deployManagedCompose`
  * instead of assembling these flags per route.
  *
- * | intent   | webUiMode | compose up                         | pre-up SSH          | post-up SSH                     |
- * |----------|-----------|------------------------------------|---------------------|---------------------------------|
- * | telegram | preserve  | full stack (`docker compose up -d`)| —                   | —                               |
- * | provider | preserve  | full stack                         | —                   | sleep + `hermes config set model`|
- * | web-ui   | preserve  | pull + `--no-deps hermes-webui`    | `sudo mkdir -p /root/.hermes /root/workspace` | `assertWebUiReachable` |
+ * | intent   | compose up                         | pre-up SSH          | post-up SSH                     |
+ * |----------|------------------------------------|---------------------|---------------------------------|
+ * | telegram | full stack (`docker compose up -d`)| —                   | —                               |
+ * | provider | full stack                         | —                   | sleep + `hermes config set model`|
+ * | web-ui   | pull + `--no-deps hermes-webui`    | `sudo mkdir -p ...` | `assertWebUiReachable`          |
  */
 export type ManagedComposeDeployPolicy = {
 	intent: ManagedComposeDeployIntent;
-	webUiMode: ManagedComposeWebUiMode;
 	composeServices?: string[];
+	pullImages?: boolean;
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 };
@@ -39,10 +36,7 @@ export function resolveManagedComposeDeployPolicy(
 ): ManagedComposeDeployPolicy {
 	switch (intent) {
 		case "telegram":
-			return {
-				intent,
-				webUiMode: "preserve",
-			};
+			return { intent };
 		case "provider": {
 			const providerModel = options.providerModel;
 			if (!providerModel) {
@@ -53,7 +47,6 @@ export function resolveManagedComposeDeployPolicy(
 
 			return {
 				intent,
-				webUiMode: "preserve",
 				extraSshCommands: async (ssh) => {
 					await ssh.execCommand("sleep 2");
 
@@ -76,8 +69,8 @@ export function resolveManagedComposeDeployPolicy(
 
 			return {
 				intent,
-				webUiMode: "preserve",
 				composeServices: ["hermes-webui"],
+				pullImages: true,
 				preSshCommands: async (ssh) => {
 					const prepResult = await ssh.execCommand(
 						"sudo mkdir -p /root/.hermes /root/workspace",
@@ -126,7 +119,6 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 		apiServerKey: input.apiServerKey,
 		telegramBotToken: input.telegramBotToken,
 		webUiPassword: input.webUiPassword,
-		webUiMode: policy.webUiMode,
 	});
 
 	await deployComposeViaSsh({
@@ -137,6 +129,7 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 		credential: input.credential,
 		composeContent,
 		composeServices: policy.composeServices,
+		pullImages: policy.pullImages,
 		preSshCommands: policy.preSshCommands,
 		extraSshCommands: policy.extraSshCommands,
 		expectedFingerprint: input.expectedFingerprint,

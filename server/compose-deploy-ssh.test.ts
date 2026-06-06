@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildComposeUpCommand } from "./deploy";
+import { buildComposeUpCommand } from "./compose-deploy-ssh";
 
 describe("buildComposeUpCommand", () => {
 	it("recreates the full stack when no services are targeted", () => {

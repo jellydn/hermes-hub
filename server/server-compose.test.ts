@@ -25,7 +25,7 @@ describe("buildManagedComposeContentFromSecrets", () => {
 		);
 	});
 
-	it("throws when preserve mode cannot decrypt an enabled Web UI password", () => {
+	it("throws when an enabled Web UI password cannot be decrypted", () => {
 		expect(() =>
 			buildManagedComposeContentFromSecrets({
 				serverId: "server_1",

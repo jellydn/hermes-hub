@@ -14,7 +14,7 @@ vi.mock("./server-compose", () => ({
 	buildManagedComposeContent,
 }));
 
-vi.mock("./deploy", () => ({
+vi.mock("./compose-deploy-ssh", () => ({
 	deployComposeViaSsh,
 }));
 
@@ -31,7 +31,6 @@ describe("resolveManagedComposeDeployPolicy", () => {
 	it("uses full-stack compose for telegram deploys", () => {
 		expect(resolveManagedComposeDeployPolicy("telegram")).toEqual({
 			intent: "telegram",
-			webUiMode: "preserve",
 		});
 	});
 
@@ -42,7 +41,6 @@ describe("resolveManagedComposeDeployPolicy", () => {
 
 		expect(policy).toMatchObject({
 			intent: "provider",
-			webUiMode: "preserve",
 		});
 		expect(policy.extraSshCommands).toBeTypeOf("function");
 	});
@@ -54,8 +52,8 @@ describe("resolveManagedComposeDeployPolicy", () => {
 
 		expect(policy).toEqual({
 			intent: "web-ui",
-			webUiMode: "preserve",
 			composeServices: ["hermes-webui"],
+			pullImages: true,
 			preSshCommands: expect.any(Function),
 			extraSshCommands: expect.any(Function),
 		});
@@ -114,12 +112,12 @@ describe("deployManagedCompose", () => {
 			apiServerKey: undefined,
 			telegramBotToken: undefined,
 			webUiPassword: "ui-password",
-			webUiMode: "preserve",
 		});
 		expect(deployComposeViaSsh).toHaveBeenCalledWith(
 			expect.objectContaining({
 				host: "203.0.113.10",
 				composeServices: ["hermes-webui"],
+				pullImages: true,
 				preSshCommands: expect.any(Function),
 				extraSshCommands: expect.any(Function),
 			}),
