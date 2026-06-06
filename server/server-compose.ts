@@ -1,4 +1,4 @@
-import { buildHermesComposeContent } from "./compose";
+import { buildHermesComposeContent, normalizePublicOrigin } from "./compose";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getProviderDeployConfig } from "./providers";
 import { getTelegramDeployInfo } from "./providers/records";
@@ -69,6 +69,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 			? {
 					password: resolvedWebUiPassword,
 					port: input.webUiPort ?? webUiRecord?.port,
+					publicOrigin: normalizePublicOrigin(process.env.BETTER_AUTH_URL),
 				}
 			: undefined,
 	});

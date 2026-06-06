@@ -182,6 +182,58 @@ describe("buildHermesComposeContent", () => {
 		);
 	});
 
+	it("advertises the public origin for reverse-proxy CSRF when provided", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "https://hermes-hub.itman.fyi",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(env).toEqual(
+			expect.arrayContaining([
+				`HERMES_WEBUI_TRUST_FORWARDED_HOST=${hermesWebUiTrustForwardedHost}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_PROTO=${hermesWebUiTrustForwardedProto}`,
+				"HERMES_WEBUI_ALLOWED_ORIGINS=https://hermes-hub.itman.fyi",
+			]),
+		);
+	});
+
+	it("normalizes the public origin and strips any path or query", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "https://hermes-hub.itman.fyi/dashboard?tab=web-ui",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(env).toContain(
+			"HERMES_WEBUI_ALLOWED_ORIGINS=https://hermes-hub.itman.fyi",
+		);
+	});
+
+	it("omits HERMES_WEBUI_ALLOWED_ORIGINS when the public origin is invalid", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "not-a-url",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(
+			env.some((entry) => entry.startsWith("HERMES_WEBUI_ALLOWED_ORIGINS=")),
+		).toBe(false);
+	});
+
 	it("sets API_SERVER_KEY independently of TELEGRAM_BOT_TOKEN", () => {
 		const result = buildHermesComposeContent({
 			apiServerKey: "key-only",

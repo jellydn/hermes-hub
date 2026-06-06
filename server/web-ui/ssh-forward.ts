@@ -36,6 +36,7 @@ export async function proxyRequestOverSsh(input: {
 	remotePort: number;
 	request: Request;
 	upstreamPath: string;
+	upstreamHost?: string;
 }) {
 	return withSshTcpForward(
 		input.userId,
@@ -50,6 +51,7 @@ export async function proxyRequestOverSsh(input: {
 				request: input.request,
 				stream,
 				upstreamPath: input.upstreamPath,
+				upstreamHost: input.upstreamHost,
 			}),
 	);
 }
