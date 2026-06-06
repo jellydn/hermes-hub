@@ -1,7 +1,9 @@
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 type ThemeMode = "light" | "dark" | "auto";
+
+const themeListeners = new Set<() => void>();
 
 function getInitialMode(): ThemeMode {
 	if (typeof window === "undefined") {
@@ -32,35 +34,54 @@ function applyThemeMode(mode: ThemeMode) {
 	document.documentElement.style.colorScheme = resolved;
 }
 
-export default function ThemeToggle() {
-	const [mode, setMode] = useState<ThemeMode>("auto");
+function emitThemeChange() {
+	for (const listener of themeListeners) {
+		listener();
+	}
+}
 
-	useEffect(() => {
-		const initialMode = getInitialMode();
-		setMode(initialMode);
-		applyThemeMode(initialMode);
-	}, []);
+function subscribeTheme(listener: () => void) {
+	const isFirstListener = themeListeners.size === 0;
+	themeListeners.add(listener);
 
-	useEffect(() => {
-		if (mode !== "auto") {
-			return;
+	if (isFirstListener) {
+		applyThemeMode(getInitialMode());
+	}
+
+	const media = window.matchMedia("(prefers-color-scheme: dark)");
+	const onMediaChange = () => {
+		const mode = getInitialMode();
+		if (mode === "auto") {
+			applyThemeMode("auto");
 		}
+		listener();
+	};
 
-		const media = window.matchMedia("(prefers-color-scheme: dark)");
-		const onChange = () => applyThemeMode("auto");
+	media.addEventListener("change", onMediaChange);
 
-		media.addEventListener("change", onChange);
-		return () => {
-			media.removeEventListener("change", onChange);
-		};
-	}, [mode]);
+	return () => {
+		themeListeners.delete(listener);
+		media.removeEventListener("change", onMediaChange);
+	};
+}
+
+function getThemeSnapshot(): ThemeMode {
+	return getInitialMode();
+}
+
+export default function ThemeToggle() {
+	const mode = useSyncExternalStore(
+		subscribeTheme,
+		getThemeSnapshot,
+		() => "auto" as ThemeMode,
+	);
 
 	function toggleMode() {
 		const nextMode: ThemeMode =
 			mode === "light" ? "dark" : mode === "dark" ? "auto" : "light";
-		setMode(nextMode);
-		applyThemeMode(nextMode);
 		window.localStorage.setItem("theme", nextMode);
+		applyThemeMode(nextMode);
+		emitThemeChange();
 	}
 
 	const label =
