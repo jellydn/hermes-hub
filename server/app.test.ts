@@ -8,6 +8,7 @@ const {
 	acceptHostKey,
 	getServerDetail,
 	runServerAction,
+	runServerHealthCheck,
 	startServerInstall,
 	streamServerInstallEvents,
 	getLatestServerInstallLog,
@@ -37,6 +38,7 @@ const {
 	acceptHostKey: vi.fn(),
 	getServerDetail: vi.fn(),
 	runServerAction: vi.fn(),
+	runServerHealthCheck: vi.fn(),
 	startServerInstall: vi.fn(),
 	streamServerInstallEvents: vi.fn(),
 	getLatestServerInstallLog: vi.fn(),
@@ -70,6 +72,10 @@ vi.mock("./servers", () => ({
 	updateServer,
 	deleteServer,
 	acceptHostKey,
+}));
+
+vi.mock("./health-check", () => ({
+	runServerHealthCheck,
 }));
 
 vi.mock("./server-actions", () => ({
@@ -318,6 +324,53 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(updateServer).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes server health check requests through the health check handler", async () => {
+		runServerHealthCheck.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					healthCheck: {
+						status: "healthy",
+						checkedAt: "2026-06-06T12:00:00.000Z",
+						groups: [],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/health-check",
+			{ method: "POST" },
+		);
+
+		expect(response.status).toBe(200);
+		expect(runServerHealthCheck).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects health check requests over plain HTTP in production", async () => {
+		const previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+
+		try {
+			const response = await apiApp.request(
+				"http://localhost/api/servers/server_123/health-check",
+				{ method: "POST" },
+			);
+
+			expect(response.status).toBe(426);
+			expect(await response.json()).toEqual({
+				error:
+					"HTTPS required. Use a secure connection to access this endpoint.",
+			});
+			expect(runServerHealthCheck).not.toHaveBeenCalled();
+		} finally {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
 	});
 
 	it("routes server action requests through the action handler", async () => {

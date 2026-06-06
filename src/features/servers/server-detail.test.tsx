@@ -55,6 +55,7 @@ vi.mock("lucide-react", () => {
 		Info: MockIcon,
 		LoaderCircle: MockIcon,
 		Pencil: MockIcon,
+		Activity: MockIcon,
 		RefreshCw: MockIcon,
 		Rocket: MockIcon,
 		RotateCcw: MockIcon,
@@ -124,6 +125,203 @@ describe("ServerDetail", () => {
 			screen.getByText(/updated hermes to the latest image successfully/i),
 		).toBeTruthy();
 		expect(screen.getByText(/action failed: host unreachable/i)).toBeTruthy();
+	});
+
+	it("runs a health check and renders grouped results", async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (
+				typeof url === "string" &&
+				url.endsWith("/health-check") &&
+				init?.method === "POST"
+			) {
+				return new Response(
+					JSON.stringify({
+						healthCheck: {
+							status: "warning",
+							checkedAt: "2026-06-06T12:00:00.000Z",
+							groups: [
+								{
+									label: "System",
+									items: [
+										{
+											label: "CPU usage",
+											status: "warning",
+											detail: "88% used",
+										},
+									],
+								},
+								{
+									label: "Security posture",
+									items: [
+										{
+											label: "Firewall",
+											status: "warning",
+											detail: "Status: inactive",
+										},
+									],
+								},
+							],
+						},
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				);
+			}
+
+			return new Response(
+				JSON.stringify({
+					status: "succeeded",
+					action: "restart",
+					message: "Restarted Hermes successfully.",
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		});
+
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /check health/i }));
+
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/servers/server_123/health-check",
+			expect.objectContaining({ method: "POST" }),
+		);
+		expect(screen.getByText(/health check results/i)).toBeTruthy();
+		expect(screen.getByText(/system/i)).toBeTruthy();
+		expect(screen.getByText(/88% used/i)).toBeTruthy();
+		expect(screen.getByText(/status: inactive/i)).toBeTruthy();
+	});
+
+	it("disables the health check button while pending", async () => {
+		let resolveFetch: ((value: Response) => void) | undefined;
+		const pendingFetch = new Promise<Response>((resolve) => {
+			resolveFetch = resolve;
+		});
+
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (
+				typeof url === "string" &&
+				url.endsWith("/health-check") &&
+				init?.method === "POST"
+			) {
+				return pendingFetch;
+			}
+
+			return new Response(
+				JSON.stringify({
+					status: "succeeded",
+					action: "restart",
+					message: "Restarted Hermes successfully.",
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		});
+
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		const button = screen.getByRole("button", { name: /check health/i });
+		fireEvent.click(button);
+
+		expect(
+			screen
+				.getByRole("button", { name: /checking health/i })
+				.getAttribute("disabled"),
+		).toBe("");
+
+		resolveFetch?.(
+			new Response(
+				JSON.stringify({
+					healthCheck: {
+						status: "healthy",
+						checkedAt: "2026-06-06T12:00:00.000Z",
+						groups: [],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		await flushAsyncWork();
+
+		expect(
+			screen
+				.getByRole("button", { name: /check health/i })
+				.getAttribute("disabled"),
+		).toBeNull();
+	});
+
+	it("shows API errors from the health check endpoint", async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (
+				typeof url === "string" &&
+				url.endsWith("/health-check") &&
+				init?.method === "POST"
+			) {
+				return new Response(
+					JSON.stringify({ error: "Health check failed: host unreachable" }),
+					{
+						status: 400,
+						headers: { "content-type": "application/json" },
+					},
+				);
+			}
+
+			return new Response(
+				JSON.stringify({
+					status: "succeeded",
+					action: "restart",
+					message: "Restarted Hermes successfully.",
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		});
+
+		render(
+			<ServerDetail
+				detail={createDetail()}
+				onDetailChange={vi.fn()}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /check health/i }));
+
+		await flushAsyncWork();
+
+		expect(
+			screen.getByText(/health check failed: host unreachable/i),
+		).toBeTruthy();
 	});
 
 	it("requires confirmation before running a server action", async () => {
