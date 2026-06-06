@@ -10,3 +10,8 @@ dist
 !.env.example
 README.md
 docs
+scripts/ralph
+.tsbuildinfo
+coverage
+**/*.test.ts
+**/*.test.tsx
