@@ -10,17 +10,11 @@
 - Impact: Extra client round-trip, no SSR snapshot, inconsistent data-loading pattern across routes, harder to test at route level.
 - Fix approach: Add a route loader mirroring `dashboard.tsx` / `logs.tsx`; keep `useMountEffect` only if intentional refresh is needed.
 
-**Dual rollback-target resolution paths:**
-- Issue: UI rollback sends `detail.rollbackTarget` from audit history (`getRollbackTargetFromHistory`), but the server fallback in `runServerAction` reads `installs.version` via `getRollbackTarget()` — not audit history. AGENTS.md documents `request targetVersion -> latest installs.version -> "latest"`, omitting the UI's audit-history source.
-- Files: `server/server-actions.ts`, `server/server-detail-snapshot.ts`, `src/features/servers/use-server-actions.ts`, `AGENTS.md`
-- Impact: UI-displayed rollback target and server-side auto-resolution can disagree when `installs.version` and audit `imageRef` diverge.
-- Fix approach: Unify on one resolver (e.g. `targetVersion ?? auditHistoryImageRef ?? installs.version ?? "latest"`) and add an integration test for the full chain.
-
-**Install version always forced to `"latest"`:**
-- Issue: `emitInstallEvent` and `upsertInstallRecord` hardcode `version: "latest"` on every install progress write and retry reset.
-- Files: `server/install/sse-stream.ts`, `server/install/records.ts`
-- Impact: Rollback fallback via `installs.version` loses meaningful version tags after install or retry; version tracking is coarse.
-- Fix approach: Preserve existing version on retry unless install succeeds; set version from pulled image tag on completion.
+**Install version not captured from pulled image tag:**
+- Issue: Install progress no longer overwrites `installs.version` on every SSE event or retry reset, but completion still does not persist the actual pulled image tag.
+- Files: `server/install/sse-stream.ts`, `server/install/records.ts`, `server/hermes/runtime.ts`
+- Impact: Rollback fallback via `installs.version` only reflects explicit update/rollback actions, not the tag running after a fresh install.
+- Fix approach: Parse and persist the deployed image tag when install succeeds.
 
 **Large/complex modules:**
 - Issue: Several files mix orchestration, UI, and infrastructure in single modules (>350 lines).
@@ -36,17 +30,7 @@
 
 ## Known Bugs
 
-**Install SSE UI claims auto-reconnect but does not reconnect:**
-- Symptoms: Banner says "HermesHub will reconnect when the browser can reach the server again" on stream drop, but `onerror` only sets `connectionState` to `"error"` — no retry/backoff loop.
-- Files: `src/features/servers/install-progress.tsx`
-- Trigger: Network blip or server idle-timeout (90s) during a running install.
-- Workaround: User must refresh the page or click Retry Install.
-
-**Rollback UI target can disagree with server auto-resolution:**
-- Symptoms: Dashboard shows one rollback target from audit history while a rollback with no explicit `targetVersion` uses `installs.version` on the server.
-- Files: `server/server-detail-snapshot.ts`, `server/server-actions.ts`, `src/features/servers/use-server-actions.ts`
-- Trigger: User updates/rolls back, then reinstalls (resets version to `"latest"`), but audit history still shows prior `imageRef`.
-- Workaround: Pass explicit `targetVersion` (UI already does when `rollbackTarget` is set).
+_None documented at audit time._
 
 ## Security Considerations
 
@@ -55,12 +39,6 @@
 - Files: `server/app.ts`
 - Current mitigation: Documented deployment assumption (single TLS-terminating proxy that overwrites headers); returns 426 on plaintext in production; uses `globalThis.process.env.NODE_ENV` to avoid Vite tree-shaking the guard away.
 - Recommendations: Document required proxy config in deployment guide; consider rejecting requests when `x-forwarded-proto` is absent in production unless direct HTTPS.
-
-**Mutating routes missing `httpsMiddleware`:**
-- Risk: `POST /api/logs/clear` and `POST /api/telegram/disconnect` mutate state without HTTPS enforcement in production.
-- Files: `server/app.ts`, `server/logs.ts`, `server/telegram.ts`
-- Current mitigation: Session auth still required; no credential bodies on these endpoints.
-- Recommendations: Apply `httpsMiddleware` consistently to all mutating routes for defense in depth.
 
 **SSH session credentials held in process memory:**
 - Risk: Passwords/private keys stored plaintext in a module-level `Map` for up to 30 minutes.
@@ -134,9 +112,9 @@
 
 **Rollback target resolution:**
 - Files: `server/server-actions.ts`, `server/server-detail-snapshot.ts`, `server/hermes/runtime.ts`, `src/features/servers/use-server-actions.ts`
-- Why fragile: Three inputs (request param, audit history, `installs.version`) with different consumers; `rollbackGateway` uses `sed` on remote `docker-compose.yml`.
-- Safe modification: Validate tags with `isValidDockerTag` before SSH; keep transaction wrapping audit log + version update in `runServerAction`.
-- Test coverage: Unit tests for explicit target, installs-table fallback, and `getRollbackTargetFromHistory`; no test for UI/server mismatch scenario.
+- Why fragile: `rollbackGateway` uses `sed` on remote `docker-compose.yml`; install version may still lag the running image after fresh installs.
+- Safe modification: Route all resolution through `resolveRollbackTargetFromSources`; validate tags with `isValidDockerTag` before SSH; keep transaction wrapping audit log + version update in `runServerAction`.
+- Test coverage: Unit tests for explicit target, audit-history preference, installs-table fallback, and snapshot display alignment.
 
 **DB transaction boundaries:**
 - Files: `server/telegram.ts`, `server/server-actions.ts`, `server/install/sse-stream.ts`, `AGENTS.md`
@@ -170,10 +148,10 @@
 - Scaling path: Tune `DB_POOL_MAX`; ensure long-running work does not hold connections (current handlers release after await).
 
 **Install SSE idle timeout:**
-- Files: `server/install/sse-stream.ts`, `server/install.ts`
+- Files: `server/install/sse-stream.ts`, `server/install.ts`, `src/features/servers/install-progress.tsx`
 - Current capacity: 90s idle (`IDLE_TIMEOUT_MS`), 30s heartbeat (`HEARTBEAT_INTERVAL_MS`).
-- Limit: Long silent SSH steps rely on heartbeat to stay alive; client must reopen stream after timeout.
-- Scaling path: Client-side reconnect with replay (DB-backed `hydrateInstallEvents` already supports replay).
+- Limit: Long silent SSH steps rely on heartbeat to stay alive; client reconnects with exponential backoff and replays persisted events after timeout.
+- Scaling path: Sticky sessions or shared pub/sub if multiple Hub instances serve the same install stream.
 
 ## Dependencies at Risk
 
@@ -198,13 +176,9 @@
 - Problem: No shared state layer for SSE, credentials, caches, or locks.
 - Blocks: Running multiple HermesHub replicas behind a load balancer.
 
-**Install SSE client auto-reconnect:**
-- Problem: UI messaging promises reconnect; implementation does not retry EventSource.
-- Blocks: Resilient install UX on flaky networks without manual refresh.
-
 **Unified version tracking:**
-- Problem: Install flow, rollback, and audit history use overlapping but inconsistent version fields.
-- Blocks: Reliable one-click rollback to the actual running image tag.
+- Problem: Rollback resolution is unified, but install completion still does not persist the deployed image tag into `installs.version`.
+- Blocks: Reliable one-click rollback to the actual running image tag after a fresh install.
 
 ## Test Coverage Gaps
 
@@ -251,10 +225,10 @@
 - Priority: Low
 
 **Rollback full fallback chain integration:**
-- What's not tested: End-to-end `param → audit history → installs.version → "latest"` in `runServerAction` (CONTEXT.md notes this gap).
-- Files: `server/server-actions.ts`, `server/server-actions.test.ts`
-- Risk: Wrong image rolled back when intermediate sources disagree.
-- Priority: High
+- What's not tested: End-to-end browser flow from snapshot `rollbackTarget` through `POST /actions` to SSH `rollbackGateway` (unit tests cover resolver branches only).
+- Files: `server/server-actions.ts`, `server/server-detail-snapshot.ts`, `server/server-actions.test.ts`
+- Risk: Wiring regressions between snapshot display and action execution.
+- Priority: Medium
 
 **E2E / browser tests:**
 - What's not tested: No Playwright/Cypress suite; SSE and cookie auth flows only partially covered by unit/component tests.
