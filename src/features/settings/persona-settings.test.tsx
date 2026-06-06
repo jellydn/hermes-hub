@@ -143,6 +143,50 @@ describe("PersonaSettings", () => {
 		expect(screen.getByText(/persona deployed to 1\.2\.3\.4/i)).toBeTruthy();
 	});
 
+	it("shows a network error when save fails", async () => {
+		fetchMock.mockRejectedValueOnce(new Error("Network failure"));
+
+		render(<PersonaSettings initialSettings={null} />);
+
+		fireEvent.change(screen.getByLabelText(/persona content/i), {
+			target: { value: "Saved persona" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save persona/i }));
+
+		await flushAsyncWork();
+
+		expect(
+			screen.getByText(
+				/network error\. please check your connection and try again\./i,
+			),
+		).toBeTruthy();
+	});
+
+	it("shows a network error when deploy fails", async () => {
+		fetchMock.mockRejectedValueOnce(new Error("Network failure"));
+
+		render(
+			<PersonaSettings
+				initialSettings={{
+					agentPersona: "You are Hermes.",
+					updatedAt: "2026-06-06T12:00:00.000Z",
+				}}
+				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: /deploy to hermes server/i }),
+		);
+		await flushAsyncWork();
+
+		expect(
+			screen.getByText(
+				/network error\. please check your connection and try again\./i,
+			),
+		).toBeTruthy();
+	});
+
 	it("keeps deploy disabled when no persona is saved", () => {
 		render(
 			<PersonaSettings

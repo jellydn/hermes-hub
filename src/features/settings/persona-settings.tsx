@@ -54,6 +54,11 @@ export function PersonaSettings({
 			setSavedSettings(payload.settings);
 			setPersona(payload.settings.agentPersona);
 			setSaveMessage({ type: "success", text: "Persona saved." });
+		} catch {
+			setSaveMessage({
+				type: "error",
+				text: "Network error. Please check your connection and try again.",
+			});
 		} finally {
 			setIsSaving(false);
 		}

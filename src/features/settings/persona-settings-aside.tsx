@@ -53,6 +53,10 @@ export function PersonaSettingsAside({
 					? `Persona deployed to ${serverHost} at ${deployedAt}. Hermes is restarting...`
 					: `Persona deployed to ${serverHost}. Hermes is restarting...`,
 			);
+		} catch {
+			setDeployError(
+				"Network error. Please check your connection and try again.",
+			);
 		} finally {
 			setIsDeploying(false);
 		}
