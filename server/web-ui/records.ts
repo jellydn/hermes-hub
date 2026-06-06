@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 
-import type { ServerWebUiDeployStatus } from "../../shared/contracts/server-web-ui";
 import { defaultHermesWebUiPort } from "../constants";
 import { decryptSecret } from "../crypto";
 import { getDb } from "../db";
 import { serverWebUi } from "../db/schema";
+import { normalizeDeployStatus } from "./deploy-status";
 import { isStaleDeploy, STALE_DEPLOY_ERROR } from "./stale-deploy";
 
 type DbClient = Pick<ReturnType<typeof getDb>, "insert">;
@@ -29,13 +29,6 @@ export type ServerWebUiUpsertPatch = {
 	deployStartedAt?: Date | null;
 	updatedAt?: Date;
 };
-
-const DEPLOY_STATUSES = new Set<ServerWebUiDeployStatus>([
-	"idle",
-	"deploying",
-	"succeeded",
-	"failed",
-]);
 
 export function getWebUiProxyPath(serverId: string) {
 	return `/api/servers/${serverId}/web-ui/proxy/`;
@@ -105,14 +98,6 @@ export async function upsertServerWebUiRecord(
 			target: serverWebUi.serverId,
 			set: updateSet,
 		});
-}
-
-function normalizeDeployStatus(value: string): ServerWebUiDeployStatus {
-	if (DEPLOY_STATUSES.has(value as ServerWebUiDeployStatus)) {
-		return value as ServerWebUiDeployStatus;
-	}
-
-	return "idle";
 }
 
 function isStaleDeployingRecord(record: ServerWebUiRecord): boolean {
