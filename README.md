@@ -31,6 +31,7 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints without editing env files
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
 - 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to your VPS
+- 🔌 **MCP server manager** — Add stdio or HTTP MCP servers on the Settings page, then deploy them to Hermes `config.yaml`
 - 📈 **Live server monitoring** — Dashboard with install logs and VPS metrics (CPU, memory, disk)
 - ✅ **VPS setup check** — On-demand readiness check on the server detail page (Docker, Hermes workspace, agent health) with plain-language results
 - 🔄 **One-click restart, update, and rollback** — Manage the running agent with audit history
@@ -208,6 +209,10 @@ If the raw provider API works but Hermes returns an authentication error, redepl
 
 HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
 
+### MCP deploy fails with a 502 error
+
+MCP deploy merges your saved servers into the existing `/root/.hermes/config.yaml` on the VPS. If that file is corrupted or not valid YAML, HermesHub refuses to overwrite it and returns a deploy error. Fix or back up the remote config on the VPS first, then deploy again from `/settings`.
+
 ## 🏗️ Architecture
 
 ```
@@ -221,7 +226,7 @@ src/routes/           — TanStack Start file-based routes (11 pages)
 ├── servers.$id.install.tsx  — Live SSE install progress
 ├── ai-provider.tsx    — AI provider selection and API key config
 ├── telegram.tsx       — Telegram bot connection wizard
-├── settings.tsx       — Hermes agent persona editor (SOUL.md)
+├── settings.tsx       — Hermes persona editor and MCP server manager
 ├── logs.tsx           — Install + action log viewer
 └── about.tsx          — About page (Hermes ecosystem context)
 
@@ -239,7 +244,10 @@ server/               — Hono API routes and business logic
 ├── providers.ts      — AI provider save, test, model validation
 ├── telegram.ts       — Telegram bot token verification + connect/disconnect
 ├── settings.ts       — Agent persona save and SOUL.md deploy
+├── settings/mcp.ts   — MCP server CRUD and config.yaml deploy
 ├── hermes/persona.ts — Persona validation and SOUL.md SSH write helper
+├── hermes/mcp-config.ts — Hermes config.yaml SSH read/write helper
+├── hermes/telegram-deploy.ts — Shared Telegram-linked Hermes deploy (SSH, audit, restart)
 ├── logs.ts           — Install + action log queries and clearing
 └── db/               — Drizzle schema, connection, health check
 ```
@@ -270,6 +278,7 @@ Complete documentation for all API endpoints is available in [`docs/api-referenc
 - AI provider configuration and testing
 - Telegram bot connect/disconnect
 - Agent persona save and SOUL.md deploy
+- MCP server CRUD and config.yaml deploy
 
 ## 📄 License
 
@@ -287,10 +296,10 @@ MIT
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/jellydn/hermes-hub/issues).
 
-## 🌟 Show your support
+## Show your support
+
+[![kofi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dunghd)
+[![paypal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/dunghd)
+[![buymeacoffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/dunghd)
 
 Give a ⭐️ if this project helped you!
-
----
-
-_This README was generated with ❤️ by [readme-md-generator](https://github.com/kefranabg/readme-md-generator)_

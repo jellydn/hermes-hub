@@ -16,7 +16,7 @@ const insertAuditValues = vi.fn();
 const withSshConnection = vi.fn();
 const writeSoulMd = vi.fn();
 const restartGateway = vi.fn();
-const resolveTelegramHermesDeployContext = vi.fn();
+const resolveHermesDeployContext = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -46,8 +46,8 @@ vi.mock("./hermes/runtime", () => ({
 	restartGateway,
 }));
 
-vi.mock("./hermes/telegram-deploy-context", () => ({
-	resolveTelegramHermesDeployContext,
+vi.mock("./hermes/deploy-context", () => ({
+	resolveHermesDeployContext,
 }));
 
 describe("persona settings", () => {
@@ -100,13 +100,7 @@ describe("persona settings", () => {
 		writeSoulMd.mockResolvedValue(undefined);
 		restartGateway.mockResolvedValue("restarted");
 
-		resolveTelegramHermesDeployContext.mockResolvedValue({
-			telegramInfo: {
-				botToken: "token",
-				apiServerKey: "key",
-				deployedServerId: "server_1",
-				deployedServerHost: "1.2.3.4",
-			},
+		resolveHermesDeployContext.mockResolvedValue({
 			sshCtx: {
 				session: { session: { id: "session_123" }, user: { id: "user_123" } },
 				server: {
@@ -233,13 +227,13 @@ describe("persona settings", () => {
 			});
 		});
 
-		it("returns 400 when Telegram deployment is unavailable", async () => {
+		it("returns 400 when no deployed Hermes agent exists", async () => {
 			selectLimit.mockResolvedValueOnce([personaRecord]);
-			resolveTelegramHermesDeployContext.mockResolvedValueOnce(
+			resolveHermesDeployContext.mockResolvedValueOnce(
 				new Response(
 					JSON.stringify({
 						error:
-							"No Hermes deployment found. Deploy a Telegram bot to a server first.",
+							"No deployed Hermes agent found. Install Hermes on a server first.",
 					}),
 					{ status: 400 },
 				),
@@ -252,6 +246,24 @@ describe("persona settings", () => {
 			expect(withSshConnection).not.toHaveBeenCalled();
 		});
 
+		it("passes the selected serverId to the deploy resolver", async () => {
+			selectLimit.mockResolvedValueOnce([personaRecord]);
+
+			const { deployPersonaToHermes } = await import("./settings");
+			const response = await deployPersonaToHermes(
+				createContext({ serverId: "server_2" }),
+			);
+
+			expect(response.status).toBe(200);
+			expect(resolveHermesDeployContext).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({
+					user: expect.objectContaining({ id: "user_123" }),
+				}),
+				"server_2",
+			);
+		});
+
 		it("writes SOUL.md, restarts Hermes, and records deploy audit", async () => {
 			selectLimit.mockResolvedValueOnce([personaRecord]);
 
@@ -261,6 +273,7 @@ describe("persona settings", () => {
 			expect(response.status).toBe(200);
 			expect(await response.json()).toMatchObject({
 				status: "deployed",
+				serverId: "server_1",
 				serverHost: "1.2.3.4",
 				deployedAt: expect.any(String),
 			});

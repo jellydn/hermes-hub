@@ -3,19 +3,18 @@ import type { Context } from "hono";
 import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
+import { deployToHermesAgent } from "./hermes/deploy";
 import { writeSoulMd } from "./hermes/persona";
-import { restartGateway } from "./hermes/runtime";
-import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { requireAuthSession } from "./request-guards";
 import { parsePersonaSaveBody } from "./settings/config";
+import { parseDeployServerIdBody } from "./settings/deploy-body";
 import {
 	getCurrentPersonaSettings,
 	getHermesSettingsRecord,
 	upsertHermesSettingsRecord,
 } from "./settings/records";
-import { withSshConnection } from "./ssh";
 
 export type { PersonaSettingsSummary } from "./settings/config";
 export { getCurrentPersonaSettings };
@@ -79,9 +78,6 @@ export async function deployPersonaToHermes(context: Context) {
 		return session;
 	}
 
-	const db = getDb();
-	const ipAddress = getClientIp(context);
-
 	const settingsRecord = await getHermesSettingsRecord(session.user.id);
 	if (!settingsRecord?.agentPersona) {
 		return context.json(
@@ -90,72 +86,36 @@ export async function deployPersonaToHermes(context: Context) {
 		);
 	}
 
-	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
-	if (deployCtx instanceof Response) {
-		return deployCtx;
-	}
-
-	const { sshCtx } = deployCtx;
-
+	let payload: unknown;
 	try {
-		await withSshConnection(
-			{
-				host: sshCtx.server.host,
-				port: sshCtx.server.port,
-				username: sshCtx.server.username,
-				authMethod: sshCtx.authMethod,
-				credential: sshCtx.credential,
-				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-			},
-			async (ssh) => {
-				await writeSoulMd(ssh, settingsRecord.agentPersona);
-				await restartGateway(ssh);
-			},
-		);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Deploy failed";
-
-		try {
-			await insertAuditLog(db, {
-				userId: session.user.id,
-				action: "persona.deploy.failed",
-				serverId: sshCtx.serverId,
-				details: {
-					serverId: sshCtx.serverId,
-					serverHost: sshCtx.server.host,
-					error: message,
-				},
-				ipAddress,
-			});
-		} catch {
-			// Audit logging is historical only; still return deploy failure to client.
-		}
-
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
-
-	const deployedAt = new Date();
-
-	try {
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "persona.deployed",
-			serverId: sshCtx.serverId,
-			details: {
-				serverId: sshCtx.serverId,
-				serverHost: sshCtx.server.host,
-			},
-			ipAddress,
-		});
+		payload = await context.req.json();
 	} catch {
-		// Deploy already succeeded remotely; audit logging is historical only.
+		payload = null;
 	}
 
-	clearDashboardCache();
+	const parsed = parseDeployServerIdBody(payload);
+	if (!parsed.ok) {
+		return context.json({ error: parsed.error }, 400);
+	}
 
-	return context.json({
-		status: "deployed",
-		serverHost: sshCtx.server.host,
-		deployedAt: deployedAt.toISOString(),
+	return deployToHermesAgent(context, session, parsed.serverId, {
+		deploy: async (ssh) => {
+			await writeSoulMd(ssh, settingsRecord.agentPersona);
+		},
+		failureAuditAction: "persona.deploy.failed",
+		successAuditAction: "persona.deployed",
+		buildFailureAuditDetails: (sshCtx, error) => ({
+			serverId: sshCtx.serverId,
+			serverHost: sshCtx.server.host,
+			error,
+		}),
+		buildSuccessAuditDetails: (sshCtx) => ({
+			serverId: sshCtx.serverId,
+			serverHost: sshCtx.server.host,
+		}),
+		buildSuccessResponse: (sshCtx, deployedAt) => ({
+			serverHost: sshCtx.server.host,
+			deployedAt: deployedAt.toISOString(),
+		}),
 	});
 }

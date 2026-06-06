@@ -39,6 +39,20 @@ const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
+const primaryTarget = {
+	serverId: "server_1",
+	label: "Primary",
+	host: "1.2.3.4",
+	installUpdatedAt: "2026-06-06T12:00:00.000Z",
+};
+
+const backupTarget = {
+	serverId: "server_2",
+	label: "Backup",
+	host: "5.6.7.8",
+	installUpdatedAt: "2026-06-05T12:00:00.000Z",
+};
+
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
@@ -61,6 +75,7 @@ describe("PersonaSettings", () => {
 					agentPersona: "You are Hermes.",
 					updatedAt: "2026-06-06T12:00:00.000Z",
 				}}
+				deploymentTargets={[primaryTarget]}
 			/>,
 		);
 
@@ -84,7 +99,7 @@ describe("PersonaSettings", () => {
 			),
 		);
 
-		render(<PersonaSettings initialSettings={null} />);
+		render(<PersonaSettings initialSettings={null} deploymentTargets={[]} />);
 
 		fireEvent.change(screen.getByLabelText(/persona content/i), {
 			target: { value: "Saved persona" },
@@ -103,16 +118,18 @@ describe("PersonaSettings", () => {
 		expect(screen.getByText(/^persona saved\.$/i)).toBeTruthy();
 	});
 
-	it("disables deploy until persona is saved and shows deploy success", async () => {
+	it("renders a deployment target selector and posts serverId on deploy", async () => {
 		render(
 			<PersonaSettings
 				initialSettings={{
 					agentPersona: "You are Hermes.",
 					updatedAt: "2026-06-06T12:00:00.000Z",
 				}}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget, backupTarget]}
 			/>,
 		);
+
+		expect(screen.getByLabelText(/deploy target/i)).toBeTruthy();
 
 		const deployButton = screen.getByRole("button", {
 			name: /deploy to hermes server/i,
@@ -123,7 +140,8 @@ describe("PersonaSettings", () => {
 			new Response(
 				JSON.stringify({
 					status: "deployed",
-					serverHost: "1.2.3.4",
+					serverId: "server_2",
+					serverHost: "5.6.7.8",
 					deployedAt: "2026-06-06T12:00:00.000Z",
 				}),
 				{
@@ -133,20 +151,42 @@ describe("PersonaSettings", () => {
 			),
 		);
 
+		fireEvent.change(screen.getByLabelText(/deploy target/i), {
+			target: { value: "server_2" },
+		});
 		fireEvent.click(deployButton);
 		await flushAsyncWork();
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/settings/persona/deploy",
-			expect.objectContaining({ method: "POST" }),
+			expect.objectContaining({
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ serverId: "server_2" }),
+			}),
 		);
-		expect(screen.getByText(/persona deployed to 1\.2\.3\.4/i)).toBeTruthy();
+		expect(screen.getByText(/persona deployed to 5\.6\.7\.8/i)).toBeTruthy();
+	});
+
+	it("shows install-first messaging when no deployment targets exist", () => {
+		render(
+			<PersonaSettings
+				initialSettings={{
+					agentPersona: "You are Hermes.",
+					updatedAt: "2026-06-06T12:00:00.000Z",
+				}}
+				deploymentTargets={[]}
+			/>,
+		);
+
+		expect(screen.getByText(/install hermes on a server first/i)).toBeTruthy();
+		expect(screen.queryByLabelText(/deploy target/i)).toBeNull();
 	});
 
 	it("shows a network error when save fails", async () => {
 		fetchMock.mockRejectedValueOnce(new Error("Network failure"));
 
-		render(<PersonaSettings initialSettings={null} />);
+		render(<PersonaSettings initialSettings={null} deploymentTargets={[]} />);
 
 		fireEvent.change(screen.getByLabelText(/persona content/i), {
 			target: { value: "Saved persona" },
@@ -171,7 +211,7 @@ describe("PersonaSettings", () => {
 					agentPersona: "You are Hermes.",
 					updatedAt: "2026-06-06T12:00:00.000Z",
 				}}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget]}
 			/>,
 		);
 
@@ -191,7 +231,7 @@ describe("PersonaSettings", () => {
 		render(
 			<PersonaSettings
 				initialSettings={null}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget]}
 			/>,
 		);
 

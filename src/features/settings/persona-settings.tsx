@@ -2,19 +2,19 @@ import { LoaderCircle, Save } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
+import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import type { PersonaSettingsSummary } from "../../../server/settings/config";
 
 import { PersonaSettingsAside } from "./persona-settings-aside";
 
 type PersonaSettingsProps = {
 	initialSettings: PersonaSettingsSummary | null;
-	telegramDeploy?: TelegramDeployInfo | null;
+	deploymentTargets: HermesDeploymentTarget[];
 };
 
 export function PersonaSettings({
 	initialSettings,
-	telegramDeploy,
+	deploymentTargets,
 }: PersonaSettingsProps) {
 	const [savedSettings, setSavedSettings] =
 		useState<PersonaSettingsSummary | null>(initialSettings);
@@ -129,7 +129,7 @@ export function PersonaSettings({
 
 			<PersonaSettingsAside
 				savedSettings={savedSettings}
-				telegramDeploy={telegramDeploy}
+				deploymentTargets={deploymentTargets}
 				hasSavedPersona={hasSavedPersona}
 			/>
 		</div>
