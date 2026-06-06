@@ -23,11 +23,15 @@ vi.mock("./web-ui/reachability", () => ({
 }));
 
 import {
+	hermesAgentSourcePathInContainer,
+	hermesContainerName,
+	hermesWebUiAgentHostDir,
 	hermesWebUiContainerGid,
 	hermesWebUiContainerUid,
 	managedComposeVolumeHome,
 } from "./constants";
 import {
+	buildWebUiAgentSourceSyncCommand,
 	deployManagedCompose,
 	resolveManagedComposeDeployPolicy,
 } from "./managed-compose-deploy";
@@ -77,20 +81,88 @@ describe("resolveManagedComposeDeployPolicy", () => {
 		);
 	});
 
-	it("prepares sudo docker volume directories before Web UI deploy", async () => {
-		const execCommand = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+	it("builds the agent source sync command with copy and chown steps", () => {
+		expect(buildWebUiAgentSourceSyncCommand()).toBe(
+			[
+				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
+				`sudo rm -rf ${hermesWebUiAgentHostDir}`,
+				`sudo docker cp ${hermesContainerName}:${hermesAgentSourcePathInContainer} ${hermesWebUiAgentHostDir}`,
+				`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
+			].join(" && "),
+		);
+	});
+
+	it("syncs Hermes agent source before Web UI deploy", async () => {
+		const execCommand = vi
+			.fn()
+			.mockResolvedValueOnce({ code: 0, stdout: `${hermesContainerName}\n` })
+			.mockResolvedValueOnce({ code: 0, stdout: "" })
+			.mockResolvedValueOnce({ code: 0, stdout: "" });
 		const policy = resolveManagedComposeDeployPolicy("web-ui", {
 			webUiPort: 8787,
 		});
 
 		await policy.preSshCommands?.({ execCommand } as never);
 
-		expect(execCommand).toHaveBeenCalledWith(
-			[
-				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
-				`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
-			].join(" && "),
+		expect(execCommand).toHaveBeenNthCalledWith(
+			1,
+			`sudo docker ps --filter name=^/${hermesContainerName}$ --filter status=running --format '{{.Names}}'`,
 		);
+		expect(execCommand).toHaveBeenNthCalledWith(
+			2,
+			`sudo docker exec ${hermesContainerName} test -d ${hermesAgentSourcePathInContainer}`,
+		);
+		expect(execCommand).toHaveBeenNthCalledWith(
+			3,
+			buildWebUiAgentSourceSyncCommand(),
+		);
+	});
+
+	it("fails clearly when the Hermes container is not running", async () => {
+		const execCommand = vi.fn().mockResolvedValueOnce({ code: 0, stdout: "" });
+		const policy = resolveManagedComposeDeployPolicy("web-ui", {
+			webUiPort: 8787,
+		});
+
+		await expect(
+			policy.preSshCommands?.({ execCommand } as never),
+		).rejects.toThrow(/Hermes container is not running/i);
+	});
+
+	it("fails clearly when Hermes agent source is missing in the container", async () => {
+		const execCommand = vi
+			.fn()
+			.mockResolvedValueOnce({ code: 0, stdout: `${hermesContainerName}\n` })
+			.mockResolvedValueOnce({ code: 1, stderr: "directory missing" });
+		const policy = resolveManagedComposeDeployPolicy("web-ui", {
+			webUiPort: 8787,
+		});
+
+		await expect(
+			policy.preSshCommands?.({ execCommand } as never),
+		).rejects.toThrow(
+			new RegExp(
+				`Hermes agent source \\(${hermesAgentSourcePathInContainer}\\) is missing`,
+			),
+		);
+	});
+
+	it("fails clearly when agent source sync fails", async () => {
+		const execCommand = vi
+			.fn()
+			.mockResolvedValueOnce({ code: 0, stdout: `${hermesContainerName}\n` })
+			.mockResolvedValueOnce({ code: 0, stdout: "" })
+			.mockResolvedValueOnce({
+				code: 1,
+				stderr: "docker cp failed: no such directory",
+			});
+		const policy = resolveManagedComposeDeployPolicy("web-ui", {
+			webUiPort: 8787,
+		});
+
+		await expect(
+			policy.preSshCommands?.({ execCommand } as never),
+		).rejects.toThrow(/docker cp failed/i);
 	});
 });
 

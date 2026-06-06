@@ -1,6 +1,9 @@
 import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
 import {
+	hermesAgentSourcePathInContainer,
+	hermesContainerName,
+	hermesWebUiAgentHostDir,
 	hermesWebUiContainerGid,
 	hermesWebUiContainerUid,
 	managedComposeVolumeHome,
@@ -34,6 +37,42 @@ export type ManagedComposeDeployPolicyOptions = {
 	webUiPort?: number;
 	providerModel?: string;
 };
+
+export function buildWebUiAgentSourceSyncCommand() {
+	return [
+		`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
+		`sudo rm -rf ${hermesWebUiAgentHostDir}`,
+		`sudo docker cp ${hermesContainerName}:${hermesAgentSourcePathInContainer} ${hermesWebUiAgentHostDir}`,
+		`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
+	].join(" && ");
+}
+
+async function syncWebUiAgentSource(ssh: NodeSSH) {
+	const runningResult = await ssh.execCommand(
+		`sudo docker ps --filter name=^/${hermesContainerName}$ --filter status=running --format '{{.Names}}'`,
+	);
+	if (!runningResult.stdout?.trim().includes(hermesContainerName)) {
+		throw new Error(
+			"Hermes container is not running. Install or restart Hermes before deploying the Web UI.",
+		);
+	}
+
+	const sourceResult = await ssh.execCommand(
+		`sudo docker exec ${hermesContainerName} test -d ${hermesAgentSourcePathInContainer}`,
+	);
+	if (sourceResult.code !== 0) {
+		throw new Error(
+			`Hermes agent source (${hermesAgentSourcePathInContainer}) is missing in the Hermes container.`,
+		);
+	}
+
+	const syncResult = await ssh.execCommand(buildWebUiAgentSourceSyncCommand());
+	if (syncResult.code !== 0) {
+		throw new Error(
+			syncResult.stderr || "Failed to sync Hermes agent source for the Web UI",
+		);
+	}
+}
 
 export function resolveManagedComposeDeployPolicy(
 	intent: ManagedComposeDeployIntent,
@@ -77,20 +116,7 @@ export function resolveManagedComposeDeployPolicy(
 				composeServices: ["hermes-webui"],
 				pullImages: true,
 				forceRecreate: true,
-				preSshCommands: async (ssh) => {
-					const prepResult = await ssh.execCommand(
-						[
-							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
-							`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
-						].join(" && "),
-					);
-					if (prepResult.code !== 0) {
-						throw new Error(
-							prepResult.stderr ||
-								"Failed to create Hermes Web UI volume directories",
-						);
-					}
-				},
+				preSshCommands: syncWebUiAgentSource,
 				extraSshCommands: async (ssh) => {
 					await assertWebUiReachable(ssh, webUiPort);
 				},
