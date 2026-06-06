@@ -142,6 +142,32 @@ export async function deployServerWebUi(context: Context) {
 		webUiPort,
 		existingEnabled,
 		ipAddress,
+	}).catch(async (error: unknown) => {
+		console.error("Web UI background deploy task failed", {
+			serverId: ctx.serverId,
+			error,
+		});
+
+		const message = error instanceof Error ? error.message : "Deploy failed";
+
+		try {
+			await upsertServerWebUiRecord(db, {
+				serverId: ctx.serverId,
+				enabled: existingEnabled,
+				port: webUiPort,
+				deployStatus: "failed",
+				deployError: message,
+				deployStartedAt: null,
+				updatedAt: new Date(),
+			});
+		} catch (persistError) {
+			console.error("Failed to persist Web UI deploy failure", {
+				serverId: ctx.serverId,
+				persistError,
+			});
+		} finally {
+			releaseWebUiDeployLock(ctx.serverId);
+		}
 	});
 
 	return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
