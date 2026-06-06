@@ -1,5 +1,4 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-
 import type {
 	ServerActionHistoryItem,
 	ServerActionResult,
@@ -7,8 +6,17 @@ import type {
 	ServerDetailSnapshot,
 } from "../src/lib/server-detail";
 import { getDb } from "./db";
-import { auditLogs, installs } from "./db/schema";
-import { getOwnedServerRecord, type OwnedServerRecord } from "./server-records";
+import { auditLogs } from "./db/schema";
+import { getLatestInstallForServer } from "./install/records";
+import { formatActionLabel } from "./lib/action-labels";
+import { getNonEmptyString } from "./lib/non-empty-string";
+import {
+	getOwnedServerRecord,
+	type OwnedServerRecord,
+	readOsInfoValue,
+} from "./server-records";
+import { getResolvedServerWebUiRecord } from "./web-ui/records";
+import { buildWebUiSnapshot } from "./web-ui/snapshot";
 
 type AuditRecord = {
 	id: string;
@@ -30,9 +38,10 @@ export async function getServerDetailSnapshot(input: {
 		return null;
 	}
 
-	const [installRecord, actionHistory] = await Promise.all([
-		getLatestInstallRecord(input.serverId),
+	const [installRecord, actionHistory, webUiRecord] = await Promise.all([
+		getLatestInstallForServer(input.serverId),
 		getServerActionHistory(input.serverId),
+		getResolvedServerWebUiRecord(input.serverId),
 	]);
 	const rollbackTarget = getRollbackTargetFromHistory(actionHistory);
 
@@ -47,6 +56,7 @@ export async function getServerDetailSnapshot(input: {
 			: null,
 		actionHistory,
 		rollbackTarget,
+		webUi: webUiRecord ? buildWebUiSnapshot(input.serverId, webUiRecord) : null,
 	};
 }
 
@@ -85,21 +95,6 @@ function buildServerSnapshot(serverRecord: OwnedServerRecord) {
 	};
 }
 
-async function getLatestInstallRecord(serverId: string) {
-	const [installRecord] = await getDb()
-		.select({
-			status: installs.status,
-			version: installs.version,
-			updatedAt: installs.updatedAt,
-		})
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	return installRecord ?? null;
-}
-
 async function getServerActionHistory(serverId: string) {
 	const records = await getDb()
 		.select({
@@ -132,7 +127,7 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		result,
 		createdAt: record.createdAt.toISOString(),
 		message: readActionMessage(details, action, result),
-		imageRef: readStringValue(details, "imageRef"),
+		imageRef: getNonEmptyString(details.imageRef),
 	};
 }
 
@@ -153,7 +148,7 @@ function readActionMessage(
 	action: ServerActionType,
 	result: ServerActionResult,
 ) {
-	const explicitMessage = readStringValue(details, "message");
+	const explicitMessage = getNonEmptyString(details.message);
 	if (explicitMessage) {
 		return explicitMessage;
 	}
@@ -163,28 +158,6 @@ function readActionMessage(
 	}
 
 	return `${formatActionLabel(action)} completed.`;
-}
-
-function formatActionLabel(action: ServerActionType) {
-	if (action === "restart") {
-		return "Restart agent";
-	}
-
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	return "Rollback";
-}
-
-function readOsInfoValue(osInfo: Record<string, unknown>, key: string) {
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function readStringValue(details: Record<string, unknown>, key: string) {
-	const value = details[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

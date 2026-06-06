@@ -43,6 +43,41 @@
       "when": 1780496778000,
       "tag": "0005_next_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780580000000,
+      "tag": "0006_server_web_ui",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780660000000,
+      "tag": "0007_drop_installs_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780720420058,
+      "tag": "0008_woozy_obadiah_stane",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780721037900,
+      "tag": "0009_same_jackal",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780725298672,
+      "tag": "0010_thankful_black_knight",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
-
 import { getSessionCredential } from "./credentials";
 import { decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { servers } from "./db/schema";
+import { getNonEmptyString } from "./lib/non-empty-string";
 import type { SshAuthMethod, VerifiedServerInfo } from "./ssh";
 
 /** Minimal server fields needed for SSH connections (no ownership/status). */
@@ -117,8 +117,7 @@ export function readOsInfoValue(
 	if (!osInfo) {
 		return null;
 	}
-	const value = osInfo[key];
-	return typeof value === "string" && value.length > 0 ? value : null;
+	return getNonEmptyString(osInfo[key]);
 }
 
 export function resolveServerSshConfig(

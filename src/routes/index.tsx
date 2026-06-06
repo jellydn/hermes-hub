@@ -12,8 +12,10 @@ import {
 	ShieldCheck,
 	Sparkles,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
 import { getCurrentSession } from "@/lib/session";
 
 const launchPillars = [
@@ -79,6 +81,13 @@ const launchChecklist = [
 ] as const;
 
 export const Route = createFileRoute("/")({
+	beforeLoad: async () => {
+		const session = await getCurrentSession();
+
+		if (session) {
+			throw redirect({ to: "/dashboard" });
+		}
+	},
 	head: () => ({
 		meta: [
 			{
@@ -91,15 +100,24 @@ export const Route = createFileRoute("/")({
 			},
 		],
 	}),
-	beforeLoad: async () => {
-		const session = await getCurrentSession();
-
-		if (session) {
-			throw redirect({ to: "/dashboard" });
-		}
-	},
 	component: App,
 });
+
+const communityTextLinkClassName =
+	"font-semibold text-[var(--sea-ink)] underline decoration-[var(--chip-line)] underline-offset-4";
+
+function HermesCommunityTextLink({ children }: { children: ReactNode }) {
+	return (
+		<a
+			href={hermesCommunitySiteUrl}
+			target="_blank"
+			rel="noopener noreferrer"
+			className={communityTextLinkClassName}
+		>
+			{children}
+		</a>
+	);
+}
 
 function App() {
 	return (
@@ -115,11 +133,11 @@ function App() {
 							Your personal AI agent in 5 minutes. Zero terminal required.
 						</h1>
 						<p className="max-w-2xl text-base text-[var(--sea-ink-soft)] sm:text-lg">
-							HermesHub turns the Hermes Agent install flow into a guided
-							product for real users, not just terminal power users. Connect a
-							VPS, verify it is compatible, install Hermes with live progress,
-							add your AI provider, and start chatting through Telegram or the
-							dashboard.
+							HermesHub is the VPS setup and control layer: connect a server,
+							verify compatibility, install Hermes with live progress, wire your
+							AI provider, and manage restart, update, and rollback from one
+							dashboard. For the browser-based Hermes Web UI, see{" "}
+							<HermesCommunityTextLink>get-hermes.ai</HermesCommunityTextLink>.
 						</p>
 
 						<div className="mt-8 flex flex-wrap gap-3">
@@ -137,11 +155,11 @@ function App() {
 							</Button>
 							<Button asChild variant="secondary">
 								<a
-									href="https://hermes-agent.nousresearch.com/"
+									href={hermesCommunitySiteUrl}
 									target="_blank"
 									rel="noopener noreferrer"
 								>
-									Explore Hermes Agent
+									Explore Hermes
 									<ExternalLink />
 								</a>
 							</Button>
@@ -189,9 +207,12 @@ function App() {
 						A guided path from server access to first chat.
 					</h2>
 					<p className="mt-3 max-w-3xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-						The official Hermes site shows what the agent can become. HermesHub
-						is the missing onboarding layer that gets users there without SSH,
-						Docker, or Linux guesswork.
+						The{" "}
+						<HermesCommunityTextLink>
+							community Hermes site
+						</HermesCommunityTextLink>{" "}
+						shows what the agent can become. HermesHub is the onboarding layer
+						that gets users there without SSH, Docker, or Linux guesswork.
 					</p>
 				</div>
 
@@ -214,6 +235,66 @@ function App() {
 							</p>
 						</article>
 					))}
+				</div>
+			</section>
+
+			<section className="island-shell mt-8 rounded-[2rem] px-6 py-8 sm:px-8">
+				<div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+					<div>
+						<p className="island-kicker mb-2">HermesHub + Hermes Web UI</p>
+						<h2 className="display-title text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-4xl">
+							Set up on HermesHub, use Hermes in the browser.
+						</h2>
+						<p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--sea-ink-soft)] sm:text-base">
+							HermesHub handles the VPS work: connect your server, watch install
+							progress, deploy your AI provider, finish Telegram setup, and
+							manage restart, update, and rollback from one dashboard.
+						</p>
+						<p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--sea-ink-soft)] sm:text-base">
+							After setup, the Hermes Web UI described on{" "}
+							<HermesCommunityTextLink>get-hermes.ai</HermesCommunityTextLink>{" "}
+							is the browser interface for using Hermes day to day — sessions,
+							chat, workspace files, and tool calls in a three-panel layout.
+						</p>
+					</div>
+
+					<div className="rounded-[1.75rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-5">
+						<p className="island-kicker mb-3">What each tool does</p>
+						<ul className="space-y-4 text-sm text-[var(--sea-ink-soft)]">
+							<li>
+								<p className="mb-1 font-semibold text-[var(--sea-ink)]">
+									HermesHub
+								</p>
+								<p className="m-0 leading-6">
+									VPS setup, install progress, provider deploy, Telegram
+									onboarding, and day-two server controls.
+								</p>
+							</li>
+							<li>
+								<p className="mb-1 font-semibold text-[var(--sea-ink)]">
+									Hermes Web UI
+								</p>
+								<p className="m-0 leading-6">
+									The browser interface for chatting with Hermes, browsing
+									sessions, and working with files after your agent is running.
+								</p>
+							</li>
+						</ul>
+						<Button
+							asChild
+							variant="secondary"
+							className="mt-5 w-full sm:w-auto"
+						>
+							<a
+								href={hermesCommunitySiteUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								Visit the Hermes community site
+								<ExternalLink />
+							</a>
+						</Button>
+					</div>
 				</div>
 			</section>
 
@@ -308,11 +389,11 @@ function App() {
 						</Button>
 						<Button asChild variant="secondary">
 							<a
-								href="https://hermes-agent.nousresearch.com/"
+								href={hermesCommunitySiteUrl}
 								target="_blank"
 								rel="noopener noreferrer"
 							>
-								Read the Hermes overview
+								Explore the Hermes community site
 								<ExternalLink />
 							</a>
 						</Button>

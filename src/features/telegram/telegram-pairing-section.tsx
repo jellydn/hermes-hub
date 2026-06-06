@@ -5,26 +5,16 @@ import {
 	UserCheck,
 	XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useReducer } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useMountEffect } from "@/lib/use-mount-effect";
 
 import { inputClassName } from "./telegram-input-class";
-
-type TelegramPairingSummary = {
-	pending: Array<{
-		code: string;
-		userId: string;
-		userName: string;
-		ageMinutes: number;
-	}>;
-	approved: Array<{
-		userId: string;
-		userName: string;
-		approvedAt: number | null;
-	}>;
-};
+import {
+	initialTelegramPairingState,
+	telegramPairingReducer,
+} from "./telegram-pairing-state";
 
 type TelegramPairingSectionProps = {
 	isDeployed: boolean;
@@ -35,13 +25,10 @@ const PAIRING_REFRESH_INTERVAL_MS = 10_000;
 export function TelegramPairingSection({
 	isDeployed,
 }: TelegramPairingSectionProps) {
-	const [pairingCode, setPairingCode] = useState("");
-	const [pairings, setPairings] = useState<TelegramPairingSummary | null>(null);
-	const [isLoadingPairings, setIsLoadingPairings] = useState(false);
-	const [isApprovingPairing, setIsApprovingPairing] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [successMessage, setSuccessMessage] = useState<string | null>(null);
-	const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+	const [state, dispatch] = useReducer(
+		telegramPairingReducer,
+		initialTelegramPairingState,
+	);
 
 	async function loadPairings({ quiet = false }: { quiet?: boolean } = {}) {
 		if (!isDeployed) {
@@ -49,43 +36,45 @@ export function TelegramPairingSection({
 		}
 
 		if (!quiet) {
-			setIsLoadingPairings(true);
-			setError(null);
+			dispatch({ type: "load_started" });
 		}
 
 		try {
 			const response = await fetch("/api/telegram/pairings");
 			const payload = (await response.json().catch(() => null)) as {
 				error?: string;
-				pairings?: TelegramPairingSummary;
+				pairings?: typeof state.pairings;
 			} | null;
 
 			if (!response.ok || !payload?.pairings) {
 				if (!quiet) {
-					setError(payload?.error ?? "Unable to load pairings");
+					dispatch({
+						type: "load_failed",
+						error: payload?.error ?? "Unable to load pairings",
+					});
 				}
 				return;
 			}
 
-			setPairings(payload.pairings);
-			setLastLoadedAt(new Date());
+			dispatch({ type: "load_succeeded", pairings: payload.pairings });
 		} finally {
 			if (!quiet) {
-				setIsLoadingPairings(false);
+				dispatch({ type: "load_finished" });
 			}
 		}
 	}
 
 	async function handleApprovePairing(selectedCode?: string) {
-		const code = (selectedCode ?? pairingCode).trim().toUpperCase();
+		const code = (selectedCode ?? state.pairingCode).trim().toUpperCase();
 		if (!code) {
-			setError("Pairing code is required.");
+			dispatch({
+				type: "approve_failed",
+				error: "Pairing code is required.",
+			});
 			return;
 		}
 
-		setIsApprovingPairing(true);
-		setError(null);
-		setSuccessMessage(null);
+		dispatch({ type: "approve_started" });
 
 		try {
 			const response = await fetch("/api/telegram/pairings/approve", {
@@ -100,16 +89,18 @@ export function TelegramPairingSection({
 			} | null;
 
 			if (!response.ok || !payload?.approved) {
-				setError(payload?.error ?? "Unable to approve pairing");
+				dispatch({
+					type: "approve_failed",
+					error: payload?.error ?? "Unable to approve pairing",
+				});
 				return;
 			}
 
 			const displayName = payload.approved.userName || payload.approved.userId;
-			setPairingCode("");
-			setSuccessMessage(`Approved ${displayName || "Telegram user"}.`);
+			dispatch({ type: "approve_succeeded", displayName });
 			void loadPairings({ quiet: true });
 		} finally {
-			setIsApprovingPairing(false);
+			dispatch({ type: "approve_finished" });
 		}
 	}
 
@@ -161,31 +152,36 @@ export function TelegramPairingSection({
 							<input
 								id="pairingCode"
 								type="text"
-								value={pairingCode}
+								value={state.pairingCode}
 								onChange={(event) =>
-									setPairingCode(event.currentTarget.value.toUpperCase())
+									dispatch({
+										type: "set_pairing_code",
+										code: event.currentTarget.value.toUpperCase(),
+									})
 								}
 								onKeyDown={(event) => {
-									if (event.key === "Enter" && !isApprovingPairing) {
+									if (event.key === "Enter" && !state.isApprovingPairing) {
 										void handleApprovePairing();
 									}
 								}}
 								className={inputClassName}
 								placeholder="RGTS8S2R"
-								disabled={isApprovingPairing}
+								disabled={state.isApprovingPairing}
 								maxLength={8}
 							/>
 							<Button
 								type="button"
 								onClick={() => void handleApprovePairing()}
-								disabled={isApprovingPairing || !pairingCode.trim()}
+								disabled={state.isApprovingPairing || !state.pairingCode.trim()}
 							>
-								{isApprovingPairing ? (
+								{state.isApprovingPairing ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
 								) : (
 									<UserCheck className="h-4 w-4" />
 								)}
-								<span>{isApprovingPairing ? "Approving..." : "Approve"}</span>
+								<span>
+									{state.isApprovingPairing ? "Approving..." : "Approve"}
+								</span>
 							</Button>
 						</div>
 					</div>
@@ -195,46 +191,48 @@ export function TelegramPairingSection({
 							type="button"
 							variant="secondary"
 							onClick={() => void loadPairings()}
-							disabled={isLoadingPairings}
+							disabled={state.isLoadingPairings}
 						>
-							{isLoadingPairings ? (
+							{state.isLoadingPairings ? (
 								<LoaderCircle className="h-4 w-4 animate-spin" />
 							) : (
 								<RefreshCw className="h-4 w-4" />
 							)}
-							<span>{isLoadingPairings ? "Refreshing..." : "Refresh"}</span>
+							<span>
+								{state.isLoadingPairings ? "Refreshing..." : "Refresh"}
+							</span>
 						</Button>
-						{lastLoadedAt ? (
+						{state.lastLoadedAt ? (
 							<span className="self-center text-xs text-[var(--sea-ink-soft)]">
-								Updated {lastLoadedAt.toLocaleTimeString()}
+								Updated {state.lastLoadedAt.toLocaleTimeString()}
 							</span>
 						) : null}
 					</div>
 
-					{successMessage ? (
+					{state.successMessage ? (
 						<div className="mt-4 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
 							<div className="flex items-center gap-3">
 								<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-								<span>{successMessage}</span>
+								<span>{state.successMessage}</span>
 							</div>
 						</div>
 					) : null}
 
-					{error ? (
+					{state.error ? (
 						<div className="mt-4 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{error}
+							{state.error}
 						</div>
 					) : null}
 
-					{pairings ? (
+					{state.pairings ? (
 						<div className="mt-5 grid gap-3 sm:grid-cols-2">
 							<div className="rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface-weak)] px-4 py-3">
 								<div className="text-xs font-semibold text-[var(--sea-ink-soft)]">
 									Pending requests
 								</div>
-								{pairings.pending.length > 0 ? (
+								{state.pairings.pending.length > 0 ? (
 									<ul className="mt-3 m-0 space-y-2 p-0 text-sm text-[var(--sea-ink)]">
-										{pairings.pending.map((request) => (
+										{state.pairings.pending.map((request) => (
 											<li
 												key={`${request.userId}-${request.code}`}
 												className="flex list-none flex-col gap-2 rounded-2xl border border-[var(--line)] bg-white/60 p-3 sm:flex-row sm:items-center sm:justify-between"
@@ -256,7 +254,7 @@ export function TelegramPairingSection({
 													onClick={() =>
 														void handleApprovePairing(request.code)
 													}
-													disabled={isApprovingPairing}
+													disabled={state.isApprovingPairing}
 													aria-label={`Approve ${request.code}`}
 												>
 													<UserCheck className="h-4 w-4" />
@@ -276,9 +274,9 @@ export function TelegramPairingSection({
 								<div className="text-xs font-semibold text-[var(--sea-ink-soft)]">
 									Approved users
 								</div>
-								{pairings.approved.length > 0 ? (
+								{state.pairings.approved.length > 0 ? (
 									<ul className="mt-3 m-0 space-y-2 p-0 text-sm text-[var(--sea-ink)]">
-										{pairings.approved.map((user) => (
+										{state.pairings.approved.map((user) => (
 											<li key={user.userId} className="list-none">
 												{user.userName || user.userId}
 											</li>

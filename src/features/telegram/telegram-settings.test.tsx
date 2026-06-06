@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import {
 	act,
@@ -7,7 +7,39 @@ import {
 	render,
 	screen,
 } from "@testing-library/react";
+import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		CheckCircle2: MockIcon,
+		LoaderCircle: MockIcon,
+		PlugZap: MockIcon,
+		RefreshCw: MockIcon,
+		Rocket: MockIcon,
+		Send: MockIcon,
+		Unplug: MockIcon,
+		UserCheck: MockIcon,
+		Users: MockIcon,
+		XCircle: MockIcon,
+	};
+});
+
+vi.mock("@/components/ui/button", () => ({
+	Button: ({
+		asChild: _asChild,
+		children,
+		disabled,
+		onClick,
+		type = "button",
+		...props
+	}: ComponentPropsWithoutRef<"button"> & { asChild?: boolean }) => (
+		<button type={type} disabled={disabled} onClick={onClick} {...props}>
+			{children}
+		</button>
+	),
+}));
 
 import { TelegramSettings } from "./telegram-settings";
 

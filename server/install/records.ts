@@ -49,6 +49,21 @@ export async function upsertInstallRecord(serverId: string) {
 	return updatedInstall;
 }
 
+export async function getLatestInstallForServer(serverId: string) {
+	const [installRecord] = await getDb()
+		.select({
+			status: installs.status,
+			version: installs.version,
+			updatedAt: installs.updatedAt,
+		})
+		.from(installs)
+		.where(eq(installs.serverId, serverId))
+		.orderBy(desc(installs.createdAt))
+		.limit(1);
+
+	return installRecord ?? null;
+}
+
 export async function getServerForInstall(input: {
 	serverId: string;
 	userId: string;

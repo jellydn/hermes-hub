@@ -7,21 +7,16 @@ import {
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StatusIcon } from "@/components/ui/status-icon";
+import {
+	formatInstallTimestamp,
+	type InstallEvent,
+	type InstallStatus,
+	mergeInstallSnapshot,
+	quantizeInstallProgress,
+} from "@/features/servers/install-snapshot";
 import { useMountEffect } from "@/lib/use-mount-effect";
 import { cn } from "@/lib/utils";
-
-export type InstallStatus = "pending" | "running" | "succeeded" | "failed";
-
-export type InstallEvent = {
-	installId: string;
-	serverId: string;
-	step: string;
-	progress: number;
-	message: string;
-	status: InstallStatus;
-	timestamp: string;
-	error?: string;
-};
 
 type InstallSnapshot = {
 	events: InstallEvent[];
@@ -39,6 +34,15 @@ const initialSnapshot: InstallSnapshot = {
 	status: "pending",
 	error: null,
 };
+
+function getStatusIconType(
+	status: InstallStatus,
+): "success" | "error" | "info" | "neutral" {
+	if (status === "succeeded") return "success";
+	if (status === "failed") return "error";
+	if (status === "running") return "info";
+	return "neutral";
+}
 
 export function ServerInstallProgress({
 	serverId,
@@ -261,7 +265,13 @@ export function ServerInstallProgress({
 						</div>
 						<div>
 							<dt className="text-[var(--sea-ink-soft)]">Current status</dt>
-							<dd className="mt-1 font-medium capitalize">{snapshot.status}</dd>
+							<dd className="mt-1 font-medium capitalize flex items-center gap-2">
+								<StatusIcon
+									status={getStatusIconType(snapshot.status)}
+									size={3.5}
+								/>
+								{snapshot.status}
+							</dd>
 						</div>
 						<div>
 							<dt className="text-[var(--sea-ink-soft)]">Last update</dt>
@@ -320,45 +330,10 @@ export function ServerInstallProgress({
 	);
 }
 
-export function mergeInstallSnapshot(
-	current: InstallSnapshot,
-	nextEvent: InstallEvent,
-) {
-	const hasEvent = current.events.some(
-		(event) => getInstallEventKey(event) === getInstallEventKey(nextEvent),
+function getInstallEventKey(event: InstallEvent) {
+	return [event.installId, event.timestamp, event.step, event.message].join(
+		":",
 	);
-
-	const nextEvents = hasEvent ? current.events : [...current.events, nextEvent];
-
-	return {
-		events: nextEvents,
-		status: nextEvent.status,
-		error:
-			nextEvent.error ??
-			(nextEvent.status === "failed" ? nextEvent.message : null),
-	};
-}
-
-export function quantizeInstallProgress(progress: number) {
-	if (progress <= 0) {
-		return 0;
-	}
-
-	return Math.min(100, Math.ceil(progress / 25) * 25);
-}
-
-export function formatInstallTimestamp(timestamp: string) {
-	const parsed = new Date(timestamp);
-
-	if (Number.isNaN(parsed.getTime())) {
-		return timestamp;
-	}
-
-	return parsed.toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
 }
 
 function parseInstallEvent(messageEvent: MessageEvent<string>) {
@@ -367,12 +342,6 @@ function parseInstallEvent(messageEvent: MessageEvent<string>) {
 	} catch {
 		return null;
 	}
-}
-
-function getInstallEventKey(event: InstallEvent) {
-	return [event.installId, event.timestamp, event.step, event.message].join(
-		":",
-	);
 }
 
 function getInstallHeadline(status: InstallStatus) {

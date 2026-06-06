@@ -4,7 +4,7 @@ import {
 	type InstallEvent,
 	mergeInstallSnapshot,
 	quantizeInstallProgress,
-} from "./install-progress";
+} from "./install-snapshot";
 
 describe("install progress helpers", () => {
 	it("deduplicates replayed SSE events while preserving the latest status", () => {

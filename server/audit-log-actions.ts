@@ -11,10 +11,6 @@ export const FINISHED_SERVER_ACTION_NAMES = [
 	"server.action.rollback.failed",
 ] as const;
 
-export const SERVER_ACTION_NAME_SET = new Set<string>(
-	FINISHED_SERVER_ACTION_NAMES,
-);
-
 export const USER_INITIATED_ACTION_NAMES = [
 	"server.action.restart.succeeded",
 	"server.action.restart.failed",

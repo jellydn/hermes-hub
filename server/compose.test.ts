@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { buildHermesComposeContent } from "./compose";
+import {
+	defaultHermesImage,
+	hermesWebUiAgentDir,
+	hermesWebUiContainerGid,
+	hermesWebUiContainerUid,
+	hermesWebUiDefaultWorkspace,
+	hermesWebUiImage,
+	hermesWebUiStateDir,
+	hermesWebUiTrustForwardedHost,
+	hermesWebUiTrustForwardedProto,
+	managedComposeVolumeHome,
+} from "./constants";
 
 describe("buildHermesComposeContent", () => {
 	it("renders a minimal compose with no optional inputs", () => {
@@ -133,6 +145,96 @@ describe("buildHermesComposeContent", () => {
 
 		expect(env).toContain("HAS_VALUE=present");
 		expect(env).not.toContain("EMPTY_VALUE=");
+	});
+
+	it("adds the hermes-webui service when web UI is enabled", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+			},
+		});
+		expect(result).toMatchSnapshot();
+
+		const parsed = parse(result);
+		expect(parsed.services.hermes.image).toBe(defaultHermesImage);
+		expect(parsed.services["hermes-webui"]).toEqual(
+			expect.objectContaining({
+				image: hermesWebUiImage,
+				container_name: "hermes-webui",
+				ports: ["127.0.0.1:8787:8787"],
+				volumes: [
+					`${managedComposeVolumeHome}/.hermes:/home/hermeswebui/.hermes`,
+					`${managedComposeVolumeHome}/.hermes/hermes-agent:${hermesWebUiAgentDir}:ro`,
+					`${managedComposeVolumeHome}/workspace:/workspace`,
+				],
+			}),
+		);
+		expect(parsed.services["hermes-webui"].environment).toEqual(
+			expect.arrayContaining([
+				"HERMES_WEBUI_HOST=0.0.0.0",
+				"HERMES_WEBUI_PORT=8787",
+				"HERMES_WEBUI_PASSWORD=generated-password",
+				`HERMES_WEBUI_STATE_DIR=${hermesWebUiStateDir}`,
+				`HERMES_WEBUI_DEFAULT_WORKSPACE=${hermesWebUiDefaultWorkspace}`,
+				`HERMES_WEBUI_AGENT_DIR=${hermesWebUiAgentDir}`,
+				`WANTED_UID=${hermesWebUiContainerUid}`,
+				`WANTED_GID=${hermesWebUiContainerGid}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_HOST=${hermesWebUiTrustForwardedHost}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_PROTO=${hermesWebUiTrustForwardedProto}`,
+			]),
+		);
+	});
+
+	it("advertises the public origin for reverse-proxy CSRF when provided", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "https://hermes-hub.itman.fyi",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(env).toEqual(
+			expect.arrayContaining([
+				`HERMES_WEBUI_TRUST_FORWARDED_HOST=${hermesWebUiTrustForwardedHost}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_PROTO=${hermesWebUiTrustForwardedProto}`,
+				"HERMES_WEBUI_ALLOWED_ORIGINS=https://hermes-hub.itman.fyi",
+			]),
+		);
+	});
+
+	it("normalizes the public origin and strips any path or query", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "https://hermes-hub.itman.fyi/dashboard?tab=web-ui",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(env).toContain(
+			"HERMES_WEBUI_ALLOWED_ORIGINS=https://hermes-hub.itman.fyi",
+		);
+	});
+
+	it("omits HERMES_WEBUI_ALLOWED_ORIGINS when the public origin is invalid", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+				publicOrigin: "not-a-url",
+			},
+		});
+
+		const parsed = parse(result);
+		const env = parsed.services["hermes-webui"].environment as string[];
+
+		expect(
+			env.some((entry) => entry.startsWith("HERMES_WEBUI_ALLOWED_ORIGINS=")),
+		).toBe(false);
 	});
 
 	it("sets API_SERVER_KEY independently of TELEGRAM_BOT_TOKEN", () => {

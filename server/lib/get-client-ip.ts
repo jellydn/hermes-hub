@@ -26,10 +26,13 @@ export function getClientIp(context: Context): string | null {
 		process.env.TRUSTED_PROXY_COUNT ?? "1",
 		10,
 	);
-	const ips = forwarded
-		.split(",")
-		.map((ip) => ip.trim())
-		.filter(Boolean);
+	const ips: string[] = [];
+	for (const part of forwarded.split(",")) {
+		const ip = part.trim();
+		if (ip) {
+			ips.push(ip);
+		}
+	}
 
 	if (ips.length === 0) {
 		return null;

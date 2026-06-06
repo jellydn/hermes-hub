@@ -1,17 +1,25 @@
 import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { tableAuditLogs, tableInstallEvents, tableInstalls, tableServers } =
-	vi.hoisted(() => ({
-		tableInstalls: { kind: "installs" },
-		tableInstallEvents: { kind: "installEvents" },
-		tableServers: { kind: "servers" },
-		tableAuditLogs: { kind: "auditLogs" },
-	}));
-
-const getAuthSession = vi.fn();
-const deleteWhere = vi.fn();
-const selectFrom = vi.fn();
+const {
+	tableAuditLogs,
+	tableInstallEvents,
+	tableInstalls,
+	tableServers,
+	getAuthSession,
+	deleteWhere,
+	selectFrom,
+	transaction,
+} = vi.hoisted(() => ({
+	tableInstalls: { kind: "installs" },
+	tableInstallEvents: { kind: "installEvents" },
+	tableServers: { kind: "servers" },
+	tableAuditLogs: { kind: "auditLogs" },
+	getAuthSession: vi.fn(),
+	deleteWhere: vi.fn(),
+	selectFrom: vi.fn(),
+	transaction: vi.fn(),
+}));
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -21,6 +29,7 @@ vi.mock("./db", () => ({
 	getDb: () => ({
 		select: () => ({ from: selectFrom }),
 		delete: () => ({ where: deleteWhere }),
+		transaction,
 	}),
 }));
 
@@ -31,15 +40,21 @@ vi.mock("./db/schema", () => ({
 	auditLogs: tableAuditLogs,
 }));
 
+import { clearLogs, getLogs } from "./logs";
+
 describe("logs handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		deleteWhere.mockResolvedValue(undefined);
+		transaction.mockImplementation(async (fn) =>
+			fn({
+				delete: () => ({ where: deleteWhere }),
+			}),
+		);
 	});
 
 	it("returns unauthorized when reading logs without a session", async () => {
 		getAuthSession.mockResolvedValueOnce(null);
-		const { getLogs } = await import("./logs");
 
 		const response = await getLogs(createContext());
 		const payload = await response.json();
@@ -122,7 +137,6 @@ describe("logs handlers", () => {
 			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
 		});
 
-		const { getLogs } = await import("./logs");
 		const response = await getLogs(createContext());
 		const payload = await response.json();
 
@@ -138,6 +152,67 @@ describe("logs handlers", () => {
 		});
 	});
 
+	it("omits installs with no persisted events", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () =>
+									Promise.resolve([
+										{
+											id: "install_empty",
+											status: "succeeded",
+											step: "start-containers",
+											createdAt: new Date("2026-05-26T03:00:00.000Z"),
+											updatedAt: new Date("2026-05-26T03:05:00.000Z"),
+											serverLabel: "Staging VPS",
+										},
+									]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () => Promise.resolve([]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
+
+		const response = await getLogs(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload.logs.installLogs).toEqual([]);
+	});
+
 	it("clears persisted action logs and install events", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
 		selectFrom.mockReturnValueOnce({
@@ -147,13 +222,94 @@ describe("logs handlers", () => {
 			}),
 		});
 
-		const { clearLogs } = await import("./logs");
 		const response = await clearLogs(createContext());
 		const payload = await response.json();
 
 		expect(response.status).toBe(200);
 		expect(payload).toEqual({ status: "cleared" });
+		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(deleteWhere).toHaveBeenCalledTimes(2);
+	});
+
+	it("limits install events per install instead of using one global cap", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const eventLimitCalls: number[] = [];
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () =>
+									Promise.resolve([
+										{
+											id: "install_a",
+											status: "succeeded",
+											step: "done",
+											createdAt: new Date("2026-06-01T00:00:00.000Z"),
+											updatedAt: new Date("2026-06-01T00:05:00.000Z"),
+											serverLabel: "A",
+										},
+										{
+											id: "install_b",
+											status: "failed",
+											step: "done",
+											createdAt: new Date("2026-06-02T00:00:00.000Z"),
+											updatedAt: new Date("2026-06-02T00:05:00.000Z"),
+											serverLabel: "B",
+										},
+									]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: (count: number) => {
+								eventLimitCalls.push(count);
+								return Promise.resolve([
+									{
+										installId: "install_a",
+										stepName: "install-docker",
+										message: "Installing Docker",
+										createdAt: new Date("2026-06-01T00:00:00.000Z"),
+									},
+								]);
+							},
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () => Promise.resolve([]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
+
+		const response = await getLogs(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(eventLimitCalls).toEqual([200, 200]);
+		expect(payload.logs.installLogs).toHaveLength(2);
 	});
 });
 

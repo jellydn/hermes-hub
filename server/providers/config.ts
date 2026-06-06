@@ -89,9 +89,7 @@ export function isApiKeyRequired(provider: AiProviderId): boolean {
 	return !getAiProviderOption(provider)?.requiresBaseUrl;
 }
 
-export function deriveCustomProviderApiKeyEnvVar(
-	baseUrl: string | null | undefined,
-) {
+function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
 	if (!baseUrl) {
 		return null;
 	}
@@ -107,10 +105,13 @@ export function deriveCustomProviderApiKeyEnvVar(
 		return null;
 	}
 
-	const labels = hostname
-		.split(".")
-		.map((label) => label.trim())
-		.filter(Boolean);
+	const labels: string[] = [];
+	for (const part of hostname.split(".")) {
+		const label = part.trim();
+		if (label) {
+			labels.push(label);
+		}
+	}
 	while (labels[0] === "api" || labels[0] === "www") {
 		labels.shift();
 	}

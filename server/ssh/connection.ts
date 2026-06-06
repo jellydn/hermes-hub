@@ -36,8 +36,10 @@ export async function verifyServerConnection(
 	input: SshConnectionInput,
 ): Promise<VerifiedServerConnection> {
 	return withSshConnection(input, async (ssh, hostKey) => {
-		const osRelease = await execStrict(ssh, "cat /etc/os-release");
-		const architecture = await execStrict(ssh, "uname -m");
+		const [osRelease, architecture] = await Promise.all([
+			execStrict(ssh, "cat /etc/os-release"),
+			execStrict(ssh, "uname -m"),
+		]);
 
 		const verified = parseAndValidateOs(osRelease.stdout, architecture.stdout);
 
@@ -54,10 +56,9 @@ export async function verifyServerConnection(
  * Do NOT set `hostHash` here: ssh2 would pre-hash the raw key before calling the verifier,
  * but we need the raw Buffer to derive the OpenSSH SHA256 fingerprint ourselves.
  */
-export async function withSshConnection<T>(
+export async function establishSshConnection(
 	input: SshConnectionInput,
-	run: (ssh: NodeSSH, hostKey: HostKeyInfo) => Promise<T>,
-): Promise<T> {
+): Promise<{ ssh: NodeSSH; hostKey: HostKeyInfo }> {
 	const ssh = new NodeSSH();
 	let capturedHostKey: HostKeyInfo | undefined;
 
@@ -105,11 +106,22 @@ export async function withSshConnection<T>(
 		throw normalized;
 	}
 
+	if (!capturedHostKey) {
+		ssh.dispose();
+		throw new Error("Host key fingerprint not available");
+	}
+
+	return { ssh, hostKey: capturedHostKey };
+}
+
+export async function withSshConnection<T>(
+	input: SshConnectionInput,
+	run: (ssh: NodeSSH, hostKey: HostKeyInfo) => Promise<T>,
+): Promise<T> {
+	const { ssh, hostKey } = await establishSshConnection(input);
+
 	try {
-		if (!capturedHostKey) {
-			throw new Error("Host key fingerprint not available");
-		}
-		return await run(ssh, capturedHostKey);
+		return await run(ssh, hostKey);
 	} finally {
 		ssh.dispose();
 	}

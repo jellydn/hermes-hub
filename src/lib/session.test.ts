@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { requireSession } from "./session";
-
-vi.mock("@tanstack/react-router", () => ({
+const { redirect } = vi.hoisted(() => ({
 	redirect: vi.fn((options: unknown) => options),
 }));
+
+vi.mock("@tanstack/react-router", () => ({
+	redirect,
+}));
+
+import { requireSession } from "./session";
 
 describe("requireSession", () => {
 	beforeEach(() => {
@@ -12,8 +16,6 @@ describe("requireSession", () => {
 	});
 
 	it("redirects to /login when there is no active session", async () => {
-		const { redirect } = await import("@tanstack/react-router");
-
 		await expect(
 			requireSession("/dashboard", async () => null as never),
 		).rejects.toEqual({

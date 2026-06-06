@@ -1,5 +1,8 @@
+import type { NodeSSH } from "node-ssh";
+
 import { buildHermesComposeContent } from "../compose";
 import { getDb } from "../db";
+import { composePull, composeUpAll } from "../hermes/runtime";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "../ssh";
 import { emitInstallEvent } from "./sse-stream";
@@ -9,6 +12,7 @@ export type InstallStep = {
 	progress: number;
 	message: string;
 	command: string;
+	runner?: (ssh: NodeSSH) => Promise<void>;
 };
 
 export type ServerCredentialRecord = {
@@ -62,13 +66,15 @@ export const installSteps: InstallStep[] = [
 		id: "pull-image",
 		progress: 80,
 		message: "Pulling Hermes image",
-		command: "cd ~/hermes && sudo docker compose pull",
+		command: "compose_pull",
+		runner: composePull,
 	},
 	{
 		id: "start-containers",
 		progress: 100,
 		message: "Starting Hermes containers",
-		command: "cd ~/hermes && sudo docker compose up -d",
+		command: "compose_up_all",
+		runner: composeUpAll,
 	},
 ];
 
@@ -76,57 +82,7 @@ export const installStepIds = installSteps.map((step) => step.id);
 
 export async function runInstallWorkflow(input: InstallWorkflowInput) {
 	try {
-		await emitInstallEvent({
-			installId: input.installId,
-			serverId: input.serverId,
-			runId: input.runId,
-			step: installSteps[0]?.id ?? "pending",
-			progress: 0,
-			message: "Install queued",
-			status: "pending",
-		});
-
-		await withSshConnection(
-			{
-				host: input.server.host,
-				port: input.server.port,
-				username: input.server.username,
-				authMethod: input.authMethod,
-				credential: input.credential,
-				expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
-			},
-			async (ssh) => {
-				for (const step of installSteps) {
-					const result = await ssh.execCommand(step.command);
-
-					if (result.code !== 0) {
-						throw new Error(result.stderr || `Command failed: ${step.id}`);
-					}
-
-					const detail = result.stdout.trim();
-					await emitInstallEvent({
-						installId: input.installId,
-						serverId: input.serverId,
-						runId: input.runId,
-						step: step.id,
-						progress: step.progress,
-						message: detail ? `${step.message}: ${detail}` : step.message,
-						status: step.progress === 100 ? "succeeded" : "running",
-					});
-				}
-			},
-		);
-
-		await insertAuditLog(getDb(), {
-			userId: input.userId,
-			action: "server.install.succeeded",
-			serverId: input.serverId,
-			details: {
-				serverId: input.serverId,
-				installId: input.installId,
-			},
-			ipAddress: input.ipAddress,
-		});
+		await executeInstallWorkflow(input);
 	} catch (error) {
 		const message = normalizeInstallError(error);
 
@@ -153,6 +109,89 @@ export async function runInstallWorkflow(input: InstallWorkflowInput) {
 			ipAddress: input.ipAddress,
 		});
 	}
+}
+
+async function executeInstallWorkflow(input: InstallWorkflowInput) {
+	// react-doctor-disable-next-line react-doctor/async-parallel
+	await emitInstallEvent({
+		installId: input.installId,
+		serverId: input.serverId,
+		runId: input.runId,
+		step: installSteps[0]?.id ?? "pending",
+		progress: 0,
+		message: "Install queued",
+		status: "pending",
+	});
+
+	await withSshConnection(
+		{
+			host: input.server.host,
+			port: input.server.port,
+			username: input.server.username,
+			authMethod: input.authMethod,
+			credential: input.credential,
+			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
+		},
+		async (ssh) => {
+			await runInstallStepsOverSsh(ssh, input);
+		},
+	);
+
+	await insertAuditLog(getDb(), {
+		userId: input.userId,
+		action: "server.install.succeeded",
+		serverId: input.serverId,
+		details: {
+			serverId: input.serverId,
+			installId: input.installId,
+		},
+		ipAddress: input.ipAddress,
+	});
+}
+
+async function runInstallStepsOverSsh(
+	ssh: NodeSSH,
+	input: InstallWorkflowInput,
+) {
+	let index = 0;
+	while (index < installSteps.length) {
+		const step = installSteps[index];
+		if (!step) {
+			break;
+		}
+
+		// react-doctor-disable-next-line react-doctor/async-await-in-loop
+		await runOneInstallStep(ssh, step, input);
+		index += 1;
+	}
+}
+
+async function runOneInstallStep(
+	ssh: NodeSSH,
+	step: InstallStep,
+	_input: InstallWorkflowInput,
+) {
+	let detail = "";
+
+	if (step.runner) {
+		await step.runner(ssh);
+	} else {
+		const result = await ssh.execCommand(step.command);
+		if (result.code !== 0) {
+			throw new Error(result.stderr || `Command failed: ${step.id}`);
+		}
+		detail = result.stdout.trim();
+	}
+
+	await emitInstallEvent({
+		installId: _input.installId,
+		serverId: _input.serverId,
+		runId: _input.runId,
+		step: step.id,
+		progress: step.progress,
+		message: detail ? `${step.message}: ${detail}` : step.message,
+		status: step.progress === 100 ? "succeeded" : "running",
+	});
 }
 
 function normalizeInstallError(error: unknown) {

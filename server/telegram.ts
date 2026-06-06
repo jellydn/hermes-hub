@@ -3,14 +3,13 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { getAuthSession } from "./auth";
-import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
-import { deployComposeViaSsh } from "./deploy";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { shellQuote, withSshConnection } from "./ssh";
@@ -98,29 +97,14 @@ export async function connectTelegram(context: Context) {
 	const ipAddress = getClientIp(context);
 
 	try {
-		await db
-			.update(telegramConfigs)
-			.set({ isActive: false })
-			.where(eq(telegramConfigs.userId, session.user.id));
-
-		await db.insert(telegramConfigs).values({
-			userId: session.user.id,
-			botToken: encryptSecret(botToken),
-			botUsername: bot.username,
-			isActive: true,
-			deployedServerId: null,
-			deployedServerHost: null,
-			apiServerKey: null,
-		});
-
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "telegram.connected",
-			details: {
+		await db.transaction(async (tx) => {
+			await persistTelegramConnection(tx, {
+				userId: session.user.id,
+				botToken,
 				botUsername: bot.username,
 				botId: bot.id,
-			},
-			ipAddress,
+				ipAddress,
+			});
 		});
 
 		clearDashboardCache();
@@ -198,9 +182,9 @@ export async function deployTelegramToServer(context: Context) {
 		);
 	}
 
-	let decryptedToken: string;
+	let telegramBotToken: string;
 	try {
-		decryptedToken = decryptSecret(record.botToken);
+		telegramBotToken = decryptSecret(record.botToken);
 	} catch {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
@@ -228,48 +212,20 @@ export async function deployTelegramToServer(context: Context) {
 	const { authMethod, credential } = sshResult;
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
-	let providerEnvVars: Record<string, string> | undefined;
-	let hermesModel: string | undefined;
-	try {
-		const providerConfig = await getProviderDeployConfig(session.user.id);
-		providerEnvVars = providerConfig?.envVars;
-		hermesModel = providerConfig?.model;
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Failed to resolve provider config";
 
-		await insertAuditLog(db, {
+	try {
+		await deployManagedCompose({
+			intent: "telegram",
 			userId: session.user.id,
-			action: "telegram.deploy.failed",
 			serverId: serverRecord.id,
-			details: {
-				serverId: serverRecord.id,
-				error: message,
-			},
-			ipAddress,
-		});
-
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
-
-	const composeContent = buildHermesComposeContent({
-		apiServerKey,
-		telegramBotToken: decryptedToken,
-		providerEnvVars,
-		hermesModel,
-	});
-
-	try {
-		await deployComposeViaSsh({
 			host: serverRecord.host,
 			port: serverRecord.port,
 			username: serverRecord.username,
 			authMethod,
 			credential,
-			composeContent,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			apiServerKey,
+			telegramBotToken,
 		});
 
 		// Persist deploy state in a single transaction so that the config update
@@ -459,4 +415,48 @@ export async function testTelegramBot(context: Context) {
 		const message = error instanceof Error ? error.message : "Test failed";
 		return context.json({ error: message }, 502);
 	}
+}
+
+type TelegramPersistenceInput = {
+	userId: string;
+	botToken: string;
+	botUsername: string;
+	botId: number;
+	ipAddress: string | null;
+};
+
+type TelegramPersistenceWriter = Pick<
+	ReturnType<typeof getDb>,
+	"update" | "insert"
+>;
+
+async function persistTelegramConnection(
+	writer: TelegramPersistenceWriter,
+	input: TelegramPersistenceInput,
+) {
+	// react-doctor-disable-next-line react-doctor/async-parallel
+	await writer
+		.update(telegramConfigs)
+		.set({ isActive: false })
+		.where(eq(telegramConfigs.userId, input.userId));
+
+	await writer.insert(telegramConfigs).values({
+		userId: input.userId,
+		botToken: encryptSecret(input.botToken),
+		botUsername: input.botUsername,
+		isActive: true,
+		deployedServerId: null,
+		deployedServerHost: null,
+		apiServerKey: null,
+	});
+
+	await insertAuditLog(writer, {
+		userId: input.userId,
+		action: "telegram.connected",
+		details: {
+			botUsername: input.botUsername,
+			botId: input.botId,
+		},
+		ipAddress: input.ipAddress,
+	});
 }

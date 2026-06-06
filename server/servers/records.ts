@@ -25,26 +25,6 @@ export type ServerActionRecord = {
 	createdAt: Date;
 };
 
-export async function getStoredServerCredential(input: {
-	serverId: string;
-	userId: string;
-}) {
-	const [serverRecord] = await getDb()
-		.select({
-			id: servers.id,
-			authMethod: servers.authMethod,
-			encryptedCredential: servers.encryptedCredential,
-			storeCredential: servers.storeCredential,
-		})
-		.from(servers)
-		.where(
-			and(eq(servers.id, input.serverId), eq(servers.userId, input.userId)),
-		)
-		.limit(1);
-
-	return serverRecord ?? null;
-}
-
 export async function getOwnedServerListRecords(userId: string) {
 	const records = await getDb()
 		.select({

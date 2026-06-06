@@ -1,27 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
-const selectLimit = vi.fn();
-const selectThen = vi.fn();
-const selectPromise = vi.fn();
-const dbSelect = vi.fn();
+const { ownedServerRecord, selectLimit, dbSelect, getLatestInstallForServer } =
+	vi.hoisted(() => {
+		const ownedServerRecord = {
+			id: "server_123",
+			label: "Production",
+			host: "203.0.113.10",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: "encrypted-secret",
+			storeCredential: true,
+			status: "connected",
+			osInfo: {
+				name: "Ubuntu 22.04",
+				version: "22.04",
+				supportLevel: "supported",
+			},
+			hostKeyFingerprint: "SHA256:abc",
+			hostKeyAlgorithm: "ssh-ed25519",
+		};
 
-const ownedServerRecord = {
-	id: "server_123",
-	label: "Production",
-	host: "203.0.113.10",
-	port: 22,
-	username: "root",
-	authMethod: "password",
-	encryptedCredential: "encrypted-secret",
-	storeCredential: true,
-	status: "connected",
-	osInfo: { name: "Ubuntu 22.04", version: "22.04", supportLevel: "supported" },
-	hostKeyFingerprint: "SHA256:abc",
-	hostKeyAlgorithm: "ssh-ed25519",
-};
+		return {
+			ownedServerRecord,
+			selectLimit: vi.fn(),
+			dbSelect: vi.fn(),
+			getLatestInstallForServer: vi.fn(),
+		};
+	});
 
 vi.mock("./db", () => ({
 	getDb: () => ({
@@ -47,19 +53,42 @@ vi.mock("./db/schema", () => ({
 	},
 }));
 
+vi.mock("./install/records", () => ({
+	getLatestInstallForServer,
+}));
+
 vi.mock("./server-records", () => ({
 	getOwnedServerRecord: vi.fn().mockResolvedValue(ownedServerRecord),
+	readOsInfoValue: (
+		osInfo: Record<string, unknown> | null | undefined,
+		key: string,
+	) => {
+		if (!osInfo) {
+			return null;
+		}
+		const value = osInfo[key];
+		return typeof value === "string" && value.length > 0 ? value : null;
+	},
 }));
+
+const { getResolvedServerWebUiRecord } = vi.hoisted(() => ({
+	getResolvedServerWebUiRecord: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("./web-ui/records", () => ({
+	getResolvedServerWebUiRecord,
+	getWebUiProxyPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy/`,
+	getWebUiProxyLandingPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy/chat`,
+}));
+
+import { getServerDetailSnapshot } from "./server-detail-snapshot";
 
 describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		selectFrom.mockReset();
-		selectWhere.mockReset();
-		selectOrderBy.mockReset();
 		selectLimit.mockReset();
-		selectThen.mockReset();
-		selectPromise.mockReset();
 		dbSelect.mockReset();
 
 		// Every call to getDb().select() returns a full query chain:
@@ -73,6 +102,7 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		}));
 
 		selectLimit.mockResolvedValue([]);
+		getLatestInstallForServer.mockResolvedValue(null);
 	});
 
 	it("queries the action history through the indexed serverId column", async () => {
@@ -137,7 +167,7 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 			action: "server.action.restart.succeeded",
 			details: { serverId: `server_other_${i}`, message: "noise" },
 			createdAt: new Date(
-				`2026-02-${String((i % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
+				`2026-06-${String((i % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
 			),
 		}));
 		const all = [...finished, ...noise].sort(
@@ -145,15 +175,9 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		);
 		expect(all.length).toBe(230);
 
-		// First .limit() = getLatestInstallRecord (empty)
-		// Second .limit() = getServerActionHistory
-		selectLimit
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce(all.slice(0, 5));
+		getLatestInstallForServer.mockResolvedValueOnce(null);
+		selectLimit.mockResolvedValueOnce(all.slice(0, 5));
 
-		const { getServerDetailSnapshot } = await import(
-			"./server-detail-snapshot"
-		);
 		const snapshot = await getServerDetailSnapshot({
 			serverId: "server_123",
 			userId: "user_123",
@@ -169,5 +193,82 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		// details->>'serverId', so this exercises the new path. We verify
 		// the call shape: limit(5) was used.
 		expect(selectLimit).toHaveBeenCalledWith(5);
+	});
+});
+
+describe("getServerDetailSnapshot webUi deploy status", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		selectLimit.mockReset();
+		dbSelect.mockReset();
+		dbSelect.mockImplementation(() => ({
+			from: () => ({
+				where: () => ({
+					orderBy: () => ({ limit: selectLimit }),
+				}),
+			}),
+		}));
+		selectLimit.mockResolvedValue([]);
+		getLatestInstallForServer.mockResolvedValue(null);
+	});
+
+	it("includes deploying Web UI records in the snapshot", async () => {
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
+			enabled: false,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "deploying",
+			deployError: null,
+			deployStartedAt: new Date(),
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi?.deployStatus).toBe("deploying");
+		expect(snapshot?.webUi?.deployError).toBe(null);
+	});
+
+	it("includes failed Web UI records with deploy error", async () => {
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
+			enabled: false,
+			encryptedPassword: null,
+			port: 8787,
+			deployStatus: "failed",
+			deployError: "SSH timeout",
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi?.deployStatus).toBe("failed");
+		expect(snapshot?.webUi?.deployError).toBe("SSH timeout");
+	});
+
+	it("includes succeeded Web UI records for enabled servers", async () => {
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
+			enabled: true,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi?.deployStatus).toBe("succeeded");
+		expect(snapshot?.webUi?.enabled).toBe(true);
 	});
 });

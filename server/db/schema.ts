@@ -140,7 +140,6 @@ export const installs = pgTable(
 			.references(() => servers.id, { onDelete: "cascade" }),
 		status: text("status").notNull(),
 		step: text("step").notNull(),
-		log: text("log"),
 		version: text("version"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
@@ -215,6 +214,28 @@ export const telegramConfigs = pgTable(
 			.notNull(),
 	},
 	(table) => [index("telegram_configs_user_id_idx").on(table.userId)],
+);
+
+export const serverWebUi = pgTable(
+	"server_web_ui",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		serverId: text("server_id")
+			.notNull()
+			.references(() => servers.id, { onDelete: "cascade" })
+			.unique(),
+		enabled: boolean("enabled").default(false).notNull(),
+		encryptedPassword: text("encrypted_password"),
+		port: integer("port").notNull().default(8787),
+		deployStatus: text("deploy_status").notNull().default("idle"),
+		deployError: text("deploy_error"),
+		deployStartedAt: timestamp("deploy_started_at", { withTimezone: true }),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	() => [],
 );
 
 export const auditLogs = pgTable(

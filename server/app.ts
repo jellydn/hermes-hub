@@ -28,6 +28,12 @@ import {
 	listTelegramPairings,
 	testTelegramBot,
 } from "./telegram";
+import {
+	deployServerWebUi,
+	getServerWebUiStatus,
+	proxyServerWebUi,
+	revealServerWebUiPassword,
+} from "./web-ui";
 
 // 3 requests per 5 minutes per email for magic link sending
 const magicLinkRateLimiter = new RateLimiterMemory({
@@ -207,6 +213,16 @@ apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
+apiApp.get("/servers/:id/web-ui", httpsMiddleware, getServerWebUiStatus);
+apiApp.post("/servers/:id/web-ui/deploy", httpsMiddleware, deployServerWebUi);
+apiApp.get(
+	"/servers/:id/web-ui/password",
+	httpsMiddleware,
+	revealServerWebUiPassword,
+);
+// Root path redirects to chat; the catch-all handles nested proxied assets.
+apiApp.all("/servers/:id/web-ui/proxy", httpsMiddleware, proxyServerWebUi);
+apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);

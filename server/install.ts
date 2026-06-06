@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { installEvents, installs } from "./db/schema";
-import { buildLogLinesFromEvents } from "./install/legacy-log";
+import { buildLogLinesFromEvents } from "./install/log-lines";
 import { getServerForInstall, upsertInstallRecord } from "./install/records";
 import {
 	ensureInstallStream,
@@ -142,17 +142,13 @@ export async function streamServerInstallEvents(context: Context) {
 	const state = await ensureInstallStream(serverId);
 
 	return streamSSE(context, async (stream) => {
-		// Replay past events
-		for (const event of state.events) {
-			await stream.writeSSE({
-				event: "install-progress",
-				data: JSON.stringify(event),
-			});
-		}
-
 		if (state.status === "succeeded" || state.status === "failed") {
+			await replayInstallEvents(stream, state.events);
 			return;
 		}
+
+		// Replay past events in order before subscribing to live updates.
+		await replayInstallEvents(stream, state.events);
 
 		// 90-second idle timeout: close the stream if no event is written
 		// and no heartbeat write has succeeded. The heartbeat doubles as a
@@ -255,8 +251,6 @@ export async function getLatestServerInstallLog(context: Context) {
 			status: installs.status,
 			step: installs.step,
 			updatedAt: installs.updatedAt,
-			createdAt: installs.createdAt,
-			legacyLog: installs.log,
 		})
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
@@ -283,11 +277,7 @@ export async function getLatestServerInstallLog(context: Context) {
 		.where(eq(installEvents.installId, installRecord.id))
 		.orderBy(installEvents.createdAt);
 
-	const logLines = buildLogLinesFromEvents(
-		events,
-		installRecord.legacyLog,
-		installRecord.createdAt,
-	);
+	const logLines = buildLogLinesFromEvents(events);
 
 	return context.json({
 		installId: installRecord.id,
@@ -296,4 +286,24 @@ export async function getLatestServerInstallLog(context: Context) {
 		log: logLines.join("\n") || null,
 		updatedAt: installRecord.updatedAt,
 	});
+}
+
+async function replayInstallEvents(
+	stream: Parameters<Parameters<typeof streamSSE>[1]>[0],
+	events: InstallEvent[],
+): Promise<void> {
+	let index = 0;
+	while (index < events.length) {
+		const event = events[index];
+		if (!event) {
+			break;
+		}
+
+		// react-doctor-disable-next-line react-doctor/async-await-in-loop
+		await stream.writeSSE({
+			event: "install-progress",
+			data: JSON.stringify(event),
+		});
+		index += 1;
+	}
 }

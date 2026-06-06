@@ -1,4 +1,7 @@
-export type ServerActionType = "restart" | "update" | "rollback";
+export type { ServerActionType } from "../../server/lib/action-labels";
+export { formatActionLabel } from "../../server/lib/action-labels";
+
+import type { ServerActionType } from "../../server/lib/action-labels";
 
 export type ServerActionResult = "succeeded" | "failed";
 
@@ -10,6 +13,19 @@ export type ServerActionHistoryItem = {
 	message: string;
 	imageRef: string | null;
 };
+
+import type {
+	ServerWebUiDeployStatus,
+	ServerWebUiSnapshot,
+} from "../../shared/contracts/server-web-ui";
+
+export type { ServerWebUiDeployStatus, ServerWebUiSnapshot };
+
+export type ServerDetailUpdater =
+	| ServerDetailSnapshot
+	| ((prev: ServerDetailSnapshot) => ServerDetailSnapshot);
+
+export type ServerDetailChangeHandler = (detail: ServerDetailUpdater) => void;
 
 export type ServerDetailSnapshot = {
 	server: {
@@ -32,4 +48,5 @@ export type ServerDetailSnapshot = {
 	} | null;
 	actionHistory: ServerActionHistoryItem[];
 	rollbackTarget: string | null;
+	webUi: ServerWebUiSnapshot | null;
 };

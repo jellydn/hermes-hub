@@ -10,6 +10,7 @@ const fetchMock = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
 const dbInsert = vi.fn();
+const transaction = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
 const selectFrom = vi.fn();
@@ -18,14 +19,10 @@ const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
 const insertAuditValues = vi.fn();
-const buildHermesComposeContent = vi.fn();
-const getServerByIdMock = vi.fn();
+const deployManagedCompose = vi.fn();
+const getOwnedServerRecordMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
-const withSshConnection = vi.fn();
-const shellQuote = vi.fn(
-	(value: string) => `'${value.replace(/'/g, "'\\''")}'`,
-);
 
 vi.stubGlobal("fetch", fetchMock);
 
@@ -44,22 +41,18 @@ vi.mock("./db", () => ({
 		select: dbSelect,
 		update: dbUpdate,
 		insert: dbInsert,
+		transaction,
 	}),
 }));
 
-vi.mock("./compose", () => ({
-	buildHermesComposeContent,
+vi.mock("./managed-compose-deploy", () => ({
+	deployManagedCompose,
 }));
 
 vi.mock("./server-records", () => ({
-	getServerById: getServerByIdMock,
+	getOwnedServerRecord: getOwnedServerRecordMock,
 	resolveServerSshConfig,
 	resolveServerSshConfigOrError,
-}));
-
-vi.mock("./ssh", () => ({
-	withSshConnection,
-	shellQuote,
 }));
 
 describe("provider settings", () => {
@@ -103,13 +96,17 @@ describe("provider settings", () => {
 
 		insertProviderValues.mockResolvedValue(undefined);
 		insertAuditValues.mockResolvedValue(undefined);
+		transaction.mockImplementation(async (fn) =>
+			fn({
+				update: dbUpdate,
+				insert: dbInsert,
+			}),
+		);
 		fetchMock.mockResolvedValue(
 			new Response(JSON.stringify({ data: [] }), { status: 200 }),
 		);
 
-		buildHermesComposeContent.mockReturnValue(
-			"services:\n  hermes:\n    image: hermes\n",
-		);
+		deployManagedCompose.mockResolvedValue(undefined);
 		resolveServerSshConfig.mockReturnValue({
 			authMethod: "ssh-key",
 			credential: "mock-credential",
@@ -415,16 +412,21 @@ describe("provider settings", () => {
 
 		const serverRecord = {
 			id: "server_1",
+			label: "prod",
 			host: "1.2.3.4",
 			port: 22,
 			username: "root",
 			authMethod: "ssh-key",
 			encryptedCredential: "encrypted-credential",
 			storeCredential: true,
+			status: "connected",
+			osInfo: {},
+			hostKeyFingerprint: null,
+			hostKeyAlgorithm: null,
 		};
 
 		beforeEach(() => {
-			getServerByIdMock.mockResolvedValue(serverRecord);
+			getOwnedServerRecordMock.mockResolvedValue(serverRecord);
 		});
 
 		it("returns 401 when unauthenticated", async () => {
@@ -470,7 +472,7 @@ describe("provider settings", () => {
 		});
 
 		it("returns 404 when deployed server is not found", async () => {
-			getServerByIdMock.mockResolvedValue(null);
+			getOwnedServerRecordMock.mockResolvedValue(null);
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
 				.mockResolvedValueOnce([telegramRecord]);
@@ -482,7 +484,7 @@ describe("provider settings", () => {
 
 			expect(response.status).toBe(404);
 			expect(await response.json()).toMatchObject({
-				error: "Deployed server not found.",
+				error: "Server not found",
 			});
 		});
 
@@ -505,13 +507,8 @@ describe("provider settings", () => {
 			});
 		});
 
-		it("returns 502 when SSH compose write fails", async () => {
-			const sshExecCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 1, stdout: "", stderr: "Write failed" });
-			withSshConnection.mockImplementation(async (_input, callback) => {
-				await callback({ execCommand: sshExecCommand });
-			});
+		it("returns 502 when managed compose deploy fails", async () => {
+			deployManagedCompose.mockRejectedValueOnce(new Error("Write failed"));
 
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
@@ -528,14 +525,27 @@ describe("provider settings", () => {
 			});
 		});
 
-		it("returns 200 on successful deploy and logs all side effects", async () => {
-			const sshExecCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 0, stdout: "", stderr: "" });
-			withSshConnection.mockImplementation(async (_input, callback) => {
-				await callback({ execCommand: sshExecCommand });
-			});
+		it("returns 200 when deploy succeeds but success audit logging fails", async () => {
+			insertAuditValues.mockRejectedValueOnce(new Error("audit db down"));
 
+			selectLimit
+				.mockResolvedValueOnce([providerRecord])
+				.mockResolvedValueOnce([telegramRecord]);
+
+			const { deployProviderToHermes } = await import("./deploy");
+			const response = await deployProviderToHermes(
+				createContext("http://localhost/api/providers/deploy", {}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({
+				status: "deployed",
+				provider: "openai",
+				model: "gpt-4o",
+			});
+		});
+
+		it("returns 200 on successful deploy and logs all side effects", async () => {
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
 				.mockResolvedValueOnce([telegramRecord]);
@@ -553,15 +563,18 @@ describe("provider settings", () => {
 				serverHost: "1.2.3.4",
 			});
 
-			// buildHermesComposeContent was called with the right arguments
-			expect(buildHermesComposeContent).toHaveBeenCalledWith({
+			expect(deployManagedCompose).toHaveBeenCalledWith({
+				intent: "provider",
+				userId: "user_123",
+				serverId: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "ssh-key",
+				credential: "mock-credential",
+				expectedFingerprint: undefined,
 				apiServerKey: "api-server-key-value",
-				telegramBotToken: "stored-api-key",
-				providerEnvVars: {
-					HERMES_INFERENCE_PROVIDER: "openai-api",
-					OPENAI_API_KEY: "stored-api-key",
-				},
-				hermesModel: "gpt-4o",
+				providerModel: "gpt-4o",
 			});
 
 			// resolveServerSshConfigOrError was called with the server ID and session ID
@@ -569,39 +582,6 @@ describe("provider settings", () => {
 				expect.objectContaining({ id: "server_1", host: "1.2.3.4" }),
 				"session_123",
 			);
-
-			// withSshConnection was called with host/port/username
-			expect(withSshConnection).toHaveBeenCalledWith(
-				expect.objectContaining({
-					host: "1.2.3.4",
-					port: 22,
-					username: "root",
-					authMethod: "ssh-key",
-					credential: "mock-credential",
-				}),
-				expect.any(Function),
-			);
-
-			// SSH exec commands: write compose, docker compose up, sleep, set model
-			expect(sshExecCommand).toHaveBeenCalledTimes(4);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				1,
-				expect.stringContaining("cat > ~/hermes/docker-compose.yml"),
-			);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				2,
-				"cd ~/hermes && sudo docker compose up -d --force-recreate",
-			);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(3, "sleep 2");
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				4,
-				expect.stringContaining(
-					"docker exec hermes hermes config set model 'gpt-4o'",
-				),
-			);
-
-			// shellQuote was called with the model
-			expect(shellQuote).toHaveBeenCalledWith("gpt-4o");
 
 			// Audit log was written with success action
 			expect(insertAuditValues).toHaveBeenCalledWith(

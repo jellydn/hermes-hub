@@ -199,10 +199,21 @@ Returns a detailed snapshot of a server, including its install status and action
         "imageRef": null
       }
     ],
-    "rollbackTarget": null
+    "rollbackTarget": null,
+    "webUi": {
+      "enabled": true,
+      "port": 8787,
+      "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+      "deployStatus": "succeeded",
+      "deployError": null,
+      "deployStartedAt": "2026-05-26T11:59:00.000Z",
+      "updatedAt": "2026-05-26T12:00:00.000Z"
+    }
   }
 }
 ```
+
+`webUi` is `null` when the Hermes Web UI has not been deployed on this server.
 
 **Error responses:**
 
@@ -343,7 +354,7 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 
 | Action    | SSH Command                                                  |
 | --------- | ------------------------------------------------------------ |
-| restart   | `cd ~/hermes && sudo docker compose restart`                 |
+| restart   | `cd ~/hermes && sudo docker compose restart hermes`          |
 | update    | `cd ~/hermes && sudo docker compose pull && sudo docker compose up -d` |
 | rollback  | Pulls `ghcr.io/hermes-agent/hermes:<tag>`, updates compose file, runs `docker compose up -d` |
 
@@ -477,7 +488,7 @@ Returns aggregated install logs and action history for the authenticated user.
 
 ### POST `/api/logs/clear`
 
-Clears the install logs (log column set to null on user's installs) and deletes finished action audit entries.
+Deletes the user's persisted `install_events` rows and finished action audit entries. Install log text shown in the UI is derived from those events.
 
 **Auth required:** Yes
 
@@ -734,6 +745,130 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 
 ---
 
+## Hermes Web UI
+
+HermesHub can deploy the [Hermes Web UI](https://get-hermes.ai/) alongside the Hermes agent on a connected VPS. After setup, the UI is reachable through an authenticated reverse proxy at `/api/servers/:id/web-ui/proxy/` — traffic is forwarded over SSH to the Web UI container on the VPS (default port `8787`). No manual SSH tunnels are required.
+
+The server detail page (`/servers/:id`) exposes setup, open, redeploy, and password-reveal controls when the latest Hermes install has succeeded.
+
+### POST `/api/servers/:id/web-ui/deploy`
+
+Deploys or redeploys the Hermes Web UI service on the connected VPS. The deploy runs in the background: the endpoint returns `202` immediately and the caller polls `GET /api/servers/:id/web-ui` to watch `deployStatus` advance from `"deploying"` to `"succeeded"` or `"failed"`.
+
+On first deploy, generates and encrypts a Web UI password; redeploys reuse the stored password. If a non-stale deploy is already in progress (started within `STALE_DEPLOY_THRESHOLD_MS`, default 10 minutes), the endpoint returns `202` with the current status instead of starting a duplicate deploy. A deploy that exceeds the threshold without completing is treated as stale and will be replaced by a new deploy on the next request.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None
+
+**Response (202 — deploying or already deploying):**
+
+`enabled` reflects the Web UI state before this deploy; it flips to `true` once `deployStatus` reaches `"succeeded"`.
+
+```json
+{
+  "status": "deploying",
+  "webUi": {
+    "enabled": false,
+    "port": 8787,
+    "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+    "deployStatus": "deploying",
+    "deployError": null,
+    "deployStartedAt": "2026-05-26T12:00:00.000Z",
+    "updatedAt": "2026-05-26T12:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                              |
+| ------ | ------------------------------------------------------ |
+| 400    | Hermes is not installed or the latest install failed   |
+| 401    | Unauthorized                                           |
+| 404    | Server not found                                       |
+| 500    | Password resolution failed before deploy               |
+| 502    | SSH connect, compose deploy, or reachability check failed |
+
+---
+
+### GET `/api/servers/:id/web-ui`
+
+Returns the current Hermes Web UI snapshot for a server. Use this lightweight endpoint while a background deploy is running instead of reloading the full server detail payload.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "webUi": {
+    "enabled": true,
+    "port": 8787,
+    "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+    "deployStatus": "succeeded",
+    "deployError": null,
+    "deployStartedAt": null,
+    "updatedAt": "2026-05-26T12:00:00.000Z"
+  }
+}
+```
+
+Returns `"webUi": null` when no Web UI record exists yet.
+
+**Error responses:**
+
+| Status | Condition      |
+| ------ | -------------- |
+| 401    | Unauthorized   |
+| 404    | Server not found |
+
+---
+
+### GET `/api/servers/:id/web-ui/password`
+
+Returns the decrypted Hermes Web UI password for the authenticated server owner. Use this to sign in when opening the proxied Web UI in a new tab.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Response (200):**
+```json
+{
+  "password": "generated-web-ui-password"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                |
+| ------ | ---------------------------------------- |
+| 400    | Hermes Web UI is not enabled on this server |
+| 401    | Unauthorized                             |
+| 404    | Server not found                         |
+| 500    | Failed to decrypt stored password        |
+
+---
+
+### ALL `/api/servers/:id/web-ui/proxy` and `/api/servers/:id/web-ui/proxy/*`
+
+Authenticated reverse proxy to the Hermes Web UI running on the VPS. Requests are forwarded over a pooled SSH connection to `127.0.0.1:<port>` on the remote host. Response headers are rewritten so assets and redirects resolve under the proxy path.
+
+A request to `/api/servers/:id/web-ui/proxy` (no trailing slash) returns `308` to `/api/servers/:id/web-ui/proxy/`.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Response:** Upstream HTTP response from the Hermes Web UI, or JSON error on proxy failure.
+
+**Error responses:**
+
+| Status | Condition                                      |
+| ------ | ---------------------------------------------- |
+| 400    | Hermes Web UI is not enabled on this server    |
+| 401    | Unauthorized                                   |
+| 404    | Server not found                               |
+| 502    | SSH tunnel failed or remote Web UI unreachable |
+
+---
+
 ## Database Schema
 
 The following tables are used by the API:
@@ -741,7 +876,9 @@ The following tables are used by the API:
 | Table              | Description                                  |
 | ------------------ | -------------------------------------------- |
 | `servers`          | Connected VPS records with encrypted credentials |
-| `installs`         | Install workflow state and logs              |
+| `installs`         | Install workflow state and version tracking  |
+| `install_events`   | Persisted install progress events (log source) |
+| `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
 | `ai_providers`     | AI provider configuration with encrypted API keys |
 | `telegram_configs` | Telegram bot connections                     |
 | `audit_logs`       | Action audit trail (connect, install, actions, provider, telegram) |

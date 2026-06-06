@@ -54,6 +54,8 @@ jobs:
         run: bun run typecheck
 
       - name: Run tests
+        env:
+          VITEST_MAX_WORKERS: 4
         run: bun run test
 
       - name: Run production build

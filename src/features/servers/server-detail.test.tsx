@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import {
 	act,
@@ -10,7 +10,10 @@ import {
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import {
+	formatActionLabel,
+	type ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 type MockLinkProps = {
 	children?: ReactNode;
@@ -39,6 +42,40 @@ vi.mock("./server-detail-aside", () => ({
 				</div>
 			))}
 		</aside>
+	),
+}));
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		AlertCircle: MockIcon,
+		ArrowLeft: MockIcon,
+		CheckCircle2: MockIcon,
+		Circle: MockIcon,
+		Info: MockIcon,
+		LoaderCircle: MockIcon,
+		Pencil: MockIcon,
+		RefreshCw: MockIcon,
+		Rocket: MockIcon,
+		RotateCcw: MockIcon,
+		ShieldAlert: MockIcon,
+		Trash2: MockIcon,
+		TriangleAlert: MockIcon,
+		Wrench: MockIcon,
+	};
+});
+
+vi.mock("@/components/ui/button", () => ({
+	Button: ({
+		children,
+		disabled,
+		onClick,
+		type = "button",
+		...props
+	}: ComponentPropsWithoutRef<"button">) => (
+		<button type={type} disabled={disabled} onClick={onClick} {...props}>
+			{children}
+		</button>
 	),
 }));
 
@@ -80,9 +117,9 @@ describe("ServerDetail", () => {
 			/>,
 		);
 
-		expect(screen.getAllByText(/restart agent/i).length).toBeGreaterThanOrEqual(
-			1,
-		);
+		expect(
+			screen.getAllByText(/restart hermes/i).length,
+		).toBeGreaterThanOrEqual(1);
 		expect(
 			screen.getByText(/updated hermes to the latest image successfully/i),
 		).toBeTruthy();
@@ -99,7 +136,7 @@ describe("ServerDetail", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: /restart agent/i }));
+		fireEvent.click(screen.getByRole("button", { name: /restart hermes/i }));
 
 		expect(screen.getByText(/are you sure\?/i)).toBeTruthy();
 
@@ -115,6 +152,40 @@ describe("ServerDetail", () => {
 			"/api/servers/server_123/actions",
 			expect.objectContaining({ method: "POST" }),
 		);
+	});
+
+	it("updates action history with a functional detail updater", async () => {
+		let latestDetail = createDetail();
+		const onDetailChange = vi.fn(
+			(
+				update:
+					| ServerDetailSnapshot
+					| ((prev: ServerDetailSnapshot) => ServerDetailSnapshot),
+			) => {
+				latestDetail =
+					typeof update === "function" ? update(latestDetail) : update;
+			},
+		);
+
+		render(
+			<ServerDetail
+				detail={latestDetail}
+				onDetailChange={onDetailChange}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /restart hermes/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+		await flushAsyncWork();
+
+		expect(onDetailChange).toHaveBeenCalledWith(expect.any(Function));
+		expect(latestDetail.actionHistory[0]?.message).toBe(
+			"Restarted Hermes successfully.",
+		);
+		expect(latestDetail.actionHistory).toHaveLength(3);
 	});
 
 	it("shows a failed action message when the API returns an error", async () => {
@@ -323,20 +394,6 @@ async function flushAsyncWork() {
 	});
 }
 
-function formatActionLabel(
-	action: ServerDetailSnapshot["actionHistory"][number]["action"],
-) {
-	if (action === "update") {
-		return "Update Hermes";
-	}
-
-	if (action === "rollback") {
-		return "Rollback";
-	}
-
-	return "Restart Agent";
-}
-
 function createDetail(overrides?: {
 	server?: Partial<ServerDetailSnapshot["server"]>;
 	install?: ServerDetailSnapshot["install"];
@@ -383,5 +440,6 @@ function createDetail(overrides?: {
 			},
 		],
 		rollbackTarget: "latest",
+		webUi: null,
 	};
 }

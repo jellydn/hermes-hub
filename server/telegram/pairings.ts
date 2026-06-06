@@ -1,11 +1,12 @@
 import type { Context } from "hono";
 import { getAuthSession } from "../auth";
+import { runPairingCommand } from "../hermes/runtime";
 import {
 	getServerById,
 	resolveServerSshConfigOrError,
 	type ServerConnectionRecord,
 } from "../server-records";
-import { type SshAuthMethod, shellQuote, withSshConnection } from "../ssh";
+import { type SshAuthMethod, withSshConnection } from "../ssh";
 import type {
 	TelegramPairingApproveRequest,
 	TelegramPairingSummary,
@@ -65,32 +66,14 @@ async function getDeployedTelegramServer(
 	};
 }
 
-async function runHermesPairingJsonCommand(
+async function withDeployedServerSsh<T>(
 	serverRecord: ServerConnectionRecord,
 	authMethod: SshAuthMethod,
 	credential: string,
-	pythonCode: string,
-	env: Record<string, string> = {},
-) {
-	const envArgs = Object.entries(env)
-		.map(([key, value]) => `-e ${shellQuote(`${key}=${value}`)}`)
-		.join(" ");
-	const repairPairingOwnershipCommand = [
-		"docker exec hermes sh -lc",
-		shellQuote(
-			'chown -R hermes:hermes "$HERMES_HOME/platforms/pairing" 2>/dev/null || chown -R hermes:hermes /opt/data/platforms/pairing 2>/dev/null || true',
-		),
-	].join(" ");
-	const pairingCommand = [
-		"docker exec --user hermes",
-		envArgs,
-		"hermes python -c",
-		shellQuote(pythonCode),
-	]
-		.filter(Boolean)
-		.join(" ");
-	const command = `${repairPairingOwnershipCommand} && ${pairingCommand}`;
-
+	fn: (
+		ssh: Parameters<Parameters<typeof withSshConnection>[1]>[0],
+	) => Promise<T>,
+): Promise<T> {
 	return withSshConnection(
 		{
 			host: serverRecord.host,
@@ -100,22 +83,7 @@ async function runHermesPairingJsonCommand(
 			credential,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 		},
-		async (ssh) => {
-			const result = await ssh.execCommand(command, {
-				execOptions: { timeout: 30_000 },
-			});
-			if (result.code !== 0) {
-				throw new Error(result.stderr || "Hermes pairing command failed.");
-			}
-
-			try {
-				return JSON.parse(result.stdout.trim()) as unknown;
-			} catch {
-				throw new Error(
-					`Invalid pairing response: ${result.stdout.slice(0, 200)}`,
-				);
-			}
-		},
+		fn,
 	);
 }
 
@@ -169,11 +137,15 @@ export async function listTelegramPairings(
 	}
 
 	try {
-		const result = await runHermesPairingJsonCommand(
+		const result = await withDeployedServerSsh(
 			deployedServer.serverRecord,
 			deployedServer.authMethod,
 			deployedServer.credential,
-			'import json; from gateway.pairing import PairingStore; store = PairingStore(); print(json.dumps({"pending": store.list_pending("telegram"), "approved": store.list_approved("telegram")}))',
+			(ssh) =>
+				runPairingCommand(
+					ssh,
+					'import json; from gateway.pairing import PairingStore; store = PairingStore(); print(json.dumps({"pending": store.list_pending("telegram"), "approved": store.list_approved("telegram")}))',
+				),
 		);
 
 		return context.json({ pairings: parsePairingSummary(result) });
@@ -238,18 +210,22 @@ export async function approveTelegramPairing(
 	}
 
 	try {
-		const result = await runHermesPairingJsonCommand(
+		const result = await withDeployedServerSsh(
 			deployedServer.serverRecord,
 			deployedServer.authMethod,
 			deployedServer.credential,
-			[
-				"import json, os",
-				"from gateway.pairing import PairingStore",
-				"store = PairingStore()",
-				'result = store.approve_code("telegram", os.environ["PAIRING_CODE"])',
-				'print(json.dumps({"approved": result, "locked": store._is_locked_out("telegram")}))',
-			].join("; "),
-			{ PAIRING_CODE: code },
+			(ssh) =>
+				runPairingCommand(
+					ssh,
+					[
+						"import json, os",
+						"from gateway.pairing import PairingStore",
+						"store = PairingStore()",
+						'result = store.approve_code("telegram", os.environ["PAIRING_CODE"])',
+						'print(json.dumps({"approved": result, "locked": store._is_locked_out("telegram")}))',
+					].join("; "),
+					{ PAIRING_CODE: code },
+				),
 		);
 
 		const { approved, locked } = parsePairingApproveResult(result);

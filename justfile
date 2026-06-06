@@ -31,12 +31,18 @@ typecheck:
 db-generate:
     bun run db:generate
 
+# Apply Drizzle migrations locally
+db-migrate:
+    bun run db:migrate
+
 # Run all checks (typecheck + test, parallel for speed)
 check:
 	#!/usr/bin/env bash
 	set -e
 	bun run typecheck & T1=$!
-	bun run test & T2=$!
+	CPU="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
+	if [ "$CPU" -gt 6 ]; then CPU=6; fi
+	VITEST_MAX_WORKERS="${VITEST_MAX_WORKERS:-$CPU}" bun run test & T2=$!
 	wait $T1
 	wait $T2
 

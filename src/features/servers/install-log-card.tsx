@@ -7,7 +7,7 @@ import {
 	LoaderCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import { StatusIcon } from "@/components/ui/status-icon";
 import { formatInstallStatus } from "./server-detail-helpers";
 
 type InstallLogCardProps = {
@@ -28,9 +28,19 @@ const POLL_INTERVAL_MS = 3000;
 export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [logData, setLogData] = useState<InstallLogData | null>(null);
-	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const previousServerIdRef = useRef(serverId);
+
+	if (serverId !== previousServerIdRef.current) {
+		previousServerIdRef.current = serverId;
+		setLogData(null);
+		setError(null);
+	}
+
+	const shouldFetchLog = Boolean(
+		install && (isExpanded || install.status === "failed"),
+	);
 
 	const fetchLog = useCallback(async () => {
 		try {
@@ -47,18 +57,16 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 		}
 	}, [serverId]);
 
+	const fetchLogRef = useRef(fetchLog);
+	fetchLogRef.current = fetchLog;
+
 	useEffect(() => {
-		if (!install) {
+		if (!shouldFetchLog) {
 			return;
 		}
 
-		if (!isExpanded && install.status !== "failed") {
-			return;
-		}
-
-		setIsLoading(true);
-		void fetchLog().finally(() => setIsLoading(false));
-	}, [isExpanded, install, fetchLog]);
+		void fetchLogRef.current();
+	}, [shouldFetchLog]);
 
 	useEffect(() => {
 		if (install?.status !== "running") {
@@ -70,7 +78,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 		}
 
 		pollTimerRef.current = setInterval(() => {
-			void fetchLog();
+			void fetchLogRef.current();
 		}, POLL_INTERVAL_MS);
 
 		return () => {
@@ -79,7 +87,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 				pollTimerRef.current = null;
 			}
 		};
-	}, [install, fetchLog]);
+	}, [install?.status]);
 
 	if (!install) {
 		return (
@@ -94,6 +102,9 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 
 	const isFailed = install.status === "failed";
 	const isRunning = install.status === "running";
+	const isSucceeded = install.status === "succeeded";
+	const showLogLoading =
+		shouldFetchLog && isExpanded && logData === null && error === null;
 	const lastErrorLine = logData?.log
 		?.split("\n")
 		.filter(Boolean)
@@ -103,9 +114,12 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 	return (
 		<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
 			<p className="m-0 font-semibold">Latest install</p>
-			<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
-				Status: {formatInstallStatus(install.status)}
-				{install.version ? ` • Version: ${install.version}` : ""}
+			<p className="mt-2 mb-0 text-[var(--sea-ink-soft)] flex items-center gap-2">
+				{isSucceeded && <StatusIcon status="success" size={3.5} />}
+				{isFailed && <StatusIcon status="error" size={3.5} />}
+				{isRunning && <StatusIcon status="info" size={3.5} />}
+				<span>Status: {formatInstallStatus(install.status)}</span>
+				{install.version ? <span>• Version: {install.version}</span> : null}
 			</p>
 
 			{isFailed && lastErrorLine ? (
@@ -155,7 +169,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 
 			{isExpanded ? (
 				<div className="mt-3 min-h-32 max-h-64 overflow-auto rounded-[1rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4 font-mono text-xs text-[var(--sea-ink)]">
-					{isLoading ? (
+					{showLogLoading ? (
 						<div className="flex items-center gap-2 text-[var(--sea-ink-soft)]">
 							<LoaderCircle className="h-4 w-4 animate-spin" />
 							<span>Loading log...</span>
