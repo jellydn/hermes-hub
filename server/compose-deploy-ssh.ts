@@ -24,6 +24,8 @@ export type DeployComposeInput = {
 	composeServices?: string[];
 	/** Pull service images before `docker compose up` when targeting specific services. */
 	pullImages?: boolean;
+	/** Force-recreate targeted containers so stale env vars are replaced on redeploy. */
+	forceRecreate?: boolean;
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	expectedFingerprint?: string;
@@ -32,6 +34,7 @@ export type DeployComposeInput = {
 export function buildComposeUpCommand(input?: {
 	composeServices?: string[];
 	pull?: boolean;
+	forceRecreate?: boolean;
 }) {
 	const parts = ["cd ~/hermes"];
 	const services = input?.composeServices ?? [];
@@ -42,6 +45,9 @@ export function buildComposeUpCommand(input?: {
 	}
 
 	const upCommand = ["sudo docker compose up", "-d"];
+	if (input?.forceRecreate) {
+		upCommand.push("--force-recreate");
+	}
 	if (services.length > 0) {
 		upCommand.push("--no-deps", ...services);
 	}
@@ -79,6 +85,7 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 				buildComposeUpCommand({
 					composeServices: input.composeServices,
 					pull: input.pullImages,
+					forceRecreate: input.forceRecreate,
 				}),
 			);
 			if (restartResult.code !== 0) {

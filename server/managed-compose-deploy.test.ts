@@ -59,6 +59,7 @@ describe("resolveManagedComposeDeployPolicy", () => {
 			intent: "web-ui",
 			composeServices: ["hermes-webui"],
 			pullImages: true,
+			forceRecreate: true,
 			preSshCommands: expect.any(Function),
 			extraSshCommands: expect.any(Function),
 		});

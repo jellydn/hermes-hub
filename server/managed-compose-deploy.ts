@@ -25,6 +25,7 @@ export type ManagedComposeDeployPolicy = {
 	intent: ManagedComposeDeployIntent;
 	composeServices?: string[];
 	pullImages?: boolean;
+	forceRecreate?: boolean;
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 };
@@ -75,6 +76,7 @@ export function resolveManagedComposeDeployPolicy(
 				intent,
 				composeServices: ["hermes-webui"],
 				pullImages: true,
+				forceRecreate: true,
 				preSshCommands: async (ssh) => {
 					const prepResult = await ssh.execCommand(
 						[
@@ -138,6 +140,7 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 		composeContent,
 		composeServices: policy.composeServices,
 		pullImages: policy.pullImages,
+		forceRecreate: policy.forceRecreate,
 		preSshCommands: policy.preSshCommands,
 		extraSshCommands: policy.extraSshCommands,
 		expectedFingerprint: input.expectedFingerprint,

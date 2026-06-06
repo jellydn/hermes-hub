@@ -29,6 +29,18 @@ describe("buildComposeUpCommand", () => {
 		);
 	});
 
+	it("force-recreates the Web UI so stale env vars are replaced on redeploy", () => {
+		expect(
+			buildComposeUpCommand({
+				composeServices: ["hermes-webui"],
+				pull: true,
+				forceRecreate: true,
+			}),
+		).toBe(
+			"cd ~/hermes && sudo docker compose pull hermes-webui && sudo docker compose up -d --force-recreate --no-deps hermes-webui",
+		);
+	});
+
 	it("rejects invalid compose service names", () => {
 		expect(() =>
 			assertValidComposeServiceNames(["hermes-webui"]),
