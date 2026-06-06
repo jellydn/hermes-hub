@@ -1,14 +1,14 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import {
-	formatActionLabel,
-	type ServerActionHistoryItem,
-	type ServerActionResult,
-	type ServerActionType,
-	type ServerDetailSnapshot,
+import type {
+	ServerActionHistoryItem,
+	ServerActionResult,
+	ServerActionType,
+	ServerDetailSnapshot,
 } from "../src/lib/server-detail";
 import { getDb } from "./db";
 import { auditLogs } from "./db/schema";
 import { getLatestInstallForServer } from "./install/records";
+import { formatActionLabel } from "./lib/action-labels";
 import { getNonEmptyString } from "./lib/non-empty-string";
 import {
 	getOwnedServerRecord,
