@@ -467,7 +467,7 @@ export function ServerDetail({
 					) : null}
 				</section>
 
-				<ServerDetailAside detail={detail} />
+				<ServerDetailAside detail={detail} onDetailChange={onDetailChange} />
 			</div>
 		</section>
 	);

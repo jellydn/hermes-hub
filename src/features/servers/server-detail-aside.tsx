@@ -1,5 +1,9 @@
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerActionHistoryItem,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
+import { HermesWebUiCard } from "./hermes-web-ui-card";
 import {
 	badgeClassName,
 	formatActionTitle,
@@ -10,11 +14,17 @@ import {
 
 type ServerDetailAsideProps = {
 	detail: ServerDetailSnapshot;
+	onDetailChange?: (detail: ServerDetailSnapshot) => void;
 };
 
-export function ServerDetailAside({ detail }: ServerDetailAsideProps) {
+export function ServerDetailAside({
+	detail,
+	onDetailChange,
+}: ServerDetailAsideProps) {
 	return (
 		<aside className="space-y-4">
+			<HermesWebUiCard detail={detail} onDetailChange={onDetailChange} />
+
 			<section className="island-shell rounded-[2rem] p-6">
 				<p className="island-kicker mb-2">Connection summary</p>
 				<dl className="space-y-4 text-sm text-[var(--sea-ink)]">
@@ -37,25 +47,7 @@ export function ServerDetailAside({ detail }: ServerDetailAsideProps) {
 				) : (
 					<ul className="m-0 space-y-3 p-0">
 						{detail.actionHistory.map((item) => (
-							<li
-								key={item.id}
-								className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4"
-							>
-								<div className="flex items-center justify-between gap-3">
-									<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
-										{formatActionTitle(item.action)}
-									</p>
-									<span className={badgeClassName(item.result)}>
-										{item.result}
-									</span>
-								</div>
-								<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">
-									{item.message}
-								</p>
-								<p className="mt-2 mb-0 text-xs text-[var(--sea-ink-soft)]">
-									{formatTimestamp(item.createdAt)}
-								</p>
-							</li>
+							<ActionHistoryItem key={item.id} item={item} />
 						))}
 					</ul>
 				)}
@@ -64,11 +56,35 @@ export function ServerDetailAside({ detail }: ServerDetailAsideProps) {
 	);
 }
 
-function SummaryEntry({ label, value }: { label: string; value: string }) {
+type SummaryEntryProps = {
+	label: string;
+	value: string;
+};
+
+function SummaryEntry({ label, value }: SummaryEntryProps) {
 	return (
 		<div>
 			<dt className="text-[var(--sea-ink-soft)]">{label}</dt>
 			<dd className="mt-1 font-medium">{value}</dd>
 		</div>
+	);
+}
+
+function ActionHistoryItem({ item }: { item: ServerActionHistoryItem }) {
+	return (
+		<li className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4">
+			<div className="flex items-center justify-between gap-3">
+				<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
+					{formatActionTitle(item.action)}
+				</p>
+				<span className={badgeClassName(item.result)}>{item.result}</span>
+			</div>
+			<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">
+				{item.message}
+			</p>
+			<p className="mt-2 mb-0 text-xs text-[var(--sea-ink-soft)]">
+				{formatTimestamp(item.createdAt)}
+			</p>
+		</li>
 	);
 }

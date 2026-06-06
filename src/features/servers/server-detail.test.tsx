@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import {
 	act,
@@ -39,6 +39,38 @@ vi.mock("./server-detail-aside", () => ({
 				</div>
 			))}
 		</aside>
+	),
+}));
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		AlertCircle: MockIcon,
+		ArrowLeft: MockIcon,
+		CheckCircle2: MockIcon,
+		LoaderCircle: MockIcon,
+		Pencil: MockIcon,
+		RefreshCw: MockIcon,
+		Rocket: MockIcon,
+		RotateCcw: MockIcon,
+		ShieldAlert: MockIcon,
+		Trash2: MockIcon,
+		TriangleAlert: MockIcon,
+		Wrench: MockIcon,
+	};
+});
+
+vi.mock("@/components/ui/button", () => ({
+	Button: ({
+		children,
+		disabled,
+		onClick,
+		type = "button",
+		...props
+	}: ComponentPropsWithoutRef<"button">) => (
+		<button type={type} disabled={disabled} onClick={onClick} {...props}>
+			{children}
+		</button>
 	),
 }));
 
@@ -383,5 +415,6 @@ function createDetail(overrides?: {
 			},
 		],
 		rollbackTarget: "latest",
+		webUi: null,
 	};
 }
