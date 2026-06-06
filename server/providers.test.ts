@@ -19,7 +19,7 @@ const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
 const insertAuditValues = vi.fn();
 const buildManagedComposeContent = vi.fn();
-const getServerByIdMock = vi.fn();
+const getOwnedServerRecordMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
 const withSshConnection = vi.fn();
@@ -52,7 +52,7 @@ vi.mock("./server-compose", () => ({
 }));
 
 vi.mock("./server-records", () => ({
-	getServerById: getServerByIdMock,
+	getOwnedServerRecord: getOwnedServerRecordMock,
 	resolveServerSshConfig,
 	resolveServerSshConfigOrError,
 }));
@@ -415,16 +415,21 @@ describe("provider settings", () => {
 
 		const serverRecord = {
 			id: "server_1",
+			label: "prod",
 			host: "1.2.3.4",
 			port: 22,
 			username: "root",
 			authMethod: "ssh-key",
 			encryptedCredential: "encrypted-credential",
 			storeCredential: true,
+			status: "connected",
+			osInfo: {},
+			hostKeyFingerprint: null,
+			hostKeyAlgorithm: null,
 		};
 
 		beforeEach(() => {
-			getServerByIdMock.mockResolvedValue(serverRecord);
+			getOwnedServerRecordMock.mockResolvedValue(serverRecord);
 		});
 
 		it("returns 401 when unauthenticated", async () => {
@@ -470,7 +475,7 @@ describe("provider settings", () => {
 		});
 
 		it("returns 404 when deployed server is not found", async () => {
-			getServerByIdMock.mockResolvedValue(null);
+			getOwnedServerRecordMock.mockResolvedValue(null);
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
 				.mockResolvedValueOnce([telegramRecord]);
@@ -482,7 +487,7 @@ describe("provider settings", () => {
 
 			expect(response.status).toBe(404);
 			expect(await response.json()).toMatchObject({
-				error: "Deployed server not found.",
+				error: "Server not found",
 			});
 		});
 

@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import type { NodeSSH } from "node-ssh";
 import { getAiProviderOption, isAiProviderId } from "../src/lib/ai-providers";
-import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { getClientIp } from "./lib/get-client-ip";
@@ -12,8 +11,11 @@ import {
 	getTelegramDeployInfo,
 } from "./providers/records";
 import { buildManagedComposeContent } from "./server-compose";
-import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
+import {
+	requireAuthSession,
+	requireOwnedServerSshById,
+} from "./web-ui/context";
 
 type DeployComposeInput = {
 	host: string;
@@ -66,9 +68,9 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 }
 
 export async function deployProviderToHermes(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
 	}
 
 	const db = getDb();
@@ -93,9 +95,13 @@ export async function deployProviderToHermes(context: Context) {
 		);
 	}
 
-	const serverRecord = await getServerById(telegramInfo.deployedServerId);
-	if (!serverRecord) {
-		return context.json({ error: "Deployed server not found." }, 404);
+	const sshCtx = await requireOwnedServerSshById(
+		context,
+		telegramInfo.deployedServerId,
+		session,
+	);
+	if (sshCtx instanceof Response) {
+		return sshCtx;
 	}
 
 	try {
@@ -112,35 +118,26 @@ export async function deployProviderToHermes(context: Context) {
 	const isKeyRequired = !getAiProviderOption(providerRecord.provider)
 		?.requiresBaseUrl;
 	if (isKeyRequired && !decryptedApiKey) {
-		return context.json({ error: "API key is required." }, 500);
+		return context.json({ error: "API key is required." }, 400);
 	}
 
 	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
 
 	const composeContent = await buildManagedComposeContent({
 		userId: session.user.id,
-		serverId: serverRecord.id,
+		serverId: sshCtx.serverId,
 		apiServerKey: decryptedApiServerKey,
 	});
 
-	const sshResult = resolveServerSshConfigOrError(
-		serverRecord,
-		session.session.id,
-	);
-	if (!sshResult.ok) {
-		return context.json({ error: sshResult.error }, 400);
-	}
-	const { authMethod, credential } = sshResult;
-
 	try {
 		await deployComposeViaSsh({
-			host: serverRecord.host,
-			port: serverRecord.port,
-			username: serverRecord.username,
-			authMethod,
-			credential,
+			host: sshCtx.server.host,
+			port: sshCtx.server.port,
+			username: sshCtx.server.username,
+			authMethod: sshCtx.authMethod,
+			credential: sshCtx.credential,
 			composeContent,
-			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
 			extraSshCommands: async (ssh) => {
 				await ssh.execCommand("sleep 2");
 
@@ -158,12 +155,12 @@ export async function deployProviderToHermes(context: Context) {
 		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "provider.deploy.succeeded",
-			serverId: serverRecord.id,
+			serverId: sshCtx.serverId,
 			details: {
 				provider: providerRecord.provider,
 				model: providerRecord.model,
-				serverId: serverRecord.id,
-				serverHost: serverRecord.host,
+				serverId: sshCtx.serverId,
+				serverHost: sshCtx.server.host,
 			},
 			ipAddress,
 		});
@@ -172,7 +169,7 @@ export async function deployProviderToHermes(context: Context) {
 			status: "deployed",
 			provider: providerRecord.provider,
 			model: providerRecord.model,
-			serverHost: serverRecord.host,
+			serverHost: sshCtx.server.host,
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
@@ -180,11 +177,11 @@ export async function deployProviderToHermes(context: Context) {
 		await insertAuditLog(db, {
 			userId: session.user.id,
 			action: "provider.deploy.failed",
-			serverId: serverRecord.id,
+			serverId: sshCtx.serverId,
 			details: {
 				provider: providerRecord.provider,
 				model: providerRecord.model,
-				serverId: serverRecord.id,
+				serverId: sshCtx.serverId,
 				error: message,
 			},
 			ipAddress,
