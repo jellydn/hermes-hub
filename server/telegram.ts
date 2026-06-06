@@ -97,29 +97,14 @@ export async function connectTelegram(context: Context) {
 	const ipAddress = getClientIp(context);
 
 	try {
-		await db
-			.update(telegramConfigs)
-			.set({ isActive: false })
-			.where(eq(telegramConfigs.userId, session.user.id));
-
-		await db.insert(telegramConfigs).values({
-			userId: session.user.id,
-			botToken: encryptSecret(botToken),
-			botUsername: bot.username,
-			isActive: true,
-			deployedServerId: null,
-			deployedServerHost: null,
-			apiServerKey: null,
-		});
-
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "telegram.connected",
-			details: {
+		await db.transaction(async (tx) => {
+			await persistTelegramConnection(tx, {
+				userId: session.user.id,
+				botToken,
 				botUsername: bot.username,
 				botId: bot.id,
-			},
-			ipAddress,
+				ipAddress,
+			});
 		});
 
 		clearDashboardCache();
@@ -430,4 +415,48 @@ export async function testTelegramBot(context: Context) {
 		const message = error instanceof Error ? error.message : "Test failed";
 		return context.json({ error: message }, 502);
 	}
+}
+
+type TelegramPersistenceInput = {
+	userId: string;
+	botToken: string;
+	botUsername: string;
+	botId: number;
+	ipAddress: string | null;
+};
+
+type TelegramPersistenceWriter = Pick<
+	ReturnType<typeof getDb>,
+	"update" | "insert"
+>;
+
+async function persistTelegramConnection(
+	writer: TelegramPersistenceWriter,
+	input: TelegramPersistenceInput,
+) {
+	// react-doctor-disable-next-line react-doctor/async-parallel
+	await writer
+		.update(telegramConfigs)
+		.set({ isActive: false })
+		.where(eq(telegramConfigs.userId, input.userId));
+
+	await writer.insert(telegramConfigs).values({
+		userId: input.userId,
+		botToken: encryptSecret(input.botToken),
+		botUsername: input.botUsername,
+		isActive: true,
+		deployedServerId: null,
+		deployedServerHost: null,
+		apiServerKey: null,
+	});
+
+	await insertAuditLog(writer, {
+		userId: input.userId,
+		action: "telegram.connected",
+		details: {
+			botUsername: input.botUsername,
+			botId: input.botId,
+		},
+		ipAddress: input.ipAddress,
+	});
 }
