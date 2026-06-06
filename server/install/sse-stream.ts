@@ -202,7 +202,6 @@ export async function emitInstallEvent(input: {
 			.set({
 				status: input.status,
 				step: input.step,
-				version: "latest",
 				updatedAt: new Date(),
 			})
 			.where(eq(installs.id, input.installId));

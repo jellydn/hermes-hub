@@ -233,9 +233,9 @@ describe("install SSE stream helpers", () => {
 			expect.objectContaining({
 				status: "running",
 				step: "install-docker",
-				version: "latest",
 			}),
 		);
+		expect(txSet.mock.calls[0]?.[0]).not.toHaveProperty("version");
 		expect(txSet.mock.calls[0]?.[0]).not.toHaveProperty("log");
 		expect(listener).toHaveBeenCalledWith(
 			expect.objectContaining({
