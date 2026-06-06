@@ -942,9 +942,9 @@ Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over S
 
 ## MCP Servers
 
-HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to the Telegram-linked Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; list and edit responses return keys with masked value metadata only.
+HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to the Telegram-linked Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; create, update, and settings-page responses return keys with masked `valueLast4` metadata only. Server names are unique per user.
 
-The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway. The page loader reads saved MCP servers server-side (same pattern as persona); there is no list GET endpoint for v1.
+The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway. The page loader reads saved MCP servers server-side (same pattern as persona); there is no list GET endpoint for v1. Switching a server between stdio and HTTP clears inactive transport fields (command/args/env vs URL/headers) on save.
 
 ### POST `/api/settings/mcp-servers`
 
@@ -987,7 +987,32 @@ Creates a new MCP server for the authenticated user.
 **Response (200):**
 ```json
 {
-  "server": { "...": "same shape as list entries" }
+  "server": {
+    "id": "mcp_123",
+    "name": "github",
+    "transport": "stdio",
+    "enabled": true,
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "url": null,
+    "env": [
+      {
+        "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "valueLast4": "1234",
+        "hasStoredValue": true
+      }
+    ],
+    "headers": [],
+    "toolsInclude": [],
+    "toolsExclude": [],
+    "toolsResources": true,
+    "toolsPrompts": true,
+    "timeout": null,
+    "connectTimeout": null,
+    "supportsParallelToolCalls": false,
+    "createdAt": "2026-06-06T12:00:00.000Z",
+    "updatedAt": "2026-06-06T12:00:00.000Z"
+  }
 }
 ```
 
@@ -1003,18 +1028,13 @@ Creates a new MCP server for the authenticated user.
 
 ### PUT `/api/settings/mcp-servers/:id`
 
-Updates an owned MCP server. Blank secret values preserve existing encrypted env/header values.
+Updates an owned MCP server. Blank secret values preserve existing encrypted env/header values for the active transport. Changing `transport` clears fields for the inactive transport.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body:** Partial MCP server fields (same shape as create)
 
-**Response (200):**
-```json
-{
-  "server": { "...": "updated server summary" }
-}
-```
+**Response (200):** Same `server` object shape as create.
 
 **Error responses:**
 
@@ -1053,7 +1073,7 @@ Deletes an owned MCP server from HermesHub. Remote Hermes config is unchanged un
 
 ### POST `/api/settings/mcp-servers/deploy`
 
-Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with the user's saved HermesHub state, preserves all other config keys, fixes readable ownership where possible, and restarts the Hermes gateway.
+Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with the user's saved HermesHub state, preserves all other config keys when the existing file is valid YAML, fixes readable ownership where possible, and restarts the Hermes gateway. If the remote `config.yaml` is missing or unreadable, deploy starts from an empty object and writes only `mcp_servers`. If the file exists but is not valid YAML (or is not a YAML object), deploy fails without writing remotely.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
@@ -1077,7 +1097,7 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 | 400    | Credential unavailable / expired                             |
 | 401    | Unauthorized                                                 |
 | 404    | Deployed server not found                                    |
-| 502    | SSH connect, config read/write, or gateway restart failed    |
+| 502    | SSH connect, invalid existing `config.yaml`, config read/write, or gateway restart failed |
 
 ---
 

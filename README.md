@@ -209,6 +209,10 @@ If the raw provider API works but Hermes returns an authentication error, redepl
 
 HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
 
+### MCP deploy fails with a 502 error
+
+MCP deploy merges your saved servers into the existing `/root/.hermes/config.yaml` on the VPS. If that file is corrupted or not valid YAML, HermesHub refuses to overwrite it and returns a deploy error. Fix or back up the remote config on the VPS first, then deploy again from `/settings`.
+
 ## 🏗️ Architecture
 
 ```
@@ -243,6 +247,7 @@ server/               — Hono API routes and business logic
 ├── settings/mcp.ts   — MCP server CRUD and config.yaml deploy
 ├── hermes/persona.ts — Persona validation and SOUL.md SSH write helper
 ├── hermes/mcp-config.ts — Hermes config.yaml SSH read/write helper
+├── hermes/telegram-deploy.ts — Shared Telegram-linked Hermes deploy (SSH, audit, restart)
 ├── logs.ts           — Install + action log queries and clearing
 └── db/               — Drizzle schema, connection, health check
 ```
@@ -291,10 +296,10 @@ MIT
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/jellydn/hermes-hub/issues).
 
-## 🌟 Show your support
+## Show your support
+
+[![kofi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dunghd)
+[![paypal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/dunghd)
+[![buymeacoffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/dunghd)
 
 Give a ⭐️ if this project helped you!
-
----
-
-_This README was generated with ❤️ by [readme-md-generator](https://github.com/kefranabg/readme-md-generator)_
