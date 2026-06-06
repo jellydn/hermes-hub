@@ -8,6 +8,8 @@ export type ServerWebUiRecord = {
 	enabled: boolean;
 	encryptedPassword: string | null;
 	port: number;
+	deployStatus: string;
+	deployError: string | null;
 	updatedAt: Date;
 };
 
@@ -23,6 +25,8 @@ export async function getServerWebUiRecord(
 			enabled: serverWebUi.enabled,
 			encryptedPassword: serverWebUi.encryptedPassword,
 			port: serverWebUi.port,
+			deployStatus: serverWebUi.deployStatus,
+			deployError: serverWebUi.deployError,
 			updatedAt: serverWebUi.updatedAt,
 		})
 		.from(serverWebUi)

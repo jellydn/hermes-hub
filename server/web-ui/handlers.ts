@@ -7,8 +7,11 @@ import { serverWebUi } from "../db/schema";
 import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
-import { deployManagedCompose } from "../managed-compose-deploy";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
+import {
+	buildDeployingWebUiSnapshot,
+	runWebUiDeployInBackground,
+} from "./background-deploy";
 import { requireEnabledWebUi } from "./enabled-context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
@@ -64,77 +67,48 @@ export async function deployServerWebUi(context: Context) {
 	}
 	const password = passwordResult.password;
 	const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
+	const existingEnabled = existingRecord?.enabled ?? false;
 
 	invalidatePooledSsh(ctx.session.user.id, ctx.serverId);
 
-	try {
-		await deployManagedCompose({
-			intent: "web-ui",
-			userId: ctx.session.user.id,
+	const now = new Date();
+	const encryptedPassword = encryptSecret(password);
+	await db
+		.insert(serverWebUi)
+		.values({
 			serverId: ctx.serverId,
-			host: ctx.server.host,
-			port: ctx.server.port,
-			username: ctx.server.username,
-			authMethod: ctx.authMethod,
-			credential: ctx.credential,
-			expectedFingerprint: ctx.server.hostKeyFingerprint ?? undefined,
-			webUiPassword: password,
-			webUiPort,
-		});
-
-		const updatedAt = new Date();
-		const encryptedPassword = encryptSecret(password);
-		await db.transaction(async (tx) => {
-			await tx
-				.insert(serverWebUi)
-				.values({
-					serverId: ctx.serverId,
-					enabled: true,
-					encryptedPassword,
-					port: webUiPort,
-					updatedAt,
-				})
-				.onConflictDoUpdate({
-					target: serverWebUi.serverId,
-					set: {
-						enabled: true,
-						encryptedPassword,
-						port: webUiPort,
-						updatedAt,
-					},
-				});
-
-			await insertAuditLog(tx, {
-				userId: ctx.session.user.id,
-				action: "server.web_ui.deploy.succeeded",
-				serverId: ctx.serverId,
-				details: { serverId: ctx.serverId, serverHost: ctx.server.host },
-				ipAddress,
-			});
-		});
-
-		return context.json({
-			status: "deployed",
-			webUi: {
-				enabled: true,
-				port: existingRecord?.port ?? defaultHermesWebUiPort,
-				proxyPath: getWebUiProxyPath(ctx.serverId),
-				updatedAt: updatedAt.toISOString(),
+			enabled: existingEnabled,
+			encryptedPassword,
+			port: webUiPort,
+			deployStatus: "deploying",
+			deployError: null,
+			updatedAt: now,
+		})
+		.onConflictDoUpdate({
+			target: serverWebUi.serverId,
+			set: {
+				encryptedPassword,
+				deployStatus: "deploying",
+				deployError: null,
+				updatedAt: now,
 			},
 		});
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Deploy failed";
 
-		await insertAuditLog(db, {
-			userId: ctx.session.user.id,
-			action: "server.web_ui.deploy.failed",
-			serverId: ctx.serverId,
-			details: { serverId: ctx.serverId, error: message },
-			ipAddress,
-		});
+	const webUiSnapshot = buildDeployingWebUiSnapshot(ctx.serverId, {
+		enabled: existingEnabled,
+		port: webUiPort,
+		updatedAt: now,
+	});
 
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
+	void runWebUiDeployInBackground({
+		ctx,
+		password,
+		webUiPort,
+		existingEnabled,
+		ipAddress,
+	});
+
+	return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
 }
 
 export async function revealServerWebUiPassword(context: Context) {

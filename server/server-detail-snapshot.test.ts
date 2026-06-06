@@ -71,8 +71,12 @@ vi.mock("./server-records", () => ({
 	},
 }));
 
-vi.mock("./web-ui/records", () => ({
+const { getServerWebUiRecord } = vi.hoisted(() => ({
 	getServerWebUiRecord: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("./web-ui/records", () => ({
+	getServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
 }));
@@ -187,5 +191,91 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		// details->>'serverId', so this exercises the new path. We verify
 		// the call shape: limit(5) was used.
 		expect(selectLimit).toHaveBeenCalledWith(5);
+	});
+});
+
+describe("getServerDetailSnapshot webUi deploy status", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		selectLimit.mockReset();
+		dbSelect.mockReset();
+		dbSelect.mockImplementation(() => ({
+			from: () => ({
+				where: () => ({
+					orderBy: () => ({ limit: selectLimit }),
+				}),
+			}),
+		}));
+		selectLimit.mockResolvedValue([]);
+		getLatestInstallForServer.mockResolvedValue(null);
+	});
+
+	it("includes deploying Web UI records in the snapshot", async () => {
+		getServerWebUiRecord.mockResolvedValueOnce({
+			enabled: false,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "deploying",
+			deployError: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi).toEqual({
+			enabled: false,
+			port: 8787,
+			proxyPath: "/api/servers/server_123/web-ui/proxy/",
+			deployStatus: "deploying",
+			deployError: null,
+			updatedAt: "2026-05-26T04:00:00.000Z",
+		});
+	});
+
+	it("includes failed Web UI records with deploy error", async () => {
+		getServerWebUiRecord.mockResolvedValueOnce({
+			enabled: false,
+			encryptedPassword: null,
+			port: 8787,
+			deployStatus: "failed",
+			deployError: "SSH timeout",
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi?.deployStatus).toBe("failed");
+		expect(snapshot?.webUi?.deployError).toBe("SSH timeout");
+	});
+
+	it("includes succeeded Web UI records for enabled servers", async () => {
+		getServerWebUiRecord.mockResolvedValueOnce({
+			enabled: true,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.webUi).toEqual({
+			enabled: true,
+			port: 8787,
+			proxyPath: "/api/servers/server_123/web-ui/proxy/",
+			deployStatus: "succeeded",
+			deployError: null,
+			updatedAt: "2026-05-26T04:00:00.000Z",
+		});
 	});
 });

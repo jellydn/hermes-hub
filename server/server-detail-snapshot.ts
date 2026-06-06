@@ -15,7 +15,8 @@ import {
 	type OwnedServerRecord,
 	readOsInfoValue,
 } from "./server-records";
-import { getServerWebUiRecord, getWebUiProxyPath } from "./web-ui/records";
+import { getServerWebUiRecord } from "./web-ui/records";
+import { buildWebUiSnapshot } from "./web-ui/snapshot";
 
 type AuditRecord = {
 	id: string;
@@ -55,15 +56,7 @@ export async function getServerDetailSnapshot(input: {
 			: null,
 		actionHistory,
 		rollbackTarget,
-		webUi:
-			webUiRecord?.enabled === true
-				? {
-						enabled: true,
-						port: webUiRecord.port,
-						proxyPath: getWebUiProxyPath(input.serverId),
-						updatedAt: webUiRecord.updatedAt.toISOString(),
-					}
-				: null,
+		webUi: webUiRecord ? buildWebUiSnapshot(input.serverId, webUiRecord) : null,
 	};
 }
 

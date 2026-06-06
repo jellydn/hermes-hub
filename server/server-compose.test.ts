@@ -36,6 +36,8 @@ describe("buildManagedComposeContentFromSecrets", () => {
 						enabled: true,
 						encryptedPassword: "bad-ciphertext",
 						port: 8787,
+						deployStatus: "succeeded",
+						deployError: null,
 						updatedAt: new Date(),
 					},
 				},

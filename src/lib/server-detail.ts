@@ -21,10 +21,18 @@ export function formatActionLabel(action: ServerActionType): string {
 	return "Restart Agent";
 }
 
+export type ServerWebUiDeployStatus =
+	| "idle"
+	| "deploying"
+	| "succeeded"
+	| "failed";
+
 export type ServerWebUiSnapshot = {
 	enabled: boolean;
 	port: number;
 	proxyPath: string;
+	deployStatus: ServerWebUiDeployStatus;
+	deployError: string | null;
 	updatedAt: string;
 };
 

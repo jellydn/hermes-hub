@@ -57,6 +57,13 @@
       "when": 1780660000000,
       "tag": "0007_drop_installs_log",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780720420058,
+      "tag": "0008_woozy_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

@@ -227,6 +227,8 @@ export const serverWebUi = pgTable(
 		enabled: boolean("enabled").default(false).notNull(),
 		encryptedPassword: text("encrypted_password"),
 		port: integer("port").notNull().default(8787),
+		deployStatus: text("deploy_status").notNull().default("idle"),
+		deployError: text("deploy_error"),
 		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.$onUpdate(() => new Date())

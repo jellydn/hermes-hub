@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -55,6 +56,7 @@ import { HermesWebUiCard } from "./hermes-web-ui-card";
 afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 beforeEach(() => {
@@ -97,12 +99,7 @@ describe("HermesWebUiCard", () => {
 		render(
 			<HermesWebUiCard
 				detail={createDetail({
-					webUi: {
-						enabled: true,
-						port: 8787,
-						proxyPath: "/api/servers/server_123/web-ui/proxy/",
-						updatedAt: "2026-05-26T04:00:00.000Z",
-					},
+					webUi: createWebUi({ enabled: true, deployStatus: "succeeded" }),
 				})}
 			/>,
 		);
@@ -115,28 +112,86 @@ describe("HermesWebUiCard", () => {
 		expect(screen.getByTestId("hermes-web-ui-redeploy")).toBeTruthy();
 	});
 
+	it("shows deploying state without setup button", () => {
+		render(
+			<HermesWebUiCard
+				detail={createDetail({
+					webUi: createWebUi({ deployStatus: "deploying" }),
+				})}
+			/>,
+		);
+
+		expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
+		expect(screen.queryByTestId("hermes-web-ui-setup")).toBeNull();
+	});
+
+	it("shows failed state with retry setup button", () => {
+		render(
+			<HermesWebUiCard
+				detail={createDetail({
+					webUi: createWebUi({
+						deployStatus: "failed",
+						deployError: "SSH timeout",
+					}),
+				})}
+			/>,
+		);
+
+		expect(screen.getByText("SSH timeout")).toBeTruthy();
+		expect(screen.getByText("Retry setup")).toBeTruthy();
+	});
+
+	it("keeps open controls visible while redeploying an enabled Web UI", () => {
+		render(
+			<HermesWebUiCard
+				detail={createDetail({
+					webUi: createWebUi({
+						enabled: true,
+						deployStatus: "deploying",
+					}),
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("hermes-web-ui-open")).toBeTruthy();
+		expect(screen.getByTestId("hermes-web-ui-password")).toBeTruthy();
+		expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
+	});
+
 	it("redeploys Web UI when it is already enabled", async () => {
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				webUi: {
-					enabled: true,
-					port: 8787,
-					proxyPath: "/api/servers/server_123/web-ui/proxy/",
-					updatedAt: "2026-05-26T05:00:00.000Z",
-				},
-			}),
-		});
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					webUi: createWebUi({
+						enabled: true,
+						deployStatus: "deploying",
+						updatedAt: "2026-05-26T05:00:00.000Z",
+					}),
+				}),
+			})
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					serverDetail: createDetail({
+						webUi: createWebUi({
+							enabled: true,
+							deployStatus: "succeeded",
+							updatedAt: "2026-05-26T05:00:00.000Z",
+						}),
+					}),
+				}),
+			});
 
 		render(
 			<HermesWebUiCard
 				detail={createDetail({
-					webUi: {
+					webUi: createWebUi({
 						enabled: true,
-						port: 8787,
-						proxyPath: "/api/servers/server_123/web-ui/proxy/",
-						updatedAt: "2026-05-26T04:00:00.000Z",
-					},
+						deployStatus: "succeeded",
+					}),
 				})}
 			/>,
 		);
@@ -148,7 +203,13 @@ describe("HermesWebUiCard", () => {
 				"/api/servers/server_123/web-ui/deploy",
 				{ method: "POST" },
 			);
+			expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
 		});
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5000);
+		});
+
 		expect(
 			await screen.findByText(
 				"Hermes Web UI redeployed. Try opening it again.",
@@ -156,40 +217,65 @@ describe("HermesWebUiCard", () => {
 		).toBeTruthy();
 	});
 
-	it("deploys Web UI without onDetailChange and shows open control", async () => {
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				webUi: {
-					enabled: true,
-					port: 8787,
-					proxyPath: "/api/servers/server_123/web-ui/proxy/",
-					updatedAt: "2026-05-26T04:00:00.000Z",
-				},
-			}),
-		});
+	it("deploys Web UI without onDetailChange and shows open control after polling", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					webUi: createWebUi({ deployStatus: "deploying" }),
+				}),
+			})
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					serverDetail: createDetail({
+						webUi: createWebUi({
+							enabled: true,
+							deployStatus: "succeeded",
+						}),
+					}),
+				}),
+			});
 
 		render(<HermesWebUiCard detail={createDetail()} />);
 		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
+
+		await waitFor(() => {
+			expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
+		});
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5000);
+		});
 
 		expect(await screen.findByTestId("hermes-web-ui-open")).toBeTruthy();
 		expect(screen.queryByTestId("hermes-web-ui-setup")).toBeNull();
 	});
 
 	it("deploys Web UI and updates detail on success", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 		const onDetailChange = vi.fn();
 
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				webUi: {
-					enabled: true,
-					port: 8787,
-					proxyPath: "/api/servers/server_123/web-ui/proxy/",
-					updatedAt: "2026-05-26T04:00:00.000Z",
-				},
-			}),
-		});
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					webUi: createWebUi({ deployStatus: "deploying" }),
+				}),
+			})
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					serverDetail: createDetail({
+						webUi: createWebUi({
+							enabled: true,
+							deployStatus: "succeeded",
+						}),
+					}),
+				}),
+			});
 
 		render(
 			<HermesWebUiCard
@@ -205,8 +291,52 @@ describe("HermesWebUiCard", () => {
 				"/api/servers/server_123/web-ui/deploy",
 				{ method: "POST" },
 			);
+			expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
+		});
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5000);
+		});
+
+		await waitFor(() => {
 			expect(onDetailChange).toHaveBeenCalled();
 		});
+	});
+
+	it("shows poll failure error when background deploy fails", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					webUi: createWebUi({ deployStatus: "deploying" }),
+				}),
+			})
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					serverDetail: createDetail({
+						webUi: createWebUi({
+							deployStatus: "failed",
+							deployError: "Container start failed",
+						}),
+					}),
+				}),
+			});
+
+		render(<HermesWebUiCard detail={createDetail()} />);
+		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
+
+		await waitFor(() => {
+			expect(screen.getByText("Setting up Web UI...")).toBeTruthy();
+		});
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5000);
+		});
+
+		expect(await screen.findByText("Container start failed")).toBeTruthy();
 	});
 
 	it("shows an error when deploy fails", async () => {
@@ -241,12 +371,7 @@ describe("HermesWebUiCard", () => {
 		render(
 			<HermesWebUiCard
 				detail={createDetail({
-					webUi: {
-						enabled: true,
-						port: 8787,
-						proxyPath: "/api/servers/server_123/web-ui/proxy/",
-						updatedAt: "2026-05-26T04:00:00.000Z",
-					},
+					webUi: createWebUi({ enabled: true, deployStatus: "succeeded" }),
 				})}
 			/>,
 		);
@@ -268,6 +393,20 @@ describe("HermesWebUiCard", () => {
 		expect(communityLinks.length).toBeGreaterThanOrEqual(1);
 	});
 });
+
+function createWebUi(
+	overrides?: Partial<NonNullable<ServerDetailSnapshot["webUi"]>>,
+): NonNullable<ServerDetailSnapshot["webUi"]> {
+	return {
+		enabled: false,
+		port: 8787,
+		proxyPath: "/api/servers/server_123/web-ui/proxy/",
+		deployStatus: "idle",
+		deployError: null,
+		updatedAt: "2026-05-26T04:00:00.000Z",
+		...overrides,
+	};
+}
 
 function createDetail(overrides?: {
 	install?: ServerDetailSnapshot["install"];

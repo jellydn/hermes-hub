@@ -156,25 +156,56 @@ describe("web-ui handlers", () => {
 		expect(response.status).toBe(401);
 	});
 
-	it("deploys Web UI when install succeeded", async () => {
+	it("returns 202 immediately while deploy runs in the background", async () => {
 		getAuthSession.mockResolvedValue({
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
+		deployManagedCompose.mockReturnValue(new Promise(() => {}));
 
 		const response = await deployServerWebUi(createContext());
 		const payload = await response.json();
 
-		expect(response.status).toBe(200);
-		expect(payload.webUi.enabled).toBe(true);
-		expect(deployManagedCompose).toHaveBeenCalledWith(
+		expect(response.status).toBe(202);
+		expect(payload.status).toBe("deploying");
+		expect(payload.webUi.deployStatus).toBe("deploying");
+		expect(payload.webUi.enabled).toBe(false);
+		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
+		expect(insertValues).toHaveBeenCalledWith(
 			expect.objectContaining({
-				intent: "web-ui",
 				serverId: "server_123",
-				webUiPort: 8787,
+				deployStatus: "deploying",
+				deployError: null,
 			}),
 		);
-		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
+	});
+
+	it("upserts deploying state while preserving enabled on redeploy", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:existing-password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		deployManagedCompose.mockReturnValue(new Promise(() => {}));
+
+		const response = await deployServerWebUi(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(202);
+		expect(payload.webUi.enabled).toBe(true);
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				enabled: true,
+				deployStatus: "deploying",
+			}),
+		);
 	});
 
 	it("rejects deploy when install is missing", async () => {
