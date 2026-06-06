@@ -2,12 +2,13 @@ import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatAiProviderLabel } from "@/lib/ai-providers";
+import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
 
 import type { ProviderSettingsSummary } from "./provider-settings";
 
 type ProviderSettingsAsideProps = {
 	savedConfig: ProviderSettingsSummary | null;
-	telegramDeploy?: { deployedServerHost: string } | null;
+	telegramDeploy?: TelegramDeployInfo | null;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;

@@ -28,6 +28,8 @@ const {
 	getServerWebUiStatus,
 	revealServerWebUiPassword,
 	proxyServerWebUi,
+	savePersonaSettings,
+	deployPersonaToHermes,
 	authHandler,
 	hasDatabaseUrl,
 } = vi.hoisted(() => ({
@@ -58,6 +60,8 @@ const {
 	getServerWebUiStatus: vi.fn(),
 	revealServerWebUiPassword: vi.fn(),
 	proxyServerWebUi: vi.fn(),
+	savePersonaSettings: vi.fn(),
+	deployPersonaToHermes: vi.fn(),
 	authHandler: vi.fn(),
 	hasDatabaseUrl: vi.fn(() => true),
 }));
@@ -118,6 +122,11 @@ vi.mock("./web-ui", () => ({
 	getServerWebUiStatus,
 	revealServerWebUiPassword,
 	proxyServerWebUi,
+}));
+
+vi.mock("./settings", () => ({
+	savePersonaSettings,
+	deployPersonaToHermes,
 }));
 
 vi.mock("./auth", () => ({
@@ -585,6 +594,82 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(proxyServerWebUi).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes persona save requests through the settings handler", async () => {
+		savePersonaSettings.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					settings: { agentPersona: "You are Hermes." },
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/settings/persona",
+			{
+				method: "POST",
+				body: JSON.stringify({ agentPersona: "You are Hermes." }),
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(savePersonaSettings).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes persona deploy requests through the settings handler", async () => {
+		deployPersonaToHermes.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					status: "deployed",
+					serverHost: "1.2.3.4",
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/settings/persona/deploy",
+			{ method: "POST" },
+		);
+
+		expect(response.status).toBe(200);
+		expect(deployPersonaToHermes).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects mutating persona routes over plain HTTP in production", async () => {
+		const previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+
+		try {
+			const saveResponse = await apiApp.request(
+				"http://localhost/api/settings/persona",
+				{
+					method: "POST",
+					body: JSON.stringify({ agentPersona: "You are Hermes." }),
+					headers: { "content-type": "application/json" },
+				},
+			);
+			const deployResponse = await apiApp.request(
+				"http://localhost/api/settings/persona/deploy",
+				{ method: "POST" },
+			);
+
+			expect(saveResponse.status).toBe(426);
+			expect(deployResponse.status).toBe(426);
+			expect(savePersonaSettings).not.toHaveBeenCalled();
+			expect(deployPersonaToHermes).not.toHaveBeenCalled();
+		} finally {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
 	});
 
 	it("routes Telegram disconnect requests through the Telegram handler", async () => {
