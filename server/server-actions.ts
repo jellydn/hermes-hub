@@ -36,9 +36,9 @@ const actionCommands: Record<
 	ServerActionType,
 	(targetVersion?: string) => string
 > = {
-	restart: () => "cd ~/hermes && sudo docker compose restart",
+	restart: () => "cd ~/hermes && sudo docker compose restart hermes",
 	update: () =>
-		"cd ~/hermes && sudo docker compose pull && sudo docker compose up -d",
+		"cd ~/hermes && sudo docker compose pull hermes && sudo docker compose up -d --no-deps hermes",
 	rollback: (targetVersion) => {
 		const imageTag = targetVersion?.trim() || "latest";
 		if (!isValidDockerTag(imageTag)) {
@@ -48,7 +48,7 @@ const actionCommands: Record<
 			"cd ~/hermes",
 			`sudo docker pull ${hermesImageRepository}:${imageTag}`,
 			`sudo sed -i.bak 's|image: ${hermesImageRepository}:.*|image: ${hermesImageRepository}:${imageTag}|' docker-compose.yml`,
-			"sudo docker compose up -d",
+			"sudo docker compose up -d --no-deps hermes",
 		].join(" && ");
 	},
 };

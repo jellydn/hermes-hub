@@ -57,6 +57,23 @@ vi.mock("./web-ui/records", () => ({
 		`/api/servers/${serverId}/web-ui/proxy/`,
 }));
 
+function mockSshExec(
+	implementation?: (
+		command: string,
+	) => Promise<{ code: number; stdout: string; stderr: string }>,
+) {
+	withSshConnection.mockImplementation(async (_input, run) => {
+		const execCommand = vi.fn(async (command: string) => {
+			if (implementation) {
+				return implementation(command);
+			}
+
+			return { code: 0, stdout: "ok", stderr: "" };
+		});
+		return run({ execCommand });
+	});
+}
+
 describe("server actions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -111,20 +128,27 @@ describe("server actions", () => {
 		updateInstallSet.mockReturnValue({ where: updateInstallWhere });
 		dbUpdate.mockReturnValue({ set: updateInstallSet });
 
-		withSshConnection.mockImplementation(async (_input, run) => {
-			const execCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 0, stdout: "ok", stderr: "" });
-			return run({ execCommand });
-		});
+		mockSshExec();
 	});
 
 	it("runs restart actions over SSH and records audit history", async () => {
+		const execCommand = vi.fn().mockResolvedValue({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		});
+		withSshConnection.mockImplementation(async (_input, run) =>
+			run({ execCommand }),
+		);
+
 		const { runServerAction } = await import("./server-actions");
 		const response = await runServerAction(
 			createContext({ action: "restart" }),
 		);
 
+		expect(execCommand).toHaveBeenCalledWith(
+			"cd ~/hermes && sudo docker compose restart hermes",
+		);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
@@ -254,9 +278,21 @@ describe("server actions", () => {
 	});
 
 	it("runs update actions over SSH and records audit history", async () => {
+		const execCommand = vi.fn().mockResolvedValue({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		});
+		withSshConnection.mockImplementation(async (_input, run) =>
+			run({ execCommand }),
+		);
+
 		const { runServerAction } = await import("./server-actions");
 		const response = await runServerAction(createContext({ action: "update" }));
 
+		expect(execCommand).toHaveBeenCalledWith(
+			"cd ~/hermes && sudo docker compose pull hermes && sudo docker compose up -d --no-deps hermes",
+		);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
@@ -277,11 +313,28 @@ describe("server actions", () => {
 	});
 
 	it("runs rollback with an explicit target version", async () => {
+		const execCommand = vi.fn().mockResolvedValue({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		});
+		withSshConnection.mockImplementation(async (_input, run) =>
+			run({ execCommand }),
+		);
+
 		const { runServerAction } = await import("./server-actions");
 		const response = await runServerAction(
 			createContext({ action: "rollback", targetVersion: "v1.2.3" }),
 		);
 
+		expect(execCommand).toHaveBeenCalledWith(
+			[
+				"cd ~/hermes",
+				"sudo docker pull nousresearch/hermes-agent:v1.2.3",
+				"sudo sed -i.bak 's|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
+				"sudo docker compose up -d --no-deps hermes",
+			].join(" && "),
+		);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
@@ -360,12 +413,11 @@ describe("server actions", () => {
 	});
 
 	it("records a failed audit log when an SSH command fails", async () => {
-		withSshConnection.mockImplementation(async (_input, run) => {
-			const execCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 1, stdout: "", stderr: "Container error" });
-			return run({ execCommand });
-		});
+		mockSshExec(async () => ({
+			code: 1,
+			stdout: "",
+			stderr: "Container error",
+		}));
 
 		insertAuditValues.mockClear();
 		const { runServerAction } = await import("./server-actions");
