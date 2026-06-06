@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	assertWebUiReachable,
+	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
 	formatWebUiProxyError,
 	isRemotePortUnreachable,
@@ -18,6 +19,31 @@ describe("isRemotePortUnreachable", () => {
 
 	it("returns false for unrelated errors", () => {
 		expect(isRemotePortUnreachable(new Error("Upstream timeout"))).toBe(false);
+	});
+});
+
+describe("formatHermesCliImportFailure", () => {
+	it("includes the import error and recent container logs", () => {
+		expect(
+			formatHermesCliImportFailure(
+				"ModuleNotFoundError: No module named 'hermes_cli'",
+				"running exit=0 error=",
+				"startup ok\nimport failed",
+			),
+		).toContain("cannot import hermes_cli");
+		expect(
+			formatHermesCliImportFailure(
+				"ModuleNotFoundError: No module named 'hermes_cli'",
+				"running exit=0 error=",
+				"startup ok\nimport failed",
+			),
+		).toContain("import failed");
+	});
+
+	it("falls back when diagnostics are unavailable", () => {
+		expect(formatHermesCliImportFailure(undefined, undefined, undefined)).toBe(
+			"Hermes Web UI cannot import hermes_cli (unknown import error).",
+		);
 	});
 });
 
@@ -80,6 +106,7 @@ describe("assertWebUiReachable", () => {
 				stderr: "",
 				code: 0,
 			})
+			.mockResolvedValueOnce({ stdout: "", stderr: "", code: 0 })
 			.mockResolvedValueOnce({ stdout: "", stderr: "", code: 0 });
 
 		await assertWebUiReachable({ execCommand } as never, 8787);
@@ -92,6 +119,10 @@ describe("assertWebUiReachable", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(
 			4,
 			"curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8787/login",
+		);
+		expect(execCommand).toHaveBeenNthCalledWith(
+			5,
+			`sudo docker exec hermes-webui /app/venv/bin/python -c "import hermes_cli"`,
 		);
 	});
 
@@ -109,6 +140,7 @@ describe("assertWebUiReachable", () => {
 				stderr: "",
 				code: 0,
 			})
+			.mockResolvedValueOnce({ stdout: "", stderr: "", code: 0 })
 			.mockResolvedValueOnce({ stdout: "", stderr: "", code: 0 });
 
 		await assertWebUiReachable({ execCommand } as never, 8787);
@@ -117,6 +149,38 @@ describe("assertWebUiReachable", () => {
 		expect(execCommand).toHaveBeenCalledWith(
 			"curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8787/login",
 		);
+		expect(execCommand).toHaveBeenCalledWith(
+			`sudo docker exec hermes-webui /app/venv/bin/python -c "import hermes_cli"`,
+		);
+	});
+
+	it("reports container diagnostics when hermes_cli import fails", async () => {
+		execCommand
+			.mockResolvedValueOnce({
+				stdout: "hermes-webui",
+				stderr: "",
+				code: 0,
+			})
+			.mockResolvedValueOnce({ stdout: "", stderr: "", code: 0 })
+			.mockResolvedValueOnce({
+				stdout: "",
+				stderr: "ModuleNotFoundError: No module named 'hermes_cli'",
+				code: 1,
+			})
+			.mockResolvedValueOnce({
+				stdout: "running exit=0 error=",
+				stderr: "",
+				code: 0,
+			})
+			.mockResolvedValueOnce({
+				stdout: `${"init noise\n".repeat(40)}!! ERROR: hermes_cli missing`,
+				stderr: "",
+				code: 0,
+			});
+
+		await expect(
+			assertWebUiReachable({ execCommand } as never, 8787),
+		).rejects.toThrow(/hermes_cli missing/i);
 	});
 
 	it("reports container diagnostics when the service never stays running", async () => {

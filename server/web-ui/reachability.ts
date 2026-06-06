@@ -12,6 +12,7 @@ const WEB_UI_CONTAINER_NAME = "hermes-webui";
 const WEB_UI_STARTUP_ATTEMPTS = 60;
 const WEB_UI_STARTUP_DELAY_SECONDS = 5;
 const WEB_UI_LOG_TAIL_LINES = 80;
+const WEB_UI_HERMES_CLI_IMPORT_COMMAND = `sudo docker exec ${WEB_UI_CONTAINER_NAME} /app/venv/bin/python -c "import hermes_cli"`;
 export const WEB_UI_DIAGNOSTICS_MAX_LENGTH = 2000;
 
 export function isRemotePortUnreachable(error: unknown): boolean {
@@ -87,6 +88,44 @@ async function buildContainerFailureError(ssh: NodeSSH) {
 	);
 }
 
+export function formatHermesCliImportFailure(
+	importError: string | undefined,
+	state: string | undefined,
+	logs: string | undefined,
+	maxLength = WEB_UI_DIAGNOSTICS_MAX_LENGTH,
+) {
+	const importPart = importError?.trim() || "unknown import error";
+	const details = formatWebUiContainerFailureDetails(state, logs, maxLength);
+	const prefix = `Hermes Web UI cannot import hermes_cli (${importPart}).`;
+
+	if (!details) {
+		return prefix;
+	}
+
+	const remaining = maxLength - prefix.length - 1;
+	if (remaining <= 0) {
+		return prefix.slice(0, maxLength);
+	}
+
+	if (details.length <= remaining) {
+		return `${prefix} ${details}`;
+	}
+
+	return `${prefix} ${details.slice(0, remaining)}`;
+}
+
+async function assertHermesCliImportable(ssh: NodeSSH) {
+	const importResult = await ssh.execCommand(WEB_UI_HERMES_CLI_IMPORT_COMMAND);
+	if (importResult.code === 0) {
+		return;
+	}
+
+	const { state, logs } = await readWebUiContainerDiagnostics(ssh);
+	const importError =
+		importResult.stderr?.trim() || importResult.stdout?.trim() || undefined;
+	throw new Error(formatHermesCliImportFailure(importError, state, logs));
+}
+
 async function isWebUiContainerRunning(ssh: NodeSSH) {
 	const containerResult = await ssh.execCommand(
 		`sudo docker ps --filter name=^/${WEB_UI_CONTAINER_NAME}$ --filter status=running --format '{{.Names}}'`,
@@ -133,6 +172,7 @@ export async function assertWebUiReachable(ssh: NodeSSH, port: number) {
 		// react-doctor-disable-next-line react-doctor/async-await-in-loop
 		const outcome = await probeWebUiStartup(ssh, port, attempt);
 		if (outcome === "ready") {
+			await assertHermesCliImportable(ssh);
 			return;
 		}
 
