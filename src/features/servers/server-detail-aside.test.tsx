@@ -119,7 +119,8 @@ describe("ServerDetailAside", () => {
 
 		expect(screen.getByText("Update Hermes failed.")).toBeTruthy();
 		expect(screen.queryByText(longFailureOutput)).toBeNull();
-		expect(screen.getByText("Restarted Hermes successfully.")).toBeTruthy();
+		expect(screen.queryByText("Restarted Hermes successfully.")).toBeNull();
+		expect(screen.queryByText("succeeded")).toBeNull();
 	});
 });
 

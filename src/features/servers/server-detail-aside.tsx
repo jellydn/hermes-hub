@@ -73,23 +73,29 @@ function SummaryEntry({ label, value }: SummaryEntryProps) {
 }
 
 function ActionHistoryItem({ item }: { item: ServerActionHistoryItem }) {
+	const isSuccess = item.result === "succeeded";
+
 	return (
 		<li className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-3">
-			<div className="flex items-start justify-between gap-3">
+			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
 						{formatActionTitle(item.action)}
 					</p>
-					<p className="mt-1 mb-0 line-clamp-2 text-sm text-[var(--sea-ink-soft)]">
-						{formatActionHistorySummary(item)}
-					</p>
+					{!isSuccess ? (
+						<p className="mt-1 mb-0 line-clamp-2 text-sm text-[var(--sea-ink-soft)]">
+							{formatActionHistorySummary(item)}
+						</p>
+					) : null}
 					<p className="mt-1 mb-0 text-xs text-[var(--sea-ink-soft)]">
 						{formatTimestamp(item.createdAt)}
 					</p>
 				</div>
-				<span className={badgeClassName(item.result)}>
-					<StatusIcon status={badgeIconType(item.result)} size={3} />
-					{item.result}
+				<span
+					className={badgeClassName(item.result)}
+					title={isSuccess ? "Succeeded" : "Failed"}
+				>
+					<StatusIcon status={badgeIconType(item.result)} size={3.5} />
 				</span>
 			</div>
 		</li>
