@@ -34,10 +34,6 @@ export class WebUiProxyError extends Error {
 	}
 }
 
-export type ProxyRequestTarget =
-	| { kind: "redirect"; location: string }
-	| { kind: "forward"; upstreamPath: string };
-
 function normalizeProxyBasePath(proxyBasePath: string) {
 	return proxyBasePath.endsWith("/")
 		? proxyBasePath.slice(0, -1)
@@ -47,18 +43,14 @@ function normalizeProxyBasePath(proxyBasePath: string) {
 export function resolveProxyRequestTarget(
 	requestUrl: string,
 	proxyBasePath: string,
-	landingPath: string,
-): ProxyRequestTarget {
+): string {
 	const url = new URL(requestUrl);
 	const normalizedBase = normalizeProxyBasePath(proxyBasePath);
 	if (url.pathname === normalizedBase || url.pathname === proxyBasePath) {
-		return { kind: "redirect", location: landingPath };
+		return "/";
 	}
 
-	return {
-		kind: "forward",
-		upstreamPath: getUpstreamPath(requestUrl, proxyBasePath),
-	};
+	return getUpstreamPath(requestUrl, proxyBasePath);
 }
 
 export function getUpstreamPath(requestUrl: string, proxyBasePath: string) {
@@ -72,35 +64,30 @@ export function getUpstreamPath(requestUrl: string, proxyBasePath: string) {
 	}
 
 	const subpath = url.pathname.slice(prefix.length);
-	// Root paths are intercepted by resolveProxyRequestTarget before this
-	// is ever called; a bare proxy-root arriving here is a bug.
-	if (subpath === "") {
-		throw new Error(
-			`Proxy root reached getUpstreamPath unexpectedly: ${url.pathname}`,
-		);
-	}
-	return `/${subpath}`;
+	return subpath === "" ? "/" : `/${subpath}`;
 }
 
 export function rewriteLocationHeader(
 	value: string,
 	proxyBasePath: string,
 	upstreamOrigin: string,
-	landingPath?: string,
 ) {
 	const trimmed = value.trim();
 	if (trimmed.startsWith("/")) {
-		if (trimmed === "/" && landingPath) {
-			return landingPath;
-		}
+		return rewritePathLocationHeader(trimmed, proxyBasePath);
+	}
 
-		return joinProxyPath(proxyBasePath, trimmed);
+	if (!trimmed.includes("://")) {
+		return rewritePathLocationHeader(`/${trimmed}`, proxyBasePath);
 	}
 
 	try {
 		const parsed = new URL(trimmed);
 		if (parsed.origin === upstreamOrigin) {
-			return joinProxyPath(proxyBasePath, `${parsed.pathname}${parsed.search}`);
+			return rewritePathLocationHeader(
+				`${parsed.pathname}${parsed.search}`,
+				proxyBasePath,
+			);
 		}
 	} catch {
 		return value;
@@ -120,7 +107,6 @@ export function rewriteProxyResponseHeaders(
 	headers: Headers,
 	proxyBasePath: string,
 	upstreamOrigin: string,
-	landingPath?: string,
 ) {
 	const rewritten = new Headers();
 
@@ -133,12 +119,7 @@ export function rewriteProxyResponseHeaders(
 		if (lowerName === "location") {
 			rewritten.set(
 				name,
-				rewriteLocationHeader(
-					value,
-					proxyBasePath,
-					upstreamOrigin,
-					landingPath,
-				),
+				rewriteLocationHeader(value, proxyBasePath, upstreamOrigin),
 			);
 			continue;
 		}
@@ -292,6 +273,51 @@ function rewriteCookieSegment(segment: string, proxyBasePath: string) {
 	}
 
 	return rewritten.join("; ");
+}
+
+function rewritePathLocationHeader(value: string, proxyBasePath: string) {
+	const questionIndex = value.indexOf("?");
+	const pathPart = questionIndex === -1 ? value : value.slice(0, questionIndex);
+	const searchPart = questionIndex === -1 ? "" : value.slice(questionIndex + 1);
+
+	const proxiedPath =
+		pathPart === "/" ? proxyBasePath : joinProxyPath(proxyBasePath, pathPart);
+
+	if (!searchPart) {
+		return proxiedPath;
+	}
+
+	const params = new URLSearchParams(searchPart);
+	rewriteNextSearchParam(params, proxyBasePath);
+	const rewrittenSearch = params.toString();
+	return rewrittenSearch ? `${proxiedPath}?${rewrittenSearch}` : proxiedPath;
+}
+
+function rewriteNextSearchParam(
+	params: URLSearchParams,
+	proxyBasePath: string,
+) {
+	const next = params.get("next");
+	if (!next) {
+		return;
+	}
+
+	params.set("next", rewriteUpstreamPathForProxy(next, proxyBasePath));
+}
+
+function rewriteUpstreamPathForProxy(
+	upstreamPath: string,
+	proxyBasePath: string,
+) {
+	if (upstreamPath === "/" || upstreamPath === "") {
+		return proxyBasePath;
+	}
+
+	if (upstreamPath.startsWith("/")) {
+		return joinProxyPath(proxyBasePath, upstreamPath);
+	}
+
+	return joinProxyPath(proxyBasePath, `/${upstreamPath}`);
 }
 
 function joinProxyPath(proxyBasePath: string, upstreamPath: string) {

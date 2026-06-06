@@ -79,8 +79,6 @@ vi.mock("./web-ui/records", () => ({
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
-	getWebUiProxyLandingPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/chat`,
 }));
 
 import {

@@ -11,7 +11,6 @@ import {
 import {
 	decryptWebUiPassword,
 	getResolvedServerWebUiRecord,
-	getWebUiProxyLandingPath,
 	getWebUiProxyPath,
 } from "./records";
 import { proxyRequestOverSsh } from "./ssh-forward";
@@ -105,20 +104,10 @@ export async function proxyServerWebUi(context: Context) {
 	}
 
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
-	const landingPath = getWebUiProxyLandingPath(ctx.serverId);
-	const target = resolveProxyRequestTarget(
+	const upstreamPath = resolveProxyRequestTarget(
 		context.req.url,
 		proxyBasePath,
-		landingPath,
 	);
-	if (target.kind === "redirect") {
-		return new Response(null, {
-			status: 302,
-			headers: { Location: target.location },
-		});
-	}
-
-	const upstreamPath = target.upstreamPath;
 	const upstreamOrigin = `http://127.0.0.1:${ctx.webUi.port}`;
 
 	try {
@@ -146,7 +135,6 @@ export async function proxyServerWebUi(context: Context) {
 				upstreamResponse.headers,
 				proxyBasePath,
 				upstreamOrigin,
-				landingPath,
 			),
 		});
 	} catch (error) {

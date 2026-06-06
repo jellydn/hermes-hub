@@ -234,7 +234,7 @@ apiApp.get(
 	httpsMiddleware,
 	revealServerWebUiPassword,
 );
-// Root path redirects to chat; the catch-all handles nested proxied assets.
+// Proxy root forwards upstream /; the catch-all handles nested proxied assets.
 apiApp.all("/servers/:id/web-ui/proxy", httpsMiddleware, proxyServerWebUi);
 apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);

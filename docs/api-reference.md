@@ -1311,7 +1311,7 @@ Returns the decrypted Hermes Web UI password for the authenticated server owner.
 
 Authenticated reverse proxy to the Hermes Web UI running on the VPS. Requests are forwarded over a pooled SSH connection to `127.0.0.1:<port>` on the remote host. Response headers are rewritten so assets and redirects resolve under the proxy path.
 
-A request to `/api/servers/:id/web-ui/proxy` (no trailing slash) returns `308` to `/api/servers/:id/web-ui/proxy/`.
+A request to `/api/servers/:id/web-ui/proxy` (no trailing slash) returns `308` to `/api/servers/:id/web-ui/proxy/`. The proxy root forwards upstream `/` so the Hermes Web UI shell loads at the proxied landing path.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
