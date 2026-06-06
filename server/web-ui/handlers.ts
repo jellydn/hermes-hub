@@ -1,30 +1,17 @@
 import type { Context } from "hono";
 
-import { defaultHermesWebUiPort } from "../constants";
-import { encryptSecret } from "../crypto";
-import { getDb } from "../db";
-import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
-import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
-import { runWebUiDeployInBackground } from "./background-deploy";
-import {
-	releaseWebUiDeployLock,
-	tryAcquireWebUiDeployLock,
-} from "./deploy-lock";
+import { DeployError, getStatus, startDeploy } from "./deploy";
 import { requireEnabledWebUi } from "./enabled-context";
-import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
 import { formatWebUiProxyError } from "./reachability";
 import {
 	decryptWebUiPassword,
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath,
-	upsertServerWebUiRecord,
 } from "./records";
-import { buildWebUiSnapshot } from "./snapshot";
 import { proxyRequestOverSsh } from "./ssh-forward";
-import { invalidatePooledSsh } from "./ssh-pool";
 
 export async function getServerWebUiStatus(context: Context) {
 	const owned = await requireOwnedServer(context);
@@ -32,10 +19,8 @@ export async function getServerWebUiStatus(context: Context) {
 		return owned;
 	}
 
-	const record = await getResolvedServerWebUiRecord(owned.serverId);
-	return context.json({
-		webUi: record ? buildWebUiSnapshot(owned.serverId, record) : null,
-	});
+	const snapshot = await getStatus(owned.serverId);
+	return context.json({ webUi: snapshot });
 }
 
 export async function deployServerWebUi(context: Context) {
@@ -44,133 +29,21 @@ export async function deployServerWebUi(context: Context) {
 		return ctx;
 	}
 
-	const installRecord = await getLatestInstallForServer(ctx.serverId);
-	if (!installRecord) {
-		return context.json(
-			{ error: "Install Hermes on this server before setting up the Web UI." },
-			400,
-		);
-	}
-	if (installRecord.status !== "succeeded") {
-		return context.json(
-			{
-				error:
-					"The latest Hermes install did not succeed. Fix the install before setting up the Web UI.",
-			},
-			400,
-		);
-	}
-
-	const db = getDb();
 	const ipAddress = getClientIp(context);
-	const existingRecord = await getResolvedServerWebUiRecord(ctx.serverId);
-
-	if (existingRecord?.deployStatus === "deploying") {
-		const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, existingRecord);
-		return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
-	}
-
-	if (!tryAcquireWebUiDeployLock(ctx.serverId)) {
-		const record = await getResolvedServerWebUiRecord(ctx.serverId);
-		const webUiSnapshot = record
-			? buildWebUiSnapshot(ctx.serverId, record)
-			: buildWebUiSnapshot(ctx.serverId, {
-					enabled: false,
-					encryptedPassword: null,
-					port: defaultHermesWebUiPort,
-					deployStatus: "deploying",
-					deployError: null,
-					deployStartedAt: new Date(),
-					updatedAt: new Date(),
-				});
-		return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
-	}
-
-	const passwordResult = resolveWebUiDeployPassword(existingRecord);
-	if ("error" in passwordResult) {
-		releaseWebUiDeployLock(ctx.serverId);
-		const message = passwordResult.error;
-
-		await insertAuditLog(db, {
-			userId: ctx.session.user.id,
-			action: "server.web_ui.deploy.failed",
-			serverId: ctx.serverId,
-			details: { serverId: ctx.serverId, error: message },
-			ipAddress,
-		});
-
-		return context.json({ error: `Deploy failed: ${message}` }, 500);
-	}
-	const password = passwordResult.password;
-	const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
-	const existingEnabled = existingRecord?.enabled ?? false;
-
-	invalidatePooledSsh(ctx.session.user.id, ctx.serverId);
-
-	const now = new Date();
-	const encryptedPassword = encryptSecret(password);
 
 	try {
-		await upsertServerWebUiRecord(db, {
-			serverId: ctx.serverId,
-			enabled: existingEnabled,
-			encryptedPassword,
-			port: webUiPort,
-			deployStatus: "deploying",
-			deployError: null,
-			deployStartedAt: now,
-			updatedAt: now,
-		});
+		const result = await startDeploy(ctx, ipAddress);
+		return context.json(result, 202 as const);
 	} catch (error) {
-		releaseWebUiDeployLock(ctx.serverId);
+		if (error instanceof DeployError) {
+			return context.json(
+				{ error: error.message },
+				error.statusCode as 400 | 500,
+			);
+		}
+
 		throw error;
 	}
-
-	const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, {
-		enabled: existingEnabled,
-		encryptedPassword,
-		port: webUiPort,
-		deployStatus: "deploying",
-		deployError: null,
-		deployStartedAt: now,
-		updatedAt: now,
-	});
-
-	void runWebUiDeployInBackground({
-		ctx,
-		password,
-		webUiPort,
-		existingEnabled,
-		ipAddress,
-	}).catch(async (error: unknown) => {
-		console.error("Web UI background deploy task failed", {
-			serverId: ctx.serverId,
-			error,
-		});
-
-		const message = error instanceof Error ? error.message : "Deploy failed";
-
-		try {
-			await upsertServerWebUiRecord(db, {
-				serverId: ctx.serverId,
-				enabled: existingEnabled,
-				port: webUiPort,
-				deployStatus: "failed",
-				deployError: message,
-				deployStartedAt: null,
-				updatedAt: new Date(),
-			});
-		} catch (persistError) {
-			console.error("Failed to persist Web UI deploy failure", {
-				serverId: ctx.serverId,
-				persistError,
-			});
-		} finally {
-			releaseWebUiDeployLock(ctx.serverId);
-		}
-	});
-
-	return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
 }
 
 export async function revealServerWebUiPassword(context: Context) {
@@ -183,7 +56,7 @@ export async function revealServerWebUiPassword(context: Context) {
 	if (!webUiRecord?.enabled) {
 		return context.json(
 			{ error: "Hermes Web UI is not enabled on this server." },
-			400,
+			400 as const,
 		);
 	}
 
@@ -191,7 +64,7 @@ export async function revealServerWebUiPassword(context: Context) {
 	if (!password) {
 		return context.json(
 			{ error: "Failed to decrypt Hermes Web UI password." },
-			500,
+			500 as const,
 		);
 	}
 
@@ -246,7 +119,7 @@ export async function proxyServerWebUi(context: Context) {
 	} catch (error) {
 		return context.json(
 			{ error: formatWebUiProxyError(error, ctx.webUi.port) },
-			502,
+			502 as const,
 		);
 	}
 }

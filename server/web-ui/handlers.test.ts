@@ -5,32 +5,20 @@ const {
 	getAuthSession,
 	encryptSecret,
 	decryptSecret,
-	deployManagedCompose,
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
 	getResolvedServerWebUiRecord,
-	upsertServerWebUiRecord,
-	insertAuditLog,
-	getLatestInstallForServer,
 	proxyRequestOverSsh,
-	invalidatePooledSsh,
-	tryAcquireWebUiDeployLock,
-	releaseWebUiDeployLock,
+	startDeploy,
 } = vi.hoisted(() => ({
 	getAuthSession: vi.fn(),
 	encryptSecret: vi.fn(),
 	decryptSecret: vi.fn(),
-	deployManagedCompose: vi.fn(),
 	getOwnedServerRecord: vi.fn(),
 	resolveServerSshConfigOrError: vi.fn(),
 	getResolvedServerWebUiRecord: vi.fn(),
-	upsertServerWebUiRecord: vi.fn(),
-	insertAuditLog: vi.fn(),
-	getLatestInstallForServer: vi.fn(),
 	proxyRequestOverSsh: vi.fn(),
-	invalidatePooledSsh: vi.fn(),
-	tryAcquireWebUiDeployLock: vi.fn(),
-	releaseWebUiDeployLock: vi.fn(),
+	startDeploy: vi.fn(),
 }));
 
 vi.mock("../auth", () => ({
@@ -42,17 +30,9 @@ vi.mock("../crypto", () => ({
 	decryptSecret,
 }));
 
-vi.mock("../managed-compose-deploy", () => ({
-	deployManagedCompose,
-}));
-
 vi.mock("../server-records", () => ({
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
-}));
-
-vi.mock("../install/records", () => ({
-	getLatestInstallForServer,
 }));
 
 vi.mock("./records", () => ({
@@ -61,24 +41,38 @@ vi.mock("./records", () => ({
 		`/api/servers/${serverId}/web-ui/proxy/`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
-	upsertServerWebUiRecord,
 }));
 
 vi.mock("./ssh-forward", () => ({
 	proxyRequestOverSsh,
 }));
 
-vi.mock("./ssh-pool", () => ({
-	invalidatePooledSsh,
+vi.mock("./deploy", () => ({
+	startDeploy,
+	getStatus: async (serverId: string) => {
+		const record = await getResolvedServerWebUiRecord(serverId);
+		if (!record) return null;
+		return {
+			enabled: record.enabled,
+			port: record.port,
+			proxyPath: `/api/servers/${serverId}/web-ui/proxy/`,
+			deployStatus: record.deployStatus,
+			deployError: record.deployError,
+			deployStartedAt: record.deployStartedAt?.toISOString() ?? null,
+			updatedAt: record.updatedAt.toISOString(),
+		};
+	},
+	DeployError: class extends Error {
+		readonly statusCode: number;
+		constructor(message: string, statusCode: number) {
+			super(message);
+			this.statusCode = statusCode;
+		}
+	},
 }));
 
-vi.mock("./deploy-lock", () => ({
-	tryAcquireWebUiDeployLock,
-	releaseWebUiDeployLock,
-}));
-
-vi.mock("../lib/insert-audit-log", () => ({
-	insertAuditLog,
+vi.mock("../lib/get-client-ip", () => ({
+	getClientIp: () => "127.0.0.1",
 }));
 
 vi.mock("../db", () => ({
@@ -120,7 +114,7 @@ describe("web-ui handlers", () => {
 		decryptSecret.mockImplementation((value: string) =>
 			value.startsWith("enc:") ? value.slice(4) : value,
 		);
-		deployManagedCompose.mockResolvedValue(undefined);
+
 		resolveServerSshConfigOrError.mockReturnValue({
 			ok: true,
 			authMethod: "password",
@@ -133,320 +127,231 @@ describe("web-ui handlers", () => {
 			username: "root",
 			hostKeyFingerprint: null,
 		});
-		insertAuditLog.mockResolvedValue(undefined);
-		upsertServerWebUiRecord.mockResolvedValue(undefined);
-		tryAcquireWebUiDeployLock.mockReturnValue(true);
 
-		getLatestInstallForServer.mockResolvedValue({ status: "succeeded" });
-		getResolvedServerWebUiRecord.mockResolvedValue(null);
-		invalidatePooledSsh.mockReturnValue(undefined);
-	});
-
-	it("rejects unauthorized deploy requests", async () => {
-		getAuthSession.mockResolvedValue(null);
-
-		const response = await deployServerWebUi(createContext());
-		expect(response.status).toBe(401);
-	});
-
-	it("returns 202 immediately while deploy runs in the background", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		deployManagedCompose.mockReturnValue(new Promise(() => {}));
-
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
-
-		expect(response.status).toBe(202);
-		expect(payload.status).toBe("deploying");
-		expect(payload.webUi.deployStatus).toBe("deploying");
-		expect(payload.webUi.enabled).toBe(false);
-		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
-		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				serverId: "server_123",
+		startDeploy.mockResolvedValue({
+			status: "deploying",
+			webUi: {
+				enabled: false,
+				port: 8787,
+				proxyPath: "/api/servers/server_123/web-ui/proxy/",
 				deployStatus: "deploying",
 				deployError: null,
-			}),
-		);
+				deployStartedAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			},
+		});
 	});
 
-	it("upserts deploying state while preserving enabled on redeploy", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:existing-password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
-		deployManagedCompose.mockReturnValue(new Promise(() => {}));
+	describe("deploy", () => {
+		it("rejects unauthorized deploy requests", async () => {
+			getAuthSession.mockResolvedValue(null);
 
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
+			const response = await deployServerWebUi(createContext());
+			expect(response.status).toBe(401);
+		});
 
-		expect(response.status).toBe(202);
-		expect(payload.webUi.enabled).toBe(true);
-		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
+		it("returns 202 when deploy starts successfully", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+
+			const response = await deployServerWebUi(createContext());
+			const payload = await response.json();
+
+			expect(response.status).toBe(202);
+			expect(payload.status).toBe("deploying");
+		});
+
+		it("maps DeployError to the correct HTTP status", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+
+			const { DeployError } = await import("./deploy");
+			startDeploy.mockRejectedValue(new DeployError("Install first", 400));
+
+			const response = await deployServerWebUi(createContext());
+			const payload = await response.json();
+
+			expect(response.status).toBe(400);
+			expect(payload.error).toBe("Install first");
+		});
+
+		it("re-throws non-DeployError exceptions", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+
+			startDeploy.mockRejectedValue(new Error("Boom"));
+
+			await expect(deployServerWebUi(createContext())).rejects.toThrow("Boom");
+		});
+	});
+
+	describe("status", () => {
+		it("returns current Web UI status", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
 				enabled: true,
-				deployStatus: "deploying",
-			}),
-		);
+				encryptedPassword: "enc:password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
+
+			const response = await getServerWebUiStatus(createContext());
+			const payload = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(payload.webUi?.deployStatus).toBe("succeeded");
+			expect(payload.webUi?.enabled).toBe(true);
+		});
+
+		it("rejects unauthorized status requests", async () => {
+			getAuthSession.mockResolvedValue(null);
+
+			const response = await getServerWebUiStatus(createContext());
+			expect(response.status).toBe(401);
+		});
 	});
 
-	it("returns 202 when another deploy is already in flight", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		tryAcquireWebUiDeployLock.mockReturnValue(false);
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: false,
-			encryptedPassword: "enc:password",
-			port: 8787,
-			deployStatus: "deploying",
-			deployError: null,
-			deployStartedAt: new Date(),
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+	describe("password", () => {
+		it("reveals the Web UI password for enabled servers", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
+
+			const response = await revealServerWebUiPassword(createContext());
+			const payload = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(payload.password).toBe("generated-password");
 		});
 
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
+		it("rejects unauthorized password reveal requests", async () => {
+			getAuthSession.mockResolvedValue(null);
 
-		expect(response.status).toBe(202);
-		expect(payload.status).toBe("deploying");
-		expect(upsertServerWebUiRecord).not.toHaveBeenCalled();
+			const response = await revealServerWebUiPassword(createContext());
+			expect(response.status).toBe(401);
+		});
 	});
 
-	it("returns current Web UI status", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
+	describe("proxy", () => {
+		it("redirects bare proxy roots to the trailing-slash path", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
 
-		const response = await getServerWebUiStatus(createContext());
-		const payload = await response.json();
+			const response = await proxyServerWebUi(
+				createContext({
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy",
+				}),
+			);
 
-		expect(response.status).toBe(200);
-		expect(payload.webUi?.deployStatus).toBe("succeeded");
-		expect(payload.webUi?.enabled).toBe(true);
-	});
-
-	it("rejects deploy when install is missing", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getLatestInstallForServer.mockResolvedValueOnce(null);
-
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
-
-		expect(response.status).toBe(400);
-		expect(payload.error).toMatch(/install hermes/i);
-	});
-
-	it("rejects deploy when install failed", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getLatestInstallForServer.mockResolvedValueOnce({ status: "failed" });
-
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
-
-		expect(response.status).toBe(400);
-		expect(payload.error).toMatch(/did not succeed/i);
-	});
-
-	it("rejects deploy when SSH credentials are missing", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		resolveServerSshConfigOrError.mockReturnValue({
-			ok: false,
-			error: "SSH credential required",
+			expect(response.status).toBe(308);
+			expect(response.headers.get("location")).toBe(
+				"/api/servers/server_123/web-ui/proxy/",
+			);
+			expect(proxyRequestOverSsh).not.toHaveBeenCalled();
 		});
 
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
+		it("returns actionable errors when the upstream port is closed", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
+			proxyRequestOverSsh.mockRejectedValue(
+				new Error("(SSH) Channel open failure: Connection refused"),
+			);
 
-		expect(response.status).toBe(400);
-		expect(payload.error).toBe("SSH credential required");
-	});
+			const response = await proxyServerWebUi(
+				createContext({
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+				}),
+			);
+			const payload = await response.json();
 
-	it("rejects deploy when stored Web UI password cannot be decrypted", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: false,
-			encryptedPassword: "corrupt",
-			port: 8787,
-			deployStatus: "idle",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
-		decryptSecret.mockImplementation(() => null);
-
-		const response = await deployServerWebUi(createContext());
-		const payload = await response.json();
-
-		expect(response.status).toBe(500);
-		expect(payload.error).toMatch(
-			/stored hermes web ui password could not be decrypted/i,
-		);
-		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
-	});
-
-	it("reveals the Web UI password for enabled servers", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:generated-password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			expect(response.status).toBe(502);
+			expect(payload.error).toContain(
+				"Hermes Web UI is not reachable on the server (127.0.0.1:8787)",
+			);
 		});
 
-		const response = await revealServerWebUiPassword(createContext());
-		const payload = await response.json();
+		it("proxies requests with rewritten response headers", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
 
-		expect(response.status).toBe(200);
-		expect(payload.password).toBe("generated-password");
-	});
+			proxyRequestOverSsh.mockResolvedValue(
+				new Response(null, {
+					status: 302,
+					headers: {
+						Location: "/login",
+						"Set-Cookie": "session=abc; Path=/",
+					},
+				}),
+			);
 
-	it("rejects unauthorized password reveal requests", async () => {
-		getAuthSession.mockResolvedValue(null);
+			const response = await proxyServerWebUi(
+				createContext({
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
+				}),
+			);
 
-		const response = await revealServerWebUiPassword(createContext());
-		expect(response.status).toBe(401);
-	});
-
-	it("redirects bare proxy roots to the trailing-slash path", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe(
+				"/api/servers/server_123/web-ui/proxy/login",
+			);
+			expect(response.headers.get("set-cookie")).toBe(
+				"session=abc; Path=/api/servers/server_123/web-ui/proxy/",
+			);
 		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:generated-password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
-
-		const response = await proxyServerWebUi(
-			createContext({
-				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy",
-			}),
-		);
-
-		expect(response.status).toBe(308);
-		expect(response.headers.get("location")).toBe(
-			"/api/servers/server_123/web-ui/proxy/",
-		);
-		expect(proxyRequestOverSsh).not.toHaveBeenCalled();
-	});
-
-	it("returns actionable errors when the upstream port is closed", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:generated-password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
-		proxyRequestOverSsh.mockRejectedValue(
-			new Error("(SSH) Channel open failure: Connection refused"),
-		);
-
-		const response = await proxyServerWebUi(
-			createContext({
-				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
-			}),
-		);
-		const payload = await response.json();
-
-		expect(response.status).toBe(502);
-		expect(payload.error).toContain(
-			"Hermes Web UI is not reachable on the server (127.0.0.1:8787)",
-		);
-	});
-
-	it("proxies requests with rewritten response headers", async () => {
-		getAuthSession.mockResolvedValue({
-			user: { id: "user_123" },
-			session: { id: "session_123" },
-		});
-		getResolvedServerWebUiRecord.mockResolvedValue({
-			enabled: true,
-			encryptedPassword: "enc:generated-password",
-			port: 8787,
-			deployStatus: "succeeded",
-			deployError: null,
-			deployStartedAt: null,
-			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-		});
-
-		proxyRequestOverSsh.mockResolvedValue(
-			new Response(null, {
-				status: 302,
-				headers: {
-					Location: "/login",
-					"Set-Cookie": "session=abc; Path=/",
-				},
-			}),
-		);
-
-		const response = await proxyServerWebUi(
-			createContext({
-				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
-			}),
-		);
-
-		expect(response.status).toBe(302);
-		expect(response.headers.get("location")).toBe(
-			"/api/servers/server_123/web-ui/proxy/login",
-		);
-		expect(response.headers.get("set-cookie")).toBe(
-			"session=abc; Path=/api/servers/server_123/web-ui/proxy/",
-		);
 	});
 });
