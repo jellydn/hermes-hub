@@ -240,7 +240,7 @@ apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
-apiApp.post("/logs/clear", clearLogs);
+apiApp.post("/logs/clear", httpsMiddleware, clearLogs);
 apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
@@ -262,7 +262,7 @@ apiApp.post(
 	deployMcpServersToHermes,
 );
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
-apiApp.post("/telegram/disconnect", disconnectTelegram);
+apiApp.post("/telegram/disconnect", httpsMiddleware, disconnectTelegram);
 apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);
 apiApp.post("/telegram/test", httpsMiddleware, testTelegramBot);
 apiApp.get("/telegram/pairings", listTelegramPairings);
