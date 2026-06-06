@@ -11,14 +11,14 @@ import {
 
 type McpRecommendedPresetsProps = {
 	servers: McpServerSummary[];
-	configuringPresetId: string | null;
+	configuringPresetName: string | null;
 	onConfigure: (preset: McpServerPreset) => void;
 	onEditSaved: (server: McpServerSummary) => void;
 };
 
 export function McpRecommendedPresets({
 	servers,
-	configuringPresetId,
+	configuringPresetName,
 	onConfigure,
 	onEditSaved,
 }: McpRecommendedPresetsProps) {
@@ -38,11 +38,11 @@ export function McpRecommendedPresets({
 			<ul className="m-0 grid list-none gap-3 p-0 sm:grid-cols-2 xl:grid-cols-3">
 				{MCP_SERVER_PRESETS.map((preset) => {
 					const savedServer = findSavedPresetServer(servers, preset);
-					const isConfiguring = configuringPresetId === preset.id;
+					const isConfiguring = configuringPresetName === preset.name;
 
 					return (
 						<li
-							key={preset.id}
+							key={preset.name}
 							className="flex h-full flex-col rounded-[1.25rem] border border-[var(--line)] p-4"
 						>
 							<div className="flex-1">

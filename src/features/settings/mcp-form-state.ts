@@ -97,25 +97,15 @@ function toSecretRows(entries: McpServerSummary["env"]): SecretRow[] {
 
 export type McpPresetOverrides = Record<string, string>;
 
-function buildPresetArgs(
+function resolvePresetArgs(
 	preset: McpServerPreset,
 	overrides?: McpPresetOverrides,
 ): string[] {
-	if (!preset.configurableFields?.length) {
-		return [...preset.args];
+	if (preset.buildArgs) {
+		return preset.buildArgs(overrides ?? {});
 	}
 
-	const args = [...preset.args];
-
-	for (const field of preset.configurableFields) {
-		const value = overrides?.[field.id]?.trim() || field.defaultValue;
-
-		if (field.id === "allowedDirectory") {
-			return ["-y", "@modelcontextprotocol/server-filesystem", value];
-		}
-	}
-
-	return args;
+	return [...preset.args];
 }
 
 export function formStateFromPreset(
@@ -127,7 +117,7 @@ export function formStateFromPreset(
 		transport: preset.transport,
 		enabled: true,
 		command: preset.command,
-		argsText: buildPresetArgs(preset, overrides).join("\n"),
+		argsText: resolvePresetArgs(preset, overrides).join("\n"),
 		url: "",
 		envRows: [emptySecretRow()],
 		headerRows: [emptySecretRow()],
@@ -174,6 +164,41 @@ function secretRowsToInputs(rows: SecretRow[]) {
 	return inputs;
 }
 
+function getTimeoutValidationError(
+	value: string,
+	label: string,
+): string | null {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	const parsed = Number(trimmed);
+	if (!Number.isInteger(parsed) || parsed <= 0) {
+		return `${label} must be a positive integer.`;
+	}
+
+	return null;
+}
+
+export function getFormValidationError(form: McpFormState): string | null {
+	const timeoutError = getTimeoutValidationError(form.timeout, "Timeout");
+	if (timeoutError) {
+		return timeoutError;
+	}
+
+	return getTimeoutValidationError(form.connectTimeout, "Connect timeout");
+}
+
+function parseOptionalTimeout(value: string): number | null {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	return Number(trimmed);
+}
+
 export function buildRequestBody(form: McpFormState) {
 	return {
 		name: form.name.trim(),
@@ -188,10 +213,8 @@ export function buildRequestBody(form: McpFormState) {
 		toolsExclude: parseLines(form.toolsExcludeText),
 		toolsResources: form.toolsResources,
 		toolsPrompts: form.toolsPrompts,
-		timeout: form.timeout.trim() ? Number(form.timeout.trim()) : null,
-		connectTimeout: form.connectTimeout.trim()
-			? Number(form.connectTimeout.trim())
-			: null,
+		timeout: parseOptionalTimeout(form.timeout),
+		connectTimeout: parseOptionalTimeout(form.connectTimeout),
 		supportsParallelToolCalls: form.supportsParallelToolCalls,
 	};
 }

@@ -3,6 +3,8 @@ import type {
 	McpTransport,
 } from "../../../server/settings/mcp/config";
 
+import type { McpPresetOverrides } from "./mcp-form-state";
+
 export type McpPresetConfigurableField = {
 	id: string;
 	label: string;
@@ -11,7 +13,6 @@ export type McpPresetConfigurableField = {
 };
 
 export type McpServerPreset = {
-	id: string;
 	name: string;
 	title: string;
 	description: string;
@@ -19,11 +20,11 @@ export type McpServerPreset = {
 	command: string;
 	args: string[];
 	configurableFields?: McpPresetConfigurableField[];
+	buildArgs?: (overrides: McpPresetOverrides) => string[];
 };
 
 export const MCP_SERVER_PRESETS: McpServerPreset[] = [
 	{
-		id: "memory",
 		name: "memory",
 		title: "Memory",
 		description:
@@ -33,7 +34,6 @@ export const MCP_SERVER_PRESETS: McpServerPreset[] = [
 		args: ["-y", "@modelcontextprotocol/server-memory"],
 	},
 	{
-		id: "sequential-thinking",
 		name: "sequential-thinking",
 		title: "Sequential Thinking",
 		description:
@@ -43,7 +43,6 @@ export const MCP_SERVER_PRESETS: McpServerPreset[] = [
 		args: ["-y", "@modelcontextprotocol/server-sequential-thinking"],
 	},
 	{
-		id: "filesystem",
 		name: "filesystem",
 		title: "Filesystem",
 		description:
@@ -60,13 +59,18 @@ export const MCP_SERVER_PRESETS: McpServerPreset[] = [
 				defaultValue: "/opt/data",
 			},
 		],
+		buildArgs: (overrides) => [
+			"-y",
+			"@modelcontextprotocol/server-filesystem",
+			overrides.allowedDirectory?.trim() || "/opt/data",
+		],
 	},
 ];
 
 export function getMcpServerPreset(
-	presetId: string,
+	presetName: string,
 ): McpServerPreset | undefined {
-	return MCP_SERVER_PRESETS.find((preset) => preset.id === presetId);
+	return MCP_SERVER_PRESETS.find((preset) => preset.name === presetName);
 }
 
 export function findSavedPresetServer(

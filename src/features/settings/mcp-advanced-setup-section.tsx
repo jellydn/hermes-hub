@@ -1,18 +1,18 @@
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-
+import type { McpFormMessage } from "./mcp-form-message";
 import type { McpFormState } from "./mcp-form-state";
 import { McpServerForm } from "./mcp-server-form";
 
 type McpAdvancedSetupSectionProps = {
-	showAdvancedSetup: boolean;
-	showAdvancedForm: boolean;
+	advancedOpen: boolean;
+	showForm: boolean;
 	editingId: string | null;
-	form: McpFormState;
-	formMessage: { type: "success" | "error"; text: string } | null;
+	form: McpFormState | null;
+	formMessage: McpFormMessage | null;
 	isSaving: boolean;
-	onToggleAdvancedSetup: () => void;
+	onToggleAdvanced: () => void;
 	onStartCreate: () => void;
 	onCancel: () => void;
 	onSave: () => void;
@@ -20,13 +20,13 @@ type McpAdvancedSetupSectionProps = {
 };
 
 export function McpAdvancedSetupSection({
-	showAdvancedSetup,
-	showAdvancedForm,
+	advancedOpen,
+	showForm,
 	editingId,
 	form,
 	formMessage,
 	isSaving,
-	onToggleAdvancedSetup,
+	onToggleAdvanced,
 	onStartCreate,
 	onCancel,
 	onSave,
@@ -45,23 +45,19 @@ export function McpAdvancedSetupSection({
 						over command, URL, secrets, and tool filters.
 					</p>
 				</div>
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={onToggleAdvancedSetup}
-				>
-					{showAdvancedSetup ? "Hide advanced setup" : "Advanced setup"}
+				<Button type="button" variant="secondary" onClick={onToggleAdvanced}>
+					{advancedOpen ? "Hide advanced setup" : "Advanced setup"}
 				</Button>
 			</div>
 
-			{showAdvancedSetup ? (
+			{advancedOpen ? (
 				<div className="mt-6 space-y-4">
 					<Button type="button" onClick={onStartCreate}>
 						<Plus className="h-4 w-4" />
 						<span>Add custom server</span>
 					</Button>
 
-					{showAdvancedForm ? (
+					{showForm && form ? (
 						<McpServerForm
 							editingId={editingId}
 							form={form}

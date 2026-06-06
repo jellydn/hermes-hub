@@ -2,7 +2,7 @@ import { LoaderCircle, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
+import { type McpFormMessage, McpFormMessageBanner } from "./mcp-form-message";
 import {
 	emptySecretRow,
 	type McpFormState,
@@ -15,7 +15,7 @@ import { McpServerAdvancedOptions } from "./mcp-server-advanced-options";
 type McpServerFormProps = {
 	editingId: string | null;
 	form: McpFormState;
-	formMessage: { type: "success" | "error"; text: string } | null;
+	formMessage: McpFormMessage | null;
 	isSaving: boolean;
 	onCancel: () => void;
 	onSave: () => void;
@@ -156,15 +156,10 @@ export function McpServerForm({
 				<McpServerAdvancedOptions form={form} onPatch={patchForm} />
 			</div>
 
-			{formMessage ? (
-				<p
-					className={`mt-4 mb-0 text-sm ${
-						formMessage.type === "error" ? "text-red-600" : "text-emerald-600"
-					}`}
-				>
-					{formMessage.text}
-				</p>
-			) : null}
+			<McpFormMessageBanner
+				message={formMessage}
+				className="mt-4 mb-0 text-sm"
+			/>
 
 			<div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
 				<Button type="button" onClick={onSave} disabled={isSaving}>

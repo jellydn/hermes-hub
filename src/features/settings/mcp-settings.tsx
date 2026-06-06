@@ -2,124 +2,52 @@ import { useReducer, useState } from "react";
 
 import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
 import type { McpServerSummary } from "../../../server/settings/mcp/config";
-
 import { McpAdvancedSetupSection } from "./mcp-advanced-setup-section";
+import { deleteMcpServer, persistMcpServer } from "./mcp-api";
+import { McpFormMessageBanner } from "./mcp-form-message";
 import {
 	buildRequestBody,
-	createEmptyFormState,
-	formStateFromServer,
+	getFormValidationError,
 	type McpFormState,
 } from "./mcp-form-state";
 import { McpPresetConfigureForm } from "./mcp-preset-configure-form";
-import { initialMcpPresetState, mcpPresetReducer } from "./mcp-preset-state";
 import { McpRecommendedPresets } from "./mcp-recommended-presets";
 import { McpSavedServersList } from "./mcp-saved-servers-list";
 import { getMcpServerPreset, type McpServerPreset } from "./mcp-server-presets";
 import { McpSettingsAside } from "./mcp-settings-aside";
+import {
+	getActiveForm,
+	getConfiguringPresetName,
+	getEditingServerId,
+	initialMcpSettingsUiState,
+	mcpSettingsReducer,
+	showAdvancedForm,
+} from "./mcp-settings-state";
 
 type McpSettingsProps = {
 	initialServers: McpServerSummary[];
 	telegramDeploy?: TelegramDeployInfo | null;
 };
 
-type EditorState = {
-	editingId: string | null;
-	isCreating: boolean;
-	form: McpFormState;
-	formMessage: { type: "success" | "error"; text: string } | null;
-	isSaving: boolean;
-	isDeleting: boolean;
-};
-
-type EditorAction =
-	| { type: "start_create" }
-	| { type: "start_edit"; server: McpServerSummary }
-	| { type: "cancel" }
-	| { type: "set_form"; form: McpFormState }
-	| { type: "set_message"; message: EditorState["formMessage"] }
-	| { type: "set_saving"; isSaving: boolean }
-	| { type: "set_deleting"; isDeleting: boolean }
-	| { type: "saved"; server: McpServerSummary; isUpdate: boolean };
-
-const initialEditorState: EditorState = {
-	editingId: null,
-	isCreating: false,
-	form: createEmptyFormState(),
-	formMessage: null,
-	isSaving: false,
-	isDeleting: false,
-};
-
 const PRESET_SAVE_SUCCESS_MESSAGE =
 	"MCP server saved. Deploy MCP settings to install it on your VPS.";
-
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
-	switch (action.type) {
-		case "start_create":
-			return {
-				...state,
-				editingId: null,
-				isCreating: true,
-				form: createEmptyFormState(),
-				formMessage: null,
-			};
-		case "start_edit":
-			return {
-				...state,
-				isCreating: false,
-				editingId: action.server.id,
-				form: formStateFromServer(action.server),
-				formMessage: null,
-			};
-		case "cancel":
-			return {
-				...state,
-				editingId: null,
-				isCreating: false,
-				form: createEmptyFormState(),
-				formMessage: null,
-			};
-		case "set_form":
-			return { ...state, form: action.form };
-		case "set_message":
-			return { ...state, formMessage: action.message };
-		case "set_saving":
-			return { ...state, isSaving: action.isSaving };
-		case "set_deleting":
-			return { ...state, isDeleting: action.isDeleting };
-		case "saved":
-			return {
-				...state,
-				isCreating: false,
-				editingId: action.server.id,
-				form: formStateFromServer(action.server),
-				formMessage: {
-					type: "success",
-					text: action.isUpdate ? "MCP server updated." : "MCP server created.",
-				},
-			};
-		default:
-			return state;
-	}
-}
 
 export function McpSettings({
 	initialServers,
 	telegramDeploy,
 }: McpSettingsProps) {
 	const [servers, setServers] = useState(() => initialServers);
-	const [editor, dispatch] = useReducer(editorReducer, initialEditorState);
-	const [preset, dispatchPreset] = useReducer(
-		mcpPresetReducer,
-		initialMcpPresetState,
+	const [ui, dispatch] = useReducer(
+		mcpSettingsReducer,
+		initialMcpSettingsUiState,
 	);
-	const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
 
-	const configuringPreset = preset.configuringPresetId
-		? getMcpServerPreset(preset.configuringPresetId)
+	const configuringPresetName = getConfiguringPresetName(ui);
+	const configuringPreset = configuringPresetName
+		? getMcpServerPreset(configuringPresetName)
 		: undefined;
-	const showAdvancedForm =
-		showAdvancedSetup && (editor.isCreating || editor.editingId !== null);
+	const editingServerId = getEditingServerId(ui);
+	const activeForm = getActiveForm(ui);
 
 	function upsertServer(savedServer: McpServerSummary) {
 		setServers((current) => {
@@ -132,156 +60,77 @@ export function McpSettings({
 		});
 	}
 
-	function handleConfigurePreset(presetItem: McpServerPreset) {
-		dispatch({ type: "cancel" });
-		setShowAdvancedSetup(false);
-		dispatchPreset({ type: "configure", presetId: presetItem.id });
+	function handleConfigurePreset(preset: McpServerPreset) {
+		dispatch({ type: "configure_preset", presetName: preset.name });
 	}
 
 	function handleEditSaved(server: McpServerSummary) {
-		dispatchPreset({ type: "cancel" });
-		setShowAdvancedSetup(true);
-		dispatch({ type: "start_edit", server });
+		dispatch({ type: "edit_server", server });
 	}
 
-	async function handlePresetSave(body: ReturnType<typeof buildRequestBody>) {
-		dispatchPreset({ type: "set_saving", isSaving: true });
-		dispatchPreset({ type: "set_message", message: null });
-
-		try {
-			const response = await fetch("/api/settings/mcp-servers", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-			});
-
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				server?: McpServerSummary;
-			} | null;
-
-			const savedServer = payload?.server;
-			if (!response.ok || !savedServer) {
-				dispatchPreset({
-					type: "set_message",
-					message: {
-						type: "error",
-						text: payload?.error ?? "Unable to save MCP server.",
-					},
-				});
-				return;
-			}
-
-			upsertServer(savedServer);
-			dispatchPreset({
-				type: "saved",
-				message: PRESET_SAVE_SUCCESS_MESSAGE,
-			});
-		} catch {
-			dispatchPreset({
+	async function saveForm(
+		form: McpFormState,
+		options: {
+			serverId: string | null;
+			successMessage: string;
+			keepEditing: boolean;
+		},
+	) {
+		const validationError = getFormValidationError(form);
+		if (validationError) {
+			dispatch({
 				type: "set_message",
-				message: {
-					type: "error",
-					text: "Network error. Please check your connection and try again.",
-				},
+				message: { type: "error", text: validationError },
 			});
-		} finally {
-			dispatchPreset({ type: "set_saving", isSaving: false });
+			return;
 		}
-	}
 
-	async function handleSave() {
 		dispatch({ type: "set_saving", isSaving: true });
 		dispatch({ type: "set_message", message: null });
 
-		const body = buildRequestBody(editor.form);
-		const url = editor.editingId
-			? `/api/settings/mcp-servers/${editor.editingId}`
+		const body = buildRequestBody(form);
+		const method = options.serverId ? "PUT" : "POST";
+		const url = options.serverId
+			? `/api/settings/mcp-servers/${options.serverId}`
 			: "/api/settings/mcp-servers";
-		const method = editor.editingId ? "PUT" : "POST";
 
-		try {
-			const response = await fetch(url, {
-				method,
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-			});
+		const result = await persistMcpServer({ method, url, body });
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				server?: McpServerSummary;
-			} | null;
-
-			const savedServer = payload?.server;
-			if (!response.ok || !savedServer) {
-				dispatch({
-					type: "set_message",
-					message: {
-						type: "error",
-						text: payload?.error ?? "Unable to save MCP server.",
-					},
-				});
-				return;
-			}
-
-			upsertServer(savedServer);
-			dispatch({
-				type: "saved",
-				server: savedServer,
-				isUpdate: Boolean(editor.editingId),
-			});
-		} catch {
+		if (!result.ok) {
 			dispatch({
 				type: "set_message",
-				message: {
-					type: "error",
-					text: "Network error. Please check your connection and try again.",
-				},
+				message: { type: "error", text: result.error },
 			});
-		} finally {
 			dispatch({ type: "set_saving", isSaving: false });
+			return;
 		}
+
+		upsertServer(result.server);
+		dispatch({
+			type: "saved",
+			server: result.server,
+			message: options.successMessage,
+			keepEditing: options.keepEditing,
+		});
 	}
 
 	async function handleDelete(serverId: string) {
 		dispatch({ type: "set_deleting", isDeleting: true });
 		dispatch({ type: "set_message", message: null });
 
-		try {
-			const response = await fetch(`/api/settings/mcp-servers/${serverId}`, {
-				method: "DELETE",
-			});
+		const result = await deleteMcpServer(serverId);
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-			} | null;
-
-			if (!response.ok) {
-				dispatch({
-					type: "set_message",
-					message: {
-						type: "error",
-						text: payload?.error ?? "Unable to delete MCP server.",
-					},
-				});
-				return;
-			}
-
-			setServers((current) =>
-				current.filter((server) => server.id !== serverId),
-			);
-			dispatch({ type: "cancel" });
-		} catch {
+		if (!result.ok) {
 			dispatch({
 				type: "set_message",
-				message: {
-					type: "error",
-					text: "Network error. Please check your connection and try again.",
-				},
+				message: { type: "error", text: result.error },
 			});
-		} finally {
 			dispatch({ type: "set_deleting", isDeleting: false });
+			return;
 		}
+
+		setServers((current) => current.filter((server) => server.id !== serverId));
+		dispatch({ type: "deleted" });
 	}
 
 	return (
@@ -289,57 +138,60 @@ export function McpSettings({
 			<div className="space-y-4">
 				<McpRecommendedPresets
 					servers={servers}
-					configuringPresetId={preset.configuringPresetId}
+					configuringPresetName={configuringPresetName}
 					onConfigure={handleConfigurePreset}
 					onEditSaved={handleEditSaved}
 				/>
 
-				{preset.formMessage && !configuringPreset ? (
-					<p
-						className={`m-0 text-sm ${
-							preset.formMessage.type === "error"
-								? "text-red-600"
-								: "text-emerald-600"
-						}`}
-					>
-						{preset.formMessage.text}
-					</p>
-				) : null}
-
 				{configuringPreset ? (
 					<McpPresetConfigureForm
 						preset={configuringPreset}
-						isSaving={preset.isSaving}
-						formMessage={preset.formMessage}
-						onCancel={() => dispatchPreset({ type: "cancel" })}
-						onSave={(body) => void handlePresetSave(body)}
+						isSaving={ui.isSaving}
+						formMessage={ui.formMessage}
+						onCancel={() => dispatch({ type: "cancel_panel" })}
+						onSave={(form) =>
+							void saveForm(form, {
+								serverId: null,
+								successMessage: PRESET_SAVE_SUCCESS_MESSAGE,
+								keepEditing: false,
+							})
+						}
 					/>
+				) : ui.panel.kind === "none" ? (
+					<McpFormMessageBanner message={ui.formMessage} />
 				) : null}
 
 				<McpSavedServersList
 					servers={servers}
-					editingId={editor.editingId}
-					isDeleting={editor.isDeleting}
+					editingId={editingServerId}
+					isDeleting={ui.isDeleting}
 					onEdit={handleEditSaved}
 					onDelete={(serverId) => void handleDelete(serverId)}
 				/>
 
 				<McpAdvancedSetupSection
-					showAdvancedSetup={showAdvancedSetup}
-					showAdvancedForm={showAdvancedForm}
-					editingId={editor.editingId}
-					form={editor.form}
-					formMessage={editor.formMessage}
-					isSaving={editor.isSaving}
-					onToggleAdvancedSetup={() =>
-						setShowAdvancedSetup((current) => !current)
-					}
-					onStartCreate={() => {
-						dispatchPreset({ type: "cancel" });
-						dispatch({ type: "start_create" });
+					advancedOpen={ui.advancedOpen}
+					showForm={showAdvancedForm(ui)}
+					editingId={editingServerId}
+					form={activeForm}
+					formMessage={ui.formMessage}
+					isSaving={ui.isSaving}
+					onToggleAdvanced={() => dispatch({ type: "toggle_advanced" })}
+					onStartCreate={() => dispatch({ type: "start_create" })}
+					onCancel={() => dispatch({ type: "cancel_panel" })}
+					onSave={() => {
+						if (!activeForm) {
+							return;
+						}
+
+						void saveForm(activeForm, {
+							serverId: editingServerId,
+							successMessage: editingServerId
+								? "MCP server updated."
+								: "MCP server created.",
+							keepEditing: true,
+						});
 					}}
-					onCancel={() => dispatch({ type: "cancel" })}
-					onSave={() => void handleSave()}
 					onFormChange={(form) => dispatch({ type: "set_form", form })}
 				/>
 			</div>

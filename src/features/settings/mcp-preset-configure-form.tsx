@@ -2,10 +2,10 @@ import { LoaderCircle, Save } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-
+import { type McpFormMessage, McpFormMessageBanner } from "./mcp-form-message";
 import {
-	buildRequestBody,
 	formStateFromPreset,
+	type McpFormState,
 	type McpPresetOverrides,
 	mcpInputClassName,
 } from "./mcp-form-state";
@@ -14,9 +14,9 @@ import type { McpServerPreset } from "./mcp-server-presets";
 type McpPresetConfigureFormProps = {
 	preset: McpServerPreset;
 	isSaving: boolean;
-	formMessage: { type: "success" | "error"; text: string } | null;
+	formMessage: McpFormMessage | null;
 	onCancel: () => void;
-	onSave: (body: ReturnType<typeof buildRequestBody>) => void;
+	onSave: (form: McpFormState) => void;
 };
 
 export function McpPresetConfigureForm({
@@ -36,9 +36,10 @@ export function McpPresetConfigureForm({
 		return initial;
 	});
 
+	const previewForm = formStateFromPreset(preset, overrides);
+
 	function handleSave() {
-		const form = formStateFromPreset(preset, overrides);
-		onSave(buildRequestBody(form));
+		onSave(formStateFromPreset(preset, overrides));
 	}
 
 	return (
@@ -61,17 +62,14 @@ export function McpPresetConfigureForm({
 					</p>
 					<p className="m-0 mt-2">
 						<span className="font-medium text-[var(--sea-ink)]">Args:</span>{" "}
-						{formStateFromPreset(preset, overrides).argsText.replaceAll(
-							"\n",
-							" ",
-						)}
+						{previewForm.argsText.replaceAll("\n", " ")}
 					</p>
 				</div>
 
 				{preset.configurableFields?.map((field) => (
 					<div key={field.id} className="space-y-2">
 						<label
-							htmlFor={`preset-${preset.id}-${field.id}`}
+							htmlFor={`preset-${preset.name}-${field.id}`}
 							className="text-sm font-medium text-[var(--sea-ink)]"
 						>
 							{field.label}
@@ -80,7 +78,7 @@ export function McpPresetConfigureForm({
 							{field.description}
 						</p>
 						<input
-							id={`preset-${preset.id}-${field.id}`}
+							id={`preset-${preset.name}-${field.id}`}
 							aria-label={field.label}
 							value={overrides[field.id] ?? field.defaultValue}
 							onChange={(event) =>
@@ -95,15 +93,10 @@ export function McpPresetConfigureForm({
 				))}
 			</div>
 
-			{formMessage ? (
-				<p
-					className={`mt-4 mb-0 text-sm ${
-						formMessage.type === "error" ? "text-red-600" : "text-emerald-600"
-					}`}
-				>
-					{formMessage.text}
-				</p>
-			) : null}
+			<McpFormMessageBanner
+				message={formMessage}
+				className="mt-4 mb-0 text-sm"
+			/>
 
 			<div className="mt-6 flex flex-wrap gap-3">
 				<Button type="button" onClick={handleSave} disabled={isSaving}>

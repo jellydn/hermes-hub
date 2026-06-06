@@ -1,6 +1,5 @@
 import type { Context } from "hono";
 
-import { getAuthSession } from "../auth";
 import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
 import {
@@ -45,9 +44,9 @@ function isMcpServerNameConflict(error: unknown): boolean {
 }
 
 export async function createMcpServer(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
 	}
 
 	let payload: unknown;
@@ -105,9 +104,9 @@ export async function createMcpServer(context: Context) {
 }
 
 export async function updateMcpServer(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
 	}
 
 	const serverId = context.req.param("id");
@@ -202,9 +201,9 @@ export async function updateMcpServer(context: Context) {
 }
 
 export async function deleteMcpServer(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
 	}
 
 	const serverId = context.req.param("id");
