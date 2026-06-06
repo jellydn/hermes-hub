@@ -109,6 +109,27 @@ export function rewriteProxyResponseHeaders(
 	return rewritten;
 }
 
+export function buildUpstreamProxyHeaders(
+	request: Request,
+	upstreamHost: string,
+): Record<string, string> {
+	const publicUrl = new URL(request.url);
+	const headers: Record<string, string> = {
+		...filterRequestHeaders(request.headers),
+		host: upstreamHost,
+		connection: "close",
+		"X-Forwarded-Host": publicUrl.host,
+		"X-Forwarded-Proto": publicUrl.protocol.replace(/:$/, ""),
+	};
+
+	const forwardedFor = request.headers.get("x-forwarded-for");
+	if (forwardedFor) {
+		headers["X-Forwarded-For"] = forwardedFor;
+	}
+
+	return headers;
+}
+
 export async function proxyHttpOverStream(input: {
 	request: Request;
 	stream: TcpForwardStream;
@@ -131,11 +152,7 @@ export async function proxyHttpOverStream(input: {
 				createConnection: () => input.stream as Duplex,
 				method: input.request.method,
 				path,
-				headers: {
-					...filterRequestHeaders(input.request.headers),
-					host: upstreamHost,
-					connection: "close",
-				},
+				headers: buildUpstreamProxyHeaders(input.request, upstreamHost),
 			},
 			(incoming) => {
 				const headers = new Headers();

@@ -31,6 +31,8 @@ exports[`buildHermesComposeContent > adds the hermes-webui service when web UI i
       - HERMES_WEBUI_DEFAULT_WORKSPACE=/workspace
       - WANTED_UID=10000
       - WANTED_GID=10000
+      - HERMES_WEBUI_TRUST_FORWARDED_HOST=1
+      - HERMES_WEBUI_TRUST_FORWARDED_PROTO=1
 "
 `;
 

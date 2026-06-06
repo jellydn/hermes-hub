@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	buildUpstreamProxyHeaders,
 	getUpstreamPath,
 	rewriteLocationHeader,
 	rewriteSetCookieHeader,
@@ -43,6 +44,26 @@ describe("web-ui proxy helpers", () => {
 				"http://127.0.0.1:8787",
 			),
 		).toBe("/api/servers/server_123/web-ui/proxy/dashboard");
+	});
+
+	it("forwards public host and proto headers to the upstream web UI", () => {
+		const headers = buildUpstreamProxyHeaders(
+			new Request(
+				"https://hermes-hub.itman.fyi/api/servers/server_123/web-ui/proxy/chat",
+				{
+					headers: {
+						Origin: "https://hermes-hub.itman.fyi",
+						"X-Forwarded-For": "203.0.113.10",
+					},
+				},
+			),
+			"127.0.0.1:8787",
+		);
+
+		expect(headers.host).toBe("127.0.0.1:8787");
+		expect(headers["X-Forwarded-Host"]).toBe("hermes-hub.itman.fyi");
+		expect(headers["X-Forwarded-Proto"]).toBe("https");
+		expect(headers["X-Forwarded-For"]).toBe("203.0.113.10");
 	});
 
 	it("rewrites cookie paths for the proxy base", () => {

@@ -13,5 +13,8 @@ export const hermesWebUiContainerGid = 10000;
 /** State directory path inside the hermes-webui container. */
 export const hermesWebUiStateDir = "/home/hermeswebui/.hermes/webui";
 export const hermesWebUiDefaultWorkspace = "/workspace";
+/** Trust X-Forwarded-Host/Proto from HermesHub's authenticated reverse proxy. */
+export const hermesWebUiTrustForwardedHost = "1";
+export const hermesWebUiTrustForwardedProto = "1";
 /** Bind-mount root when deploys run `sudo docker compose` (see hermes-webui docker.md #3006). */
 export const managedComposeVolumeHome = "/root";

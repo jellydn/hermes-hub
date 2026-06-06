@@ -8,6 +8,8 @@ import {
 	hermesWebUiDefaultWorkspace,
 	hermesWebUiImage,
 	hermesWebUiStateDir,
+	hermesWebUiTrustForwardedHost,
+	hermesWebUiTrustForwardedProto,
 	managedComposeVolumeHome,
 } from "./constants";
 
@@ -174,6 +176,8 @@ describe("buildHermesComposeContent", () => {
 				`HERMES_WEBUI_DEFAULT_WORKSPACE=${hermesWebUiDefaultWorkspace}`,
 				`WANTED_UID=${hermesWebUiContainerUid}`,
 				`WANTED_GID=${hermesWebUiContainerGid}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_HOST=${hermesWebUiTrustForwardedHost}`,
+				`HERMES_WEBUI_TRUST_FORWARDED_PROTO=${hermesWebUiTrustForwardedProto}`,
 			]),
 		);
 	});
