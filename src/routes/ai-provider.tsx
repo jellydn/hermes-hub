@@ -39,8 +39,8 @@ const loadTelegramDeploy = createServerFn({ method: "GET" }).handler(
 
 export const Route = createFileRoute("/ai-provider")({
 	beforeLoad: async ({ location }) => {
-		const session = await requireSession(location.href);
-		const [providerConfig, telegramDeploy] = await Promise.all([
+		const [session, providerConfig, telegramDeploy] = await Promise.all([
+			requireSession(location.href),
 			loadCurrentProviderConfig(),
 			loadTelegramDeploy(),
 		]);
