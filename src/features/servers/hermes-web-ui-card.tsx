@@ -29,7 +29,12 @@ export function HermesWebUiCard({
 	if (detail.install?.status !== "succeeded") {
 		return null;
 	}
+
 	const { webUi, isEnabled } = webUiState;
+	const isDeploying = webUiState.isDeploying || webUiState.isSubmitting;
+	const isFailed =
+		webUi?.deployStatus === "failed" && !isEnabled && !isDeploying;
+	const deployError = webUi?.deployError;
 
 	return (
 		<section
@@ -57,15 +62,24 @@ export function HermesWebUiCard({
 						.
 					</p>
 
+					{isDeploying ? (
+						<Banner tone="info" className="mt-4">
+							<span className="inline-flex items-center gap-2">
+								<LoaderCircle className="h-4 w-4 animate-spin" />
+								Setting up Web UI...
+							</span>
+						</Banner>
+					) : null}
+
 					{webUiState.successMessage ? (
 						<Banner tone="success" className="mt-4">
 							{webUiState.successMessage}
 						</Banner>
 					) : null}
 
-					{webUiState.error ? (
+					{webUiState.error || (isFailed && deployError) ? (
 						<Banner tone="error" className="mt-4">
-							{webUiState.error}
+							{webUiState.error ?? deployError}
 						</Banner>
 					) : null}
 
@@ -82,41 +96,37 @@ export function HermesWebUiCard({
 									<ExternalLink className="h-4 w-4" />
 								</a>
 							</Button>
-						) : (
+						) : !isDeploying ? (
 							<Button
 								type="button"
 								onClick={() => void webUiState.deploy()}
-								disabled={webUiState.isDeploying}
+								disabled={webUiState.isSubmitting}
 								data-testid="hermes-web-ui-setup"
 							>
-								{webUiState.isDeploying ? (
+								{webUiState.isSubmitting ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
 								) : (
 									<Rocket className="h-4 w-4" />
 								)}
-								<span>
-									{webUiState.isDeploying ? "Setting up..." : "Set up Web UI"}
-								</span>
+								<span>{isFailed ? "Retry setup" : "Set up Web UI"}</span>
 							</Button>
-						)}
+						) : null}
 
 						{isEnabled ? (
 							<Button
 								type="button"
 								variant="secondary"
 								onClick={() => void webUiState.deploy()}
-								disabled={webUiState.isDeploying}
+								disabled={isDeploying}
 								data-testid="hermes-web-ui-redeploy"
 							>
-								{webUiState.isDeploying ? (
+								{isDeploying ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
 								) : (
 									<RefreshCw className="h-4 w-4" />
 								)}
 								<span>
-									{webUiState.isDeploying
-										? "Redeploying..."
-										: "Redeploy Web UI"}
+									{isDeploying ? "Redeploying..." : "Redeploy Web UI"}
 								</span>
 							</Button>
 						) : null}

@@ -7,7 +7,7 @@ import { StatusIcon } from "./status-icon";
 type BannerProps = {
 	children: ReactNode;
 	className?: string;
-	tone: "success" | "error";
+	tone: "success" | "error" | "info";
 };
 
 export function Banner({ children, className, tone }: BannerProps) {
@@ -17,7 +17,9 @@ export function Banner({ children, className, tone }: BannerProps) {
 				"mt-5 rounded-[1.5rem] border px-4 py-3 text-sm text-[var(--sea-ink)]",
 				tone === "success"
 					? "border-emerald-500/30 bg-emerald-500/10"
-					: "border-red-500/30 bg-red-500/10",
+					: tone === "error"
+						? "border-red-500/30 bg-red-500/10"
+						: "border-blue-500/30 bg-blue-500/10",
 				className,
 			)}
 		>

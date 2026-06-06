@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
 
 type WebUiState = {
 	error: string | null;
-	isDeploying: boolean;
+	isSubmitting: boolean;
 	isRevealingPassword: boolean;
 	revealedPassword: string | null;
 	showPassword: boolean;
@@ -19,22 +19,75 @@ export function useHermesWebUi(
 		useState<ServerDetailSnapshot["webUi"]>(null);
 	const [state, setState] = useState<WebUiState>({
 		error: null,
-		isDeploying: false,
+		isSubmitting: false,
 		isRevealingPassword: false,
 		revealedPassword: null,
 		showPassword: false,
 		successMessage: null,
 	});
+	const wasEnabledAtDeployStart = useRef(false);
 
 	const webUi = deployedWebUi ?? detail.webUi;
 	const isEnabled = webUi?.enabled === true;
+	const isDeploying = webUi?.deployStatus === "deploying";
+
+	useEffect(() => {
+		if (webUi?.deployStatus !== "deploying") {
+			return;
+		}
+
+		const interval = setInterval(() => {
+			void (async () => {
+				try {
+					const response = await fetch(`/api/servers/${detail.server.id}`);
+					if (!response.ok) {
+						return;
+					}
+
+					const payload = (await response.json()) as {
+						serverDetail?: ServerDetailSnapshot;
+					};
+					const updated = payload.serverDetail;
+					if (!updated?.webUi || updated.webUi.deployStatus === "deploying") {
+						return;
+					}
+
+					setDeployedWebUi(updated.webUi);
+					onDetailChange?.(updated);
+
+					if (updated.webUi.deployStatus === "succeeded") {
+						setState((current) => ({
+							...current,
+							error: null,
+							successMessage: wasEnabledAtDeployStart.current
+								? "Hermes Web UI redeployed. Try opening it again."
+								: "Hermes Web UI is ready. Open it from HermesHub.",
+						}));
+						return;
+					}
+
+					if (updated.webUi.deployStatus === "failed") {
+						setState((current) => ({
+							...current,
+							successMessage: null,
+							error: updated.webUi?.deployError ?? "Web UI setup failed.",
+						}));
+					}
+				} catch {
+					// Keep polling on transient fetch failures.
+				}
+			})();
+		}, 5000);
+
+		return () => clearInterval(interval);
+	}, [webUi?.deployStatus, detail.server.id, onDetailChange]);
 
 	async function deploy() {
-		const wasEnabled = isEnabled;
+		wasEnabledAtDeployStart.current = isEnabled;
 
 		setState((current) => ({
 			...current,
-			isDeploying: true,
+			isSubmitting: true,
 			error: null,
 			successMessage: null,
 		}));
@@ -52,7 +105,7 @@ export function useHermesWebUi(
 			if (!response.ok) {
 				setState((current) => ({
 					...current,
-					isDeploying: false,
+					isSubmitting: false,
 					error: payload?.error ?? "Web UI setup failed",
 				}));
 				return;
@@ -66,20 +119,18 @@ export function useHermesWebUi(
 				});
 			}
 
-			setState({
-				isDeploying: false,
-				isRevealingPassword: false,
+			setState((current) => ({
+				...current,
+				isSubmitting: false,
 				error: null,
+				successMessage: null,
 				revealedPassword: null,
 				showPassword: false,
-				successMessage: wasEnabled
-					? "Hermes Web UI redeployed. Try opening it again."
-					: "Hermes Web UI is ready. Open it from HermesHub.",
-			});
+			}));
 		} catch {
 			setState((current) => ({
 				...current,
-				isDeploying: false,
+				isSubmitting: false,
 				error: "Web UI setup failed: Connection failed.",
 			}));
 		}
@@ -136,6 +187,7 @@ export function useHermesWebUi(
 	return {
 		webUi,
 		isEnabled,
+		isDeploying,
 		...state,
 		deploy,
 		revealPassword,
