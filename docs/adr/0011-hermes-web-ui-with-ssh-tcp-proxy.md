@@ -67,7 +67,9 @@ Only after both checks pass is the proxy request forwarded.
 
 ### 6. Async Deploy with Polling
 
-Deploying the Web UI is an async operation (SSH + Docker Compose can take 30+ seconds). The deploy endpoint returns HTTP 202 with the initial `deploying` status. The client polls `/api/servers/:id/web-ui` until the status transitions to `succeeded` or `failed`. A deploy lock (keyed by server ID) prevents concurrent deploys on the same server.
+Deploying the Web UI is an async operation (SSH + Docker Compose can take 30+ seconds). `server/web-ui/deploy.ts` owns orchestration: install preconditions, deploy lock acquisition, `deploying` state persistence, and background `deployManagedCompose` execution. `server/web-ui/handlers.ts` is HTTP-only — it calls `startDeploy` and maps `DeployError` to status codes.
+
+The deploy endpoint returns HTTP 202 with the initial `deploying` status. The client polls `/api/servers/:id/web-ui` until the status transitions to `succeeded` or `failed`. A deploy lock (keyed by server ID) prevents concurrent deploys on the same server within a single HermesHub instance. Stale `deploying` records past `STALE_DEPLOY_THRESHOLD_MS` are resolved to `failed` on read via `resolveServerWebUiRecord` in `server/web-ui/records.ts`.
 
 ### 7. Password & Port Management
 

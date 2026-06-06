@@ -36,8 +36,13 @@ server/
 ├── ssh.test.ts                   # SSH connection + OS validation
 ├── telegram.test.ts              # Telegram flow
 └── web-ui/
-    ├── handlers.test.ts          # Web UI deploy + proxy handlers
-    ├── snapshot.test.ts          # Stale deploy detection
+    ├── deploy.test.ts            # Deploy orchestration + background work
+    ├── handlers.test.ts          # Web UI HTTP handler wiring
+    ├── snapshot.test.ts          # Snapshot builder
+    ├── records.test.ts           # Record persistence + stale deploy
+    ├── reachability.test.ts      # Proxy error formatting
+    ├── ssh-pool.test.ts          # SSH connection pooling
+    ├── proxy-http.test.ts        # Header/path rewriting
     └── proxy-http.integration.test.ts # Proxy HTTP integration
 
 src/features/

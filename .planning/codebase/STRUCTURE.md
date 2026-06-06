@@ -67,11 +67,12 @@ server/
 │   ├── connection.ts        # SSH connection + verification
 │   └── os.ts                # OS info parsing
 ├── web-ui/
-│   ├── handlers.ts          # Deploy, password reveal, proxy handlers
-│   ├── background-deploy.ts # Async deploy execution
+│   ├── handlers.ts          # HTTP handlers (status, deploy, password, proxy)
+│   ├── deploy.ts            # Deploy orchestration + background execution
+│   ├── deploy.test.ts       # Deploy orchestration tests
 │   ├── snapshot.ts          # Web UI state snapshot builder
 │   ├── snapshot.test.ts     # Snapshot logic tests
-│   ├── records.ts           # Web UI record persistence
+│   ├── records.ts           # Web UI record persistence + stale-deploy resolution
 │   ├── reachability.ts      # Port reachability probes
 │   ├── proxy-http.ts        # HTTP proxy logic
 │   ├── ssh-forward.ts       # SSH tunnel for proxy
@@ -152,7 +153,7 @@ shared/
 
 ```
 docs/
-├── adr/                         # Architecture Decision Records (10 ADRs)
+├── adr/                         # Architecture Decision Records (11 ADRs)
 │   ├── 0001-tanstack-start-with-hono-api.md
 │   ├── 0002-postgresql-with-drizzle-orm.md
 │   ├── 0003-better-auth-with-magic-link.md
@@ -162,7 +163,8 @@ docs/
 │   ├── 0007-tailwind-css-v4-with-island-components.md
 │   ├── 0008-react-hook-form-with-zod.md
 │   ├── 0009-single-instance-boundary-for-operational-state.md
-│   └── 0010-hermes-runtime-management-from-telegram-page.md
+│   ├── 0010-hermes-runtime-management-from-telegram-page.md
+│   └── 0011-hermes-web-ui-with-ssh-tcp-proxy.md
 ├── api-reference.md             # Complete API endpoint documentation
 └── test-coverage-review.md      # Test coverage analysis
 ```

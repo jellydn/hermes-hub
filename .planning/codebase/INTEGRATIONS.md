@@ -78,7 +78,9 @@ Bot token encrypted at rest. Bot deployed to VPS alongside Hermes agent. Pairing
 
 The Hermes Web UI is a separate Docker container (`ghcr.io/hermes-agent/hermes-webui`) deployed alongside the Hermes agent on the user's VPS. HermesHub proxies traffic to the Web UI via SSH tunneling through `/api/servers/:id/web-ui/proxy/`.
 
-**Key files:** `server/web-ui/` directory (deploy, proxy, snapshot, reachability, records)
+**Key files:** `server/web-ui/deploy.ts` (orchestration), `handlers.ts` (HTTP), `proxy-http.ts` + `ssh-forward.ts` (SSH TCP proxy), `records.ts` (persistence + stale deploy), `reachability.ts` (health probes)
+
+**API routes** (`server/app.ts`): `GET /servers/:id/web-ui`, `POST /servers/:id/web-ui/deploy`, `GET /servers/:id/web-ui/password`, `ALL /servers/:id/web-ui/proxy/*`
 
 ## Known Integration Gaps
 

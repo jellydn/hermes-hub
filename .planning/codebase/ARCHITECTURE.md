@@ -35,7 +35,7 @@ Browser
 | **Lib** | `src/lib/` | Shared utilities, types, auth client, status pill helpers |
 | **Contracts** | `shared/contracts/` | Shared TypeScript types between server and client |
 | **API handlers** | `server/app.ts` | Hono route bindings → handler modules |
-| **Business logic** | `server/` | Domain modules: servers, install, providers, telegram, web-ui, dashboard, logs |
+| **Business logic** | `server/` | Domain modules: servers, install, providers, telegram, web-ui (`deploy.ts`, `records.ts`, `proxy-http.ts`), dashboard, logs |
 | **Infrastructure** | `server/db/`, `server/ssh/` | Database connection, SSH connection, encryption |
 
 ## Data Flow Patterns

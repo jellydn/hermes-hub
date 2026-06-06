@@ -10,9 +10,14 @@ Generated: 2026-06-06
 React 19 hydration mismatch when browser extensions inject DOM elements or when theme state differs between server (always "Auto") and client (localStorage preference). Mitigated with `suppressHydrationWarning` on the ThemeToggle button, but extensions can still cause hydration failures elsewhere.
 
 ### Concurrent Deploy Race Condition
-**Severity:** Low | **File:** `server/web-ui/handlers.ts:55-58`
+**Severity:** Low | **File:** `server/web-ui/deploy.ts:66-80`
 
-Two simultaneous POSTs can both pass the stale-deploy guard and start duplicate background deploys. `onConflictDoUpdate` keeps one DB row, but the VPS may see concurrent work. Commented in code as a known limitation — `SELECT ... FOR UPDATE` would need raw SQL.
+Two simultaneous POSTs can both pass the stale-deploy guard and start duplicate background deploys. `tryAcquireWebUiDeployLock` serializes same-process deploys, but two HermesHub instances (violating ADR 0009) could still race. `onConflictDoUpdate` keeps one DB row, but the VPS may see concurrent work. `SELECT ... FOR UPDATE` would need raw SQL to harden further.
+
+### Stale Deploy Resolution Side Effect on Read
+**Severity:** Low | **File:** `server/web-ui/records.ts:125-140`
+
+`getResolvedServerWebUiRecord` calls `resolveServerWebUiRecord`, which writes a `failed` status to the DB when a `deploying` record is past `STALE_DEPLOY_THRESHOLD_MS`. Any status read can mutate state. This is intentional (self-healing stuck deploys) but means read paths are not pure — tests and callers must account for the write.
 
 ### Legacy deployStartedAt NULL handling
 **Severity:** Low (fixed) | **File:** `server/web-ui/snapshot.ts`
