@@ -22,7 +22,11 @@ vi.mock("./web-ui/reachability", () => ({
 	assertWebUiReachable,
 }));
 
-import { managedComposeVolumeHome } from "./constants";
+import {
+	hermesWebUiContainerGid,
+	hermesWebUiContainerUid,
+	managedComposeVolumeHome,
+} from "./constants";
 import {
 	deployManagedCompose,
 	resolveManagedComposeDeployPolicy,
@@ -77,17 +81,18 @@ describe("resolveManagedComposeDeployPolicy", () => {
 		const policy = resolveManagedComposeDeployPolicy("web-ui", {
 			webUiPort: 8787,
 		});
-		const agentSrcDir = `${managedComposeVolumeHome}/.hermes/hermes-agent-src`;
 
 		await policy.preSshCommands?.({ execCommand } as never);
 
 		expect(execCommand).toHaveBeenCalledWith(
 			[
-				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace ${agentSrcDir}`,
-				`if [ ! -f ${agentSrcDir}/pyproject.toml ]; then`,
-				`sudo docker cp hermes:/opt/hermes/. ${agentSrcDir}/ 2>/dev/null || true`,
-				"fi",
-			].join("\n"),
+				`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
+				`${managedComposeVolumeHome}/.hermes/webui`,
+				`${managedComposeVolumeHome}/workspace`,
+				`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid}`,
+				`${managedComposeVolumeHome}/.hermes`,
+				`${managedComposeVolumeHome}/workspace`,
+			].join(" "),
 		);
 	});
 });

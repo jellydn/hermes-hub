@@ -11,6 +11,8 @@ const WEB_UI_UNREACHABLE_PROXY_MESSAGE =
 const WEB_UI_CONTAINER_NAME = "hermes-webui";
 const WEB_UI_STARTUP_ATTEMPTS = 60;
 const WEB_UI_STARTUP_DELAY_SECONDS = 5;
+const WEB_UI_LOG_TAIL_LINES = 80;
+export const WEB_UI_DIAGNOSTICS_MAX_LENGTH = 2000;
 
 export function isRemotePortUnreachable(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error);
@@ -27,12 +29,47 @@ export function formatWebUiProxyError(error: unknown, port: number) {
 	return error instanceof Error ? error.message : String(error);
 }
 
+export function formatWebUiContainerFailureDetails(
+	state: string | undefined,
+	logs: string | undefined,
+	maxLength = WEB_UI_DIAGNOSTICS_MAX_LENGTH,
+) {
+	const statePart = state?.trim();
+	const logsPart = logs?.trim();
+	const prefix = statePart
+		? `${statePart}. Recent logs: `
+		: logsPart
+			? "Recent logs: "
+			: "";
+
+	if (!prefix && !logsPart) {
+		return "";
+	}
+
+	const remaining = maxLength - prefix.length;
+	if (remaining <= 0) {
+		return prefix.slice(0, maxLength);
+	}
+
+	if (!logsPart) {
+		return prefix.slice(0, maxLength);
+	}
+
+	if (logsPart.length <= remaining) {
+		return `${prefix}${logsPart}`;
+	}
+
+	return `${prefix}...${logsPart.slice(-(remaining - 3))}`;
+}
+
 async function readWebUiContainerDiagnostics(ssh: NodeSSH) {
 	const [stateResult, logsResult] = await Promise.all([
 		ssh.execCommand(
 			`sudo docker inspect ${WEB_UI_CONTAINER_NAME} --format '{{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' 2>&1`,
 		),
-		ssh.execCommand(`sudo docker logs ${WEB_UI_CONTAINER_NAME} --tail 40 2>&1`),
+		ssh.execCommand(
+			`sudo docker logs ${WEB_UI_CONTAINER_NAME} --tail ${WEB_UI_LOG_TAIL_LINES} 2>&1`,
+		),
 	]);
 
 	const state = stateResult.stdout?.trim() || stateResult.stderr?.trim();
@@ -42,10 +79,10 @@ async function readWebUiContainerDiagnostics(ssh: NodeSSH) {
 
 async function buildContainerFailureError(ssh: NodeSSH) {
 	const { state, logs } = await readWebUiContainerDiagnostics(ssh);
-	const details = [state, logs].filter(Boolean).join(". Recent logs: ");
+	const details = formatWebUiContainerFailureDetails(state, logs);
 	return new Error(
 		details
-			? `Hermes Web UI container is not running. ${details.slice(0, 600)}`
+			? `Hermes Web UI container is not running. ${details}`
 			: "Hermes Web UI container is not running after docker compose up.",
 	);
 }

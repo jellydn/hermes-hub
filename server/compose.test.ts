@@ -3,7 +3,11 @@ import { parse } from "yaml";
 import { buildHermesComposeContent } from "./compose";
 import {
 	defaultHermesImage,
+	hermesWebUiContainerGid,
+	hermesWebUiContainerUid,
+	hermesWebUiDefaultWorkspace,
 	hermesWebUiImage,
+	hermesWebUiStateDir,
 	managedComposeVolumeHome,
 } from "./constants";
 
@@ -157,7 +161,6 @@ describe("buildHermesComposeContent", () => {
 				ports: ["127.0.0.1:8787:8787"],
 				volumes: [
 					`${managedComposeVolumeHome}/.hermes:/home/hermeswebui/.hermes`,
-					`${managedComposeVolumeHome}/.hermes/hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro`,
 					`${managedComposeVolumeHome}/workspace:/workspace`,
 				],
 			}),
@@ -167,7 +170,10 @@ describe("buildHermesComposeContent", () => {
 				"HERMES_WEBUI_HOST=0.0.0.0",
 				"HERMES_WEBUI_PORT=8787",
 				"HERMES_WEBUI_PASSWORD=generated-password",
-				"HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui",
+				`HERMES_WEBUI_STATE_DIR=${hermesWebUiStateDir}`,
+				`HERMES_WEBUI_DEFAULT_WORKSPACE=${hermesWebUiDefaultWorkspace}`,
+				`WANTED_UID=${hermesWebUiContainerUid}`,
+				`WANTED_GID=${hermesWebUiContainerGid}`,
 			]),
 		);
 	});

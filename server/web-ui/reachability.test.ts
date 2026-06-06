@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	assertWebUiReachable,
+	formatWebUiContainerFailureDetails,
 	formatWebUiProxyError,
 	isRemotePortUnreachable,
 } from "./reachability";
@@ -17,6 +18,30 @@ describe("isRemotePortUnreachable", () => {
 
 	it("returns false for unrelated errors", () => {
 		expect(isRemotePortUnreachable(new Error("Upstream timeout"))).toBe(false);
+	});
+});
+
+describe("formatWebUiContainerFailureDetails", () => {
+	it("preserves the final failure line when startup logs are long", () => {
+		const fatal = "!! ERROR: HERMES_WEBUI_STATE_DIR not set";
+		const logs = `UNIQUE_START_MARKER\n${"EARLY_INIT_NOISE\n".repeat(200)}${fatal}`;
+		const message = formatWebUiContainerFailureDetails(
+			"restarting exit=1 error=",
+			logs,
+		);
+
+		expect(message).toContain(fatal);
+		expect(message).not.toContain("UNIQUE_START_MARKER");
+		expect(message).toContain("...");
+	});
+
+	it("keeps container state and recent logs together", () => {
+		expect(
+			formatWebUiContainerFailureDetails(
+				"exited exit=1 error=",
+				"startup failed",
+			),
+		).toBe("exited exit=1 error=. Recent logs: startup failed");
 	});
 });
 
@@ -106,13 +131,13 @@ describe("assertWebUiReachable", () => {
 			code: 0,
 		});
 		execCommand.mockResolvedValueOnce({
-			stdout: "startup failed",
+			stdout: `${"init noise\n".repeat(40)}!! ERROR: subscript failed`,
 			stderr: "",
 			code: 0,
 		});
 
 		await expect(
 			assertWebUiReachable({ execCommand } as never, 8787),
-		).rejects.toThrow(/container is not running/i);
+		).rejects.toThrow(/subscript failed/i);
 	});
 });

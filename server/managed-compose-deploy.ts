@@ -1,6 +1,10 @@
 import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
-import { managedComposeVolumeHome } from "./constants";
+import {
+	hermesWebUiContainerGid,
+	hermesWebUiContainerUid,
+	managedComposeVolumeHome,
+} from "./constants";
 import { buildManagedComposeContent } from "./server-compose";
 import { type SshAuthMethod, shellQuote } from "./ssh";
 import { assertWebUiReachable } from "./web-ui/reachability";
@@ -72,14 +76,15 @@ export function resolveManagedComposeDeployPolicy(
 				composeServices: ["hermes-webui"],
 				pullImages: true,
 				preSshCommands: async (ssh) => {
-					const agentSrcDir = `${managedComposeVolumeHome}/.hermes/hermes-agent-src`;
 					const prepResult = await ssh.execCommand(
 						[
-							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace ${agentSrcDir}`,
-							`if [ ! -f ${agentSrcDir}/pyproject.toml ]; then`,
-							`sudo docker cp hermes:/opt/hermes/. ${agentSrcDir}/ 2>/dev/null || true`,
-							"fi",
-						].join("\n"),
+							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
+							`${managedComposeVolumeHome}/.hermes/webui`,
+							`${managedComposeVolumeHome}/workspace`,
+							`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid}`,
+							`${managedComposeVolumeHome}/.hermes`,
+							`${managedComposeVolumeHome}/workspace`,
+						].join(" "),
 					);
 					if (prepResult.code !== 0) {
 						throw new Error(

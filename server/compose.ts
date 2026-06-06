@@ -2,7 +2,11 @@ import { stringify } from "yaml";
 import {
 	defaultHermesImage,
 	defaultHermesWebUiPort,
+	hermesWebUiContainerGid,
+	hermesWebUiContainerUid,
+	hermesWebUiDefaultWorkspace,
 	hermesWebUiImage,
+	hermesWebUiStateDir,
 	managedComposeVolumeHome,
 } from "./constants";
 
@@ -61,14 +65,16 @@ export function buildHermesComposeContent(input?: {
 			ports: [`127.0.0.1:${port}:${port}`],
 			volumes: [
 				`${volumeHome}/.hermes:/home/hermeswebui/.hermes`,
-				`${volumeHome}/.hermes/hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro`,
 				`${volumeHome}/workspace:/workspace`,
 			],
 			environment: [
 				"HERMES_WEBUI_HOST=0.0.0.0",
 				`HERMES_WEBUI_PORT=${port}`,
 				`HERMES_WEBUI_PASSWORD=${input.webUi.password}`,
-				"HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui",
+				`HERMES_WEBUI_STATE_DIR=${hermesWebUiStateDir}`,
+				`HERMES_WEBUI_DEFAULT_WORKSPACE=${hermesWebUiDefaultWorkspace}`,
+				`WANTED_UID=${hermesWebUiContainerUid}`,
+				`WANTED_GID=${hermesWebUiContainerGid}`,
 			],
 		};
 	}
