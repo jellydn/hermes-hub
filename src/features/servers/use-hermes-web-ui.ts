@@ -58,54 +58,72 @@ export function useHermesWebUi(
 			return;
 		}
 
-		const interval = setInterval(() => {
-			void (async () => {
-				try {
-					const response = await fetch(`/api/servers/${detail.server.id}`);
-					if (!response.ok) {
-						return;
-					}
+		let aborted = false;
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-					const payload = (await response.json()) as {
-						serverDetail?: ServerDetailSnapshot;
-					};
-					const updated = payload.serverDetail;
-					if (!updated?.webUi || updated.webUi.deployStatus === "deploying") {
-						return;
-					}
-
-					setDeployedWebUi(updated.webUi);
-					onDetailChange?.(updated);
-
-					if (updated.webUi.deployStatus === "succeeded") {
-						setState((current) => ({
-							...current,
-							error: null,
-							successMessage: wasEnabledAtDeployStart.current
-								? "Hermes Web UI redeployed. Try opening it again."
-								: "Hermes Web UI is ready. Open it from HermesHub.",
-						}));
-						return;
-					}
-
-					if (updated.webUi.deployStatus === "failed") {
-						setState((current) => ({
-							...current,
-							successMessage: null,
-							error: updated.webUi?.deployError ?? "Web UI setup failed.",
-						}));
-					}
-				} catch {
-					// Keep polling on transient fetch failures.
+		async function poll() {
+			try {
+				const response = await fetch(`/api/servers/${detail.server.id}`);
+				if (aborted) {
+					return;
 				}
-			})();
-		}, 5000);
+				if (!response.ok) {
+					timeoutId = setTimeout(poll, 5000);
+					return;
+				}
 
-		return () => clearInterval(interval);
+				const payload = (await response.json()) as {
+					serverDetail?: ServerDetailSnapshot;
+				};
+				if (aborted) {
+					return;
+				}
+
+				const updated = payload.serverDetail;
+				if (!updated?.webUi || updated.webUi.deployStatus === "deploying") {
+					timeoutId = setTimeout(poll, 5000);
+					return;
+				}
+
+				setDeployedWebUi(updated.webUi);
+				onDetailChange?.(updated);
+
+				if (updated.webUi.deployStatus === "succeeded") {
+					setState((current) => ({
+						...current,
+						error: null,
+						successMessage: wasEnabledAtDeployStart.current
+							? "Hermes Web UI redeployed. Try opening it again."
+							: "Hermes Web UI is ready. Open it from HermesHub.",
+					}));
+					return;
+				}
+
+				if (updated.webUi.deployStatus === "failed") {
+					setState((current) => ({
+						...current,
+						successMessage: null,
+						error: updated.webUi?.deployError ?? "Web UI setup failed.",
+					}));
+				}
+			} catch {
+				// Keep polling on transient fetch failures.
+				if (!aborted) {
+					timeoutId = setTimeout(poll, 5000);
+				}
+			}
+		}
+
+		timeoutId = setTimeout(poll, 5000);
+
+		return () => {
+			aborted = true;
+			clearTimeout(timeoutId);
+		};
 	}, [webUi?.deployStatus, detail.server.id, onDetailChange]);
 
 	async function deploy() {
-		wasEnabledAtDeployStart.current = isEnabled;
+
 
 		setState((current) => ({
 			...current,
