@@ -351,7 +351,7 @@ describe("server actions", () => {
 	});
 
 	it("rollback auto-resolves the version from the installs table when no target is given", async () => {
-		// selectLimit returns: [server], [install version], [install id for update]
+		// selectLimit returns: [server], [audit history], [install version], [install id]
 		selectLimit.mockReset();
 		selectLimit
 			.mockResolvedValueOnce([
@@ -368,6 +368,7 @@ describe("server actions", () => {
 					osInfo: {},
 				},
 			])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([{ version: "v1.0.0" }])
 			.mockResolvedValueOnce([{ id: "install_123" }]);
 
@@ -381,6 +382,47 @@ describe("server actions", () => {
 			status: "succeeded",
 			action: "rollback",
 			imageRef: "v1.0.0",
+		});
+	});
+
+	it("rollback prefers audit history over installs.version when no target is given", async () => {
+		// selectLimit returns: [server], [audit history], [install id for version update]
+		selectLimit.mockReset();
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Prod VPS",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+					status: "connected",
+					osInfo: {},
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					id: "audit_1",
+					action: "server.action.rollback.succeeded",
+					details: { imageRef: "v2.0.0" },
+					createdAt: new Date("2026-05-29T00:00:00.000Z"),
+				},
+			])
+			.mockResolvedValueOnce([{ id: "install_123" }]);
+
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "rollback" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "rollback",
+			imageRef: "v2.0.0",
 		});
 	});
 
