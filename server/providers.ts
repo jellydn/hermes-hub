@@ -81,29 +81,15 @@ export async function saveProviderConfig(context: Context) {
 	const ipAddress = getClientIp(context);
 
 	try {
-		await db
-			.update(aiProviders)
-			.set({ isActive: false })
-			.where(eq(aiProviders.userId, session.user.id));
-
-		await db.insert(aiProviders).values({
-			userId: session.user.id,
-			provider: parsed.provider,
-			encryptedApiKey: encryptSecret(resolvedApiKey.apiKey),
-			baseUrl: resolvedApiKey.baseUrl || null,
-			model: parsed.model,
-			label: formatAiProviderLabel(parsed.provider),
-			isActive: true,
-		});
-
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "provider.saved",
-			details: {
+		await db.transaction(async (tx) => {
+			await persistProviderConfig(tx, {
+				userId: session.user.id,
 				provider: parsed.provider,
+				apiKey: resolvedApiKey.apiKey,
+				baseUrl: resolvedApiKey.baseUrl,
 				model: parsed.model,
-			},
-			ipAddress,
+				ipAddress,
+			});
 		});
 
 		clearDashboardCache();
@@ -262,4 +248,49 @@ export async function getProviderDeployConfig(
 		),
 		model: record.model,
 	};
+}
+
+type ProviderPersistenceInput = {
+	userId: string;
+	provider: AiProviderId;
+	apiKey: string;
+	baseUrl: string | undefined;
+	model: string;
+	ipAddress: string | null;
+};
+
+type ProviderPersistenceWriter = Pick<
+	ReturnType<typeof getDb>,
+	"update" | "insert"
+>;
+
+async function persistProviderConfig(
+	writer: ProviderPersistenceWriter,
+	input: ProviderPersistenceInput,
+) {
+	// react-doctor-disable-next-line react-doctor/async-parallel
+	await writer
+		.update(aiProviders)
+		.set({ isActive: false })
+		.where(eq(aiProviders.userId, input.userId));
+
+	await writer.insert(aiProviders).values({
+		userId: input.userId,
+		provider: input.provider,
+		encryptedApiKey: encryptSecret(input.apiKey),
+		baseUrl: input.baseUrl || null,
+		model: input.model,
+		label: formatAiProviderLabel(input.provider),
+		isActive: true,
+	});
+
+	await insertAuditLog(writer, {
+		userId: input.userId,
+		action: "provider.saved",
+		details: {
+			provider: input.provider,
+			model: input.model,
+		},
+		ipAddress: input.ipAddress,
+	});
 }

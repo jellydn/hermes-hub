@@ -10,6 +10,7 @@ const fetchMock = vi.fn();
 const dbSelect = vi.fn();
 const dbUpdate = vi.fn();
 const dbInsert = vi.fn();
+const transaction = vi.fn();
 const updateSet = vi.fn();
 const updateWhere = vi.fn();
 const selectFrom = vi.fn();
@@ -40,6 +41,7 @@ vi.mock("./db", () => ({
 		select: dbSelect,
 		update: dbUpdate,
 		insert: dbInsert,
+		transaction,
 	}),
 }));
 
@@ -94,6 +96,12 @@ describe("provider settings", () => {
 
 		insertProviderValues.mockResolvedValue(undefined);
 		insertAuditValues.mockResolvedValue(undefined);
+		transaction.mockImplementation(async (fn) =>
+			fn({
+				update: dbUpdate,
+				insert: dbInsert,
+			}),
+		);
 		fetchMock.mockResolvedValue(
 			new Response(JSON.stringify({ data: [] }), { status: 200 }),
 		);
