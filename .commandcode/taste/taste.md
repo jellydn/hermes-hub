@@ -18,4 +18,3 @@
 # Theming
 - Support both light and dark modes using data-theme attribute and CSS custom properties. Confidence: 0.85
 - Test all color combinations in both themes for accessibility compliance. Confidence: 0.75
-
