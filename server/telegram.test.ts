@@ -473,6 +473,7 @@ describe("telegram handlers", () => {
 			expect.objectContaining({
 				userId: "user_123",
 				serverId: "server_1",
+				telegramBotToken: "123456:secret-token",
 			}),
 		);
 

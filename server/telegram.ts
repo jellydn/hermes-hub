@@ -198,8 +198,9 @@ export async function deployTelegramToServer(context: Context) {
 		);
 	}
 
+	let telegramBotToken: string;
 	try {
-		decryptSecret(record.botToken);
+		telegramBotToken = decryptSecret(record.botToken);
 	} catch {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
@@ -233,6 +234,7 @@ export async function deployTelegramToServer(context: Context) {
 			userId: session.user.id,
 			serverId: serverRecord.id,
 			apiServerKey,
+			telegramBotToken,
 		});
 	} catch (error) {
 		const message =

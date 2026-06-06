@@ -37,6 +37,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 	serverId: string;
 	secrets: ManagedComposeSecrets;
 	apiServerKey?: string;
+	telegramBotToken?: string;
 	webUiPassword?: string;
 	webUiMode?: ManagedComposeWebUiMode;
 }) {
@@ -44,7 +45,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 	const { telegramInfo, providerConfig, webUiRecord } = input.secrets;
 
 	let apiServerKey = input.apiServerKey;
-	let telegramBotToken: string | undefined;
+	let telegramBotToken = input.telegramBotToken;
 	let providerEnvVars: Record<string, string> | undefined;
 	let hermesModel: string | undefined;
 
@@ -52,7 +53,8 @@ export function buildManagedComposeContentFromSecrets(input: {
 		try {
 			apiServerKey =
 				input.apiServerKey ?? decryptApiServerKey(telegramInfo.apiServerKey);
-			telegramBotToken = decryptSecret(telegramInfo.botToken);
+			telegramBotToken =
+				input.telegramBotToken ?? decryptSecret(telegramInfo.botToken);
 		} catch {
 			throw new Error("Failed to decrypt Telegram deploy secrets.");
 		}
@@ -87,6 +89,7 @@ export async function buildManagedComposeContent(input: {
 	userId: string;
 	serverId: string;
 	apiServerKey?: string;
+	telegramBotToken?: string;
 	webUiPassword?: string;
 	webUiMode?: ManagedComposeWebUiMode;
 }) {
@@ -98,6 +101,7 @@ export async function buildManagedComposeContent(input: {
 	return buildManagedComposeContentFromSecrets({
 		serverId: input.serverId,
 		apiServerKey: input.apiServerKey,
+		telegramBotToken: input.telegramBotToken,
 		webUiPassword: input.webUiPassword,
 		webUiMode: input.webUiMode,
 		secrets,
