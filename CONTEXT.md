@@ -12,6 +12,8 @@
 
 **Bot Username**: The Telegram bot's display name (e.g., `my_hermes_bot`). Stored in `telegram_configs.bot_username` (renamed from `chat_id`). Used only for display in the dashboard — the bot's `botToken` is sufficient for message delivery via the Telegram API; no separate numeric chat ID is needed.
 
+**Agent Persona**: User-authored instructions that define how Hermes speaks, reasons, and presents itself. Edited on `/settings`, stored in `hermes_settings.agent_persona`, and deployed to `SOUL.md` on the Telegram-linked Hermes VPS. Save persists locally; deploy writes over SSH and restarts the gateway. Content is trimmed markdown, capped at 20,000 characters.
+
 **Client IP**: The IP address recorded in audit logs for accountability. Extracted via a shared `getClientIp(context)` helper that reads the rightmost entry from `x-forwarded-for` (standard convention behind a single reverse proxy). Configurable via `TRUSTED_PROXY_COUNT` env var for multi-proxy setups. Never reads `x-forwarded-for` raw — always goes through the helper.
 
 **Migration Reset**: The project is pre-production (no live databases), so all existing Drizzle migration files and the journal are deleted and regenerated as a single clean `0001` migration from the current schema. No data loss risk.
