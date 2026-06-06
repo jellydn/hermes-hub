@@ -19,7 +19,7 @@ const getProviderDeployConfig = vi.fn();
 const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
-const buildHermesComposeContent = vi.fn();
+const buildManagedComposeContent = vi.fn();
 const deployComposeViaSsh = vi.fn();
 
 vi.mock("./auth", () => ({
@@ -82,8 +82,8 @@ vi.mock("./server-records", () => ({
 	resolveServerSshConfigOrError,
 }));
 
-vi.mock("./compose", () => ({
-	buildHermesComposeContent,
+vi.mock("./server-compose", () => ({
+	buildManagedComposeContent,
 }));
 
 vi.mock("./deploy", () => ({
@@ -107,7 +107,7 @@ describe("telegram handlers", () => {
 			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
 			model: "gpt-4o",
 		});
-		buildHermesComposeContent.mockReturnValue("# mocked compose content");
+		buildManagedComposeContent.mockResolvedValue("# mocked compose content");
 		transaction.mockImplementation(async (fn) => {
 			const tx = {
 				update: () => ({ set: updateSet }),
@@ -469,12 +469,10 @@ describe("telegram handlers", () => {
 		});
 		expect(deployArgs.composeContent).toBe("# mocked compose content");
 
-		// buildHermesComposeContent received the env vars.
-		expect(buildHermesComposeContent).toHaveBeenCalledWith(
+		expect(buildManagedComposeContent).toHaveBeenCalledWith(
 			expect.objectContaining({
-				telegramBotToken: "123456:secret-token",
-				providerEnvVars: { HERMES_INFERENCE_PROVIDER: "openai" },
-				hermesModel: "gpt-4o",
+				userId: "user_123",
+				serverId: "server_1",
 			}),
 		);
 

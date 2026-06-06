@@ -1,5 +1,4 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-
 import type {
 	ServerActionHistoryItem,
 	ServerActionResult,
@@ -7,8 +6,10 @@ import type {
 	ServerDetailSnapshot,
 } from "../src/lib/server-detail";
 import { getDb } from "./db";
-import { auditLogs, installs } from "./db/schema";
+import { auditLogs } from "./db/schema";
+import { getLatestInstallForServer } from "./install/records";
 import { getOwnedServerRecord, type OwnedServerRecord } from "./server-records";
+import { getServerWebUiRecord, getWebUiProxyPath } from "./web-ui/records";
 
 type AuditRecord = {
 	id: string;
@@ -30,9 +31,10 @@ export async function getServerDetailSnapshot(input: {
 		return null;
 	}
 
-	const [installRecord, actionHistory] = await Promise.all([
-		getLatestInstallRecord(input.serverId),
+	const [installRecord, actionHistory, webUiRecord] = await Promise.all([
+		getLatestInstallForServer(input.serverId),
 		getServerActionHistory(input.serverId),
+		getServerWebUiRecord(input.serverId),
 	]);
 	const rollbackTarget = getRollbackTargetFromHistory(actionHistory);
 
@@ -47,6 +49,15 @@ export async function getServerDetailSnapshot(input: {
 			: null,
 		actionHistory,
 		rollbackTarget,
+		webUi:
+			webUiRecord?.enabled === true
+				? {
+						enabled: true,
+						port: webUiRecord.port,
+						proxyPath: getWebUiProxyPath(input.serverId),
+						updatedAt: webUiRecord.updatedAt.toISOString(),
+					}
+				: null,
 	};
 }
 
@@ -83,21 +94,6 @@ function buildServerSnapshot(serverRecord: OwnedServerRecord) {
 			| "untested"
 			| null,
 	};
-}
-
-async function getLatestInstallRecord(serverId: string) {
-	const [installRecord] = await getDb()
-		.select({
-			status: installs.status,
-			version: installs.version,
-			updatedAt: installs.updatedAt,
-		})
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	return installRecord ?? null;
 }
 
 async function getServerActionHistory(serverId: string) {

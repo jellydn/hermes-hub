@@ -1,4 +1,5 @@
 export {
+	establishSshConnection,
 	type HostKeyInfo,
 	type SshAuthMethod,
 	type SshConnectionInput,

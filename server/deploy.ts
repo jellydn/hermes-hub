@@ -2,17 +2,16 @@ import type { Context } from "hono";
 import type { NodeSSH } from "node-ssh";
 import { getAiProviderOption, isAiProviderId } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
-import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
-import { buildProviderEnvMap } from "./providers/config";
 import {
 	decryptApiKey,
 	getLatestProviderRecord,
 	getTelegramDeployInfo,
 } from "./providers/records";
+import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 
@@ -23,6 +22,7 @@ type DeployComposeInput = {
 	authMethod: SshAuthMethod;
 	credential: string;
 	composeContent: string;
+	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	expectedFingerprint?: string;
 };
@@ -40,6 +40,10 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			expectedFingerprint: input.expectedFingerprint,
 		},
 		async (ssh) => {
+			if (input.preSshCommands) {
+				await input.preSshCommands(ssh);
+			}
+
 			const writeResult = await ssh.execCommand(writeCmd);
 			if (writeResult.code !== 0) {
 				throw new Error(
@@ -94,9 +98,8 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Deployed server not found." }, 404);
 	}
 
-	let decryptedBotToken: string;
 	try {
-		decryptedBotToken = decryptSecret(telegramInfo.botToken);
+		decryptSecret(telegramInfo.botToken);
 	} catch {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
@@ -114,17 +117,10 @@ export async function deployProviderToHermes(context: Context) {
 
 	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
 
-	const providerEnvVars = buildProviderEnvMap(
-		providerRecord.provider,
-		decryptedApiKey,
-		providerRecord.baseUrl,
-	);
-
-	const composeContent = buildHermesComposeContent({
+	const composeContent = await buildManagedComposeContent({
+		userId: session.user.id,
+		serverId: serverRecord.id,
 		apiServerKey: decryptedApiServerKey,
-		telegramBotToken: decryptedBotToken,
-		providerEnvVars,
-		hermesModel: providerRecord.model,
 	});
 
 	const sshResult = resolveServerSshConfigOrError(

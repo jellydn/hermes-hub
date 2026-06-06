@@ -51,6 +51,12 @@ vi.mock("./db", () => ({
 	}),
 }));
 
+vi.mock("./web-ui/records", () => ({
+	getServerWebUiRecord: vi.fn().mockResolvedValue(null),
+	getWebUiProxyPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy`,
+}));
+
 describe("server actions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

@@ -1,31 +1,66 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const {
+	connectServer,
+	listServers,
+	updateServer,
+	deleteServer,
+	acceptHostKey,
+	getServerDetail,
+	runServerAction,
+	startServerInstall,
+	streamServerInstallEvents,
+	getLatestServerInstallLog,
+	getDashboardStatus,
+	getLogs,
+	clearLogs,
+	deployProviderToHermes,
+	saveProviderConfig,
+	testProviderConfig,
+	connectTelegram,
+	disconnectTelegram,
+	deployTelegramToServer,
+	testTelegramBot,
+	listTelegramPairings,
+	approveTelegramPairing,
+	deployServerWebUi,
+	revealServerWebUiPassword,
+	proxyServerWebUi,
+	authHandler,
+	hasDatabaseUrl,
+} = vi.hoisted(() => ({
+	connectServer: vi.fn(),
+	listServers: vi.fn(),
+	updateServer: vi.fn(),
+	deleteServer: vi.fn(),
+	acceptHostKey: vi.fn(),
+	getServerDetail: vi.fn(),
+	runServerAction: vi.fn(),
+	startServerInstall: vi.fn(),
+	streamServerInstallEvents: vi.fn(),
+	getLatestServerInstallLog: vi.fn(),
+	getDashboardStatus: vi.fn(),
+	getLogs: vi.fn(),
+	clearLogs: vi.fn(),
+	deployProviderToHermes: vi.fn(),
+	saveProviderConfig: vi.fn(),
+	testProviderConfig: vi.fn(),
+	connectTelegram: vi.fn(),
+	disconnectTelegram: vi.fn(),
+	deployTelegramToServer: vi.fn(),
+	testTelegramBot: vi.fn(),
+	listTelegramPairings: vi.fn(),
+	approveTelegramPairing: vi.fn(),
+	deployServerWebUi: vi.fn(),
+	revealServerWebUiPassword: vi.fn(),
+	proxyServerWebUi: vi.fn(),
+	authHandler: vi.fn(),
+	hasDatabaseUrl: vi.fn(() => true),
+}));
+
 vi.mock("./db/health", () => ({
 	checkDatabaseConnection: vi.fn(),
 }));
-
-const connectServer = vi.fn();
-const listServers = vi.fn();
-const updateServer = vi.fn();
-const deleteServer = vi.fn();
-const acceptHostKey = vi.fn();
-const getServerDetail = vi.fn();
-const runServerAction = vi.fn();
-const startServerInstall = vi.fn();
-const streamServerInstallEvents = vi.fn();
-const getLatestServerInstallLog = vi.fn();
-const getDashboardStatus = vi.fn();
-const getLogs = vi.fn();
-const clearLogs = vi.fn();
-const deployProviderToHermes = vi.fn();
-const saveProviderConfig = vi.fn();
-const testProviderConfig = vi.fn();
-const connectTelegram = vi.fn();
-const disconnectTelegram = vi.fn();
-const deployTelegramToServer = vi.fn();
-const testTelegramBot = vi.fn();
-const listTelegramPairings = vi.fn();
-const approveTelegramPairing = vi.fn();
 
 vi.mock("./servers", () => ({
 	connectServer,
@@ -70,8 +105,11 @@ vi.mock("./telegram", () => ({
 	testTelegramBot,
 }));
 
-const authHandler = vi.fn();
-const hasDatabaseUrl = vi.fn(() => true);
+vi.mock("./web-ui", () => ({
+	deployServerWebUi,
+	revealServerWebUiPassword,
+	proxyServerWebUi,
+}));
 
 vi.mock("./auth", () => ({
 	getAuth: () => ({
@@ -80,14 +118,14 @@ vi.mock("./auth", () => ({
 	hasDatabaseUrl,
 }));
 
+import { apiApp } from "./app";
+
 describe("apiApp", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		hasDatabaseUrl.mockReturnValue(true);
 	});
 	it("returns health status for GET /api/health", async () => {
-		const { apiApp } = await import("./app");
-
 		const response = await apiApp.request("http://localhost/api/health");
 		const payload = await response.json();
 
@@ -107,7 +145,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/auth/send-magic-link",
 			{
@@ -135,7 +172,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/auth/verify-magic-link?token=abc&callbackURL=%2Fdashboard",
 		);
@@ -158,7 +194,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/auth/callback?token=abc&callbackURL=%2Fdashboard",
 		);
@@ -176,7 +211,6 @@ describe("apiApp", () => {
 	it("returns 503 for auth routes when DATABASE_URL is unavailable", async () => {
 		hasDatabaseUrl.mockReturnValue(false);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request("http://localhost/api/auth/session");
 
 		expect(response.status).toBe(503);
@@ -194,7 +228,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request("http://localhost/api/servers");
 
 		expect(response.status).toBe(200);
@@ -209,7 +242,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/connect",
 			{
@@ -231,7 +263,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/server_123/install",
 			{
@@ -254,7 +285,6 @@ describe("apiApp", () => {
 			),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/server_123",
 		);
@@ -274,7 +304,6 @@ describe("apiApp", () => {
 			),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/server_123",
 			{
@@ -296,7 +325,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/server_123/actions",
 			{
@@ -318,7 +346,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/servers/server_123/install/events",
 		);
@@ -335,7 +362,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/dashboard/status",
 		);
@@ -355,7 +381,6 @@ describe("apiApp", () => {
 			),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request("http://localhost/api/logs");
 
 		expect(response.status).toBe(200);
@@ -370,7 +395,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request("http://localhost/api/logs/clear", {
 			method: "POST",
 		});
@@ -387,7 +411,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request("http://localhost/api/providers", {
 			method: "POST",
 			body: JSON.stringify({ provider: "openai", model: "gpt-4o-mini" }),
@@ -406,7 +429,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/providers/test",
 			{
@@ -431,7 +453,6 @@ describe("apiApp", () => {
 			),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/telegram/connect",
 			{
@@ -453,7 +474,6 @@ describe("apiApp", () => {
 			}),
 		);
 
-		const { apiApp } = await import("./app");
 		const response = await apiApp.request(
 			"http://localhost/api/telegram/disconnect",
 			{

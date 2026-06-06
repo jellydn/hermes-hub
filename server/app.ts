@@ -28,6 +28,11 @@ import {
 	listTelegramPairings,
 	testTelegramBot,
 } from "./telegram";
+import {
+	deployServerWebUi,
+	proxyServerWebUi,
+	revealServerWebUiPassword,
+} from "./web-ui";
 
 // 3 requests per 5 minutes per email for magic link sending
 const magicLinkRateLimiter = new RateLimiterMemory({
@@ -207,6 +212,14 @@ apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
+apiApp.post("/servers/:id/web-ui/deploy", httpsMiddleware, deployServerWebUi);
+apiApp.get(
+	"/servers/:id/web-ui/password",
+	httpsMiddleware,
+	revealServerWebUiPassword,
+);
+apiApp.all("/servers/:id/web-ui/proxy", proxyServerWebUi);
+apiApp.all("/servers/:id/web-ui/proxy/*", proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);

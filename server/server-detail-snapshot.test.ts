@@ -1,27 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectOrderBy = vi.fn();
-const selectLimit = vi.fn();
-const selectThen = vi.fn();
-const selectPromise = vi.fn();
-const dbSelect = vi.fn();
+const { ownedServerRecord, selectLimit, dbSelect, getLatestInstallForServer } =
+	vi.hoisted(() => {
+		const ownedServerRecord = {
+			id: "server_123",
+			label: "Production",
+			host: "203.0.113.10",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: "encrypted-secret",
+			storeCredential: true,
+			status: "connected",
+			osInfo: {
+				name: "Ubuntu 22.04",
+				version: "22.04",
+				supportLevel: "supported",
+			},
+			hostKeyFingerprint: "SHA256:abc",
+			hostKeyAlgorithm: "ssh-ed25519",
+		};
 
-const ownedServerRecord = {
-	id: "server_123",
-	label: "Production",
-	host: "203.0.113.10",
-	port: 22,
-	username: "root",
-	authMethod: "password",
-	encryptedCredential: "encrypted-secret",
-	storeCredential: true,
-	status: "connected",
-	osInfo: { name: "Ubuntu 22.04", version: "22.04", supportLevel: "supported" },
-	hostKeyFingerprint: "SHA256:abc",
-	hostKeyAlgorithm: "ssh-ed25519",
-};
+		return {
+			ownedServerRecord,
+			selectLimit: vi.fn(),
+			dbSelect: vi.fn(),
+			getLatestInstallForServer: vi.fn(),
+		};
+	});
 
 vi.mock("./db", () => ({
 	getDb: () => ({
@@ -47,19 +53,26 @@ vi.mock("./db/schema", () => ({
 	},
 }));
 
+vi.mock("./install/records", () => ({
+	getLatestInstallForServer,
+}));
+
 vi.mock("./server-records", () => ({
 	getOwnedServerRecord: vi.fn().mockResolvedValue(ownedServerRecord),
 }));
 
+vi.mock("./web-ui/records", () => ({
+	getServerWebUiRecord: vi.fn().mockResolvedValue(null),
+	getWebUiProxyPath: (serverId: string) =>
+		`/api/servers/${serverId}/web-ui/proxy`,
+}));
+
+import { getServerDetailSnapshot } from "./server-detail-snapshot";
+
 describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		selectFrom.mockReset();
-		selectWhere.mockReset();
-		selectOrderBy.mockReset();
 		selectLimit.mockReset();
-		selectThen.mockReset();
-		selectPromise.mockReset();
 		dbSelect.mockReset();
 
 		// Every call to getDb().select() returns a full query chain:
@@ -73,6 +86,7 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		}));
 
 		selectLimit.mockResolvedValue([]);
+		getLatestInstallForServer.mockResolvedValue(null);
 	});
 
 	it("queries the action history through the indexed serverId column", async () => {
@@ -145,15 +159,9 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 		);
 		expect(all.length).toBe(230);
 
-		// First .limit() = getLatestInstallRecord (empty)
-		// Second .limit() = getServerActionHistory
-		selectLimit
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce(all.slice(0, 5));
+		getLatestInstallForServer.mockResolvedValueOnce(null);
+		selectLimit.mockResolvedValueOnce(all.slice(0, 5));
 
-		const { getServerDetailSnapshot } = await import(
-			"./server-detail-snapshot"
-		);
 		const snapshot = await getServerDetailSnapshot({
 			serverId: "server_123",
 			userId: "user_123",

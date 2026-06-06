@@ -11,6 +11,13 @@ export type ServerActionHistoryItem = {
 	imageRef: string | null;
 };
 
+export type ServerWebUiSnapshot = {
+	enabled: boolean;
+	port: number;
+	proxyPath: string;
+	updatedAt: string;
+};
+
 export type ServerDetailSnapshot = {
 	server: {
 		id: string;
@@ -32,4 +39,5 @@ export type ServerDetailSnapshot = {
 	} | null;
 	actionHistory: ServerActionHistoryItem[];
 	rollbackTarget: string | null;
+	webUi: ServerWebUiSnapshot | null;
 };

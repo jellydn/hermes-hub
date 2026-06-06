@@ -18,7 +18,7 @@ const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
 const insertAuditValues = vi.fn();
-const buildHermesComposeContent = vi.fn();
+const buildManagedComposeContent = vi.fn();
 const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
@@ -47,8 +47,8 @@ vi.mock("./db", () => ({
 	}),
 }));
 
-vi.mock("./compose", () => ({
-	buildHermesComposeContent,
+vi.mock("./server-compose", () => ({
+	buildManagedComposeContent,
 }));
 
 vi.mock("./server-records", () => ({
@@ -107,7 +107,7 @@ describe("provider settings", () => {
 			new Response(JSON.stringify({ data: [] }), { status: 200 }),
 		);
 
-		buildHermesComposeContent.mockReturnValue(
+		buildManagedComposeContent.mockResolvedValue(
 			"services:\n  hermes:\n    image: hermes\n",
 		);
 		resolveServerSshConfig.mockReturnValue({
@@ -553,15 +553,10 @@ describe("provider settings", () => {
 				serverHost: "1.2.3.4",
 			});
 
-			// buildHermesComposeContent was called with the right arguments
-			expect(buildHermesComposeContent).toHaveBeenCalledWith({
+			expect(buildManagedComposeContent).toHaveBeenCalledWith({
+				userId: "user_123",
+				serverId: "server_1",
 				apiServerKey: "api-server-key-value",
-				telegramBotToken: "stored-api-key",
-				providerEnvVars: {
-					HERMES_INFERENCE_PROVIDER: "openai-api",
-					OPENAI_API_KEY: "stored-api-key",
-				},
-				hermesModel: "gpt-4o",
 			});
 
 			// resolveServerSshConfigOrError was called with the server ID and session ID

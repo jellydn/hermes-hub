@@ -195,6 +195,7 @@ describe("server handlers", () => {
 			install: null,
 			actionHistory: [],
 			rollbackTarget: null,
+			webUi: null,
 		});
 	});
 

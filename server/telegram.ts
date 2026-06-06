@@ -3,7 +3,6 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { getAuthSession } from "./auth";
-import { buildHermesComposeContent } from "./compose";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
@@ -12,6 +11,7 @@ import { deployComposeViaSsh } from "./deploy";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { getProviderDeployConfig } from "./providers";
+import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { shellQuote, withSshConnection } from "./ssh";
 import {
@@ -198,9 +198,8 @@ export async function deployTelegramToServer(context: Context) {
 		);
 	}
 
-	let decryptedToken: string;
 	try {
-		decryptedToken = decryptSecret(record.botToken);
+		decryptSecret(record.botToken);
 	} catch {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
@@ -228,12 +227,13 @@ export async function deployTelegramToServer(context: Context) {
 	const { authMethod, credential } = sshResult;
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
-	let providerEnvVars: Record<string, string> | undefined;
-	let hermesModel: string | undefined;
+	let composeContent: string;
 	try {
-		const providerConfig = await getProviderDeployConfig(session.user.id);
-		providerEnvVars = providerConfig?.envVars;
-		hermesModel = providerConfig?.model;
+		composeContent = await buildManagedComposeContent({
+			userId: session.user.id,
+			serverId: serverRecord.id,
+			apiServerKey,
+		});
 	} catch (error) {
 		const message =
 			error instanceof Error
@@ -253,13 +253,6 @@ export async function deployTelegramToServer(context: Context) {
 
 		return context.json({ error: `Deploy failed: ${message}` }, 502);
 	}
-
-	const composeContent = buildHermesComposeContent({
-		apiServerKey,
-		telegramBotToken: decryptedToken,
-		providerEnvVars,
-		hermesModel,
-	});
 
 	try {
 		await deployComposeViaSsh({
