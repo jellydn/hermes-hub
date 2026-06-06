@@ -8,5 +8,4 @@ CREATE TABLE "server_web_ui" (
 	CONSTRAINT "server_web_ui_server_id_unique" UNIQUE("server_id")
 );
 --> statement-breakpoint
-ALTER TABLE "server_web_ui" ADD CONSTRAINT "server_web_ui_server_id_servers_id_fk" FOREIGN KEY ("server_id") REFERENCES "public"."servers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "server_web_ui_server_id_idx" ON "server_web_ui" USING btree ("server_id");
+ALTER TABLE "server_web_ui" ADD CONSTRAINT "server_web_ui_server_id_servers_id_fk" FOREIGN KEY ("server_id") REFERENCES "public"."servers"("id") ON DELETE cascade ON UPDATE no action;

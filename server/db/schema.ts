@@ -234,7 +234,7 @@ export const serverWebUi = pgTable(
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(table) => [index("server_web_ui_server_id_idx").on(table.serverId)],
+	() => [],
 );
 
 export const auditLogs = pgTable(
