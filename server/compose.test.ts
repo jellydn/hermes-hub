@@ -135,6 +135,35 @@ describe("buildHermesComposeContent", () => {
 		expect(env).not.toContain("EMPTY_VALUE=");
 	});
 
+	it("adds the hermes-webui service when web UI is enabled", () => {
+		const result = buildHermesComposeContent({
+			webUi: {
+				password: "generated-password",
+			},
+		});
+		expect(result).toMatchSnapshot();
+
+		const parsed = parse(result);
+		expect(parsed.services["hermes-webui"]).toEqual(
+			expect.objectContaining({
+				image: "ghcr.io/nesquena/hermes-webui:latest",
+				container_name: "hermes-webui",
+				ports: ["127.0.0.1:8787:8787"],
+				volumes: [
+					"~/.hermes:/home/hermeswebui/.hermes",
+					"~/workspace:/workspace",
+				],
+			}),
+		);
+		expect(parsed.services["hermes-webui"].environment).toEqual(
+			expect.arrayContaining([
+				"HERMES_WEBUI_HOST=0.0.0.0",
+				"HERMES_WEBUI_PORT=8787",
+				"HERMES_WEBUI_PASSWORD=generated-password",
+			]),
+		);
+	});
+
 	it("sets API_SERVER_KEY independently of TELEGRAM_BOT_TOKEN", () => {
 		const result = buildHermesComposeContent({
 			apiServerKey: "key-only",

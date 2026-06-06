@@ -1,5 +1,35 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`buildHermesComposeContent > adds the hermes-webui service when web UI is enabled 1`] = `
+"services:
+  hermes:
+    image: nousresearch/hermes-agent:v0.4.1
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - 8642:8642
+    volumes:
+      - ~/.hermes:/opt/data
+    environment:
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+  hermes-webui:
+    image: ghcr.io/nesquena/hermes-webui:latest
+    container_name: hermes-webui
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:8787:8787
+    volumes:
+      - ~/.hermes:/home/hermeswebui/.hermes
+      - ~/workspace:/workspace
+    environment:
+      - HERMES_WEBUI_HOST=0.0.0.0
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_WEBUI_PASSWORD=generated-password
+"
+`;
+
 exports[`buildHermesComposeContent > renders a compose with all options including api key and telegram token 1`] = `
 "services:
   hermes:
