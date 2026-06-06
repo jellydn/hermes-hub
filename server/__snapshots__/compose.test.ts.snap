@@ -22,11 +22,13 @@ exports[`buildHermesComposeContent > adds the hermes-webui service when web UI i
       - 127.0.0.1:8787:8787
     volumes:
       - /root/.hermes:/home/hermeswebui/.hermes
+      - /root/.hermes/hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro
       - /root/workspace:/workspace
     environment:
       - HERMES_WEBUI_HOST=0.0.0.0
       - HERMES_WEBUI_PORT=8787
       - HERMES_WEBUI_PASSWORD=generated-password
+      - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
 "
 `;
 
