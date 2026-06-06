@@ -38,7 +38,7 @@ export async function requireAuthSession(
 	return session;
 }
 
-export async function requireOwnedServerById(
+async function requireOwnedServerById(
 	context: Context,
 	serverId: string,
 	session?: AuthSession,

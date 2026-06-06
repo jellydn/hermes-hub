@@ -6,12 +6,12 @@ import type {
 	InstallLogEntry,
 	LogsSnapshot,
 } from "../src/lib/logs";
-import { formatActionLabel } from "../src/lib/server-detail";
 import { USER_INITIATED_ACTION_NAMES } from "./audit-log-actions";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installEvents, installs, servers } from "./db/schema";
 import { buildLogLinesFromEvents } from "./install/log-lines";
+import { formatActionLabel } from "./lib/action-labels";
 
 const finishedActionNames = USER_INITIATED_ACTION_NAMES;
 
