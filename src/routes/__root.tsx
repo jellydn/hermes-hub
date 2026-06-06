@@ -20,7 +20,7 @@ export const Route = createRootRoute({
 			{
 				name: "description",
 				content:
-					"Deploy Hermes Agent to your own VPS with guided install, live progress, and zero terminal setup.",
+					"Deploy and manage a self-hosted Hermes AI Agent on any VPS without SSH, Docker, or Linux knowledge.",
 			},
 		],
 		links: [

@@ -13,7 +13,8 @@
 		"preview": "vite preview",
 		"test": "vitest run --passWithNoTests --reporter=dot",
 		"typecheck": "tsc --noEmit",
-		"doctor": "react-doctor"
+		"doctor": "react-doctor",
+		"brand:assets": "bun run scripts/generate-brand-assets.ts"
 	},
 	"dependencies": {
 		"@better-auth/drizzle-adapter": "^1.6.11",
