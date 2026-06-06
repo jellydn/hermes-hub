@@ -1,6 +1,6 @@
 import {
 	type AiProviderId,
-	getAiProviderOption,
+	providerRequiresApiKey,
 } from "../../src/lib/ai-providers";
 
 export type ProviderRequest = {
@@ -50,6 +50,9 @@ export const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
 		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
 		hermesProvider: "custom",
 	},
+	"openai-codex": {
+		hermesProvider: "openai-codex",
+	},
 };
 
 export function buildProviderEnvMap(
@@ -86,7 +89,7 @@ export function buildProviderEnvMap(
 }
 
 export function isApiKeyRequired(provider: AiProviderId): boolean {
-	return !getAiProviderOption(provider)?.requiresBaseUrl;
+	return providerRequiresApiKey(provider);
 }
 
 function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {

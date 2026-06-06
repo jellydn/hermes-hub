@@ -13,6 +13,11 @@ import {
 } from "./install";
 import { clearLogs, getLogs } from "./logs";
 import { saveProviderConfig, testProviderConfig } from "./providers";
+import {
+	completeCodexAuth,
+	getCodexAuthStatus,
+	startCodexAuth,
+} from "./providers/codex-auth";
 import { getServerDetail, runServerAction } from "./server-actions";
 import {
 	acceptHostKey,
@@ -239,6 +244,13 @@ apiApp.post("/logs/clear", clearLogs);
 apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
+apiApp.post("/providers/codex-auth/start", httpsMiddleware, startCodexAuth);
+apiApp.post(
+	"/providers/codex-auth/complete",
+	httpsMiddleware,
+	completeCodexAuth,
+);
+apiApp.get("/providers/codex-auth/status", httpsMiddleware, getCodexAuthStatus);
 apiApp.post("/settings/persona", httpsMiddleware, savePersonaSettings);
 apiApp.post("/settings/persona/deploy", httpsMiddleware, deployPersonaToHermes);
 apiApp.post("/settings/mcp-servers", httpsMiddleware, createMcpServer);

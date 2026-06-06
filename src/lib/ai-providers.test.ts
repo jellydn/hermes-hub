@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isValidModelString, MODEL_VALIDATION_REGEX } from "./ai-providers";
+import {
+	getAiProviderOption,
+	isValidAiModel,
+	isValidModelString,
+	MODEL_VALIDATION_REGEX,
+	providerRequiresApiKey,
+	usesOAuthDeviceCode,
+} from "./ai-providers";
 
 describe("MODEL_VALIDATION_REGEX", () => {
 	it("matches common production model IDs", () => {
@@ -63,5 +70,32 @@ describe("isValidModelString", () => {
 		expect(isValidModelString("")).toBe(false);
 		expect(isValidModelString("$(id)")).toBe(false);
 		expect(isValidModelString("a".repeat(200))).toBe(false);
+	});
+});
+
+describe("openai-codex provider metadata", () => {
+	it("exposes oauth device-code credential mode and static model list", () => {
+		const option = getAiProviderOption("openai-codex");
+
+		expect(option).toMatchObject({
+			label: "OpenAI Codex / ChatGPT",
+			credentialMode: "oauth-device-code",
+			defaultModel: "gpt-5.5",
+			models: [
+				"gpt-5.5",
+				"gpt-5.4-mini",
+				"gpt-5.4",
+				"gpt-5.3-codex",
+				"gpt-5.3-codex-spark",
+			],
+		});
+		expect(usesOAuthDeviceCode("openai-codex")).toBe(true);
+		expect(providerRequiresApiKey("openai-codex")).toBe(false);
+	});
+
+	it("accepts only whitelisted Codex models", () => {
+		expect(isValidAiModel("openai-codex", "gpt-5.5")).toBe(true);
+		expect(isValidAiModel("openai-codex", "gpt-5.3-codex-spark")).toBe(true);
+		expect(isValidAiModel("openai-codex", "gpt-4o")).toBe(false);
 	});
 });

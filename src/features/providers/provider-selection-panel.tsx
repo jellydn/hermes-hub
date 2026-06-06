@@ -13,7 +13,10 @@ import {
 	aiProviderOptions,
 	formatAiProviderLabel,
 	getAiProviderOption,
+	usesOAuthDeviceCode,
 } from "@/lib/ai-providers";
+
+import { CodexAuthPanel } from "./codex-auth-panel";
 
 import type { ProviderSettingsSummary } from "./provider-settings";
 import {
@@ -38,6 +41,8 @@ type ProviderSelectionPanelProps = {
 	saveError: string | null;
 	testError: string | null;
 	isConnected: boolean;
+	telegramDeployed: boolean;
+	onCodexAuthStatusChange: (authenticated: boolean) => void;
 	onProviderChange: (provider: AiProviderId) => void;
 	onSave: () => void;
 	onTest: () => void;
@@ -53,11 +58,14 @@ export function ProviderSelectionPanel({
 	saveError,
 	testError,
 	isConnected,
+	telegramDeployed,
+	onCodexAuthStatusChange,
 	onProviderChange,
 	onSave,
 	onTest,
 }: ProviderSelectionPanelProps) {
 	const providerOption = getAiProviderOption(form.provider);
+	const isCodexProvider = usesOAuthDeviceCode(form.provider);
 	const existingKeyLast4 =
 		savedConfig?.provider === form.provider ? savedConfig.keyLast4 : null;
 
@@ -69,8 +77,8 @@ export function ProviderSelectionPanel({
 					Choose your model backend
 				</h3>
 				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					Pick a provider, save your API key, and validate the connection before
-					wiring it into Telegram and the dashboard.
+					Pick a provider, save your settings, and validate the connection
+					before wiring it into Telegram and the dashboard.
 				</p>
 			</div>
 
@@ -126,27 +134,29 @@ export function ProviderSelectionPanel({
 			</fieldset>
 
 			<div className="mt-8 grid gap-5 md:grid-cols-2">
-				<ProviderSettingsField
-					label="API key"
-					name="apiKey"
-					hint={
-						existingKeyLast4
-							? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
-							: providerOption?.requiresBaseUrl
-								? "API Key (optional for providers using a base URL)."
-								: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
-					}
-				>
-					<input
-						id="apiKey"
-						type="password"
-						{...register("apiKey")}
-						className={providerInputClassName}
-						placeholder={
-							existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
+				{!isCodexProvider ? (
+					<ProviderSettingsField
+						label="API key"
+						name="apiKey"
+						hint={
+							existingKeyLast4
+								? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
+								: providerOption?.requiresBaseUrl
+									? "API Key (optional for providers using a base URL)."
+									: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
 						}
-					/>
-				</ProviderSettingsField>
+					>
+						<input
+							id="apiKey"
+							type="password"
+							{...register("apiKey")}
+							className={providerInputClassName}
+							placeholder={
+								existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
+							}
+						/>
+					</ProviderSettingsField>
+				) : null}
 
 				{providerOption?.requiresBaseUrl ? (
 					<ProviderSettingsField
@@ -238,20 +248,29 @@ export function ProviderSelectionPanel({
 					)}
 					<span>{isSaving ? "Saving..." : "Save Provider"}</span>
 				</Button>
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={onTest}
-					disabled={isTesting}
-				>
-					{isTesting ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<ShieldCheck className="h-4 w-4" />
-					)}
-					<span>{isTesting ? "Testing..." : "Test Connection"}</span>
-				</Button>
+				{!isCodexProvider ? (
+					<Button
+						type="button"
+						variant="secondary"
+						onClick={onTest}
+						disabled={isTesting}
+					>
+						{isTesting ? (
+							<LoaderCircle className="h-4 w-4 animate-spin" />
+						) : (
+							<ShieldCheck className="h-4 w-4" />
+						)}
+						<span>{isTesting ? "Testing..." : "Test Connection"}</span>
+					</Button>
+				) : null}
 			</div>
+
+			{isCodexProvider ? (
+				<CodexAuthPanel
+					telegramDeployed={telegramDeployed}
+					onAuthStatusChange={onCodexAuthStatusChange}
+				/>
+			) : null}
 		</section>
 	);
 }

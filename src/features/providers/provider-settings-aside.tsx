@@ -1,7 +1,7 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatAiProviderLabel } from "@/lib/ai-providers";
+import { formatAiProviderLabel, usesOAuthDeviceCode } from "@/lib/ai-providers";
 import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
 
 import type { ProviderSettingsSummary } from "./provider-settings";
@@ -9,6 +9,7 @@ import type { ProviderSettingsSummary } from "./provider-settings";
 type ProviderSettingsAsideProps = {
 	savedConfig: ProviderSettingsSummary | null;
 	telegramDeploy?: TelegramDeployInfo | null;
+	codexAuthenticated: boolean;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
@@ -18,11 +19,19 @@ type ProviderSettingsAsideProps = {
 export function ProviderSettingsAside({
 	savedConfig,
 	telegramDeploy,
+	codexAuthenticated,
 	isDeploying,
 	deployError,
 	deployResult,
 	onDeploy,
 }: ProviderSettingsAsideProps) {
+	const requiresCodexAuth =
+		savedConfig?.provider != null && usesOAuthDeviceCode(savedConfig.provider);
+	const canDeploy =
+		Boolean(savedConfig) &&
+		Boolean(telegramDeploy) &&
+		(!requiresCodexAuth || codexAuthenticated);
+
 	return (
 		<aside className="space-y-4">
 			<section className="island-shell rounded-[2rem] p-6">
@@ -64,11 +73,17 @@ export function ProviderSettingsAside({
 								</span>
 							</p>
 						) : null}
+						{requiresCodexAuth && !codexAuthenticated ? (
+							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+								Complete ChatGPT device-code login before deploying Codex to
+								Hermes.
+							</p>
+						) : null}
 						<div className="mt-4">
 							<Button
 								type="button"
 								onClick={onDeploy}
-								disabled={isDeploying || !savedConfig}
+								disabled={isDeploying || !canDeploy}
 							>
 								{isDeploying ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
@@ -110,6 +125,10 @@ export function ProviderSettingsAside({
 					<li>OpenRouter accepts any model ID.</li>
 					<li>Ollama: Run local open-weight models (e.g. llama3).</li>
 					<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
+					<li>
+						OpenAI Codex: ChatGPT OAuth on the deployed Hermes server; no API
+						key in HermesHub.
+					</li>
 				</ul>
 			</section>
 		</aside>

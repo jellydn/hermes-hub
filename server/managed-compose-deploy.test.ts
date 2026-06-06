@@ -50,6 +50,7 @@ describe("resolveManagedComposeDeployPolicy", () => {
 	it("uses full-stack compose and model config for provider deploys", () => {
 		const policy = resolveManagedComposeDeployPolicy("provider", {
 			providerModel: "gpt-4o",
+			providerHermesId: "openai-api",
 		});
 
 		expect(policy).toMatchObject({
@@ -224,16 +225,22 @@ describe("deployManagedCompose", () => {
 			credential: "secret",
 			apiServerKey: "api-key",
 			providerModel: "gpt-4o",
+			providerHermesId: "openai-api",
 		});
 
 		const policy = resolveManagedComposeDeployPolicy("provider", {
 			providerModel: "gpt-4o",
+			providerHermesId: "openai-api",
 		});
 		await policy.extraSshCommands?.({ execCommand } as never);
 
-		expect(execCommand).toHaveBeenNthCalledWith(1, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
-			2,
+			1,
+			"sudo docker exec hermes hermes config set model.provider 'openai-api'",
+		);
+		expect(execCommand).toHaveBeenNthCalledWith(2, "sleep 2");
+		expect(execCommand).toHaveBeenNthCalledWith(
+			3,
 			"sudo docker exec hermes hermes config set model 'gpt-4o'",
 		);
 	});

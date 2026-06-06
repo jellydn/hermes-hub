@@ -644,17 +644,21 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 | Field     | Type   | Description                                    |
 | --------- | ------ | ---------------------------------------------- |
-| `provider`| string | `"openai"`, `"anthropic"`, or `"openrouter"`   |
+| `provider`| string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"custom"`, or `"openai-codex"` |
 | `model`   | string | Model ID (defaults to provider's default if omitted) |
-| `apiKey`  | string | API key. Optional if re-saving the same provider (uses stored key) |
+| `apiKey`  | string | API key. Optional if re-saving the same provider (uses stored key). Not used for `openai-codex`. |
+| `baseUrl` | string | Required for `ollama` and `custom`. Optional for other API-key providers. |
 
 **Supported models:**
 
-| Provider    | Models                                                      | Default              |
-| ----------- | ----------------------------------------------------------- | -------------------- |
-| openai      | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`                     | `gpt-4o-mini`        |
-| anthropic   | `claude-sonnet-4-20250514`, `claude-haiku-3-5`             | `claude-sonnet-4-20250514` |
-| openrouter  | Any model ID (custom text input)                             | `openai/gpt-4o-mini` |
+| Provider       | Models                                                      | Default              |
+| -------------- | ----------------------------------------------------------- | -------------------- |
+| openai         | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`                     | `gpt-4o-mini`        |
+| anthropic      | `claude-sonnet-4-20250514`, `claude-haiku-3-5`             | `claude-sonnet-4-20250514` |
+| openrouter     | Any model ID (custom text input)                             | `openai/gpt-4o-mini` |
+| ollama         | Any model ID (custom text input)                             | `llama3`             |
+| custom         | Any model ID (custom text input)                             | _(empty)_            |
+| openai-codex   | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5` |
 
 **Response (200):**
 ```json
@@ -672,15 +676,17 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 | Status | Condition                                    |
 | ------ | -------------------------------------------- |
-| 400    | Invalid JSON body / invalid provider / invalid model / API key required |
+| 400    | Invalid JSON body / invalid provider / invalid model / API key or base URL required |
 | 401    | Unauthorized                                 |
 | 500    | Failed to save provider settings             |
+
+For `openai-codex`, HermesHub stores an empty encrypted API key and never persists OAuth tokens. Credential status comes from remote Hermes auth checks.
 
 ---
 
 ### POST `/api/providers/test`
 
-Tests an AI provider connection by calling the provider's models list endpoint. Does not persist any data.
+Tests an AI provider connection by calling the provider's models list endpoint. Does not persist any data. `openai-codex` skips API-key testing and returns a connected status with guidance to use device-code login instead.
 
 **Auth required:** Yes
 
@@ -705,7 +711,9 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 
 ### POST `/api/providers/deploy`
 
-Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegram bot to already be deployed to a server. Over SSH, writes a new `docker-compose.yml` with provider env vars, restarts the Hermes container (with `--force-recreate`), and runs `hermes config set model` inside the container.
+Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegram bot to already be deployed to a server. Over SSH, writes a new `docker-compose.yml` with provider env vars, restarts the Hermes container (with `--force-recreate`), and runs `hermes config set model.provider` plus `hermes config set model` inside the container.
+
+For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVIDER=openai-codex` and `API_SERVER_MODEL_NAME`, and requires ChatGPT OAuth to already be present in remote `/root/.hermes/auth.json`.
 
 **Auth required:** Yes
 
@@ -727,10 +735,105 @@ Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegr
 | ------ | ------------------------------------------------------------ |
 | 400    | No provider config saved yet                                 |
 | 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | Codex not authenticated on deployed Hermes server            |
 | 400    | Credential unavailable / expired                             |
 | 401    | Unauthorized                                                 |
 | 404    | Deployed server not found                                    |
 | 502    | SSH connect or deploy command failed                         |
+
+---
+
+### POST `/api/providers/codex-auth/start`
+
+Starts ChatGPT device-code login for the active Telegram-backed Hermes deployment. HermesHub stores only transient in-memory session metadata; OAuth tokens are never written to the database.
+
+**Auth required:** Yes
+
+**Request body:** None
+
+**Response (200):**
+```json
+{
+  "codexAuth": {
+    "userCode": "ABCD-1234",
+    "verificationUrl": "https://auth.openai.com/codex/device",
+    "expiresAt": "2026-06-06T12:15:00.000Z",
+    "pollIntervalSeconds": 5,
+    "serverHost": "192.168.1.100"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                               |
+| ------ | --------------------------------------- |
+| 400    | No Hermes deployment found              |
+| 401    | Unauthorized                            |
+| 502    | OpenAI device-code request failed       |
+
+---
+
+### POST `/api/providers/codex-auth/complete`
+
+Polls OpenAI for device-code approval, exchanges the authorization code, and writes `providers.openai-codex` auth state to remote `/root/.hermes/auth.json` with restrictive permissions.
+
+**Auth required:** Yes
+
+**Request body:** None
+
+**Response (200 — pending):**
+```json
+{
+  "status": "pending"
+}
+```
+
+**Response (200 — authenticated):**
+```json
+{
+  "status": "authenticated",
+  "serverHost": "192.168.1.100",
+  "authMode": "chatgpt",
+  "lastRefresh": "2026-06-06T12:00:00.000Z"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                               |
+| ------ | --------------------------------------- |
+| 400    | No active device-code session / timeout / exchange failed |
+| 401    | Unauthorized                            |
+| 502    | SSH write or remote auth update failed  |
+
+---
+
+### GET `/api/providers/codex-auth/status`
+
+Checks remote Hermes Codex auth status without exposing OAuth tokens.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "codexAuth": {
+    "authenticated": true,
+    "authMode": "chatgpt",
+    "lastRefresh": "2026-06-06T12:00:00.000Z",
+    "serverHost": "192.168.1.100"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                               |
+| ------ | --------------------------------------- |
+| 400    | No Hermes deployment found              |
+| 401    | Unauthorized                            |
+| 502    | SSH connect or remote auth read failed  |
 
 ---
 

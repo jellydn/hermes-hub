@@ -23,6 +23,7 @@ const deployManagedCompose = vi.fn();
 const getOwnedServerRecordMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
+const resolveRemoteCodexAuthStatus = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
@@ -53,6 +54,10 @@ vi.mock("./server-records", () => ({
 	getOwnedServerRecord: getOwnedServerRecordMock,
 	resolveServerSshConfig,
 	resolveServerSshConfigOrError,
+}));
+
+vi.mock("./providers/codex-auth", () => ({
+	resolveRemoteCodexAuthStatus,
 }));
 
 describe("provider settings", () => {
@@ -370,6 +375,84 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("saves and tests OpenAI Codex without an API key", async () => {
+		const { saveProviderConfig, testProviderConfig } = await import(
+			"./providers"
+		);
+
+		const saveResponse = await saveProviderConfig(
+			createContext("http://localhost/api/providers", {
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				apiKey: "",
+			}),
+		);
+
+		expect(saveResponse.status).toBe(200);
+		expect(encryptSecret).toHaveBeenCalledWith("");
+		expect(await saveResponse.json()).toMatchObject({
+			provider: {
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				keyLast4: null,
+				hasStoredKey: true,
+			},
+		});
+
+		const testResponse = await testProviderConfig(
+			createContext("http://localhost/api/providers/test", {
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				apiKey: "",
+			}),
+		);
+
+		expect(testResponse.status).toBe(200);
+		expect(await testResponse.json()).toMatchObject({
+			status: "connected",
+			message: expect.stringContaining("device-code login"),
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects invalid Codex model IDs", async () => {
+		const { saveProviderConfig } = await import("./providers");
+
+		const response = await saveProviderConfig(
+			createContext("http://localhost/api/providers", {
+				provider: "openai-codex",
+				model: "gpt-4o",
+				apiKey: "",
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "Choose a valid model for the selected provider.",
+		});
+	});
+
+	it("builds Hermes deploy env for OpenAI Codex without API-key env vars", async () => {
+		selectLimit.mockResolvedValue([
+			{
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				encryptedApiKey: "encrypted-empty-key",
+				baseUrl: null,
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "gpt-5.5",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "openai-codex",
+			},
+		});
+	});
+
 	it("builds Hermes deploy env for custom provider configs", async () => {
 		selectLimit.mockResolvedValue([
 			{
@@ -545,6 +628,68 @@ describe("provider settings", () => {
 			});
 		});
 
+		it("returns 400 when Codex deploy is attempted without remote auth", async () => {
+			const codexProviderRecord = {
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				encryptedApiKey: "encrypted-empty-key",
+				baseUrl: null,
+			};
+
+			resolveRemoteCodexAuthStatus.mockResolvedValueOnce({
+				authenticated: false,
+				authMode: null,
+				lastRefresh: null,
+			});
+
+			selectLimit
+				.mockResolvedValueOnce([codexProviderRecord])
+				.mockResolvedValueOnce([telegramRecord]);
+
+			const { deployProviderToHermes } = await import("./deploy");
+			const response = await deployProviderToHermes(
+				createContext("http://localhost/api/providers/deploy", {}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error: expect.stringContaining("Complete ChatGPT device-code login"),
+			});
+			expect(deployManagedCompose).not.toHaveBeenCalled();
+		});
+
+		it("deploys Codex when remote auth is present", async () => {
+			const codexProviderRecord = {
+				provider: "openai-codex",
+				model: "gpt-5.5",
+				encryptedApiKey: "encrypted-empty-key",
+				baseUrl: null,
+			};
+
+			resolveRemoteCodexAuthStatus.mockResolvedValueOnce({
+				authenticated: true,
+				authMode: "chatgpt",
+				lastRefresh: "2026-06-06T12:00:00.000Z",
+			});
+
+			selectLimit
+				.mockResolvedValueOnce([codexProviderRecord])
+				.mockResolvedValueOnce([telegramRecord]);
+
+			const { deployProviderToHermes } = await import("./deploy");
+			const response = await deployProviderToHermes(
+				createContext("http://localhost/api/providers/deploy", {}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(deployManagedCompose).toHaveBeenCalledWith(
+				expect.objectContaining({
+					providerModel: "gpt-5.5",
+					providerHermesId: "openai-codex",
+				}),
+			);
+		});
+
 		it("returns 200 on successful deploy and logs all side effects", async () => {
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
@@ -575,6 +720,7 @@ describe("provider settings", () => {
 				expectedFingerprint: undefined,
 				apiServerKey: "api-server-key-value",
 				providerModel: "gpt-4o",
+				providerHermesId: "openai-api",
 			});
 
 			// resolveServerSshConfigOrError was called with the server ID and session ID

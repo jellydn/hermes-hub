@@ -1,11 +1,13 @@
 import type { Context } from "hono";
-import { getAiProviderOption, isAiProviderId } from "../src/lib/ai-providers";
+import { isAiProviderId, usesOAuthDeviceCode } from "../src/lib/ai-providers";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
+import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
+import { isApiKeyRequired, PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { decryptApiKey, getLatestProviderRecord } from "./providers/records";
 import { requireAuthSession } from "./request-guards";
 
@@ -44,10 +46,46 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt API key." }, 500);
 	}
 
-	const isKeyRequired = !getAiProviderOption(providerRecord.provider)
-		?.requiresBaseUrl;
-	if (isKeyRequired && !decryptedApiKey) {
-		return context.json({ error: "API key is required." }, 400);
+	const isCodexProvider = usesOAuthDeviceCode(providerRecord.provider);
+	if (!isCodexProvider && isApiKeyRequired(providerRecord.provider)) {
+		if (!decryptedApiKey) {
+			return context.json({ error: "API key is required." }, 400);
+		}
+	}
+
+	if (isCodexProvider) {
+		try {
+			const codexAuth = await resolveRemoteCodexAuthStatus({
+				host: sshCtx.server.host,
+				port: sshCtx.server.port,
+				username: sshCtx.server.username,
+				authMethod: sshCtx.authMethod,
+				credential: sshCtx.credential,
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+			});
+
+			if (!codexAuth.authenticated) {
+				return context.json(
+					{
+						error:
+							"Codex is not authenticated on the deployed Hermes server. Complete ChatGPT device-code login first.",
+					},
+					400,
+				);
+			}
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: "Unable to verify Codex authentication.";
+			return context.json({ error: message }, 502);
+		}
+	}
+
+	const providerHermesId =
+		PROVIDER_ENV_CONFIGS[providerRecord.provider]?.hermesProvider;
+	if (!providerHermesId) {
+		return context.json({ error: "Unsupported provider deploy target." }, 400);
 	}
 
 	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
@@ -65,6 +103,7 @@ export async function deployProviderToHermes(context: Context) {
 			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
 			apiServerKey: decryptedApiServerKey,
 			providerModel: providerRecord.model,
+			providerHermesId,
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";

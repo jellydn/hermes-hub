@@ -28,7 +28,7 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🔑 **Passwordless login** — Sign in with a magic link, no passwords to manage
 - 🖥️ **Guided VPS setup** — Step-by-step server connection wizard for non-technical users
 - 🚀 **One-click Hermes deployment** — Install Docker, Compose, and Hermes from the dashboard with live progress
-- 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints without editing env files
+- 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, custom endpoints, and OpenAI Codex / ChatGPT OAuth without editing env files
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
 - 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to your VPS
 - 🔌 **MCP server manager** — Add stdio or HTTP MCP servers on the Settings page, then deploy them to Hermes `config.yaml`
@@ -208,6 +208,12 @@ If the raw provider API works but Hermes returns an authentication error, redepl
 | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
 
 HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
+
+### OpenAI Codex deploy says authentication is missing
+
+OpenAI Codex uses ChatGPT device-code login on the deployed Hermes server, not an API key in HermesHub. On `/ai-provider`, select **OpenAI Codex / ChatGPT**, click **Start ChatGPT Login**, approve the code at OpenAI, then click **I entered the code**. Deploy stays disabled until remote auth status shows authenticated.
+
+HermesHub never stores Codex OAuth tokens in its database. Auth state lives in remote `/root/.hermes/auth.json`. If HermesHub restarts during login, start device-code auth again.
 
 ### MCP deploy fails with a 502 error
 

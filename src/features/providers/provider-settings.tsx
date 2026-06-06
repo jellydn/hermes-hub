@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -54,6 +54,7 @@ export function ProviderSettings({
 		initialConfig,
 		createInitialProviderSettingsUiState,
 	);
+	const [codexAuthenticated, setCodexAuthenticated] = useState(false);
 
 	const { register, watch, setValue } = useForm<ProviderFormState>({
 		resolver: zodResolver(providerSchema),
@@ -64,6 +65,7 @@ export function ProviderSettings({
 
 	function updateProvider(provider: AiProviderId) {
 		const option = getAiProviderOption(provider);
+		setCodexAuthenticated(false);
 		setValue("provider", provider);
 		setValue("model", getDefaultAiModel(provider));
 		setValue("apiKey", "");
@@ -185,6 +187,8 @@ export function ProviderSettings({
 					saveError={uiState.saveError}
 					testError={uiState.testError}
 					isConnected={uiState.isConnected}
+					telegramDeployed={Boolean(telegramDeploy)}
+					onCodexAuthStatusChange={setCodexAuthenticated}
 					onProviderChange={updateProvider}
 					onSave={() => void handleSave()}
 					onTest={() => void handleTestConnection()}
@@ -193,6 +197,7 @@ export function ProviderSettings({
 				<ProviderSettingsAside
 					savedConfig={uiState.savedConfig}
 					telegramDeploy={telegramDeploy}
+					codexAuthenticated={codexAuthenticated}
 					isDeploying={uiState.isDeploying}
 					deployError={uiState.deployError}
 					deployResult={uiState.deployResult}

@@ -7,6 +7,7 @@ import {
 	getDefaultAiModel,
 	isAiProviderId,
 	isValidAiModel,
+	usesOAuthDeviceCode,
 } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { encryptSecret } from "./crypto";
@@ -43,11 +44,15 @@ export async function getCurrentProviderConfig(userId: string) {
 
 	const parsedApiKey = decryptApiKey(record.encryptedApiKey);
 
+	const hasStoredKey = usesOAuthDeviceCode(record.provider)
+		? true
+		: Boolean(parsedApiKey || record.encryptedApiKey);
+
 	return {
 		provider: record.provider,
 		model: record.model,
-		keyLast4: getApiKeyLast4(parsedApiKey),
-		hasStoredKey: true,
+		keyLast4: parsedApiKey ? getApiKeyLast4(parsedApiKey) : null,
+		hasStoredKey,
 		baseUrl: record.baseUrl ?? undefined,
 	} satisfies ProviderConfigSummary;
 }
@@ -94,12 +99,20 @@ export async function saveProviderConfig(context: Context) {
 
 		clearDashboardCache();
 
+		const hasStoredKey = usesOAuthDeviceCode(parsed.provider)
+			? true
+			: isApiKeyRequired(parsed.provider)
+				? Boolean(resolvedApiKey.apiKey)
+				: Boolean(resolvedApiKey.apiKey || resolvedApiKey.baseUrl);
+
 		return context.json({
 			provider: {
 				provider: parsed.provider,
 				model: parsed.model,
-				keyLast4: getApiKeyLast4(resolvedApiKey.apiKey),
-				hasStoredKey: true,
+				keyLast4: resolvedApiKey.apiKey
+					? getApiKeyLast4(resolvedApiKey.apiKey)
+					: null,
+				hasStoredKey,
 				baseUrl: resolvedApiKey.baseUrl || undefined,
 			} satisfies ProviderConfigSummary,
 		});
@@ -139,6 +152,14 @@ export async function testProviderConfig(context: Context) {
 	}
 
 	try {
+		if (usesOAuthDeviceCode(parsed.provider)) {
+			return context.json({
+				status: "connected",
+				message:
+					"Codex uses ChatGPT OAuth on the deployed Hermes server. Complete device-code login instead of API-key testing.",
+			});
+		}
+
 		await verifyProviderConnection({
 			provider: parsed.provider,
 			apiKey: resolvedApiKey.apiKey,
@@ -199,6 +220,10 @@ function resolveProviderApiKey(
 		if (!resolvedBaseUrl) {
 			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
 		}
+	}
+
+	if (usesOAuthDeviceCode(parsed.provider)) {
+		return { apiKey: "", baseUrl: resolvedBaseUrl };
 	}
 
 	if (!isApiKeyRequired(parsed.provider) && !resolvedBaseUrl) {

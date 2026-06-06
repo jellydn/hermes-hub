@@ -3,7 +3,10 @@ export type AiProviderId =
 	| "anthropic"
 	| "openrouter"
 	| "ollama"
-	| "custom";
+	| "custom"
+	| "openai-codex";
+
+export type AiProviderCredentialMode = "api-key" | "oauth-device-code";
 
 type AiProviderOption = {
 	id: AiProviderId;
@@ -11,6 +14,7 @@ type AiProviderOption = {
 	description: string;
 	models: readonly string[];
 	defaultModel: string;
+	credentialMode?: AiProviderCredentialMode;
 	requiresCustomModel?: boolean;
 	requiresBaseUrl?: boolean;
 	defaultBaseUrl?: string;
@@ -62,6 +66,21 @@ export const aiProviderOptions: readonly AiProviderOption[] = [
 		defaultModel: "",
 		requiresCustomModel: true,
 		requiresBaseUrl: true,
+	},
+	{
+		id: "openai-codex",
+		label: "OpenAI Codex / ChatGPT",
+		description:
+			"Use ChatGPT subscription models via Codex OAuth on your deployed Hermes server.",
+		credentialMode: "oauth-device-code",
+		models: [
+			"gpt-5.5",
+			"gpt-5.4-mini",
+			"gpt-5.4",
+			"gpt-5.3-codex",
+			"gpt-5.3-codex-spark",
+		],
+		defaultModel: "gpt-5.5",
 	},
 ] as const;
 
@@ -115,4 +134,22 @@ export function isValidAiModel(provider: AiProviderId, model: string) {
 
 export function formatAiProviderLabel(provider: AiProviderId) {
 	return getAiProviderOption(provider)?.label ?? provider;
+}
+
+export function getAiProviderCredentialMode(
+	provider: AiProviderId,
+): AiProviderCredentialMode {
+	return getAiProviderOption(provider)?.credentialMode ?? "api-key";
+}
+
+export function usesOAuthDeviceCode(provider: AiProviderId): boolean {
+	return getAiProviderCredentialMode(provider) === "oauth-device-code";
+}
+
+export function providerRequiresApiKey(provider: AiProviderId): boolean {
+	if (usesOAuthDeviceCode(provider)) {
+		return false;
+	}
+
+	return !getAiProviderOption(provider)?.requiresBaseUrl;
 }

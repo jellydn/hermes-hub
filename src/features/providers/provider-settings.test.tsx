@@ -115,6 +115,91 @@ describe("ProviderSettings", () => {
 		expect(screen.getByDisplayValue("http://localhost:11434/v1")).toBeTruthy();
 		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
 	});
+
+	it("hides the API key field and test button for OpenAI Codex", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					codexAuth: {
+						authenticated: false,
+						authMode: null,
+						lastRefresh: null,
+						serverHost: "1.2.3.4",
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ProviderSettings
+				initialConfig={null}
+				telegramDeploy={{
+					deployedServerHost: "1.2.3.4",
+				}}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("radio", { name: /openai codex \/ chatgpt/i }),
+		);
+
+		await flushAsyncWork();
+
+		expect(screen.queryByLabelText(/api key/i)).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: /test connection/i }),
+		).toBeNull();
+		expect(screen.getByText(/chatgpt device-code login/i)).toBeTruthy();
+	});
+
+	it("disables Codex deploy until remote auth succeeds", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					codexAuth: {
+						authenticated: false,
+						authMode: null,
+						lastRefresh: null,
+						serverHost: "1.2.3.4",
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ProviderSettings
+				initialConfig={{
+					provider: "openai-codex",
+					model: "gpt-5.5",
+					keyLast4: null,
+					hasStoredKey: true,
+				}}
+				telegramDeploy={{
+					deployedServerHost: "1.2.3.4",
+				}}
+			/>,
+		);
+
+		await flushAsyncWork();
+
+		const deployButton = screen.getByRole("button", {
+			name: /deploy to hermes server/i,
+		});
+		expect(deployButton).toHaveProperty("disabled", true);
+		expect(
+			screen.getByText(
+				/complete chatgpt device-code login before deploying codex/i,
+			),
+		).toBeTruthy();
+	});
 });
 
 async function flushAsyncWork() {
