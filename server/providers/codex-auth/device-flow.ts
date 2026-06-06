@@ -4,6 +4,7 @@ import {
 	CODEX_OAUTH_DEVICE_API_BASE,
 	CODEX_OAUTH_ISSUER,
 	CODEX_OAUTH_TOKEN_URL,
+	CODEX_SESSION_TTL_MS,
 	CODEX_VERIFICATION_URL,
 } from "./constants";
 
@@ -97,7 +98,7 @@ export async function requestCodexDeviceCode(
 		userCode,
 		verificationUrl: CODEX_VERIFICATION_URL,
 		pollIntervalSeconds,
-		expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+		expiresAt: new Date(Date.now() + CODEX_SESSION_TTL_MS).toISOString(),
 	};
 }
 

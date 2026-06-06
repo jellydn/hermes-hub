@@ -5,6 +5,7 @@ import {
 	buildHermesAuthJsonWriteCommand,
 	mergeHermesAuthStore,
 	parseCodexAuthStatus,
+	parseHermesAuthStoreRaw,
 } from "./auth-json";
 
 describe("buildCodexAuthStorePatch", () => {
@@ -57,12 +58,25 @@ describe("mergeHermesAuthStore", () => {
 	});
 });
 
+describe("parseHermesAuthStoreRaw", () => {
+	it("returns null for empty auth.json", () => {
+		expect(parseHermesAuthStoreRaw("")).toBeNull();
+	});
+
+	it("rejects non-object JSON payloads", () => {
+		expect(() => parseHermesAuthStoreRaw("[]")).toThrow(
+			/auth.json is not valid JSON/i,
+		);
+	});
+});
+
 describe("parseCodexAuthStatus", () => {
 	it("returns unauthenticated when auth store is missing", () => {
 		expect(parseCodexAuthStatus(null)).toEqual({
 			authenticated: false,
 			authMode: null,
 			lastRefresh: null,
+			serverHost: null,
 		});
 	});
 
@@ -81,6 +95,7 @@ describe("parseCodexAuthStatus", () => {
 			authenticated: true,
 			authMode: "chatgpt",
 			lastRefresh: "2026-06-06T12:00:00.000Z",
+			serverHost: null,
 		});
 		expect(JSON.stringify(status)).not.toContain("secret-token");
 	});

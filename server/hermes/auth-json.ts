@@ -1,5 +1,6 @@
 import type { NodeSSH } from "node-ssh";
 
+import type { CodexAuthStatus } from "../../shared/contracts/codex-auth";
 import { managedComposeVolumeHome } from "../constants";
 import {
 	CODEX_CREDENTIAL_BASE_URL,
@@ -9,11 +10,42 @@ import type { CodexOAuthTokens } from "../providers/codex-auth/device-flow";
 
 export const HERMES_AUTH_JSON_PATH = `${managedComposeVolumeHome}/.hermes/auth.json`;
 
-type HermesAuthStore = {
+export const HERMES_AUTH_JSON_INVALID_MESSAGE =
+	"Remote Hermes auth.json is not valid JSON. Fix it on the VPS before continuing.";
+
+export type HermesAuthStore = {
 	providers?: Record<string, unknown>;
 	credential_pool?: Record<string, unknown>;
 	active_provider?: string;
 };
+
+export function parseHermesAuthStoreRaw(
+	raw: string,
+	errorMessage = "Remote Hermes auth.json is not valid JSON.",
+): HermesAuthStore | null {
+	if (!raw.trim()) {
+		return null;
+	}
+
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			throw new Error("Invalid JSON structure");
+		}
+
+		return parsed as HermesAuthStore;
+	} catch {
+		throw new Error(errorMessage);
+	}
+}
+
+export async function readHermesAuthStore(
+	ssh: NodeSSH,
+	errorMessage = "Remote Hermes auth.json is not valid JSON.",
+): Promise<HermesAuthStore | null> {
+	const raw = await readHermesAuthJson(ssh);
+	return parseHermesAuthStoreRaw(raw, errorMessage);
+}
 
 export function buildCodexAuthStorePatch(
 	tokens: CodexOAuthTokens,
@@ -82,16 +114,13 @@ export function mergeHermesAuthStore(
 	return merged;
 }
 
-export function parseCodexAuthStatus(authStore: unknown): {
-	authenticated: boolean;
-	authMode: string | null;
-	lastRefresh: string | null;
-} {
+export function parseCodexAuthStatus(authStore: unknown): CodexAuthStatus {
 	if (!authStore || typeof authStore !== "object") {
 		return {
 			authenticated: false,
 			authMode: null,
 			lastRefresh: null,
+			serverHost: null,
 		};
 	}
 
@@ -102,6 +131,7 @@ export function parseCodexAuthStatus(authStore: unknown): {
 			authenticated: false,
 			authMode: null,
 			lastRefresh: null,
+			serverHost: null,
 		};
 	}
 
@@ -116,6 +146,7 @@ export function parseCodexAuthStatus(authStore: unknown): {
 			authenticated: false,
 			authMode: null,
 			lastRefresh: null,
+			serverHost: null,
 		};
 	}
 
@@ -123,6 +154,7 @@ export function parseCodexAuthStatus(authStore: unknown): {
 		authenticated: true,
 		authMode: state.auth_mode ?? "chatgpt",
 		lastRefresh: state.last_refresh ?? null,
+		serverHost: null,
 	};
 }
 
