@@ -44,4 +44,29 @@ describe("buildManagedComposeContentFromSecrets", () => {
 			}),
 		).toThrow(/could not be decrypted/i);
 	});
+
+	it("prefers an explicit webUiPort over the stored record port", () => {
+		const compose = buildManagedComposeContentFromSecrets({
+			serverId: "server_1",
+			webUiPassword: "generated-password",
+			webUiPort: 9001,
+			secrets: {
+				telegramInfo: null,
+				providerConfig: null,
+				webUiRecord: {
+					enabled: true,
+					encryptedPassword: "enc:password",
+					port: 8787,
+					deployStatus: "succeeded",
+					deployError: null,
+					updatedAt: new Date(),
+				},
+			},
+		});
+
+		const parsed = parse(compose);
+		expect(parsed.services["hermes-webui"].ports).toEqual([
+			"127.0.0.1:9001:9001",
+		]);
+	});
 });

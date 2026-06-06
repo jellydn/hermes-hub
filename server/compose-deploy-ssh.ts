@@ -2,6 +2,16 @@ import type { NodeSSH } from "node-ssh";
 
 import { type SshAuthMethod, withSshConnection } from "./ssh";
 
+const COMPOSE_SERVICE_NAME = /^[A-Za-z0-9_.-]+$/;
+
+export function assertValidComposeServiceNames(serviceNames: string[]) {
+	for (const serviceName of serviceNames) {
+		if (!COMPOSE_SERVICE_NAME.test(serviceName)) {
+			throw new Error(`Invalid compose service name: ${serviceName}`);
+		}
+	}
+}
+
 export type DeployComposeInput = {
 	host: string;
 	port: number;
@@ -24,6 +34,7 @@ export function buildComposeUpCommand(input?: {
 }) {
 	const parts = ["cd ~/hermes"];
 	const services = input?.composeServices ?? [];
+	assertValidComposeServiceNames(services);
 
 	if (input?.pull && services.length > 0) {
 		parts.push(`sudo docker compose pull ${services.join(" ")}`);

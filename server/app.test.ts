@@ -466,6 +466,55 @@ describe("apiApp", () => {
 		expect(connectTelegram).toHaveBeenCalledTimes(1);
 	});
 
+	it("routes Web UI deploy requests through the Web UI handler", async () => {
+		deployServerWebUi.mockResolvedValueOnce(
+			new Response(JSON.stringify({ status: "deploying" }), {
+				status: 202,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/web-ui/deploy",
+			{ method: "POST" },
+		);
+
+		expect(response.status).toBe(202);
+		expect(deployServerWebUi).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes Web UI password reveal requests through the Web UI handler", async () => {
+		revealServerWebUiPassword.mockResolvedValueOnce(
+			new Response(JSON.stringify({ password: "generated-password" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/web-ui/password",
+		);
+
+		expect(response.status).toBe(200);
+		expect(revealServerWebUiPassword).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes Web UI proxy requests through the Web UI handler", async () => {
+		proxyServerWebUi.mockResolvedValueOnce(
+			new Response("ok", {
+				status: 200,
+				headers: { "content-type": "text/plain" },
+			}),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/web-ui/proxy/chat",
+		);
+
+		expect(response.status).toBe(200);
+		expect(proxyServerWebUi).toHaveBeenCalledTimes(1);
+	});
+
 	it("routes Telegram disconnect requests through the Telegram handler", async () => {
 		disconnectTelegram.mockResolvedValueOnce(
 			new Response(JSON.stringify({ status: "disconnected" }), {

@@ -107,8 +107,10 @@ export async function withPooledSshConnection<T>(
 	try {
 		return await run(entry.ssh);
 	} catch (error) {
-		entry.ssh.dispose();
-		pools.delete(poolKey(userId, serverId));
+		if (entry.refCount <= 1) {
+			entry.ssh.dispose();
+			pools.delete(poolKey(userId, serverId));
+		}
 		throw error;
 	} finally {
 		releasePooledSsh(entry);

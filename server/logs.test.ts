@@ -9,6 +9,7 @@ const {
 	getAuthSession,
 	deleteWhere,
 	selectFrom,
+	transaction,
 } = vi.hoisted(() => ({
 	tableInstalls: { kind: "installs" },
 	tableInstallEvents: { kind: "installEvents" },
@@ -17,6 +18,7 @@ const {
 	getAuthSession: vi.fn(),
 	deleteWhere: vi.fn(),
 	selectFrom: vi.fn(),
+	transaction: vi.fn(),
 }));
 
 vi.mock("./auth", () => ({
@@ -27,6 +29,7 @@ vi.mock("./db", () => ({
 	getDb: () => ({
 		select: () => ({ from: selectFrom }),
 		delete: () => ({ where: deleteWhere }),
+		transaction,
 	}),
 }));
 
@@ -43,6 +46,11 @@ describe("logs handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		deleteWhere.mockResolvedValue(undefined);
+		transaction.mockImplementation(async (fn) =>
+			fn({
+				delete: () => ({ where: deleteWhere }),
+			}),
+		);
 	});
 
 	it("returns unauthorized when reading logs without a session", async () => {
@@ -219,7 +227,89 @@ describe("logs handlers", () => {
 
 		expect(response.status).toBe(200);
 		expect(payload).toEqual({ status: "cleared" });
+		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(deleteWhere).toHaveBeenCalledTimes(2);
+	});
+
+	it("limits install events per install instead of using one global cap", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const eventLimitCalls: number[] = [];
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () =>
+									Promise.resolve([
+										{
+											id: "install_a",
+											status: "succeeded",
+											step: "done",
+											createdAt: new Date("2026-06-01T00:00:00.000Z"),
+											updatedAt: new Date("2026-06-01T00:05:00.000Z"),
+											serverLabel: "A",
+										},
+										{
+											id: "install_b",
+											status: "failed",
+											step: "done",
+											createdAt: new Date("2026-06-02T00:00:00.000Z"),
+											updatedAt: new Date("2026-06-02T00:05:00.000Z"),
+											serverLabel: "B",
+										},
+									]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: (count: number) => {
+								eventLimitCalls.push(count);
+								return Promise.resolve([
+									{
+										installId: "install_a",
+										stepName: "install-docker",
+										message: "Installing Docker",
+										createdAt: new Date("2026-06-01T00:00:00.000Z"),
+									},
+								]);
+							},
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () => Promise.resolve([]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
+
+		const response = await getLogs(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(eventLimitCalls).toEqual([200, 200]);
+		expect(payload.logs.installLogs).toHaveLength(2);
 	});
 });
 

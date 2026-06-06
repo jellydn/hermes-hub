@@ -1,6 +1,6 @@
 import type { NodeSSH } from "node-ssh";
-
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
+import { managedComposeVolumeHome } from "./constants";
 import { buildManagedComposeContent } from "./server-compose";
 import { type SshAuthMethod, shellQuote } from "./ssh";
 import { assertWebUiReachable } from "./web-ui/reachability";
@@ -51,7 +51,7 @@ export function resolveManagedComposeDeployPolicy(
 					await ssh.execCommand("sleep 2");
 
 					const configResult = await ssh.execCommand(
-						`docker exec hermes hermes config set model ${shellQuote(providerModel)}`,
+						`sudo docker exec hermes hermes config set model ${shellQuote(providerModel)}`,
 					);
 					if (configResult.code !== 0) {
 						throw new Error(
@@ -73,7 +73,7 @@ export function resolveManagedComposeDeployPolicy(
 				pullImages: true,
 				preSshCommands: async (ssh) => {
 					const prepResult = await ssh.execCommand(
-						"sudo mkdir -p /root/.hermes /root/workspace",
+						`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
 					);
 					if (prepResult.code !== 0) {
 						throw new Error(
@@ -119,6 +119,7 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 		apiServerKey: input.apiServerKey,
 		telegramBotToken: input.telegramBotToken,
 		webUiPassword: input.webUiPassword,
+		webUiPort: input.webUiPort,
 	});
 
 	await deployComposeViaSsh({

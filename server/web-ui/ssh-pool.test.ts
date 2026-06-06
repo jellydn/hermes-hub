@@ -85,4 +85,49 @@ describe("web-ui ssh pool", () => {
 		expect(establishSshConnection).toHaveBeenCalledTimes(2);
 		expect(ssh.dispose).toHaveBeenCalled();
 	});
+
+	it("keeps a shared pooled connection when another request still holds it", async () => {
+		const ssh = createMockSsh("ssh-1");
+		establishSshConnection.mockResolvedValue({ ssh, hostKey: {} });
+
+		let releaseFirst: (() => void) | undefined;
+		const firstPromise = withPooledSshConnection(
+			"user_123",
+			"server_123",
+			sshInput,
+			async () =>
+				new Promise<string>((resolve) => {
+					releaseFirst = () => resolve("first");
+				}),
+		);
+
+		await Promise.resolve();
+
+		const secondPromise = withPooledSshConnection(
+			"user_123",
+			"server_123",
+			sshInput,
+			async () => {
+				throw new Error("proxy failed");
+			},
+		);
+
+		await expect(secondPromise).rejects.toThrow(/proxy failed/);
+
+		releaseFirst?.();
+		await expect(firstPromise).resolves.toBe("first");
+
+		let reused = false;
+		await withPooledSshConnection(
+			"user_123",
+			"server_123",
+			sshInput,
+			async (connection) => {
+				reused = connection === ssh;
+			},
+		);
+
+		expect(reused).toBe(true);
+		expect(establishSshConnection).toHaveBeenCalledTimes(1);
+	});
 });

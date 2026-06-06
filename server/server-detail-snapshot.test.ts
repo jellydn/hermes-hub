@@ -165,7 +165,7 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 			action: "server.action.restart.succeeded",
 			details: { serverId: `server_other_${i}`, message: "noise" },
 			createdAt: new Date(
-				`2026-02-${String((i % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
+				`2026-06-${String((i % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
 			),
 		}));
 		const all = [...finished, ...noise].sort(

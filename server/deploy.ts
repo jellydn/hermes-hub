@@ -85,26 +85,6 @@ export async function deployProviderToHermes(context: Context) {
 			apiServerKey: decryptedApiServerKey,
 			providerModel: providerRecord.model,
 		});
-
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "provider.deploy.succeeded",
-			serverId: sshCtx.serverId,
-			details: {
-				provider: providerRecord.provider,
-				model: providerRecord.model,
-				serverId: sshCtx.serverId,
-				serverHost: sshCtx.server.host,
-			},
-			ipAddress,
-		});
-
-		return context.json({
-			status: "deployed",
-			provider: providerRecord.provider,
-			model: providerRecord.model,
-			serverHost: sshCtx.server.host,
-		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
@@ -123,4 +103,28 @@ export async function deployProviderToHermes(context: Context) {
 
 		return context.json({ error: `Deploy failed: ${message}` }, 502);
 	}
+
+	try {
+		await insertAuditLog(db, {
+			userId: session.user.id,
+			action: "provider.deploy.succeeded",
+			serverId: sshCtx.serverId,
+			details: {
+				provider: providerRecord.provider,
+				model: providerRecord.model,
+				serverId: sshCtx.serverId,
+				serverHost: sshCtx.server.host,
+			},
+			ipAddress,
+		});
+	} catch {
+		// Deploy already succeeded remotely; audit logging is historical only.
+	}
+
+	return context.json({
+		status: "deployed",
+		provider: providerRecord.provider,
+		model: providerRecord.model,
+		serverHost: sshCtx.server.host,
+	});
 }

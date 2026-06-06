@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildComposeUpCommand } from "./compose-deploy-ssh";
+import {
+	assertValidComposeServiceNames,
+	buildComposeUpCommand,
+} from "./compose-deploy-ssh";
 
 describe("buildComposeUpCommand", () => {
 	it("recreates the full stack when no services are targeted", () => {
@@ -24,5 +27,17 @@ describe("buildComposeUpCommand", () => {
 		).toBe(
 			"cd ~/hermes && sudo docker compose pull hermes-webui && sudo docker compose up -d --no-deps hermes-webui",
 		);
+	});
+
+	it("rejects invalid compose service names", () => {
+		expect(() =>
+			assertValidComposeServiceNames(["hermes-webui"]),
+		).not.toThrow();
+		expect(() => assertValidComposeServiceNames(["hermes;rm -rf /"])).toThrow(
+			/invalid compose service name/i,
+		);
+		expect(() =>
+			buildComposeUpCommand({ composeServices: ["hermes$(whoami)"] }),
+		).toThrow(/invalid compose service name/i);
 	});
 });

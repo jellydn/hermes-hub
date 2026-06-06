@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { buildHermesComposeContent } from "./compose";
+import {
+	defaultHermesImage,
+	hermesWebUiImage,
+	managedComposeVolumeHome,
+} from "./constants";
 
 describe("buildHermesComposeContent", () => {
 	it("renders a minimal compose with no optional inputs", () => {
@@ -144,14 +149,15 @@ describe("buildHermesComposeContent", () => {
 		expect(result).toMatchSnapshot();
 
 		const parsed = parse(result);
+		expect(parsed.services.hermes.image).toBe(defaultHermesImage);
 		expect(parsed.services["hermes-webui"]).toEqual(
 			expect.objectContaining({
-				image: "ghcr.io/nesquena/hermes-webui:latest",
+				image: hermesWebUiImage,
 				container_name: "hermes-webui",
 				ports: ["127.0.0.1:8787:8787"],
 				volumes: [
-					"/root/.hermes:/home/hermeswebui/.hermes",
-					"/root/workspace:/workspace",
+					`${managedComposeVolumeHome}/.hermes:/home/hermeswebui/.hermes`,
+					`${managedComposeVolumeHome}/workspace:/workspace`,
 				],
 			}),
 		);

@@ -65,19 +65,19 @@ export async function clearLogs(context: Context) {
 		.innerJoin(servers, eq(installs.serverId, servers.id))
 		.where(eq(servers.userId, userId));
 
-	await Promise.all([
-		db
+	await db.transaction(async (tx) => {
+		await tx
 			.delete(auditLogs)
 			.where(
 				and(
 					eq(auditLogs.userId, userId),
 					inArray(auditLogs.action, [...finishedActionNames]),
 				),
-			),
-		db
+			);
+		await tx
 			.delete(installEvents)
-			.where(inArray(installEvents.installId, userInstallIds)),
-	]);
+			.where(inArray(installEvents.installId, userInstallIds));
+	});
 
 	return context.json({ status: "cleared" });
 }
@@ -128,26 +128,30 @@ async function getInstallLogs(userId: string) {
 
 	const installIds = recentInstallRows.map((row) => row.id);
 
-	const eventRows = await db
-		.select({
-			installId: installEvents.installId,
-			stepName: installEvents.step,
-			message: installEvents.message,
-			createdAt: installEvents.createdAt,
-		})
-		.from(installEvents)
-		.where(inArray(installEvents.installId, installIds))
-		.orderBy(installEvents.createdAt)
-		.limit(INSTALL_LOG_EVENT_LIMIT_PER_INSTALL * installIds.length);
+	const eventRowsByInstall = await Promise.all(
+		installIds.map(async (installId) => {
+			const rows = await db
+				.select({
+					installId: installEvents.installId,
+					stepName: installEvents.step,
+					message: installEvents.message,
+					createdAt: installEvents.createdAt,
+				})
+				.from(installEvents)
+				.where(eq(installEvents.installId, installId))
+				.orderBy(installEvents.createdAt)
+				.limit(INSTALL_LOG_EVENT_LIMIT_PER_INSTALL);
 
-	const eventsByInstall = new Map<string, typeof eventRows>();
-	for (const event of eventRows) {
-		const bucket = eventsByInstall.get(event.installId) ?? [];
-		if (bucket.length < INSTALL_LOG_EVENT_LIMIT_PER_INSTALL) {
-			bucket.push(event);
-		}
-		eventsByInstall.set(event.installId, bucket);
-	}
+			return rows;
+		}),
+	);
+
+	const eventsByInstall = new Map(
+		installIds.map((installId, index) => [
+			installId,
+			eventRowsByInstall[index] ?? [],
+		]),
+	);
 
 	return recentInstallRows
 		.map((install) => {

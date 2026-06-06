@@ -30,6 +30,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 	apiServerKey?: string;
 	telegramBotToken?: string;
 	webUiPassword?: string;
+	webUiPort?: number;
 }) {
 	const { telegramInfo, providerConfig, webUiRecord } = input.secrets;
 
@@ -67,7 +68,7 @@ export function buildManagedComposeContentFromSecrets(input: {
 		webUi: resolvedWebUiPassword
 			? {
 					password: resolvedWebUiPassword,
-					port: webUiRecord?.port,
+					port: input.webUiPort ?? webUiRecord?.port,
 				}
 			: undefined,
 	});
@@ -79,6 +80,7 @@ export async function buildManagedComposeContent(input: {
 	apiServerKey?: string;
 	telegramBotToken?: string;
 	webUiPassword?: string;
+	webUiPort?: number;
 }) {
 	const secrets = await resolveManagedComposeSecrets({
 		userId: input.userId,
@@ -89,6 +91,7 @@ export async function buildManagedComposeContent(input: {
 		apiServerKey: input.apiServerKey,
 		telegramBotToken: input.telegramBotToken,
 		webUiPassword: input.webUiPassword,
+		webUiPort: input.webUiPort,
 		secrets,
 	});
 }

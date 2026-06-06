@@ -517,6 +517,26 @@ describe("provider settings", () => {
 			});
 		});
 
+		it("returns 200 when deploy succeeds but success audit logging fails", async () => {
+			insertAuditValues.mockRejectedValueOnce(new Error("audit db down"));
+
+			selectLimit
+				.mockResolvedValueOnce([providerRecord])
+				.mockResolvedValueOnce([telegramRecord]);
+
+			const { deployProviderToHermes } = await import("./deploy");
+			const response = await deployProviderToHermes(
+				createContext("http://localhost/api/providers/deploy", {}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({
+				status: "deployed",
+				provider: "openai",
+				model: "gpt-4o",
+			});
+		});
+
 		it("returns 200 on successful deploy and logs all side effects", async () => {
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])

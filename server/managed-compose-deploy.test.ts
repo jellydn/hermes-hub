@@ -22,6 +22,7 @@ vi.mock("./web-ui/reachability", () => ({
 	assertWebUiReachable,
 }));
 
+import { managedComposeVolumeHome } from "./constants";
 import {
 	deployManagedCompose,
 	resolveManagedComposeDeployPolicy,
@@ -80,7 +81,7 @@ describe("resolveManagedComposeDeployPolicy", () => {
 		await policy.preSshCommands?.({ execCommand } as never);
 
 		expect(execCommand).toHaveBeenCalledWith(
-			"sudo mkdir -p /root/.hermes /root/workspace",
+			`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
 		);
 	});
 });
@@ -112,6 +113,7 @@ describe("deployManagedCompose", () => {
 			apiServerKey: undefined,
 			telegramBotToken: undefined,
 			webUiPassword: "ui-password",
+			webUiPort: 8787,
 		});
 		expect(deployComposeViaSsh).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -148,7 +150,7 @@ describe("deployManagedCompose", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(1, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
 			2,
-			"docker exec hermes hermes config set model 'gpt-4o'",
+			"sudo docker exec hermes hermes config set model 'gpt-4o'",
 		);
 	});
 });
