@@ -29,8 +29,9 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🚀 **Hermes Provider Deploy** — Push provider config to your Hermes VPS over SSH; sets API keys, base URLs, and default model inside the running container
 - 💬 **Telegram Integration** — Bot token verification via Telegram API; connect/disconnect flow
 - 🔄 **Server Actions** — One-click restart, update, rollback with audit-based history
+- 🖥️ **Hermes Web UI** — Deploy and open the Hermes browser UI from the server detail page via an authenticated proxy (no SSH tunnels)
 - 📋 **Logs Viewer** — Aggregated install logs and operational action history
-- ✅ **58 tests** — Vitest + Testing Library for components and server integration
+- ✅ **263 tests** — Vitest + Testing Library for components and server integration
 
 ## 📹 Demo
 
@@ -211,7 +212,7 @@ src/routes/           — TanStack Start file-based routes (11 pages)
 ├── login.tsx          — Magic link email login
 ├── dashboard.tsx      — Authenticated shell + aggregated status
 ├── servers.tsx        — VPS connection wizard + install trigger
-├── servers.$id.tsx    — Server detail, actions, action history
+├── servers.$id.tsx    — Server detail, Hermes Web UI, actions, action history
 ├── servers.$id.install.tsx  — Live SSE install progress
 ├── ai-provider.tsx    — AI provider selection and API key config
 ├── telegram.tsx       — Telegram bot connection wizard
@@ -227,6 +228,7 @@ server/               — Hono API routes and business logic
 ├── servers.ts        — VPS connection (insert, credential handling, audit)
 ├── install.ts        — Hermes install pipeline with SSE streaming
 ├── server-actions.ts — Restart/update/rollback via SSH
+├── web-ui/           — Hermes Web UI deploy, password reveal, SSH-forward proxy
 ├── dashboard.ts      — Aggregated status with live VPS metrics
 ├── providers.ts      — AI provider save, test, model validation
 ├── telegram.ts       — Telegram bot token verification + connect/disconnect
@@ -254,7 +256,7 @@ Complete documentation for all API endpoints is available in [`docs/api-referenc
 
 - Authentication (magic link flow via Better Auth)
 - Health check
-- VPS connection, install (with SSE streaming), and server actions
+- VPS connection, install (with SSE streaming), server actions, and Hermes Web UI proxy
 - Dashboard status aggregation
 - Install & action logs
 - AI provider configuration and testing
