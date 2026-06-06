@@ -63,7 +63,7 @@ export async function runServerHealthCheck(context: Context) {
 			ipAddress,
 		});
 
-		return context.json({ error: `Health check failed: ${message}` }, 400);
+		return context.json({ error: `Setup check failed: ${message}` }, 400);
 	}
 }
 
@@ -72,5 +72,5 @@ function normalizeHealthCheckError(error: unknown) {
 		return error.message;
 	}
 
-	return error instanceof Error ? error.message : "Remote health check failed";
+	return error instanceof Error ? error.message : "Remote setup check failed";
 }

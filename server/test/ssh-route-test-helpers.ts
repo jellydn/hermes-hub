@@ -117,23 +117,14 @@ export function mockHealthyHealthCheckExec() {
 				if (command.includes("docker info")) {
 					return { code: 0, stdout: "yes", stderr: "" };
 				}
-				if (command.includes("docker ps --filter")) {
-					return { code: 0, stdout: "hermes", stderr: "" };
+				if (command.includes("docker compose version")) {
+					return { code: 0, stdout: "yes", stderr: "" };
 				}
-				if (command.includes("passwordauthentication")) {
-					return { code: 0, stdout: "no", stderr: "" };
+				if (command.includes("test -d ~/hermes")) {
+					return { code: 0, stdout: "yes", stderr: "" };
 				}
-				if (command.includes("permitrootlogin")) {
-					return { code: 0, stdout: "no", stderr: "" };
-				}
-				if (
-					command.includes("ufw status") ||
-					command.includes("firewall-cmd")
-				) {
-					return { code: 0, stdout: "Status: active", stderr: "" };
-				}
-				if (command.includes("apt-get") || command.includes("dnf updateinfo")) {
-					return { code: 0, stdout: "0", stderr: "" };
+				if (command.includes("test -f ~/hermes/docker-compose.yml")) {
+					return { code: 0, stdout: "yes", stderr: "" };
 				}
 				if (command.includes("curl -s -o /dev/null")) {
 					return { code: 0, stdout: "200", stderr: "" };

@@ -145,9 +145,8 @@ describe("server health check route", () => {
 			status: "healthy",
 			checkedAt: expect.any(String),
 			groups: expect.arrayContaining([
-				expect.objectContaining({ label: "System" }),
-				expect.objectContaining({ label: "Runtime" }),
-				expect.objectContaining({ label: "Security posture" }),
+				expect.objectContaining({ label: "Server resources" }),
+				expect.objectContaining({ label: "Hermes setup" }),
 			]),
 		});
 		expect(sshRouteTestMocks.insertAuditValues).toHaveBeenCalledWith(

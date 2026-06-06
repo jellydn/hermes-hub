@@ -33,7 +33,7 @@ export function useServerHealthCheck(serverId: string) {
 
 			if (!response.ok || !payload?.healthCheck) {
 				setState({
-					error: payload?.error ?? "Health check failed.",
+					error: payload?.error ?? "Setup check failed.",
 					pending: false,
 					result: null,
 				});
@@ -47,7 +47,7 @@ export function useServerHealthCheck(serverId: string) {
 			});
 		} catch {
 			setState({
-				error: "Health check failed: Connection failed.",
+				error: "Setup check failed: Connection failed.",
 				pending: false,
 				result: null,
 			});

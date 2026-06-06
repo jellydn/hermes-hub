@@ -15,10 +15,9 @@ const STATIC_HEALTH_CHECKS = [
 	["disk", HEALTH_CHECK_COMMANDS.disk],
 	["dockerAvailable", HEALTH_CHECK_COMMANDS.dockerAvailable],
 	["dockerDaemon", HEALTH_CHECK_COMMANDS.dockerDaemon],
-	["sshPasswordAuth", HEALTH_CHECK_COMMANDS.sshPasswordAuth],
-	["sshRootLogin", HEALTH_CHECK_COMMANDS.sshRootLogin],
-	["firewall", HEALTH_CHECK_COMMANDS.firewall],
-	["securityUpdates", HEALTH_CHECK_COMMANDS.securityUpdates],
+	["dockerCompose", HEALTH_CHECK_COMMANDS.dockerCompose],
+	["hermesWorkspace", HEALTH_CHECK_COMMANDS.hermesWorkspace],
+	["hermesComposeFile", HEALTH_CHECK_COMMANDS.hermesComposeFile],
 ] as const satisfies ReadonlyArray<
 	readonly [keyof Omit<HealthCheckCommandOutput, "hermesReachability">, string]
 >;

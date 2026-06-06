@@ -14,16 +14,15 @@ function createHealthyOutput(): HealthCheckCommandOutput {
 		disk: "55",
 		dockerAvailable: "yes",
 		dockerDaemon: "yes",
+		dockerCompose: "yes",
+		hermesWorkspace: "yes",
+		hermesComposeFile: "yes",
 		hermesReachability: "200",
-		sshPasswordAuth: "no",
-		sshRootLogin: "no",
-		firewall: "Status: active",
-		securityUpdates: "0",
 	};
 }
 
 describe("health check parsing", () => {
-	it("builds a healthy result when all checks pass", () => {
+	it("builds a healthy result when the VPS harness is ready", () => {
 		const result = buildHealthCheckResult(
 			createHealthyOutput(),
 			"2026-06-06T12:00:00.000Z",
@@ -32,15 +31,19 @@ describe("health check parsing", () => {
 
 		expect(result.status).toBe("healthy");
 		expect(result.checkedAt).toBe("2026-06-06T12:00:00.000Z");
-		expect(result.groups).toHaveLength(3);
+		expect(result.groups).toHaveLength(2);
 		expect(result.groups.flatMap((group) => group.items)).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					label: "CPU usage",
+					label: "CPU",
 					status: "healthy",
 				}),
 				expect.objectContaining({
-					label: "Hermes reachability",
+					label: "Hermes agent responding",
+					status: "healthy",
+				}),
+				expect.objectContaining({
+					label: "Hermes configuration",
 					status: "healthy",
 				}),
 			]),
@@ -71,12 +74,15 @@ describe("health check parsing", () => {
 		expect(criticalResult.status).toBe("critical");
 	});
 
-	it("marks critical runtime and malformed output states", () => {
+	it("marks missing harness pieces as critical", () => {
 		const result = buildHealthCheckResult(
 			{
 				...createHealthyOutput(),
 				cpu: "not-a-number",
 				dockerDaemon: "no",
+				dockerCompose: "no",
+				hermesWorkspace: "no",
+				hermesComposeFile: "no",
 				hermesReachability: "000",
 			},
 			"2026-06-06T12:00:00.000Z",
@@ -86,62 +92,29 @@ describe("health check parsing", () => {
 		expect(result.status).toBe("critical");
 		expect(
 			result.groups
-				.find((group) => group.label === "System")
-				?.items.find((item) => item.label === "CPU usage"),
+				.find((group) => group.label === "Server resources")
+				?.items.find((item) => item.label === "CPU"),
 		).toMatchObject({
 			status: "critical",
 		});
 		expect(
 			result.groups
-				.find((group) => group.label === "Runtime")
-				?.items.find((item) => item.label === "Docker daemon"),
+				.find((group) => group.label === "Hermes setup")
+				?.items.find((item) => item.label === "Docker running"),
 		).toMatchObject({
 			status: "critical",
 		});
-	});
-
-	it("flags security posture gaps as warning", () => {
-		const result = buildHealthCheckResult(
-			{
-				...createHealthyOutput(),
-				sshPasswordAuth: "yes",
-				sshRootLogin: "yes",
-				firewall: "Status: inactive",
-				securityUpdates: "3",
-			},
-			"2026-06-06T12:00:00.000Z",
-			{ hermesRunning: true },
-		);
-
-		expect(result.status).toBe("warning");
 		expect(
 			result.groups
-				.find((group) => group.label === "Security posture")
-				?.items.map((item) => item.status),
-		).toEqual(["warning", "warning", "warning", "warning"]);
-	});
-
-	it("treats key-only root login as healthy", () => {
-		const result = buildHealthCheckResult(
-			{
-				...createHealthyOutput(),
-				sshRootLogin: "prohibit-password",
-			},
-			"2026-06-06T12:00:00.000Z",
-			{ hermesRunning: true },
-		);
-
-		expect(
-			result.groups
-				.find((group) => group.label === "Security posture")
-				?.items.find((item) => item.label === "SSH root login"),
+				.find((group) => group.label === "Hermes setup")
+				?.items.find((item) => item.label === "Hermes folder"),
 		).toMatchObject({
-			status: "healthy",
-			detail: "Root login is allowed with SSH keys only.",
+			status: "critical",
+			detail: expect.stringContaining("workspace folder is missing"),
 		});
 	});
 
-	it("omits Hermes reachability when the container is not running", () => {
+	it("omits Hermes agent response when the container is not running", () => {
 		const result = buildHealthCheckResult(
 			{
 				...createHealthyOutput(),
@@ -153,9 +126,16 @@ describe("health check parsing", () => {
 
 		expect(
 			result.groups
-				.find((group) => group.label === "Runtime")
+				.find((group) => group.label === "Hermes setup")
 				?.items.map((item) => item.label),
-		).toEqual(["Docker availability", "Docker daemon", "Hermes container"]);
+		).toEqual([
+			"Docker installed",
+			"Docker running",
+			"Docker Compose ready",
+			"Hermes folder",
+			"Hermes configuration",
+			"Hermes agent running",
+		]);
 	});
 
 	it("aggregates the most severe item status", () => {

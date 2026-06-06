@@ -33,7 +33,7 @@ export function ServerHealthCheckPanel({
 					) : (
 						<Activity className="h-4 w-4" />
 					)}
-					<span>{pending ? "Checking health..." : "Check health"}</span>
+					<span>{pending ? "Checking setup..." : "Check setup"}</span>
 				</Button>
 			</div>
 
@@ -54,10 +54,11 @@ function ServerHealthCheckResults({
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<p className="m-0 text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
-						Health check results
+						Setup check results
 					</p>
 					<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">
-						Checked {formatCheckedAt(result.checkedAt)}
+						Checked {formatCheckedAt(result.checkedAt)}. These checks confirm
+						the VPS is ready to run Hermes — no security expertise required.
 					</p>
 				</div>
 				<span className={getStatusPillClassName(result.status)}>
