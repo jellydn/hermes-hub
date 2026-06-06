@@ -7,8 +7,8 @@ afterEach(() => {
 });
 
 describe("isStaleDeploy", () => {
-	it("returns false when deployStartedAt is null", () => {
-		expect(isStaleDeploy(null)).toBe(false);
+	it("returns true when deployStartedAt is null (legacy row)", () => {
+		expect(isStaleDeploy(null)).toBe(true);
 	});
 
 	it("returns false when deploy started recently (within threshold)", () => {
@@ -117,7 +117,7 @@ describe("buildWebUiSnapshot stale detection", () => {
 		expect(snapshot.deployStartedAt).toBe(null);
 	});
 
-	it("does not trigger stale when deploying with null deployStartedAt", () => {
+	it("marks deploying with null deployStartedAt as stale (legacy row)", () => {
 		const now = new Date("2026-06-06T12:00:00.000Z");
 		vi.useFakeTimers();
 		vi.setSystemTime(now);
@@ -132,7 +132,10 @@ describe("buildWebUiSnapshot stale detection", () => {
 			updatedAt: new Date("2026-06-06T12:00:00.000Z"),
 		});
 
-		expect(snapshot.deployStatus).toBe("deploying");
+		expect(snapshot.deployStatus).toBe("failed");
+		expect(snapshot.deployError).toBe(
+			"Web UI deploy timed out. The HermesHub process may have restarted during setup.",
+		);
 	});
 });
 

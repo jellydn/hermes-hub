@@ -37,7 +37,7 @@ function normalizeDeployStatus(value: string): ServerWebUiDeployStatus {
 
 export function isStaleDeploy(deployStartedAt: Date | null): boolean {
 	if (!deployStartedAt) {
-		return false;
+		return true;
 	}
 
 	return Date.now() - deployStartedAt.getTime() > STALE_DEPLOY_THRESHOLD_MS;
