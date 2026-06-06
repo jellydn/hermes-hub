@@ -187,6 +187,7 @@ describe("web-ui handlers", () => {
 		expect(buildManagedComposeContentFromSecrets).toHaveBeenCalled();
 		expect(deployComposeViaSsh).toHaveBeenCalledWith(
 			expect.objectContaining({
+				composeServices: ["hermes-webui"],
 				preSshCommands: expect.any(Function),
 				extraSshCommands: expect.any(Function),
 			}),

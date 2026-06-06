@@ -24,10 +24,20 @@ type DeployComposeInput = {
 	authMethod: SshAuthMethod;
 	credential: string;
 	composeContent: string;
+	/** When set, only recreate these services so the Hermes gateway keeps running. */
+	composeServices?: string[];
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	expectedFingerprint?: string;
 };
+
+export function buildComposeUpCommand(input?: { composeServices?: string[] }) {
+	const command = ["cd ~/hermes && sudo docker compose up -d"];
+	if (input?.composeServices?.length) {
+		command.push("--no-deps", ...input.composeServices);
+	}
+	return command.join(" ");
+}
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
 	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${input.composeContent}\nDOCKER_EOF`;
@@ -54,7 +64,7 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			}
 
 			const restartResult = await ssh.execCommand(
-				"cd ~/hermes && sudo docker compose up -d --force-recreate",
+				buildComposeUpCommand({ composeServices: input.composeServices }),
 			);
 			if (restartResult.code !== 0) {
 				throw new Error(restartResult.stderr || "Failed to restart Hermes");

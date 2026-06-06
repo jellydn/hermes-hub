@@ -590,7 +590,7 @@ describe("provider settings", () => {
 			);
 			expect(sshExecCommand).toHaveBeenNthCalledWith(
 				2,
-				"cd ~/hermes && sudo docker compose up -d --force-recreate",
+				"cd ~/hermes && sudo docker compose up -d",
 			);
 			expect(sshExecCommand).toHaveBeenNthCalledWith(3, "sleep 2");
 			expect(sshExecCommand).toHaveBeenNthCalledWith(

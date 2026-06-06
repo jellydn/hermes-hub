@@ -110,6 +110,7 @@ export async function deployServerWebUi(context: Context) {
 			authMethod: ctx.authMethod,
 			credential: ctx.credential,
 			composeContent,
+			composeServices: ["hermes-webui"],
 			expectedFingerprint: ctx.server.hostKeyFingerprint ?? undefined,
 			preSshCommands: async (ssh) => {
 				const workspaceResult = await ssh.execCommand("mkdir -p ~/workspace");
