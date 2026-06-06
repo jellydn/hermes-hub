@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	buildUpstreamProxyHeaders,
+	getPublicRequestEndpoint,
 	getUpstreamPath,
 	rewriteLocationHeader,
 	rewriteSetCookieHeader,
@@ -64,6 +65,41 @@ describe("web-ui proxy helpers", () => {
 		expect(headers["X-Forwarded-Host"]).toBe("hermes-hub.itman.fyi");
 		expect(headers["X-Forwarded-Proto"]).toBe("https");
 		expect(headers["X-Forwarded-For"]).toBe("203.0.113.10");
+	});
+
+	it("prefers reverse-proxy forwarded headers when the app URL is internal", () => {
+		const endpoint = getPublicRequestEndpoint(
+			new Request(
+				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/chat",
+				{
+					headers: {
+						host: "hermes-hub.itman.fyi",
+						"x-forwarded-host": "hermes-hub.itman.fyi",
+						"x-forwarded-proto": "https",
+					},
+				},
+			),
+		);
+		const headers = buildUpstreamProxyHeaders(
+			new Request(
+				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/chat",
+				{
+					headers: {
+						host: "hermes-hub.itman.fyi",
+						"x-forwarded-host": "hermes-hub.itman.fyi",
+						"x-forwarded-proto": "https",
+					},
+				},
+			),
+			"127.0.0.1:8787",
+		);
+
+		expect(endpoint).toEqual({
+			host: "hermes-hub.itman.fyi",
+			proto: "https",
+		});
+		expect(headers["X-Forwarded-Host"]).toBe("hermes-hub.itman.fyi");
+		expect(headers["X-Forwarded-Proto"]).toBe("https");
 	});
 
 	it("rewrites cookie paths for the proxy base", () => {

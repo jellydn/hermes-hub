@@ -109,17 +109,39 @@ export function rewriteProxyResponseHeaders(
 	return rewritten;
 }
 
+export function getPublicRequestEndpoint(request: Request) {
+	const requestUrl = new URL(request.url);
+	const forwardedHost = request.headers
+		.get("x-forwarded-host")
+		?.split(",")[0]
+		?.trim();
+	const hostHeader = request.headers.get("host")?.trim();
+	const host = forwardedHost || hostHeader || requestUrl.host;
+
+	const forwardedProto = request.headers
+		.get("x-forwarded-proto")
+		?.split(",")[0]
+		?.trim()
+		.toLowerCase();
+	const proto =
+		forwardedProto === "https" || forwardedProto === "http"
+			? forwardedProto
+			: requestUrl.protocol.replace(/:$/, "");
+
+	return { host, proto };
+}
+
 export function buildUpstreamProxyHeaders(
 	request: Request,
 	upstreamHost: string,
 ): Record<string, string> {
-	const publicUrl = new URL(request.url);
+	const { host, proto } = getPublicRequestEndpoint(request);
 	const headers: Record<string, string> = {
 		...filterRequestHeaders(request.headers),
 		host: upstreamHost,
 		connection: "close",
-		"X-Forwarded-Host": publicUrl.host,
-		"X-Forwarded-Proto": publicUrl.protocol.replace(/:$/, ""),
+		"X-Forwarded-Host": host,
+		"X-Forwarded-Proto": proto,
 	};
 
 	const forwardedFor = request.headers.get("x-forwarded-for");
