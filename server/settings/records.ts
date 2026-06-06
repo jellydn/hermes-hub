@@ -2,21 +2,17 @@ import { eq } from "drizzle-orm";
 
 import { getDb } from "../db";
 import { hermesSettings } from "../db/schema";
+import {
+	type PersonaSettingsSummary,
+	toPersonaSettingsSummary,
+} from "./config";
 
-export type PersonaSettingsSummary = {
-	agentPersona: string;
-	deployedServerHost: string | null;
-	deployedAt: string | null;
-	updatedAt: string;
-};
+export type { PersonaSettingsSummary };
 
 export async function getHermesSettingsRecord(userId: string) {
 	const [record] = await getDb()
 		.select({
 			agentPersona: hermesSettings.agentPersona,
-			deployedServerId: hermesSettings.deployedServerId,
-			deployedServerHost: hermesSettings.deployedServerHost,
-			deployedAt: hermesSettings.deployedAt,
 			updatedAt: hermesSettings.updatedAt,
 		})
 		.from(hermesSettings)
@@ -34,12 +30,7 @@ export async function getCurrentPersonaSettings(
 		return null;
 	}
 
-	return {
-		agentPersona: record.agentPersona,
-		deployedServerHost: record.deployedServerHost ?? null,
-		deployedAt: record.deployedAt?.toISOString() ?? null,
-		updatedAt: record.updatedAt.toISOString(),
-	};
+	return toPersonaSettingsSummary(record);
 }
 
 type DbClient = Pick<ReturnType<typeof getDb>, "insert">;
@@ -49,39 +40,27 @@ export async function upsertHermesSettingsRecord(
 	input: {
 		userId: string;
 		agentPersona: string;
-		deployedServerId?: string | null;
-		deployedServerHost?: string | null;
-		deployedAt?: Date | null;
 	},
-): Promise<void> {
+): Promise<PersonaSettingsSummary> {
 	const now = new Date();
-	const updateSet: Partial<typeof hermesSettings.$inferInsert> = {
-		agentPersona: input.agentPersona,
-		updatedAt: now,
-	};
-
-	if (input.deployedServerId !== undefined) {
-		updateSet.deployedServerId = input.deployedServerId;
-	}
-	if (input.deployedServerHost !== undefined) {
-		updateSet.deployedServerHost = input.deployedServerHost;
-	}
-	if (input.deployedAt !== undefined) {
-		updateSet.deployedAt = input.deployedAt;
-	}
 
 	await db
 		.insert(hermesSettings)
 		.values({
 			userId: input.userId,
 			agentPersona: input.agentPersona,
-			deployedServerId: input.deployedServerId ?? null,
-			deployedServerHost: input.deployedServerHost ?? null,
-			deployedAt: input.deployedAt ?? null,
 			updatedAt: now,
 		})
 		.onConflictDoUpdate({
 			target: hermesSettings.userId,
-			set: updateSet,
+			set: {
+				agentPersona: input.agentPersona,
+				updatedAt: now,
+			},
 		});
+
+	return toPersonaSettingsSummary({
+		agentPersona: input.agentPersona,
+		updatedAt: now,
+	});
 }

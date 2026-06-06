@@ -59,15 +59,13 @@ describe("PersonaSettings", () => {
 			<PersonaSettings
 				initialSettings={{
 					agentPersona: "You are Hermes.",
-					deployedServerHost: "1.2.3.4",
-					deployedAt: "2026-06-06T12:00:00.000Z",
 					updatedAt: "2026-06-06T12:00:00.000Z",
 				}}
 			/>,
 		);
 
 		expect(screen.getByDisplayValue("You are Hermes.")).toBeTruthy();
-		expect(screen.getByText(/last deployed to 1\.2\.3\.4/i)).toBeTruthy();
+		expect(screen.getByText(/last saved:/i)).toBeTruthy();
 	});
 
 	it("posts persona content on save and shows success state", async () => {
@@ -76,8 +74,6 @@ describe("PersonaSettings", () => {
 				JSON.stringify({
 					settings: {
 						agentPersona: "Saved persona",
-						deployedServerHost: null,
-						deployedAt: null,
 						updatedAt: "2026-06-06T12:00:00.000Z",
 					},
 				}),
@@ -112,8 +108,6 @@ describe("PersonaSettings", () => {
 			<PersonaSettings
 				initialSettings={{
 					agentPersona: "You are Hermes.",
-					deployedServerHost: null,
-					deployedAt: null,
 					updatedAt: "2026-06-06T12:00:00.000Z",
 				}}
 				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
@@ -130,6 +124,7 @@ describe("PersonaSettings", () => {
 				JSON.stringify({
 					status: "deployed",
 					serverHost: "1.2.3.4",
+					deployedAt: "2026-06-06T12:00:00.000Z",
 				}),
 				{
 					status: 200,

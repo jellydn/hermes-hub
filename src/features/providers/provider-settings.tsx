@@ -8,6 +8,7 @@ import {
 	getAiProviderOption,
 	getDefaultAiModel,
 } from "@/lib/ai-providers";
+import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
 import { ProviderSelectionPanel } from "./provider-selection-panel";
 import { ProviderSettingsAside } from "./provider-settings-aside";
 import {
@@ -21,10 +22,6 @@ export type ProviderSettingsSummary = {
 	keyLast4: string | null;
 	hasStoredKey: boolean;
 	baseUrl?: string | null;
-};
-
-type TelegramDeployInfo = {
-	deployedServerHost: string;
 };
 
 type ProviderSettingsProps = {

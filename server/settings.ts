@@ -3,15 +3,13 @@ import type { Context } from "hono";
 import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { validateAgentPersona, writeSoulMd } from "./hermes/persona";
+import { writeSoulMd } from "./hermes/persona";
 import { restartGateway } from "./hermes/runtime";
+import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
-import { getTelegramDeployInfo } from "./providers/records";
-import {
-	requireAuthSession,
-	requireOwnedServerSshById,
-} from "./request-guards";
+import { requireAuthSession } from "./request-guards";
+import { parsePersonaSaveBody } from "./settings/config";
 import {
 	getCurrentPersonaSettings,
 	getHermesSettingsRecord,
@@ -19,12 +17,8 @@ import {
 } from "./settings/records";
 import { withSshConnection } from "./ssh";
 
-export type { PersonaSettingsSummary } from "./settings/records";
+export type { PersonaSettingsSummary } from "./settings/config";
 export { getCurrentPersonaSettings };
-
-type PersonaSaveRequest = {
-	agentPersona?: unknown;
-};
 
 export async function savePersonaSettings(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
@@ -32,45 +26,42 @@ export async function savePersonaSettings(context: Context) {
 		return context.json({ error: "Unauthorized" }, 401);
 	}
 
-	let payload: PersonaSaveRequest;
+	let payload: unknown;
 	try {
-		payload = await context.req.json<PersonaSaveRequest>();
+		payload = await context.req.json();
 	} catch {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	if (!payload || typeof payload.agentPersona !== "string") {
-		return context.json({ error: "Persona content is required." }, 400);
-	}
-
-	const validated = validateAgentPersona(payload.agentPersona);
-	if (!validated.ok) {
-		return context.json({ error: validated.error }, 400);
+	const parsed = parsePersonaSaveBody(payload);
+	if (!parsed.ok) {
+		return context.json({ error: parsed.error }, 400);
 	}
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
 
 	try {
-		await db.transaction(async (tx) => {
-			await upsertHermesSettingsRecord(tx, {
+		const settings = await db.transaction(async (tx) => {
+			const saved = await upsertHermesSettingsRecord(tx, {
 				userId: session.user.id,
-				agentPersona: validated.content,
+				agentPersona: parsed.content,
 			});
 
 			await insertAuditLog(tx, {
 				userId: session.user.id,
 				action: "persona.saved",
 				details: {
-					characterCount: validated.content.length,
+					characterCount: parsed.content.length,
 				},
 				ipAddress,
 			});
+
+			return saved;
 		});
 
 		clearDashboardCache();
 
-		const settings = await getCurrentPersonaSettings(session.user.id);
 		return context.json({ settings });
 	} catch (error) {
 		const message =
@@ -99,25 +90,12 @@ export async function deployPersonaToHermes(context: Context) {
 		);
 	}
 
-	const telegramInfo = await getTelegramDeployInfo(session.user.id);
-	if (!telegramInfo?.deployedServerId) {
-		return context.json(
-			{
-				error:
-					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
-			},
-			400,
-		);
+	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
+	if (deployCtx instanceof Response) {
+		return deployCtx;
 	}
 
-	const sshCtx = await requireOwnedServerSshById(
-		context,
-		telegramInfo.deployedServerId,
-		session,
-	);
-	if (sshCtx instanceof Response) {
-		return sshCtx;
-	}
+	const { sshCtx } = deployCtx;
 
 	try {
 		await withSshConnection(
@@ -159,33 +137,18 @@ export async function deployPersonaToHermes(context: Context) {
 	const deployedAt = new Date();
 
 	try {
-		await db.transaction(async (tx) => {
-			await upsertHermesSettingsRecord(tx, {
-				userId: session.user.id,
-				agentPersona: settingsRecord.agentPersona,
-				deployedServerId: sshCtx.serverId,
-				deployedServerHost: sshCtx.server.host,
-				deployedAt,
-			});
-
-			await insertAuditLog(tx, {
-				userId: session.user.id,
-				action: "persona.deployed",
+		await insertAuditLog(db, {
+			userId: session.user.id,
+			action: "persona.deployed",
+			serverId: sshCtx.serverId,
+			details: {
 				serverId: sshCtx.serverId,
-				details: {
-					serverId: sshCtx.serverId,
-					serverHost: sshCtx.server.host,
-				},
-				ipAddress,
-			});
+				serverHost: sshCtx.server.host,
+			},
+			ipAddress,
 		});
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Unable to record persona deploy metadata";
-
-		return context.json({ error: message }, 500);
+	} catch {
+		// Deploy already succeeded remotely; audit logging is historical only.
 	}
 
 	clearDashboardCache();

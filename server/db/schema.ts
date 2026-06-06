@@ -225,9 +225,6 @@ export const hermesSettings = pgTable(
 			.references(() => users.id, { onDelete: "cascade" })
 			.unique(),
 		agentPersona: text("agent_persona").notNull(),
-		deployedServerId: text("deployed_server_id"),
-		deployedServerHost: text("deployed_server_host"),
-		deployedAt: timestamp("deployed_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
