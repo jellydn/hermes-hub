@@ -12,7 +12,7 @@ const settingsRouteApi = getRouteApi("/settings");
 type SettingsTab = "persona" | "mcp";
 
 export function SettingsPage() {
-	const { session, personaSettings, mcpServers, telegramDeploy } =
+	const { session, personaSettings, mcpServers, deploymentTargets } =
 		settingsRouteApi.useRouteContext();
 	const [activeTab, setActiveTab] = useState<SettingsTab>("persona");
 
@@ -53,12 +53,12 @@ export function SettingsPage() {
 			{activeTab === "persona" ? (
 				<PersonaSettings
 					initialSettings={personaSettings}
-					telegramDeploy={telegramDeploy}
+					deploymentTargets={deploymentTargets}
 				/>
 			) : (
 				<McpSettings
 					initialServers={mcpServers}
-					telegramDeploy={telegramDeploy}
+					deploymentTargets={deploymentTargets}
 				/>
 			)}
 		</AppShell>

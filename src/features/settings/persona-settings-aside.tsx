@@ -1,16 +1,16 @@
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
+import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import type { PersonaSettingsSummary } from "../../../server/settings/config";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
 type PersonaSettingsAsideProps = {
 	savedSettings: PersonaSettingsSummary | null;
-	telegramDeploy?: TelegramDeployInfo | null;
+	deploymentTargets: HermesDeploymentTarget[];
 	hasSavedPersona: boolean;
 };
 
 export function PersonaSettingsAside({
 	savedSettings,
-	telegramDeploy,
+	deploymentTargets,
 	hasSavedPersona,
 }: PersonaSettingsAsideProps) {
 	return (
@@ -32,13 +32,13 @@ export function PersonaSettingsAside({
 			</section>
 
 			<HermesDeployPanel
-				telegramDeploy={telegramDeploy}
-				description="Push your saved persona to the Telegram-deployed Hermes server."
+				deploymentTargets={deploymentTargets}
+				description="Push your saved persona to a deployed Hermes agent."
 				deployUrl="/api/settings/persona/deploy"
 				buttonLabel="Deploy to Hermes Server"
 				deployingLabel="Deploying..."
 				canDeploy={hasSavedPersona}
-				noDeploymentMessage="Deploy a Telegram bot to a VPS first to enable persona deployment."
+				noDeploymentMessage="Install Hermes on a server first to enable persona deployment."
 				formatSuccess={(payload, serverHost) => {
 					const deployedAt = payload.deployedAt
 						? new Date(payload.deployedAt).toLocaleString()

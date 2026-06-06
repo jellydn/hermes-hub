@@ -26,7 +26,7 @@ const withSshConnection = vi.fn();
 const readHermesConfigYaml = vi.fn();
 const writeHermesConfigYaml = vi.fn();
 const restartGateway = vi.fn();
-const resolveTelegramHermesDeployContext = vi.fn();
+const resolveHermesDeployContext = vi.fn();
 
 vi.mock("../auth", () => ({
 	getAuthSession,
@@ -64,8 +64,8 @@ vi.mock("../hermes/runtime", () => ({
 	restartGateway,
 }));
 
-vi.mock("../hermes/telegram-deploy-context", () => ({
-	resolveTelegramHermesDeployContext,
+vi.mock("../hermes/deploy-context", () => ({
+	resolveHermesDeployContext,
 }));
 
 const baseRecord = {
@@ -166,11 +166,7 @@ describe("mcp settings", () => {
 		readHermesConfigYaml.mockResolvedValue("model: gpt-4o-mini\n");
 		writeHermesConfigYaml.mockResolvedValue(undefined);
 		restartGateway.mockResolvedValue("restarted");
-		resolveTelegramHermesDeployContext.mockResolvedValue({
-			telegramInfo: {
-				deployedServerId: "server_1",
-				deployedServerHost: "1.2.3.4",
-			},
+		resolveHermesDeployContext.mockResolvedValue({
 			sshCtx: {
 				serverId: "server_1",
 				server: {
@@ -283,12 +279,35 @@ describe("mcp settings", () => {
 		);
 
 		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "deployed",
+			serverId: "server_1",
+			serverHost: "1.2.3.4",
+		});
 		expect(writeHermesConfigYaml).toHaveBeenCalled();
 		expect(restartGateway).toHaveBeenCalled();
 		expect(insertAuditValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				action: "mcp.deployed",
 			}),
+		);
+	});
+
+	it("passes the selected serverId to the deploy resolver", async () => {
+		selectOrderBy.mockResolvedValueOnce([baseRecord]);
+
+		const { deployMcpServersToHermes } = await import("./mcp");
+		const response = await deployMcpServersToHermes(
+			createContext({ serverId: "server_2" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(resolveHermesDeployContext).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				user: expect.objectContaining({ id: "user_123" }),
+			}),
+			"server_2",
 		);
 	});
 

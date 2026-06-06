@@ -75,6 +75,20 @@ const savedServer = {
 	updatedAt: "2026-06-06T12:00:00.000Z",
 };
 
+const primaryTarget = {
+	serverId: "server_1",
+	label: "Primary",
+	host: "1.2.3.4",
+	installUpdatedAt: "2026-06-06T12:00:00.000Z",
+};
+
+const backupTarget = {
+	serverId: "server_2",
+	label: "Backup",
+	host: "5.6.7.8",
+	installUpdatedAt: "2026-06-05T12:00:00.000Z",
+};
+
 const memoryServer = {
 	...savedServer,
 	id: "mcp_memory",
@@ -94,7 +108,7 @@ beforeEach(() => {
 
 describe("McpSettings", () => {
 	it("renders recommended preset cards before advanced setup", () => {
-		render(<McpSettings initialServers={[]} />);
+		render(<McpSettings initialServers={[]} deploymentTargets={[]} />);
 
 		expect(screen.getByText(/recommended mcp servers/i)).toBeTruthy();
 		expect(screen.getByText("Memory")).toBeTruthy();
@@ -118,7 +132,7 @@ describe("McpSettings", () => {
 			),
 		);
 
-		render(<McpSettings initialServers={[]} />);
+		render(<McpSettings initialServers={[]} deploymentTargets={[]} />);
 
 		const memoryCard = screen.getByText("Memory").closest("li");
 		expect(memoryCard).toBeTruthy();
@@ -181,7 +195,7 @@ describe("McpSettings", () => {
 			),
 		);
 
-		render(<McpSettings initialServers={[]} />);
+		render(<McpSettings initialServers={[]} deploymentTargets={[]} />);
 
 		const filesystemCard = screen.getByText("Filesystem").closest("li");
 		expect(filesystemCard).toBeTruthy();
@@ -228,7 +242,9 @@ describe("McpSettings", () => {
 	});
 
 	it("marks a saved preset as saved when initialServers already contains that name", () => {
-		render(<McpSettings initialServers={[memoryServer]} />);
+		render(
+			<McpSettings initialServers={[memoryServer]} deploymentTargets={[]} />,
+		);
 
 		const memoryCard = screen.getByText("Memory").closest("li");
 		expect(memoryCard).toBeTruthy();
@@ -243,7 +259,7 @@ describe("McpSettings", () => {
 	});
 
 	it("hides the advanced custom form until advanced setup is opened", () => {
-		render(<McpSettings initialServers={[]} />);
+		render(<McpSettings initialServers={[]} deploymentTargets={[]} />);
 
 		expect(screen.queryByLabelText(/^server name$/i)).toBeNull();
 
@@ -257,7 +273,7 @@ describe("McpSettings", () => {
 		render(
 			<McpSettings
 				initialServers={[savedServer]}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget]}
 			/>,
 		);
 
@@ -266,7 +282,7 @@ describe("McpSettings", () => {
 	});
 
 	it("switches the advanced form to HTTP transport fields", () => {
-		render(<McpSettings initialServers={[]} />);
+		render(<McpSettings initialServers={[]} deploymentTargets={[]} />);
 
 		fireEvent.click(screen.getByRole("button", { name: /^advanced setup$/i }));
 		fireEvent.click(screen.getByRole("button", { name: /add custom server/i }));
@@ -277,7 +293,9 @@ describe("McpSettings", () => {
 	});
 
 	it("shows masked stored env values when editing a server", () => {
-		render(<McpSettings initialServers={[savedServer]} />);
+		render(
+			<McpSettings initialServers={[savedServer]} deploymentTargets={[]} />,
+		);
 
 		fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
 
@@ -292,7 +310,9 @@ describe("McpSettings", () => {
 			}),
 		);
 
-		render(<McpSettings initialServers={[savedServer]} />);
+		render(
+			<McpSettings initialServers={[savedServer]} deploymentTargets={[]} />,
+		);
 
 		fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
 		fireEvent.click(screen.getByRole("button", { name: /delete/i }));
@@ -306,12 +326,13 @@ describe("McpSettings", () => {
 		expect(screen.queryByText("github")).toBeNull();
 	});
 
-	it("deploys MCP settings and shows success state", async () => {
+	it("deploys MCP settings with the selected serverId and shows success state", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
 					status: "deployed",
-					serverHost: "1.2.3.4",
+					serverId: "server_2",
+					serverHost: "5.6.7.8",
 					serverCount: 1,
 					deployedAt: "2026-06-06T12:00:00.000Z",
 				}),
@@ -325,10 +346,13 @@ describe("McpSettings", () => {
 		render(
 			<McpSettings
 				initialServers={[savedServer]}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget, backupTarget]}
 			/>,
 		);
 
+		fireEvent.change(screen.getByLabelText(/deploy target/i), {
+			target: { value: "server_2" },
+		});
 		fireEvent.click(
 			screen.getByRole("button", { name: /deploy mcp settings/i }),
 		);
@@ -337,15 +361,29 @@ describe("McpSettings", () => {
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/settings/mcp-servers/deploy",
-			expect.objectContaining({ method: "POST" }),
+			expect.objectContaining({
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ serverId: "server_2" }),
+			}),
 		);
 		expect(
-			screen.getByText(/deployed 1 mcp server to 1\.2\.3\.4/i),
+			screen.getByText(/deployed 1 mcp server to 5\.6\.7\.8/i),
 		).toBeTruthy();
 	});
 
+	it("shows install-first messaging when no deployment targets exist", () => {
+		render(
+			<McpSettings initialServers={[savedServer]} deploymentTargets={[]} />,
+		);
+
+		expect(screen.getByText(/install hermes on a server first/i)).toBeTruthy();
+		expect(screen.queryByLabelText(/deploy target/i)).toBeNull();
+	});
+
 	it("shows deploy errors from the API", async () => {
-		fetchMock.mockResolvedValueOnce(
+		fetchMock.mockReset();
+		fetchMock.mockResolvedValue(
 			new Response(
 				JSON.stringify({ error: "Deploy failed: SSH write failed" }),
 				{
@@ -358,7 +396,7 @@ describe("McpSettings", () => {
 		render(
 			<McpSettings
 				initialServers={[savedServer]}
-				telegramDeploy={{ deployedServerHost: "1.2.3.4" }}
+				deploymentTargets={[primaryTarget]}
 			/>,
 		);
 

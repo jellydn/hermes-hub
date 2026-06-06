@@ -3,12 +3,13 @@ import type { Context } from "hono";
 import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
+import { deployToHermesAgent } from "./hermes/deploy";
 import { writeSoulMd } from "./hermes/persona";
-import { deployToTelegramLinkedHermes } from "./hermes/telegram-deploy";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { requireAuthSession } from "./request-guards";
 import { parsePersonaSaveBody } from "./settings/config";
+import { parseDeployServerIdBody } from "./settings/deploy-body";
 import {
 	getCurrentPersonaSettings,
 	getHermesSettingsRecord,
@@ -85,7 +86,19 @@ export async function deployPersonaToHermes(context: Context) {
 		);
 	}
 
-	return deployToTelegramLinkedHermes(context, session, {
+	let payload: unknown;
+	try {
+		payload = await context.req.json();
+	} catch {
+		payload = null;
+	}
+
+	const parsed = parseDeployServerIdBody(payload);
+	if (!parsed.ok) {
+		return context.json({ error: parsed.error }, 400);
+	}
+
+	return deployToHermesAgent(context, session, parsed.serverId, {
 		deploy: async (ssh) => {
 			await writeSoulMd(ssh, settingsRecord.agentPersona);
 		},

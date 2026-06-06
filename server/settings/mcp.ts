@@ -2,14 +2,15 @@ import type { Context } from "hono";
 
 import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
+import { deployToHermesAgent } from "../hermes/deploy";
 import {
 	readHermesConfigYaml,
 	writeHermesConfigYaml,
 } from "../hermes/mcp-config";
-import { deployToTelegramLinkedHermes } from "../hermes/telegram-deploy";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireAuthSession } from "../request-guards";
+import { parseDeployServerIdBody } from "./deploy-body";
 import {
 	type McpServerSummary,
 	parseMcpServerCreateBody,
@@ -256,7 +257,19 @@ export async function deployMcpServersToHermes(context: Context) {
 	const records = await listMcpServerRecords(session.user.id);
 	const mcpServersConfig = buildMcpServersConfig(records);
 
-	return deployToTelegramLinkedHermes(context, session, {
+	let payload: unknown;
+	try {
+		payload = await context.req.json();
+	} catch {
+		payload = null;
+	}
+
+	const parsed = parseDeployServerIdBody(payload);
+	if (!parsed.ok) {
+		return context.json({ error: parsed.error }, 400);
+	}
+
+	return deployToHermesAgent(context, session, parsed.serverId, {
 		deploy: async (ssh) => {
 			const existingYaml = await readHermesConfigYaml(ssh);
 			const mergedYaml = mergeHermesConfigMcpServers(

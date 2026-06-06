@@ -1,6 +1,6 @@
 import { useReducer, useState } from "react";
 
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
+import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import type { McpServerSummary } from "../../../server/settings/mcp/config";
 import { McpAdvancedSetupSection } from "./mcp-advanced-setup-section";
 import { deleteMcpServer, persistMcpServer } from "./mcp-api";
@@ -26,7 +26,7 @@ import {
 
 type McpSettingsProps = {
 	initialServers: McpServerSummary[];
-	telegramDeploy?: TelegramDeployInfo | null;
+	deploymentTargets: HermesDeploymentTarget[];
 };
 
 const PRESET_SAVE_SUCCESS_MESSAGE =
@@ -34,7 +34,7 @@ const PRESET_SAVE_SUCCESS_MESSAGE =
 
 export function McpSettings({
 	initialServers,
-	telegramDeploy,
+	deploymentTargets,
 }: McpSettingsProps) {
 	const [servers, setServers] = useState(() => initialServers);
 	const [ui, dispatch] = useReducer(
@@ -196,7 +196,10 @@ export function McpSettings({
 				/>
 			</div>
 
-			<McpSettingsAside servers={servers} telegramDeploy={telegramDeploy} />
+			<McpSettingsAside
+				servers={servers}
+				deploymentTargets={deploymentTargets}
+			/>
 		</div>
 	);
 }
