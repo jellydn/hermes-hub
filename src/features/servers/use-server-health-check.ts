@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { ServerHealthCheckResult } from "@/lib/server-health-check";
+import type { ServerHealthCheckResult } from "../../../shared/contracts/server-health-check";
 
 type HealthCheckState = {
 	error: string | null;

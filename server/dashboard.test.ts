@@ -86,6 +86,7 @@ describe("dashboard helpers", () => {
 
 	it("marks resource pressure as warning when any metric is high", () => {
 		expect(getHealthTone({ cpu: 91, memory: 42, disk: 55 })).toBe("warning");
+		expect(getHealthTone({ cpu: 97, memory: 42, disk: 55 })).toBe("warning");
 		expect(getHealthTone({ cpu: 24, memory: 42, disk: 55 })).toBe("healthy");
 	});
 

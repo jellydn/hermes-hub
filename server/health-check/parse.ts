@@ -1,11 +1,14 @@
 import type {
 	HealthCheckGroup,
 	HealthCheckItem,
-	HealthCheckItemStatus,
 	HealthCheckStatus,
 	ServerHealthCheckResult,
 } from "../../shared/contracts/server-health-check";
-import { parsePercentValue } from "../dashboard/summaries";
+import { hermesGatewayPort } from "../constants";
+import {
+	getResourceHealthStatus,
+	parsePercentValue,
+} from "../dashboard/summaries";
 
 export type HealthCheckCommandOutput = {
 	uptime: string;
@@ -14,12 +17,15 @@ export type HealthCheckCommandOutput = {
 	disk: string;
 	dockerAvailable: string;
 	dockerDaemon: string;
-	hermesContainer: string;
 	hermesReachability: string;
 	sshPasswordAuth: string;
 	sshRootLogin: string;
 	firewall: string;
 	securityUpdates: string;
+};
+
+export type HealthCheckParseContext = {
+	hermesRunning: boolean;
 };
 
 export function aggregateHealthCheckStatus(
@@ -39,8 +45,9 @@ export function aggregateHealthCheckStatus(
 export function buildHealthCheckResult(
 	output: HealthCheckCommandOutput,
 	checkedAt: string,
+	context: HealthCheckParseContext,
 ): ServerHealthCheckResult {
-	const groups = buildHealthCheckGroups(output);
+	const groups = buildHealthCheckGroups(output, context);
 	const items = groups.flatMap((group) => group.items);
 
 	return {
@@ -52,8 +59,17 @@ export function buildHealthCheckResult(
 
 export function buildHealthCheckGroups(
 	output: HealthCheckCommandOutput,
+	context: HealthCheckParseContext,
 ): HealthCheckGroup[] {
-	const hermesRunning = isHermesContainerRunning(output.hermesContainer);
+	const runtimeItems = [
+		evaluateDockerAvailability(output.dockerAvailable),
+		evaluateDockerDaemon(output.dockerDaemon),
+		evaluateHermesContainer(context.hermesRunning),
+	];
+
+	if (context.hermesRunning) {
+		runtimeItems.push(evaluateHermesReachability(output.hermesReachability));
+	}
 
 	return [
 		{
@@ -67,12 +83,7 @@ export function buildHealthCheckGroups(
 		},
 		{
 			label: "Runtime",
-			items: [
-				evaluateDockerAvailability(output.dockerAvailable),
-				evaluateDockerDaemon(output.dockerDaemon),
-				evaluateHermesContainer(output.hermesContainer),
-				evaluateHermesReachability(output.hermesReachability, hermesRunning),
-			],
+			items: runtimeItems,
 		},
 		{
 			label: "Security posture",
@@ -117,21 +128,9 @@ function evaluateResourceItem(label: string, stdout: string): HealthCheckItem {
 
 	return {
 		label,
-		status: resourceStatus(percent),
+		status: getResourceHealthStatus(percent),
 		detail: `${percent}% used`,
 	};
-}
-
-function resourceStatus(percent: number): HealthCheckItemStatus {
-	if (percent >= 95) {
-		return "critical";
-	}
-
-	if (percent >= 85) {
-		return "warning";
-	}
-
-	return "healthy";
 }
 
 function evaluateDockerAvailability(stdout: string): HealthCheckItem {
@@ -158,13 +157,7 @@ function evaluateDockerDaemon(stdout: string): HealthCheckItem {
 	};
 }
 
-function isHermesContainerRunning(stdout: string) {
-	return stdout.trim().includes("hermes");
-}
-
-function evaluateHermesContainer(stdout: string): HealthCheckItem {
-	const running = isHermesContainerRunning(stdout);
-
+function evaluateHermesContainer(running: boolean): HealthCheckItem {
 	return {
 		label: "Hermes container",
 		status: running ? "healthy" : "critical",
@@ -174,24 +167,13 @@ function evaluateHermesContainer(stdout: string): HealthCheckItem {
 	};
 }
 
-function evaluateHermesReachability(
-	stdout: string,
-	hermesRunning: boolean,
-): HealthCheckItem {
-	if (!hermesRunning) {
-		return {
-			label: "Hermes reachability",
-			status: "warning",
-			detail: "Skipped because the Hermes container is not running.",
-		};
-	}
-
+function evaluateHermesReachability(stdout: string): HealthCheckItem {
 	const statusCode = stdout.trim();
 	if (!/^\d{3}$/.test(statusCode) || statusCode === "000") {
 		return {
 			label: "Hermes reachability",
 			status: "critical",
-			detail: "Hermes gateway is not reachable on localhost:8642.",
+			detail: `Hermes gateway is not reachable on localhost:${hermesGatewayPort}.`,
 		};
 	}
 
@@ -239,22 +221,34 @@ function evaluateSshRootLogin(stdout: string): HealthCheckItem {
 		};
 	}
 
-	if (
-		value === "yes" ||
-		value === "without-password" ||
-		value === "prohibit-password"
-	) {
+	if (value === "yes") {
 		return {
 			label: "SSH root login",
 			status: "warning",
-			detail: `Root login is set to ${value}.`,
+			detail: "Root login is enabled with password authentication.",
+		};
+	}
+
+	if (value === "without-password" || value === "prohibit-password") {
+		return {
+			label: "SSH root login",
+			status: "healthy",
+			detail: "Root login is allowed with SSH keys only.",
+		};
+	}
+
+	if (value === "no" || value === "forced-commands-only") {
+		return {
+			label: "SSH root login",
+			status: "healthy",
+			detail: "Root login is disabled.",
 		};
 	}
 
 	return {
 		label: "SSH root login",
-		status: "healthy",
-		detail: "Root login is disabled.",
+		status: "warning",
+		detail: `Root login is set to ${value}.`,
 	};
 }
 
@@ -271,18 +265,37 @@ function evaluateFirewall(stdout: string): HealthCheckItem {
 
 	const normalized = value.toLowerCase();
 
-	if (normalized.includes("inactive") || normalized === "not running") {
+	if (normalized.startsWith("status:")) {
+		const state = normalized.slice("status:".length).trim();
+		if (state === "active") {
+			return {
+				label: "Firewall",
+				status: "healthy",
+				detail: value,
+			};
+		}
+
+		if (state === "inactive") {
+			return {
+				label: "Firewall",
+				status: "warning",
+				detail: value,
+			};
+		}
+	}
+
+	if (normalized === "running") {
 		return {
 			label: "Firewall",
-			status: "warning",
+			status: "healthy",
 			detail: value,
 		};
 	}
 
-	if (normalized.includes("active") || normalized === "running") {
+	if (normalized === "not running") {
 		return {
 			label: "Firewall",
-			status: "healthy",
+			status: "warning",
 			detail: value,
 		};
 	}
@@ -318,7 +331,7 @@ function evaluateSecurityUpdates(stdout: string): HealthCheckItem {
 		return {
 			label: "Pending security updates",
 			status: "warning",
-			detail: `${pendingCount} pending update${pendingCount === 1 ? "" : "s"} found.`,
+			detail: `${pendingCount} pending security update${pendingCount === 1 ? "" : "s"} found.`,
 		};
 	}
 

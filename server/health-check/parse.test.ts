@@ -14,7 +14,6 @@ function createHealthyOutput(): HealthCheckCommandOutput {
 		disk: "55",
 		dockerAvailable: "yes",
 		dockerDaemon: "yes",
-		hermesContainer: "hermes",
 		hermesReachability: "200",
 		sshPasswordAuth: "no",
 		sshRootLogin: "no",
@@ -28,6 +27,7 @@ describe("health check parsing", () => {
 		const result = buildHealthCheckResult(
 			createHealthyOutput(),
 			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
 		);
 
 		expect(result.status).toBe("healthy");
@@ -47,24 +47,28 @@ describe("health check parsing", () => {
 		);
 	});
 
-	it("marks hot resources as warning", () => {
-		const result = buildHealthCheckResult(
+	it("marks hot resources as warning and saturated resources as critical", () => {
+		const warningResult = buildHealthCheckResult(
 			{
 				...createHealthyOutput(),
 				cpu: "88",
 			},
 			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
 		);
 
-		expect(result.status).toBe("warning");
-		expect(
-			result.groups
-				.find((group) => group.label === "System")
-				?.items.find((item) => item.label === "CPU usage"),
-		).toMatchObject({
-			status: "warning",
-			detail: "88% used",
-		});
+		expect(warningResult.status).toBe("warning");
+
+		const criticalResult = buildHealthCheckResult(
+			{
+				...createHealthyOutput(),
+				disk: "97",
+			},
+			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
+		);
+
+		expect(criticalResult.status).toBe("critical");
 	});
 
 	it("marks critical runtime and malformed output states", () => {
@@ -73,10 +77,10 @@ describe("health check parsing", () => {
 				...createHealthyOutput(),
 				cpu: "not-a-number",
 				dockerDaemon: "no",
-				hermesContainer: "",
 				hermesReachability: "000",
 			},
 			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
 		);
 
 		expect(result.status).toBe("critical");
@@ -106,6 +110,7 @@ describe("health check parsing", () => {
 				securityUpdates: "3",
 			},
 			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
 		);
 
 		expect(result.status).toBe("warning");
@@ -116,24 +121,41 @@ describe("health check parsing", () => {
 		).toEqual(["warning", "warning", "warning", "warning"]);
 	});
 
-	it("skips Hermes reachability when the container is not running", () => {
+	it("treats key-only root login as healthy", () => {
 		const result = buildHealthCheckResult(
 			{
 				...createHealthyOutput(),
-				hermesContainer: "",
+				sshRootLogin: "prohibit-password",
+			},
+			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: true },
+		);
+
+		expect(
+			result.groups
+				.find((group) => group.label === "Security posture")
+				?.items.find((item) => item.label === "SSH root login"),
+		).toMatchObject({
+			status: "healthy",
+			detail: "Root login is allowed with SSH keys only.",
+		});
+	});
+
+	it("omits Hermes reachability when the container is not running", () => {
+		const result = buildHealthCheckResult(
+			{
+				...createHealthyOutput(),
 				hermesReachability: "000",
 			},
 			"2026-06-06T12:00:00.000Z",
+			{ hermesRunning: false },
 		);
 
 		expect(
 			result.groups
 				.find((group) => group.label === "Runtime")
-				?.items.find((item) => item.label === "Hermes reachability"),
-		).toMatchObject({
-			status: "warning",
-			detail: "Skipped because the Hermes container is not running.",
-		});
+				?.items.map((item) => item.label),
+		).toEqual(["Docker availability", "Docker daemon", "Hermes container"]);
 	});
 
 	it("aggregates the most severe item status", () => {

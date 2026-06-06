@@ -7,6 +7,7 @@ const hermesWebUiImageDigest =
 	"sha256:b5cb5a62eaa8b3b3abe501d934345c3ae8c022f0cefaf608fd34c2ff44160ae6";
 export const hermesWebUiImage = `${hermesWebUiImageRepository}@${hermesWebUiImageDigest}`;
 export const hermesContainerName = "hermes";
+export const hermesGatewayPort = 8642;
 /** Agent source path inside the Hermes gateway container. */
 export const hermesAgentSourcePathInContainer = "/opt/hermes";
 export const defaultHermesWebUiPort = 8787;

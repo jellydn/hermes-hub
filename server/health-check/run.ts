@@ -1,10 +1,27 @@
 import type { NodeSSH } from "node-ssh";
 
 import type { ServerHealthCheckResult } from "../../shared/contracts/server-health-check";
+import { hermesContainerName } from "../constants";
+import { isContainerRunning } from "../hermes/runtime";
 import type { OwnedServerRecord } from "../server-records";
 import { type SshAuthMethod, withSshConnection } from "../ssh";
 import { HEALTH_CHECK_COMMANDS } from "./commands";
 import { buildHealthCheckResult, type HealthCheckCommandOutput } from "./parse";
+
+const STATIC_HEALTH_CHECKS = [
+	["uptime", HEALTH_CHECK_COMMANDS.uptime],
+	["cpu", HEALTH_CHECK_COMMANDS.cpu],
+	["memory", HEALTH_CHECK_COMMANDS.memory],
+	["disk", HEALTH_CHECK_COMMANDS.disk],
+	["dockerAvailable", HEALTH_CHECK_COMMANDS.dockerAvailable],
+	["dockerDaemon", HEALTH_CHECK_COMMANDS.dockerDaemon],
+	["sshPasswordAuth", HEALTH_CHECK_COMMANDS.sshPasswordAuth],
+	["sshRootLogin", HEALTH_CHECK_COMMANDS.sshRootLogin],
+	["firewall", HEALTH_CHECK_COMMANDS.firewall],
+	["securityUpdates", HEALTH_CHECK_COMMANDS.securityUpdates],
+] as const satisfies ReadonlyArray<
+	readonly [keyof Omit<HealthCheckCommandOutput, "hermesReachability">, string]
+>;
 
 export async function runServerHealthChecks(input: {
 	server: OwnedServerRecord;
@@ -27,53 +44,39 @@ export async function runServerHealthChecks(input: {
 async function collectHealthCheckOutput(
 	ssh: NodeSSH,
 ): Promise<ServerHealthCheckResult> {
-	const [
-		uptimeResult,
-		cpuResult,
-		memoryResult,
-		diskResult,
-		dockerAvailableResult,
-		dockerDaemonResult,
-		hermesContainerResult,
-		sshPasswordAuthResult,
-		sshRootLoginResult,
-		firewallResult,
-		securityUpdatesResult,
-	] = await Promise.all([
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.uptime),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.cpu),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.memory),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.disk),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.dockerAvailable),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.dockerDaemon),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.hermesContainer),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.sshPasswordAuth),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.sshRootLogin),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.firewall),
-		ssh.execCommand(HEALTH_CHECK_COMMANDS.securityUpdates),
+	const [output, hermesRunning] = await Promise.all([
+		runStaticHealthChecks(ssh),
+		isContainerRunning(ssh, hermesContainerName),
 	]);
 
-	const hermesRunning = hermesContainerResult.stdout.trim().includes("hermes");
-	const hermesReachabilityResult = hermesRunning
-		? await ssh.execCommand(HEALTH_CHECK_COMMANDS.hermesReachability)
-		: { stdout: "", stderr: "", code: 0 };
+	if (hermesRunning) {
+		output.hermesReachability = readCommandOutput(
+			await ssh.execCommand(HEALTH_CHECK_COMMANDS.hermesReachability),
+		);
+	}
 
-	const output: HealthCheckCommandOutput = {
-		uptime: readCommandOutput(uptimeResult),
-		cpu: readCommandOutput(cpuResult),
-		memory: readCommandOutput(memoryResult),
-		disk: readCommandOutput(diskResult),
-		dockerAvailable: readCommandOutput(dockerAvailableResult),
-		dockerDaemon: readCommandOutput(dockerDaemonResult),
-		hermesContainer: readCommandOutput(hermesContainerResult),
-		hermesReachability: readCommandOutput(hermesReachabilityResult),
-		sshPasswordAuth: readCommandOutput(sshPasswordAuthResult),
-		sshRootLogin: readCommandOutput(sshRootLoginResult),
-		firewall: readCommandOutput(firewallResult),
-		securityUpdates: readCommandOutput(securityUpdatesResult),
+	return buildHealthCheckResult(output, new Date().toISOString(), {
+		hermesRunning,
+	});
+}
+
+async function runStaticHealthChecks(
+	ssh: NodeSSH,
+): Promise<HealthCheckCommandOutput> {
+	const entries = await Promise.all(
+		STATIC_HEALTH_CHECKS.map(async ([key, command]) => {
+			const result = await ssh.execCommand(command);
+			return [key, readCommandOutput(result)] as const;
+		}),
+	);
+
+	return {
+		...(Object.fromEntries(entries) as Omit<
+			HealthCheckCommandOutput,
+			"hermesReachability"
+		>),
+		hermesReachability: "",
 	};
-
-	return buildHealthCheckResult(output, new Date().toISOString());
 }
 
 function readCommandOutput(result: {
