@@ -4,6 +4,7 @@ import {
 	resolveServerCredential,
 } from "../server-records";
 import { withSshConnection } from "../ssh";
+import { SERVER_METRIC_COMMANDS } from "../ssh/metrics-commands";
 import {
 	getHealthTone,
 	parsePercentValue,
@@ -138,14 +139,10 @@ async function readServerMetrics(
 		async (ssh) => {
 			const [cpuResult, memoryResult, diskResult, uptimeResult] =
 				await Promise.all([
-					ssh.execCommand(
-						'LANG=C top -bn1 | awk \'/^%Cpu|^Cpu/ {for (i=1; i<=NF; i++) gsub(/[^0-9.]/, "", $i); printf "%.0f", $2 + $4; exit}\'',
-					),
-					ssh.execCommand("free | awk '/Mem:/ {printf \"%.0f\", ($3/$2)*100}'"),
-					ssh.execCommand(
-						'df -P / | awk \'NR==2 {gsub("%", "", $5); printf "%s", $5}\'',
-					),
-					ssh.execCommand("uptime -p"),
+					ssh.execCommand(SERVER_METRIC_COMMANDS.cpu),
+					ssh.execCommand(SERVER_METRIC_COMMANDS.memory),
+					ssh.execCommand(SERVER_METRIC_COMMANDS.disk),
+					ssh.execCommand(SERVER_METRIC_COMMANDS.uptime),
 				]);
 
 			const cpu = parsePercentValue(cpuResult.stdout);

@@ -389,6 +389,128 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 
 ---
 
+### POST `/api/servers/:id/health-check`
+
+Runs a manual **VPS setup check** on the connected server. HermesHub connects over SSH (read-only diagnostics), verifies that the VPS has enough resources and that the Hermes install harness is in place, and returns grouped results with plain-language guidance. Results are not persisted — only audit log entries are written.
+
+Use this from the server detail page (**Check setup**) when you need to confirm Docker, the `~/hermes` workspace, and the running Hermes agent without interpreting security hardening settings.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None
+
+**Response (200):**
+```json
+{
+  "healthCheck": {
+    "status": "warning",
+    "checkedAt": "2026-06-06T12:00:00.000Z",
+    "groups": [
+      {
+        "label": "Server resources",
+        "items": [
+          {
+            "label": "Server uptime",
+            "status": "healthy",
+            "detail": "up 2 days, 3 hours"
+          },
+          {
+            "label": "CPU",
+            "status": "healthy",
+            "detail": "24% in use. This server has enough cpu for Hermes right now."
+          },
+          {
+            "label": "Memory",
+            "status": "warning",
+            "detail": "88% in use. Hermes may run slower until memory usage comes down."
+          },
+          {
+            "label": "Disk space",
+            "status": "healthy",
+            "detail": "55% in use. This server has enough disk space for Hermes right now."
+          }
+        ]
+      },
+      {
+        "label": "Hermes setup",
+        "items": [
+          {
+            "label": "Docker installed",
+            "status": "healthy",
+            "detail": "Docker is installed on this VPS."
+          },
+          {
+            "label": "Docker running",
+            "status": "healthy",
+            "detail": "Docker is running and ready for Hermes containers."
+          },
+          {
+            "label": "Docker Compose ready",
+            "status": "healthy",
+            "detail": "Docker Compose is available for managing Hermes."
+          },
+          {
+            "label": "Hermes folder",
+            "status": "healthy",
+            "detail": "The ~/hermes workspace folder is present."
+          },
+          {
+            "label": "Hermes configuration",
+            "status": "healthy",
+            "detail": "docker-compose.yml is present in ~/hermes."
+          },
+          {
+            "label": "Hermes agent running",
+            "status": "healthy",
+            "detail": "The Hermes agent container is running on this VPS."
+          },
+          {
+            "label": "Hermes agent responding",
+            "status": "healthy",
+            "detail": "The Hermes agent is responding on this VPS."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Overall and per-item status values:** `"healthy"`, `"warning"`, or `"critical"`. The overall status is the most severe item status in the result.
+
+**Resource thresholds:** CPU, memory, and disk usage use the same thresholds as the dashboard VPS card — warning at ≥85%, critical at ≥95%.
+
+**Hermes setup checks:**
+
+| Item                     | What it verifies                                      |
+| ------------------------ | ----------------------------------------------------- |
+| Docker installed         | `docker` CLI is available                           |
+| Docker running           | `sudo docker info` succeeds                           |
+| Docker Compose ready     | `sudo docker compose version` succeeds                |
+| Hermes folder            | `~/hermes` directory exists                           |
+| Hermes configuration     | `~/hermes/docker-compose.yml` exists                  |
+| Hermes agent running     | Hermes container is running                           |
+| Hermes agent responding  | Gateway responds on localhost (only when container is running) |
+
+**Audit log events:** `server.health_check.started`, `server.health_check.succeeded`, `server.health_check.failed`
+
+**Error responses:**
+
+| Status | Condition                                |
+| ------ | ---------------------------------------- |
+| 400    | Server ID missing / credential unavailable / SSH failed |
+| 401    | Unauthorized                             |
+| 404    | Server not found                         |
+
+**Response (400 — SSH or remote check failed):**
+```json
+{
+  "error": "Setup check failed: Host key mismatch"
+}
+```
+
+---
+
 ## Dashboard
 
 ### GET `/api/dashboard/status`
@@ -954,6 +1076,7 @@ The following tables are used by the API:
 | `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
 | `ai_providers`     | AI provider configuration with encrypted API keys |
 | `telegram_configs` | Telegram bot connections                     |
+| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram) |
 | `hermes_settings`  | Per-user Hermes agent persona (`SOUL.md` source) |
 | `audit_logs`       | Action audit trail (connect, install, actions, provider, telegram, persona) |
 | `user`, `session`, `account`, `verification` | Better Auth user management tables |

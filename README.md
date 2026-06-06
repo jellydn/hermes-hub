@@ -32,6 +32,7 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
 - 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to your VPS
 - 📈 **Live server monitoring** — Dashboard with install logs and VPS metrics (CPU, memory, disk)
+- ✅ **VPS setup check** — On-demand readiness check on the server detail page (Docker, Hermes workspace, agent health) with plain-language results
 - 🔄 **One-click restart, update, and rollback** — Manage the running agent with audit history
 - 🖥️ **Built-in Hermes Web UI** — Deploy and open the Hermes browser interface from your server detail page
 - 📋 **Operational logs** — Review install history and server action records in one place
@@ -216,7 +217,7 @@ src/routes/           — TanStack Start file-based routes (11 pages)
 ├── login.tsx          — Magic link email login
 ├── dashboard.tsx      — Authenticated shell + aggregated status
 ├── servers.tsx        — VPS connection wizard + install trigger
-├── servers.$id.tsx    — Server detail, Hermes Web UI, actions, action history
+├── servers.$id.tsx    — Server detail, VPS setup check, Hermes Web UI, actions, action history
 ├── servers.$id.install.tsx  — Live SSE install progress
 ├── ai-provider.tsx    — AI provider selection and API key config
 ├── telegram.tsx       — Telegram bot connection wizard
@@ -263,7 +264,7 @@ Complete documentation for all API endpoints is available in [`docs/api-referenc
 
 - Authentication (magic link flow via Better Auth)
 - Health check
-- VPS connection, install (with SSE streaming), server actions, and Hermes Web UI proxy
+- VPS connection, install (with SSE streaming), VPS setup check, server actions, and Hermes Web UI proxy
 - Dashboard status aggregation
 - Install & action logs
 - AI provider configuration and testing

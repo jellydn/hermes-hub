@@ -108,6 +108,7 @@ All 14 API endpoints defined in `server/app.ts` are **routing-tested** (verifyin
 | `POST /api/servers/:id/install`         | ✓          | ✓             | 2 handler + 1 SSE test        |
 | `GET /api/servers/:id/install/events`   | ✓          | ✓             | SSE replay test               |
 | `POST /api/servers/:id/actions`         | ✓          | ✓             | 1 restart + 1 expired cred    |
+| `POST /api/servers/:id/health-check`    | ✓          | ✓             | 6 handler tests               |
 | `GET /api/dashboard/status`             | ✓          | —             | Only helper functions tested  |
 | `GET /api/logs`                         | ✓          | ✓             | 1 unauthorized + 1 get        |
 | `POST /api/logs/clear`                  | ✓          | ✓             | 1 test                        |

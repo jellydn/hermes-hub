@@ -20,8 +20,10 @@ import { InstallLogCard } from "./install-log-card";
 import { ServerActionControls } from "./server-action-controls";
 import { ServerBasicsForm } from "./server-basics-form";
 import { ServerDetailAside } from "./server-detail-aside";
+import { ServerHealthCheckPanel } from "./server-health-check-results";
 import { useServerActions } from "./use-server-actions";
 import { useServerBasics } from "./use-server-basics";
+import { useServerHealthCheck } from "./use-server-health-check";
 
 type ServerDetailProps = {
 	detail: ServerDetailSnapshot;
@@ -38,6 +40,7 @@ export function ServerDetail({
 }: ServerDetailProps) {
 	const basics = useServerBasics(detail, onDetailChange);
 	const actions = useServerActions(detail, onDetailChange);
+	const healthCheck = useServerHealthCheck(detail.server.id);
 	const [installError, setInstallError] = useState<string | null>(null);
 	const [isStartingInstall, setIsStartingInstall] = useState(false);
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -167,6 +170,13 @@ export function ServerDetail({
 						onCancelDialog={actions.cancelDialog}
 						onConfirmAction={actions.confirmAction}
 						onOpenDialog={actions.openDialog}
+					/>
+
+					<ServerHealthCheckPanel
+						error={healthCheck.healthCheckState.error}
+						pending={healthCheck.healthCheckState.pending}
+						result={healthCheck.healthCheckState.result}
+						onRunHealthCheck={healthCheck.runHealthCheck}
 					/>
 
 					<div className="mt-6 border-t border-[var(--line)] pt-6">

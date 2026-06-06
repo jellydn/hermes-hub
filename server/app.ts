@@ -5,6 +5,7 @@ import { getAuth, hasDatabaseUrl } from "./auth";
 import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
 import { deployProviderToHermes } from "./deploy";
+import { runServerHealthCheck } from "./health-check";
 import {
 	getLatestServerInstallLog,
 	startServerInstall,
@@ -214,6 +215,7 @@ apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
+apiApp.post("/servers/:id/health-check", httpsMiddleware, runServerHealthCheck);
 apiApp.get("/servers/:id/web-ui", httpsMiddleware, getServerWebUiStatus);
 apiApp.post("/servers/:id/web-ui/deploy", httpsMiddleware, deployServerWebUi);
 apiApp.get(

@@ -138,10 +138,35 @@ export function toTelegramSummary(
 	};
 }
 
+export const RESOURCE_WARNING_THRESHOLD = 85;
+export const RESOURCE_CRITICAL_THRESHOLD = 95;
+
+export type ResourceHealthStatus = "healthy" | "warning" | "critical";
+
+export function getResourceHealthStatus(percent: number): ResourceHealthStatus {
+	if (percent >= RESOURCE_CRITICAL_THRESHOLD) {
+		return "critical";
+	}
+
+	if (percent >= RESOURCE_WARNING_THRESHOLD) {
+		return "warning";
+	}
+
+	return "healthy";
+}
+
 export function getHealthTone(
 	metrics: Pick<ServerMetrics, "cpu" | "memory" | "disk">,
 ) {
-	return metrics.cpu >= 85 || metrics.memory >= 85 || metrics.disk >= 85
+	const statuses = [
+		getResourceHealthStatus(metrics.cpu),
+		getResourceHealthStatus(metrics.memory),
+		getResourceHealthStatus(metrics.disk),
+	];
+
+	return statuses.some(
+		(status) => status === "warning" || status === "critical",
+	)
 		? "warning"
 		: "healthy";
 }
