@@ -111,6 +111,15 @@ export function formatActionTitle(action: ServerActionType) {
 	return "Rollback";
 }
 
+/** Keep action history readable; full failure output lives in Logs. */
+export function formatActionHistorySummary(item: ServerActionHistoryItem) {
+	if (item.result === "failed") {
+		return `${formatActionTitle(item.action)} failed.`;
+	}
+
+	return item.message;
+}
+
 export function formatTimestamp(timestamp: string) {
 	const parsed = new Date(timestamp);
 	if (Number.isNaN(parsed.getTime())) {

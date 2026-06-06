@@ -81,10 +81,46 @@ describe("ServerDetailAside", () => {
 
 		expect(communityLinks.length).toBeGreaterThanOrEqual(1);
 	});
+
+	it("shows short action history summaries instead of long failure output", () => {
+		const longFailureOutput =
+			"docker compose pull failed: Error response from daemon: " +
+			"manifest unknown: manifest unknown. ".repeat(8);
+
+		render(
+			<ServerDetailAside
+				detail={createDetail({
+					actionHistory: [
+						{
+							id: "audit_failed",
+							action: "update",
+							result: "failed",
+							createdAt: "2026-05-26T03:10:00.000Z",
+							message: longFailureOutput,
+							imageRef: null,
+						},
+						{
+							id: "audit_ok",
+							action: "restart",
+							result: "succeeded",
+							createdAt: "2026-05-26T03:05:00.000Z",
+							message: "Restarted Hermes successfully.",
+							imageRef: null,
+						},
+					],
+				})}
+			/>,
+		);
+
+		expect(screen.getByText("Update Hermes failed.")).toBeTruthy();
+		expect(screen.queryByText(longFailureOutput)).toBeNull();
+		expect(screen.getByText("Restarted Hermes successfully.")).toBeTruthy();
+	});
 });
 
 function createDetail(overrides?: {
 	install?: ServerDetailSnapshot["install"];
+	actionHistory?: ServerDetailSnapshot["actionHistory"];
 }): ServerDetailSnapshot {
 	return {
 		server: {
@@ -108,7 +144,7 @@ function createDetail(overrides?: {
 						version: "latest",
 						updatedAt: "2026-05-26T03:00:00.000Z",
 					},
-		actionHistory: [],
+		actionHistory: overrides?.actionHistory ?? [],
 		rollbackTarget: "latest",
 		webUi: null,
 	};

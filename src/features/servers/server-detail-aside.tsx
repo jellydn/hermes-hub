@@ -6,6 +6,7 @@ import type {
 import { HermesWebUiCard } from "./hermes-web-ui-card";
 import {
 	badgeClassName,
+	formatActionHistorySummary,
 	formatActionTitle,
 	formatInstallStatus,
 	formatOsSummary,
@@ -72,19 +73,21 @@ function SummaryEntry({ label, value }: SummaryEntryProps) {
 
 function ActionHistoryItem({ item }: { item: ServerActionHistoryItem }) {
 	return (
-		<li className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4">
-			<div className="flex items-center justify-between gap-3">
-				<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
-					{formatActionTitle(item.action)}
-				</p>
+		<li className="list-none rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-3">
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0">
+					<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
+						{formatActionTitle(item.action)}
+					</p>
+					<p className="mt-1 mb-0 line-clamp-2 text-sm text-[var(--sea-ink-soft)]">
+						{formatActionHistorySummary(item)}
+					</p>
+					<p className="mt-1 mb-0 text-xs text-[var(--sea-ink-soft)]">
+						{formatTimestamp(item.createdAt)}
+					</p>
+				</div>
 				<span className={badgeClassName(item.result)}>{item.result}</span>
 			</div>
-			<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">
-				{item.message}
-			</p>
-			<p className="mt-2 mb-0 text-xs text-[var(--sea-ink-soft)]">
-				{formatTimestamp(item.createdAt)}
-			</p>
 		</li>
 	);
 }
