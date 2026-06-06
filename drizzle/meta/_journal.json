@@ -43,6 +43,13 @@
       "when": 1780496778000,
       "tag": "0005_next_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780580000000,
+      "tag": "0006_server_web_ui",
+      "breakpoints": true
     }
   ]
 }

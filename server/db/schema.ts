@@ -217,6 +217,25 @@ export const telegramConfigs = pgTable(
 	(table) => [index("telegram_configs_user_id_idx").on(table.userId)],
 );
 
+export const serverWebUi = pgTable(
+	"server_web_ui",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		serverId: text("server_id")
+			.notNull()
+			.references(() => servers.id, { onDelete: "cascade" })
+			.unique(),
+		enabled: boolean("enabled").default(false).notNull(),
+		encryptedPassword: text("encrypted_password"),
+		port: integer("port").notNull().default(8787),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("server_web_ui_server_id_idx").on(table.serverId)],
+);
+
 export const auditLogs = pgTable(
 	"audit_logs",
 	{
