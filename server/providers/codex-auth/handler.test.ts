@@ -4,6 +4,7 @@ const {
 	requireAuthSession,
 	requireOwnedServerSshById,
 	resolveTelegramHermesDeployContext,
+	withDeployedHermesServerSsh,
 	withSshConnection,
 	requestCodexDeviceCode,
 	pollCodexDeviceAuthorization,
@@ -14,6 +15,7 @@ const {
 	requireAuthSession: vi.fn(),
 	requireOwnedServerSshById: vi.fn(),
 	resolveTelegramHermesDeployContext: vi.fn(),
+	withDeployedHermesServerSsh: vi.fn(),
 	withSshConnection: vi.fn(),
 	requestCodexDeviceCode: vi.fn(),
 	pollCodexDeviceAuthorization: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("../../request-guards", () => ({
 }));
 
 vi.mock("../../hermes/telegram-deploy-context", () => ({
+	withDeployedHermesServerSsh,
 	resolveTelegramHermesDeployContext,
 }));
 
@@ -102,6 +105,14 @@ describe("codex auth handlers", () => {
 		requireAuthSession.mockResolvedValue(session);
 		resolveTelegramHermesDeployContext.mockResolvedValue(deployCtx);
 		requireOwnedServerSshById.mockResolvedValue(deployCtx.sshCtx);
+		withDeployedHermesServerSsh.mockImplementation(async (_context, handler) =>
+			handler({
+				session,
+				serverId: deployCtx.sshCtx.serverId,
+				serverHost: deployCtx.sshCtx.server.host,
+				sshCtx: deployCtx.sshCtx,
+			}),
+		);
 		withSshConnection.mockImplementation(async (_config, handler) =>
 			handler({ execCommand: vi.fn() }),
 		);

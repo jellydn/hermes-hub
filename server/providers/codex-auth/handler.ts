@@ -8,9 +8,11 @@ import {
 	readHermesAuthStore,
 	writeHermesAuthJson,
 } from "../../hermes/auth-json";
-import { resolveTelegramHermesDeployContext } from "../../hermes/telegram-deploy-context";
 import {
-	type AuthSession,
+	type DeployedHermesServerSsh,
+	withDeployedHermesServerSsh,
+} from "../../hermes/telegram-deploy-context";
+import {
 	type OwnedServerSshContext,
 	requireAuthSession,
 	requireOwnedServerSshById,
@@ -37,13 +39,6 @@ type SshConnectionConfig = {
 	expectedFingerprint?: string;
 };
 
-type TelegramHermesHandlerInput = {
-	session: AuthSession;
-	serverId: string;
-	serverHost: string;
-	sshConfig: SshConnectionConfig;
-};
-
 function toSshConnectionConfig(
 	sshCtx: OwnedServerSshContext,
 ): SshConnectionConfig {
@@ -57,32 +52,8 @@ function toSshConnectionConfig(
 	};
 }
 
-async function withTelegramHermesSsh(
-	context: Context,
-	handler: (input: TelegramHermesHandlerInput) => Promise<Response>,
-): Promise<Response> {
-	const session = await requireAuthSession(context);
-	if (session instanceof Response) {
-		return session;
-	}
-
-	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
-	if (deployCtx instanceof Response) {
-		return deployCtx;
-	}
-
-	const { sshCtx } = deployCtx;
-
-	return handler({
-		session,
-		serverId: sshCtx.serverId,
-		serverHost: sshCtx.server.host,
-		sshConfig: toSshConnectionConfig(sshCtx),
-	});
-}
-
 export async function startCodexAuth(context: Context) {
-	return withTelegramHermesSsh(
+	return withDeployedHermesServerSsh(
 		context,
 		async ({ session, serverId, serverHost }) => {
 			try {
@@ -198,27 +169,33 @@ export async function completeCodexAuth(context: Context) {
 }
 
 export async function getCodexAuthStatus(context: Context) {
-	return withTelegramHermesSsh(context, async ({ serverHost, sshConfig }) => {
-		try {
-			const status = await withSshConnection(sshConfig, async (ssh) => {
-				const store = await readHermesAuthStore(ssh);
-				return parseCodexAuthStatus(store);
-			});
+	return withDeployedHermesServerSsh(
+		context,
+		async ({ serverHost, sshCtx }: DeployedHermesServerSsh) => {
+			try {
+				const status = await withSshConnection(
+					toSshConnectionConfig(sshCtx),
+					async (ssh) => {
+						const store = await readHermesAuthStore(ssh);
+						return parseCodexAuthStatus(store);
+					},
+				);
 
-			return context.json({
-				codexAuth: {
-					...status,
-					serverHost,
-				},
-			});
-		} catch (error) {
-			const message =
-				error instanceof Error
-					? error.message
-					: "Unable to check Codex authentication status.";
-			return context.json({ error: message }, 502);
-		}
-	});
+				return context.json({
+					codexAuth: {
+						...status,
+						serverHost,
+					},
+				});
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: "Unable to check Codex authentication status.";
+				return context.json({ error: message }, 502);
+			}
+		},
+	);
 }
 
 export async function resolveRemoteCodexAuthStatus(input: SshConnectionConfig) {

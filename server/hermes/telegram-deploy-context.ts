@@ -16,6 +16,37 @@ export type TelegramHermesDeployContext = {
 	sshCtx: OwnedServerSshContext;
 };
 
+export type DeployedHermesServerSsh = {
+	session: AuthSession;
+	serverId: string;
+	serverHost: string;
+	sshCtx: OwnedServerSshContext;
+};
+
+export async function withDeployedHermesServerSsh(
+	context: Context,
+	handler: (input: DeployedHermesServerSsh) => Promise<Response>,
+): Promise<Response> {
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
+	}
+
+	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
+	if (deployCtx instanceof Response) {
+		return deployCtx;
+	}
+
+	const { sshCtx } = deployCtx;
+
+	return handler({
+		session,
+		serverId: sshCtx.serverId,
+		serverHost: sshCtx.server.host,
+		sshCtx,
+	});
+}
+
 export async function resolveTelegramHermesDeployContext(
 	context: Context,
 	session?: AuthSession,
