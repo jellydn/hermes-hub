@@ -9,7 +9,7 @@ export function formatWebUiProxyError(error: unknown, port: number) {
 		message.includes("Connection refused") ||
 		message.includes("Channel open failure")
 	) {
-		return `Hermes Web UI is not reachable on the server (127.0.0.1:${port}). The container may have stopped or was removed during a later deploy. Open the server page and run Set up Web UI again.`;
+		return `Hermes Web UI is not reachable on the server (127.0.0.1:${port}). The container may have stopped or was removed during a later deploy. Open the server page and run Redeploy Web UI.`;
 	}
 
 	return message;
