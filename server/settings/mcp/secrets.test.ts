@@ -15,6 +15,7 @@ import {
 	resolveSecretMapOnUpdate,
 	toSecretKeySummaries,
 	validateNewSecretEntries,
+	validateUpdatedSecretEntries,
 } from "./secrets";
 
 describe("mcp secrets", () => {
@@ -102,6 +103,35 @@ describe("mcp secrets", () => {
 		expect(result).toEqual({
 			ok: false,
 			error: 'Environment variable value is required for key "GITHUB_TOKEN".',
+		});
+	});
+
+	it("allows blank values for existing secret keys on update", () => {
+		const result = validateUpdatedSecretEntries(
+			{
+				GITHUB_TOKEN: {
+					encrypted: "enc:token",
+					last4: "oken",
+				},
+			},
+			[{ key: "GITHUB_TOKEN", value: "" }],
+			"Environment variable",
+		);
+
+		expect(result).toEqual({ ok: true });
+	});
+
+	it("requires values for newly added secret keys on update", () => {
+		const result = validateUpdatedSecretEntries(
+			{},
+			[{ key: "GITHUB_TOKEN", value: "" }],
+			"Environment variable",
+		);
+
+		expect(result).toEqual({
+			ok: false,
+			error:
+				'Environment variable value is required for new key "GITHUB_TOKEN".',
 		});
 	});
 });

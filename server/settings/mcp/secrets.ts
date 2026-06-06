@@ -85,6 +85,28 @@ export function toSecretKeySummaries(
 	}));
 }
 
+export function validateUpdatedSecretEntries(
+	existing: EncryptedSecretMap,
+	updates: SecretKeyInput[],
+	label: string,
+): { ok: true } | { ok: false; error: string } {
+	for (const { key, value } of updates) {
+		const trimmedKey = key.trim();
+		if (!trimmedKey) {
+			continue;
+		}
+
+		if (!value.trim() && !existing[trimmedKey]) {
+			return {
+				ok: false,
+				error: `${label} value is required for new key "${trimmedKey}".`,
+			};
+		}
+	}
+
+	return { ok: true };
+}
+
 export function validateNewSecretEntries(
 	entries: SecretKeyInput[],
 	label: string,

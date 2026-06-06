@@ -25,6 +25,7 @@ import {
 	listMcpServerRecords,
 	updateMcpServerRecord,
 } from "./mcp/records";
+import { validateUpdatedSecretEntries } from "./mcp/secrets";
 import { buildMcpServersConfig, mergeHermesConfigMcpServers } from "./mcp/yaml";
 
 export type { McpServerSummary };
@@ -129,6 +130,26 @@ export async function updateMcpServer(context: Context) {
 	const parsed = parseMcpServerUpdateBody(existing, payload);
 	if (!parsed.ok) {
 		return context.json({ error: parsed.error }, 400);
+	}
+
+	if (parsed.data.transport === "stdio") {
+		const envValidation = validateUpdatedSecretEntries(
+			existing.encryptedEnv,
+			parsed.data.env,
+			"Environment variable",
+		);
+		if (!envValidation.ok) {
+			return context.json({ error: envValidation.error }, 400);
+		}
+	} else {
+		const headerValidation = validateUpdatedSecretEntries(
+			existing.encryptedHeaders,
+			parsed.data.headers,
+			"Header",
+		);
+		if (!headerValidation.ok) {
+			return context.json({ error: headerValidation.error }, 400);
+		}
 	}
 
 	if (parsed.data.name !== existing.name) {

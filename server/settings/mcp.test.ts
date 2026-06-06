@@ -216,6 +216,27 @@ describe("mcp settings", () => {
 		);
 	});
 
+	it("returns 400 when update adds a new env key without a value", async () => {
+		selectLimit.mockResolvedValueOnce([baseRecord]);
+
+		const { updateMcpServer } = await import("./mcp");
+		const response = await updateMcpServer(
+			createContext(
+				{
+					env: [{ key: "NEW_TOKEN", value: "" }],
+				},
+				"PUT",
+				"mcp_1",
+			),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: 'Environment variable value is required for new key "NEW_TOKEN".',
+		});
+		expect(updateReturning).not.toHaveBeenCalled();
+	});
+
 	it("preserves encrypted env values when update leaves secrets blank", async () => {
 		selectLimit.mockResolvedValueOnce([baseRecord]);
 
