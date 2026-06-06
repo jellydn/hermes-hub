@@ -2,6 +2,7 @@ import type { NodeSSH } from "node-ssh";
 
 import { buildHermesComposeContent } from "../compose";
 import { getDb } from "../db";
+import { composePull, composeUpAll } from "../hermes/runtime";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "../ssh";
 import { emitInstallEvent } from "./sse-stream";
@@ -11,6 +12,7 @@ export type InstallStep = {
 	progress: number;
 	message: string;
 	command: string;
+	runner?: (ssh: NodeSSH) => Promise<void>;
 };
 
 export type ServerCredentialRecord = {
@@ -64,13 +66,15 @@ export const installSteps: InstallStep[] = [
 		id: "pull-image",
 		progress: 80,
 		message: "Pulling Hermes image",
-		command: "cd ~/hermes && sudo docker compose pull",
+		command: "compose_pull",
+		runner: composePull,
 	},
 	{
 		id: "start-containers",
 		progress: 100,
 		message: "Starting Hermes containers",
-		command: "cd ~/hermes && sudo docker compose up -d",
+		command: "compose_up_all",
+		runner: composeUpAll,
 	},
 ];
 
@@ -157,25 +161,37 @@ async function runInstallStepsOverSsh(
 		}
 
 		// react-doctor-disable-next-line react-doctor/async-await-in-loop
-		const result = await ssh.execCommand(step.command);
+		await runOneInstallStep(ssh, step, input);
+		index += 1;
+	}
+}
 
+async function runOneInstallStep(
+	ssh: NodeSSH,
+	step: InstallStep,
+	_input: InstallWorkflowInput,
+) {
+	let detail = "";
+
+	if (step.runner) {
+		await step.runner(ssh);
+	} else {
+		const result = await ssh.execCommand(step.command);
 		if (result.code !== 0) {
 			throw new Error(result.stderr || `Command failed: ${step.id}`);
 		}
-
-		const detail = result.stdout.trim();
-		// react-doctor-disable-next-line react-doctor/async-await-in-loop
-		await emitInstallEvent({
-			installId: input.installId,
-			serverId: input.serverId,
-			runId: input.runId,
-			step: step.id,
-			progress: step.progress,
-			message: detail ? `${step.message}: ${detail}` : step.message,
-			status: step.progress === 100 ? "succeeded" : "running",
-		});
-		index += 1;
+		detail = result.stdout.trim();
 	}
+
+	await emitInstallEvent({
+		installId: _input.installId,
+		serverId: _input.serverId,
+		runId: _input.runId,
+		step: step.id,
+		progress: step.progress,
+		message: detail ? `${step.message}: ${detail}` : step.message,
+		status: step.progress === 100 ? "succeeded" : "running",
+	});
 }
 
 function normalizeInstallError(error: unknown) {

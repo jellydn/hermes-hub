@@ -1,16 +1,12 @@
 import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
 import {
-	hermesAgentSourcePathInContainer,
-	hermesContainerName,
-	hermesWebUiAgentHostDir,
-	hermesWebUiContainerGid,
-	hermesWebUiContainerUid,
-	managedComposeVolumeHome,
-} from "./constants";
+	assertWebUiReachable,
+	setProviderModel,
+	syncAgentSourceForWebUi,
+} from "./hermes/runtime";
 import { buildManagedComposeContent } from "./server-compose";
-import { type SshAuthMethod, shellQuote } from "./ssh";
-import { assertWebUiReachable } from "./web-ui/reachability";
+import type { SshAuthMethod } from "./ssh";
 
 export type ManagedComposeDeployIntent = "telegram" | "provider" | "web-ui";
 
@@ -38,42 +34,6 @@ export type ManagedComposeDeployPolicyOptions = {
 	providerModel?: string;
 };
 
-export function buildWebUiAgentSourceSyncCommand() {
-	return [
-		`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/.hermes/webui ${managedComposeVolumeHome}/workspace`,
-		`sudo rm -rf ${hermesWebUiAgentHostDir}`,
-		`sudo docker cp ${hermesContainerName}:${hermesAgentSourcePathInContainer} ${hermesWebUiAgentHostDir}`,
-		`sudo chown -R ${hermesWebUiContainerUid}:${hermesWebUiContainerGid} ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace`,
-	].join(" && ");
-}
-
-async function syncWebUiAgentSource(ssh: NodeSSH) {
-	const runningResult = await ssh.execCommand(
-		`sudo docker ps --filter name=^/${hermesContainerName}$ --filter status=running --format '{{.Names}}'`,
-	);
-	if (!runningResult.stdout?.trim().includes(hermesContainerName)) {
-		throw new Error(
-			"Hermes container is not running. Install or restart Hermes before deploying the Web UI.",
-		);
-	}
-
-	const sourceResult = await ssh.execCommand(
-		`sudo docker exec ${hermesContainerName} test -d ${hermesAgentSourcePathInContainer}`,
-	);
-	if (sourceResult.code !== 0) {
-		throw new Error(
-			`Hermes agent source (${hermesAgentSourcePathInContainer}) is missing in the Hermes container.`,
-		);
-	}
-
-	const syncResult = await ssh.execCommand(buildWebUiAgentSourceSyncCommand());
-	if (syncResult.code !== 0) {
-		throw new Error(
-			syncResult.stderr || "Failed to sync Hermes agent source for the Web UI",
-		);
-	}
-}
-
 export function resolveManagedComposeDeployPolicy(
 	intent: ManagedComposeDeployIntent,
 	options: ManagedComposeDeployPolicyOptions = {},
@@ -92,16 +52,7 @@ export function resolveManagedComposeDeployPolicy(
 			return {
 				intent,
 				extraSshCommands: async (ssh) => {
-					await ssh.execCommand("sleep 2");
-
-					const configResult = await ssh.execCommand(
-						`sudo docker exec hermes hermes config set model ${shellQuote(providerModel)}`,
-					);
-					if (configResult.code !== 0) {
-						throw new Error(
-							configResult.stderr || "Failed to set model inside Hermes",
-						);
-					}
+					await setProviderModel(ssh, providerModel);
 				},
 			};
 		}
@@ -116,7 +67,7 @@ export function resolveManagedComposeDeployPolicy(
 				composeServices: ["hermes-webui"],
 				pullImages: true,
 				forceRecreate: true,
-				preSshCommands: syncWebUiAgentSource,
+				preSshCommands: syncAgentSourceForWebUi,
 				extraSshCommands: async (ssh) => {
 					await assertWebUiReachable(ssh, webUiPort);
 				},

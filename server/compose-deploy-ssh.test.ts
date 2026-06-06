@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	assertValidComposeServiceNames,
 	buildComposeUpCommand,
-} from "./compose-deploy-ssh";
+} from "./hermes/runtime";
 
 describe("buildComposeUpCommand", () => {
 	it("recreates the full stack when no services are targeted", () => {
@@ -13,7 +13,7 @@ describe("buildComposeUpCommand", () => {
 	});
 
 	it("targets only the requested services without restarting dependencies", () => {
-		expect(buildComposeUpCommand({ composeServices: ["hermes-webui"] })).toBe(
+		expect(buildComposeUpCommand({ services: ["hermes-webui"] })).toBe(
 			"cd ~/hermes && sudo docker compose up -d --no-deps hermes-webui",
 		);
 	});
@@ -21,7 +21,7 @@ describe("buildComposeUpCommand", () => {
 	it("pulls the Web UI image before recreating only that service", () => {
 		expect(
 			buildComposeUpCommand({
-				composeServices: ["hermes-webui"],
+				services: ["hermes-webui"],
 				pull: true,
 			}),
 		).toBe(
@@ -32,7 +32,7 @@ describe("buildComposeUpCommand", () => {
 	it("force-recreates the Web UI so stale env vars are replaced on redeploy", () => {
 		expect(
 			buildComposeUpCommand({
-				composeServices: ["hermes-webui"],
+				services: ["hermes-webui"],
 				pull: true,
 				forceRecreate: true,
 			}),
@@ -49,7 +49,7 @@ describe("buildComposeUpCommand", () => {
 			/invalid compose service name/i,
 		);
 		expect(() =>
-			buildComposeUpCommand({ composeServices: ["hermes$(whoami)"] }),
+			buildComposeUpCommand({ services: ["hermes$(whoami)"] }),
 		).toThrow(/invalid compose service name/i);
 	});
 });

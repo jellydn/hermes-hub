@@ -4,9 +4,8 @@ import {
 	assertWebUiReachable,
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
-	formatWebUiProxyError,
-	isRemotePortUnreachable,
-} from "./reachability";
+} from "../hermes/runtime";
+import { formatWebUiProxyError, isRemotePortUnreachable } from "./reachability";
 
 describe("isRemotePortUnreachable", () => {
 	it("detects SSH channel and connection refused errors", () => {

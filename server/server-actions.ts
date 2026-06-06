@@ -3,10 +3,15 @@ import type { Context } from "hono";
 
 import type { ServerActionType } from "../src/lib/server-detail";
 import { getAuthSession } from "./auth";
-import { hermesImageRepository } from "./constants";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { installs } from "./db/schema";
+import {
+	isValidDockerTag,
+	restartGateway,
+	rollbackGateway,
+	updateGateway,
+} from "./hermes/runtime";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import {
@@ -21,37 +26,6 @@ import {
 import { type SshAuthMethod, SshConnectError, withSshConnection } from "./ssh";
 
 export { getRollbackTargetFromHistory, getServerDetailSnapshot };
-
-// Docker image tag reference grammar:
-// first char must be alphanumeric or underscore; subsequent chars may
-// additionally include `.` and `-`; max 128 chars total.
-// See https://docs.docker.com/reference/cli/docker/image/tag/#description
-const DOCKER_TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
-
-function isValidDockerTag(tag: string): boolean {
-	return DOCKER_TAG_PATTERN.test(tag);
-}
-
-const actionCommands: Record<
-	ServerActionType,
-	(targetVersion?: string) => string
-> = {
-	restart: () => "cd ~/hermes && sudo docker compose restart hermes",
-	update: () =>
-		"cd ~/hermes && sudo docker compose pull hermes && sudo docker compose up -d --no-deps hermes",
-	rollback: (targetVersion) => {
-		const imageTag = targetVersion?.trim() || "latest";
-		if (!isValidDockerTag(imageTag)) {
-			throw new Error(`Invalid image tag: ${imageTag}`);
-		}
-		return [
-			"cd ~/hermes",
-			`sudo docker pull ${hermesImageRepository}:${imageTag}`,
-			`sudo sed -i.bak 's|image: ${hermesImageRepository}:.*|image: ${hermesImageRepository}:${imageTag}|' docker-compose.yml`,
-			"sudo docker compose up -d --no-deps hermes",
-		].join(" && ");
-	},
-};
 
 type ServerActionRequest = {
 	action?: ServerActionType;
@@ -78,7 +52,10 @@ export async function runServerAction(context: Context) {
 	}
 
 	const action = payload.action;
-	if (!action || !(action in actionCommands)) {
+	if (
+		!action ||
+		(action !== "restart" && action !== "update" && action !== "rollback")
+	) {
 		return context.json(
 			{ error: "Action must be restart, update, or rollback" },
 			400,
@@ -137,12 +114,12 @@ export async function runServerAction(context: Context) {
 	});
 
 	try {
-		const command = actionCommands[action](versionTarget ?? undefined);
 		const commandOutput = await executeServerAction({
 			server: serverRecord,
 			authMethod,
 			credential,
-			command,
+			action,
+			versionTarget: versionTarget ?? undefined,
 		});
 
 		// Persist success audit log and (for update/rollback) install version in
@@ -239,8 +216,9 @@ async function executeServerAction(input: {
 	server: OwnedServerRecord;
 	authMethod: SshAuthMethod;
 	credential: string;
-	command: string;
-}) {
+	action: ServerActionType;
+	versionTarget?: string;
+}): Promise<string> {
 	return withSshConnection(
 		{
 			host: input.server.host,
@@ -251,12 +229,14 @@ async function executeServerAction(input: {
 			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
 		},
 		async (ssh) => {
-			const result = await ssh.execCommand(input.command);
-			if (result.code !== 0) {
-				throw new Error(result.stderr || "Remote command failed");
+			switch (input.action) {
+				case "restart":
+					return restartGateway(ssh);
+				case "update":
+					return updateGateway(ssh);
+				case "rollback":
+					return rollbackGateway(ssh, input.versionTarget ?? "latest");
 			}
-
-			return result.stdout.trim();
 		},
 	);
 }

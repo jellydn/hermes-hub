@@ -18,9 +18,13 @@ vi.mock("./compose-deploy-ssh", () => ({
 	deployComposeViaSsh,
 }));
 
-vi.mock("./web-ui/reachability", () => ({
-	assertWebUiReachable,
-}));
+vi.mock("./hermes/runtime", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./hermes/runtime")>();
+	return {
+		...actual,
+		assertWebUiReachable,
+	};
+});
 
 import {
 	hermesAgentSourcePathInContainer,
@@ -30,8 +34,8 @@ import {
 	hermesWebUiContainerUid,
 	managedComposeVolumeHome,
 } from "./constants";
+import { buildWebUiAgentSourceSyncCommand } from "./hermes/runtime";
 import {
-	buildWebUiAgentSourceSyncCommand,
 	deployManagedCompose,
 	resolveManagedComposeDeployPolicy,
 } from "./managed-compose-deploy";
