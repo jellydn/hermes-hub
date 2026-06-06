@@ -94,7 +94,7 @@ describe("HermesWebUiCard", () => {
 					webUi: {
 						enabled: true,
 						port: 8787,
-						proxyPath: "/api/servers/server_123/web-ui/proxy",
+						proxyPath: "/api/servers/server_123/web-ui/proxy/",
 						updatedAt: "2026-05-26T04:00:00.000Z",
 					},
 				})}
@@ -103,7 +103,7 @@ describe("HermesWebUiCard", () => {
 
 		const openLink = screen.getByTestId("hermes-web-ui-open");
 		expect(openLink.getAttribute("href")).toBe(
-			"/api/servers/server_123/web-ui/proxy",
+			"/api/servers/server_123/web-ui/proxy/",
 		);
 		expect(screen.getByTestId("hermes-web-ui-password")).toBeTruthy();
 	});
@@ -115,7 +115,7 @@ describe("HermesWebUiCard", () => {
 				webUi: {
 					enabled: true,
 					port: 8787,
-					proxyPath: "/api/servers/server_123/web-ui/proxy",
+					proxyPath: "/api/servers/server_123/web-ui/proxy/",
 					updatedAt: "2026-05-26T04:00:00.000Z",
 				},
 			}),
@@ -137,7 +137,7 @@ describe("HermesWebUiCard", () => {
 				webUi: {
 					enabled: true,
 					port: 8787,
-					proxyPath: "/api/servers/server_123/web-ui/proxy",
+					proxyPath: "/api/servers/server_123/web-ui/proxy/",
 					updatedAt: "2026-05-26T04:00:00.000Z",
 				},
 			}),
@@ -173,6 +173,17 @@ describe("HermesWebUiCard", () => {
 		expect(await screen.findByText("Missing SSH credential")).toBeTruthy();
 	});
 
+	it("shows an error when deploy fetch rejects", async () => {
+		fetchMock.mockRejectedValue(new Error("network down"));
+
+		render(<HermesWebUiCard detail={createDetail()} />);
+		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
+
+		expect(
+			await screen.findByText("Web UI setup failed: Connection failed."),
+		).toBeTruthy();
+	});
+
 	it("reveals the Web UI password", async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
@@ -185,7 +196,7 @@ describe("HermesWebUiCard", () => {
 					webUi: {
 						enabled: true,
 						port: 8787,
-						proxyPath: "/api/servers/server_123/web-ui/proxy",
+						proxyPath: "/api/servers/server_123/web-ui/proxy/",
 						updatedAt: "2026-05-26T04:00:00.000Z",
 					},
 				})}

@@ -67,6 +67,8 @@ export function HermesWebUiCard({
 			setRevealedPassword(null);
 			setShowPassword(false);
 			setSuccessMessage("Hermes Web UI is ready. Open it from HermesHub.");
+		} catch {
+			setError("Web UI setup failed: Connection failed.");
 		} finally {
 			setIsDeploying(false);
 		}
