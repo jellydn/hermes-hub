@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, Plus, Rocket, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { StatusIcon } from "@/components/ui/status-icon";
 import type { ServerListSummary } from "@/lib/servers";
-import { getStatusPillClassName } from "@/lib/status-pill";
+import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
 
 import { formatInstallStatus, formatTimestamp } from "./server-detail-helpers";
 
@@ -52,6 +53,10 @@ export function ServerList({ servers }: ServerListProps) {
 							</p>
 						</div>
 						<span className={getStatusPillClassName(server.status)}>
+							<StatusIcon
+								status={getStatusPillType(server.status)}
+								size={3.5}
+							/>
 							{server.status}
 						</span>
 					</div>

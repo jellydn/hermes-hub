@@ -7,6 +7,7 @@ import {
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StatusIcon } from "@/components/ui/status-icon";
 import { useMountEffect } from "@/lib/use-mount-effect";
 import { cn } from "@/lib/utils";
 
@@ -145,6 +146,15 @@ export function ServerInstallProgress({
 	const isRunning = !isFinished;
 	const bannerTone = snapshot.status === "succeeded" ? "success" : "error";
 
+	function getStatusIconType(
+		status: InstallStatus,
+	): "success" | "error" | "info" | "neutral" {
+		if (status === "succeeded") return "success";
+		if (status === "failed") return "error";
+		if (status === "running") return "info";
+		return "neutral";
+	}
+
 	return (
 		<section className="space-y-6">
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -261,7 +271,13 @@ export function ServerInstallProgress({
 						</div>
 						<div>
 							<dt className="text-[var(--sea-ink-soft)]">Current status</dt>
-							<dd className="mt-1 font-medium capitalize">{snapshot.status}</dd>
+							<dd className="mt-1 font-medium capitalize flex items-center gap-2">
+								<StatusIcon
+									status={getStatusIconType(snapshot.status)}
+									size={3.5}
+								/>
+								{snapshot.status}
+							</dd>
 						</div>
 						<div>
 							<dt className="text-[var(--sea-ink-soft)]">Last update</dt>

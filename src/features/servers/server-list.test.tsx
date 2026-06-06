@@ -27,6 +27,11 @@ vi.mock("lucide-react", () => {
 		Plus: MockIcon,
 		Rocket: MockIcon,
 		Server: MockIcon,
+		CheckCircle2: MockIcon,
+		AlertCircle: MockIcon,
+		TriangleAlert: MockIcon,
+		Info: MockIcon,
+		Circle: MockIcon,
 	};
 });
 

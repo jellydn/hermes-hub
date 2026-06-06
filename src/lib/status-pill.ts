@@ -1,6 +1,8 @@
 import { cn } from "./utils";
 
-const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> = {
+export type StatusPillType = "success" | "warning" | "error";
+
+const STATUS_TYPE_MAP: Record<string, StatusPillType> = {
 	online: "success",
 	connected: "success",
 	healthy: "success",
@@ -10,7 +12,11 @@ const STATUS_TYPE_MAP: Record<string, "success" | "warning" | "error"> = {
 	unhealthy: "error",
 };
 
+export function getStatusPillType(status: string): StatusPillType {
+	return STATUS_TYPE_MAP[status] ?? "error";
+}
+
 export function getStatusPillClassName(status: string) {
-	const type = STATUS_TYPE_MAP[status] ?? "error";
+	const type = getStatusPillType(status);
 	return cn("status-pill", `status-pill--${type}`);
 }

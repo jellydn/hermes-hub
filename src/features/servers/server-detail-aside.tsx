@@ -1,11 +1,12 @@
+import { StatusIcon } from "@/components/ui/status-icon";
 import type {
 	ServerActionHistoryItem,
 	ServerDetailSnapshot,
 } from "@/lib/server-detail";
-
 import { HermesWebUiCard } from "./hermes-web-ui-card";
 import {
 	badgeClassName,
+	badgeIconType,
 	formatActionHistorySummary,
 	formatActionTitle,
 	formatInstallStatus,
@@ -86,7 +87,10 @@ function ActionHistoryItem({ item }: { item: ServerActionHistoryItem }) {
 						{formatTimestamp(item.createdAt)}
 					</p>
 				</div>
-				<span className={badgeClassName(item.result)}>{item.result}</span>
+				<span className={badgeClassName(item.result)}>
+					<StatusIcon status={badgeIconType(item.result)} size={3} />
+					{item.result}
+				</span>
 			</div>
 		</li>
 	);

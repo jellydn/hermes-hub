@@ -11,6 +11,7 @@ import {
 import { type ComponentType, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StatusIcon } from "@/components/ui/status-icon";
 import { formatAiProviderLabel } from "@/lib/ai-providers";
 import type {
 	DashboardProviderSummary,
@@ -19,7 +20,7 @@ import type {
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
 } from "@/lib/dashboard-status";
-import { getStatusPillClassName } from "@/lib/status-pill";
+import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
 import { useMountEffect } from "@/lib/use-mount-effect";
 
 type DashboardStatusOverviewProps = {
@@ -357,6 +358,12 @@ function ServerInventoryCard({
 						serverCount > 0 ? "connected" : "disconnected",
 					)}
 				>
+					<StatusIcon
+						status={getStatusPillType(
+							serverCount > 0 ? "connected" : "disconnected",
+						)}
+						size={3.5}
+					/>
 					{serverCount > 0 ? "ready" : "empty"}
 				</span>
 			</div>
@@ -447,7 +454,10 @@ function VpsHealthCard({
 						{vps.status === "warning" ? "Watch closely" : "Healthy"}
 					</h3>
 				</div>
-				<span className={getStatusPillClassName(vps.status)}>{vps.status}</span>
+				<span className={getStatusPillClassName(vps.status)}>
+					<StatusIcon status={getStatusPillType(vps.status)} size={3.5} />
+					{vps.status}
+				</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{vps.detail}</p>
 			<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -492,7 +502,10 @@ function StatusCard({
 						{title}
 					</h3>
 				</div>
-				<span className={getStatusPillClassName(status)}>{status}</span>
+				<span className={getStatusPillClassName(status)}>
+					<StatusIcon status={getStatusPillType(status)} size={3.5} />
+					{status}
+				</span>
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">{detail}</p>
 			<p className="mt-4 mb-0 text-sm text-[var(--sea-ink)]">{meta}</p>

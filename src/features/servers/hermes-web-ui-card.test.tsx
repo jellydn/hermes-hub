@@ -24,6 +24,11 @@ vi.mock("lucide-react", () => {
 		LoaderCircle: MockIcon,
 		Eye: MockIcon,
 		EyeOff: MockIcon,
+		CheckCircle2: MockIcon,
+		AlertCircle: MockIcon,
+		TriangleAlert: MockIcon,
+		Info: MockIcon,
+		Circle: MockIcon,
 	};
 });
 

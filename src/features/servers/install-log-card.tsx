@@ -7,7 +7,7 @@ import {
 	LoaderCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import { StatusIcon } from "@/components/ui/status-icon";
 import { formatInstallStatus } from "./server-detail-helpers";
 
 type InstallLogCardProps = {
@@ -94,6 +94,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 
 	const isFailed = install.status === "failed";
 	const isRunning = install.status === "running";
+	const isSucceeded = install.status === "succeeded";
 	const lastErrorLine = logData?.log
 		?.split("\n")
 		.filter(Boolean)
@@ -103,9 +104,12 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 	return (
 		<div className="mt-5 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
 			<p className="m-0 font-semibold">Latest install</p>
-			<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
-				Status: {formatInstallStatus(install.status)}
-				{install.version ? ` • Version: ${install.version}` : ""}
+			<p className="mt-2 mb-0 text-[var(--sea-ink-soft)] flex items-center gap-2">
+				{isSucceeded && <StatusIcon status="success" size={3.5} />}
+				{isFailed && <StatusIcon status="error" size={3.5} />}
+				{isRunning && <StatusIcon status="info" size={3.5} />}
+				<span>Status: {formatInstallStatus(install.status)}</span>
+				{install.version ? <span>• Version: {install.version}</span> : null}
 			</p>
 
 			{isFailed && lastErrorLine ? (

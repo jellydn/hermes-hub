@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StatusIcon } from "@/components/ui/status-icon";
 import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
 
@@ -136,14 +137,16 @@ export function HermesWebUiCard({
 					</p>
 
 					{successMessage ? (
-						<div className="mt-4 rounded-[1.25rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{successMessage}
+						<div className="mt-4 rounded-[1.25rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)] flex items-center gap-3">
+							<StatusIcon status="success" size={4} />
+							<span>{successMessage}</span>
 						</div>
 					) : null}
 
 					{error ? (
-						<div className="mt-4 rounded-[1.25rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{error}
+						<div className="mt-4 rounded-[1.25rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)] flex items-center gap-3">
+							<StatusIcon status="error" size={4} />
+							<span>{error}</span>
 						</div>
 					) : null}
 
