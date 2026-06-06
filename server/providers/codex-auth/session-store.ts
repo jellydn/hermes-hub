@@ -10,6 +10,12 @@ export type CodexAuthSession = CodexDeviceCodeStart & {
 const sessionsByUserId = new Map<string, CodexAuthSession>();
 
 export function storeCodexAuthSession(session: CodexAuthSession) {
+	for (const [userId, storedSession] of sessionsByUserId.entries()) {
+		if (Date.now() - storedSession.createdAt > CODEX_SESSION_TTL_MS) {
+			sessionsByUserId.delete(userId);
+		}
+	}
+
 	sessionsByUserId.set(session.userId, session);
 }
 

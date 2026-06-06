@@ -132,7 +132,16 @@ export async function completeCodexAuth(context: Context) {
 				let existingStore: Record<string, unknown> = {};
 				if (existingRaw.trim()) {
 					try {
-						existingStore = JSON.parse(existingRaw) as Record<string, unknown>;
+						const parsed: unknown = JSON.parse(existingRaw);
+						if (
+							!parsed ||
+							typeof parsed !== "object" ||
+							Array.isArray(parsed)
+						) {
+							throw new Error("Invalid JSON structure");
+						}
+
+						existingStore = parsed as Record<string, unknown>;
 					} catch {
 						throw new Error(
 							"Remote Hermes auth.json is not valid JSON. Fix it on the VPS before continuing.",

@@ -80,11 +80,16 @@ export async function requestCodexDeviceCode(
 		);
 	}
 
-	const pollIntervalSeconds = Math.max(
-		3,
+	const rawInterval =
 		typeof payload.interval === "string"
 			? Number.parseInt(payload.interval, 10)
-			: Number(payload.interval ?? CODEX_DEFAULT_POLL_INTERVAL_SECONDS),
+			: Number(payload.interval ?? CODEX_DEFAULT_POLL_INTERVAL_SECONDS);
+
+	const pollIntervalSeconds = Math.max(
+		3,
+		Number.isNaN(rawInterval)
+			? CODEX_DEFAULT_POLL_INTERVAL_SECONDS
+			: rawInterval,
 	);
 
 	return {

@@ -212,6 +212,35 @@ describe("codex auth handlers", () => {
 		expect(JSON.stringify(body)).not.toContain("secret-token");
 	});
 
+	it("returns 502 when remote auth.json is not a plain object", async () => {
+		requestCodexDeviceCode.mockResolvedValueOnce({
+			deviceAuthId: "auth_123",
+			userCode: "ABCD-1234",
+			verificationUrl: "https://auth.openai.com/codex/device",
+			pollIntervalSeconds: 5,
+			expiresAt: "2026-06-06T12:15:00.000Z",
+		});
+		await startCodexAuth(createContext());
+
+		pollCodexDeviceAuthorization.mockResolvedValueOnce({
+			authorization_code: "auth-code",
+			code_verifier: "verifier",
+		});
+		exchangeCodexAuthorizationCode.mockResolvedValueOnce({
+			access_token: "access-token",
+			refresh_token: "refresh-token",
+		});
+		readHermesAuthJson.mockResolvedValueOnce("[]");
+
+		const response = await completeCodexAuth(createContext());
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("auth.json is not valid JSON"),
+		});
+		expect(writeHermesAuthJson).not.toHaveBeenCalled();
+	});
+
 	it("returns 400 when complete is called without an active session", async () => {
 		const response = await completeCodexAuth(createContext());
 

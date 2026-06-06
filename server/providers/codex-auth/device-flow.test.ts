@@ -33,6 +33,23 @@ describe("requestCodexDeviceCode", () => {
 		expect(result.pollIntervalSeconds).toBeGreaterThanOrEqual(3);
 	});
 
+	it("falls back to the default poll interval when interval is invalid", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					device_auth_id: "auth_123",
+					user_code: "ABCD-1234",
+					interval: "not-a-number",
+				}),
+				{ status: 200 },
+			),
+		);
+
+		const result = await requestCodexDeviceCode(fetchMock);
+
+		expect(result.pollIntervalSeconds).toBe(5);
+	});
+
 	it("throws when the device-code request fails", async () => {
 		fetchMock.mockResolvedValueOnce(new Response("", { status: 500 }));
 
