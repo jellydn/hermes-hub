@@ -13,10 +13,10 @@ import {
 	aiProviderOptions,
 	formatAiProviderLabel,
 	getAiProviderOption,
-	usesOAuthDeviceCode,
+	getProviderCredentialPolicy,
 } from "@/lib/ai-providers";
 
-import { CodexAuthPanel } from "./codex-auth-panel";
+import { CodexAuthPanel, type CodexAuthStatusChange } from "./codex-auth-panel";
 
 import type { ProviderSettingsSummary } from "./provider-settings";
 import {
@@ -42,7 +42,7 @@ type ProviderSelectionPanelProps = {
 	testError: string | null;
 	isConnected: boolean;
 	telegramDeployed: boolean;
-	onCodexAuthStatusChange: (authenticated: boolean) => void;
+	onCodexAuthStatusChange: (change: CodexAuthStatusChange) => void;
 	onProviderChange: (provider: AiProviderId) => void;
 	onSave: () => void;
 	onTest: () => void;
@@ -65,7 +65,7 @@ export function ProviderSelectionPanel({
 	onTest,
 }: ProviderSelectionPanelProps) {
 	const providerOption = getAiProviderOption(form.provider);
-	const isCodexProvider = usesOAuthDeviceCode(form.provider);
+	const credentialPolicy = getProviderCredentialPolicy(form.provider);
 	const existingKeyLast4 =
 		savedConfig?.provider === form.provider ? savedConfig.keyLast4 : null;
 
@@ -134,7 +134,7 @@ export function ProviderSelectionPanel({
 			</fieldset>
 
 			<div className="mt-8 grid gap-5 md:grid-cols-2">
-				{!isCodexProvider ? (
+				{!credentialPolicy.requiresRemoteOAuth ? (
 					<ProviderSettingsField
 						label="API key"
 						name="apiKey"
@@ -248,7 +248,7 @@ export function ProviderSelectionPanel({
 					)}
 					<span>{isSaving ? "Saving..." : "Save Provider"}</span>
 				</Button>
-				{!isCodexProvider ? (
+				{!credentialPolicy.requiresRemoteOAuth ? (
 					<Button
 						type="button"
 						variant="secondary"
@@ -265,10 +265,10 @@ export function ProviderSelectionPanel({
 				) : null}
 			</div>
 
-			{isCodexProvider ? (
+			{credentialPolicy.requiresRemoteOAuth ? (
 				<CodexAuthPanel
 					telegramDeployed={telegramDeployed}
-					onAuthStatusChange={onCodexAuthStatusChange}
+					onCodexAuthStatusChange={onCodexAuthStatusChange}
 				/>
 			) : null}
 		</section>

@@ -8,6 +8,14 @@ export type AiProviderId =
 
 export type AiProviderCredentialMode = "api-key" | "oauth-device-code";
 
+export type ProviderCredentialPolicy = {
+	kind: AiProviderCredentialMode;
+	requiresApiKey: boolean;
+	requiresBaseUrl: boolean;
+	requiresRemoteOAuth: boolean;
+	reportsStoredKeyWithoutApiKey: boolean;
+};
+
 type AiProviderOption = {
 	id: AiProviderId;
 	label: string;
@@ -136,20 +144,34 @@ export function formatAiProviderLabel(provider: AiProviderId) {
 	return getAiProviderOption(provider)?.label ?? provider;
 }
 
+export function getProviderCredentialPolicy(
+	provider: AiProviderId,
+): ProviderCredentialPolicy {
+	const option = getAiProviderOption(provider);
+	const kind = option?.credentialMode ?? "api-key";
+	const requiresRemoteOAuth = kind === "oauth-device-code";
+	const requiresBaseUrl = Boolean(option?.requiresBaseUrl);
+	const requiresApiKey = !requiresRemoteOAuth && !requiresBaseUrl;
+
+	return {
+		kind,
+		requiresApiKey,
+		requiresBaseUrl,
+		requiresRemoteOAuth,
+		reportsStoredKeyWithoutApiKey: requiresRemoteOAuth,
+	};
+}
+
 export function getAiProviderCredentialMode(
 	provider: AiProviderId,
 ): AiProviderCredentialMode {
-	return getAiProviderOption(provider)?.credentialMode ?? "api-key";
+	return getProviderCredentialPolicy(provider).kind;
 }
 
 export function usesOAuthDeviceCode(provider: AiProviderId): boolean {
-	return getAiProviderCredentialMode(provider) === "oauth-device-code";
+	return getProviderCredentialPolicy(provider).requiresRemoteOAuth;
 }
 
 export function providerRequiresApiKey(provider: AiProviderId): boolean {
-	if (usesOAuthDeviceCode(provider)) {
-		return false;
-	}
-
-	return !getAiProviderOption(provider)?.requiresBaseUrl;
+	return getProviderCredentialPolicy(provider).requiresApiKey;
 }

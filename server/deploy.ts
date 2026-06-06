@@ -1,5 +1,8 @@
 import type { Context } from "hono";
-import { isAiProviderId, usesOAuthDeviceCode } from "../src/lib/ai-providers";
+import {
+	getProviderCredentialPolicy,
+	isAiProviderId,
+} from "../src/lib/ai-providers";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
@@ -7,7 +10,7 @@ import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
-import { isApiKeyRequired, PROVIDER_ENV_CONFIGS } from "./providers/config";
+import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { decryptApiKey, getLatestProviderRecord } from "./providers/records";
 import { requireAuthSession } from "./request-guards";
 
@@ -46,14 +49,12 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt API key." }, 500);
 	}
 
-	const isCodexProvider = usesOAuthDeviceCode(providerRecord.provider);
-	if (!isCodexProvider && isApiKeyRequired(providerRecord.provider)) {
-		if (!decryptedApiKey) {
-			return context.json({ error: "API key is required." }, 400);
-		}
+	const credentialPolicy = getProviderCredentialPolicy(providerRecord.provider);
+	if (credentialPolicy.requiresApiKey && !decryptedApiKey) {
+		return context.json({ error: "API key is required." }, 400);
 	}
 
-	if (isCodexProvider) {
+	if (credentialPolicy.requiresRemoteOAuth) {
 		try {
 			const codexAuth = await resolveRemoteCodexAuthStatus({
 				host: sshCtx.server.host,

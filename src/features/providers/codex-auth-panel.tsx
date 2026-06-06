@@ -1,23 +1,37 @@
-import { ExternalLink, KeyRound, LoaderCircle } from "lucide-react";
 import { useReducer, useRef } from "react";
 
-import { Button } from "@/components/ui/button";
 import { useMountEffect } from "@/lib/use-mount-effect";
+import {
+	CODEX_MAX_POLL_ATTEMPTS,
+	type CodexAuthCompleteResponse,
+	type CodexAuthStartResponse,
+	type CodexAuthStatus,
+	type CodexAuthStatusResponse,
+} from "../../../shared/contracts/codex-auth";
 
 import {
-	type CodexAuthStatus,
 	codexAuthPanelReducer,
 	createInitialCodexAuthPanelState,
 } from "./codex-auth-panel-state";
+import {
+	CodexAuthDeviceCodeSection,
+	CodexAuthStatusSection,
+} from "./codex-auth-panel-ui";
+
+export type CodexAuthStatusChange = {
+	status: CodexAuthStatus | null;
+	isLoading: boolean;
+	error: string | null;
+};
 
 type CodexAuthPanelProps = {
 	telegramDeployed: boolean;
-	onAuthStatusChange?: (authenticated: boolean) => void;
+	onCodexAuthStatusChange?: (change: CodexAuthStatusChange) => void;
 };
 
 export function CodexAuthPanel({
 	telegramDeployed,
-	onAuthStatusChange,
+	onCodexAuthStatusChange,
 }: CodexAuthPanelProps) {
 	const [state, dispatch] = useReducer(
 		codexAuthPanelReducer,
@@ -26,6 +40,10 @@ export function CodexAuthPanel({
 	);
 	const pollIntervalSecondsRef = useRef(5);
 	const abortControllerRef = useRef<AbortController | null>(null);
+
+	function publishCodexAuthStatus(change: CodexAuthStatusChange) {
+		onCodexAuthStatusChange?.(change);
+	}
 
 	useMountEffect(() => {
 		return () => {
@@ -36,25 +54,35 @@ export function CodexAuthPanel({
 	async function refreshStatus() {
 		if (!telegramDeployed) {
 			dispatch({ type: "status_reset" });
-			onAuthStatusChange?.(false);
+			publishCodexAuthStatus({
+				status: null,
+				isLoading: false,
+				error: null,
+			});
 			return;
 		}
 
 		dispatch({ type: "status_load_started" });
+		publishCodexAuthStatus({
+			status: state.status,
+			isLoading: true,
+			error: null,
+		});
 
 		try {
 			const response = await fetch("/api/providers/codex-auth/status");
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				codexAuth?: CodexAuthStatus;
-			} | null;
+			const payload = (await response
+				.json()
+				.catch(() => null)) as CodexAuthStatusResponse | null;
 
 			if (!response.ok || !payload?.codexAuth) {
-				dispatch({
-					type: "status_load_failed",
-					error: payload?.error ?? "Unable to check Codex auth status.",
+				const error = payload?.error ?? "Unable to check Codex auth status.";
+				dispatch({ type: "status_load_failed", error });
+				publishCodexAuthStatus({
+					status: null,
+					isLoading: false,
+					error,
 				});
-				onAuthStatusChange?.(false);
 				return;
 			}
 
@@ -62,13 +90,20 @@ export function CodexAuthPanel({
 				type: "status_load_succeeded",
 				status: payload.codexAuth,
 			});
-			onAuthStatusChange?.(payload.codexAuth.authenticated);
-		} catch {
-			dispatch({
-				type: "status_load_failed",
-				error: "Network error while checking Codex auth status. Try again.",
+			publishCodexAuthStatus({
+				status: payload.codexAuth,
+				isLoading: false,
+				error: null,
 			});
-			onAuthStatusChange?.(false);
+		} catch {
+			const error =
+				"Network error while checking Codex auth status. Try again.";
+			dispatch({ type: "status_load_failed", error });
+			publishCodexAuthStatus({
+				status: null,
+				isLoading: false,
+				error,
+			});
 		} finally {
 			dispatch({ type: "status_load_finished" });
 		}
@@ -85,14 +120,9 @@ export function CodexAuthPanel({
 			const response = await fetch("/api/providers/codex-auth/start", {
 				method: "POST",
 			});
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				codexAuth?: {
-					userCode: string;
-					verificationUrl: string;
-					pollIntervalSeconds: number;
-				};
-			} | null;
+			const payload = (await response
+				.json()
+				.catch(() => null)) as CodexAuthStartResponse | null;
 
 			if (!response.ok || !payload?.codexAuth) {
 				dispatch({
@@ -127,7 +157,7 @@ export function CodexAuthPanel({
 		const signal = abortControllerRef.current?.signal;
 
 		try {
-			if (attempt >= 180) {
+			if (attempt >= CODEX_MAX_POLL_ATTEMPTS) {
 				dispatch({
 					type: "complete_auth_failed",
 					error: "Codex authentication timed out. Start again.",
@@ -139,10 +169,9 @@ export function CodexAuthPanel({
 				method: "POST",
 				signal,
 			});
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				status?: string;
-			} | null;
+			const payload = (await response
+				.json()
+				.catch(() => null)) as CodexAuthCompleteResponse | null;
 
 			if (response.ok && payload?.status === "authenticated") {
 				dispatch({ type: "complete_auth_succeeded" });
@@ -205,91 +234,24 @@ export function CodexAuthPanel({
 				OpenAI, then HermesHub writes auth state to the remote Hermes volume.
 			</p>
 
-			{state.status?.authenticated ? (
-				<p className="mt-3 mb-0 text-sm text-emerald-600">
-					Codex is authenticated on{" "}
-					{state.status.serverHost ?? "your deployed server"}.
-				</p>
-			) : (
-				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-					{state.isLoadingStatus
-						? "Checking remote Codex auth status..."
-						: "Codex is not authenticated on the deployed Hermes server yet."}
-				</p>
-			)}
-
-			{state.statusError ? (
-				<p className="mt-3 mb-0 text-sm text-red-600">{state.statusError}</p>
-			) : null}
-
-			<div className="mt-4 flex flex-wrap gap-3">
-				<Button
-					type="button"
-					onClick={() => void handleStartAuth()}
-					disabled={state.isStarting || state.isCompleting}
-				>
-					{state.isStarting ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<KeyRound className="h-4 w-4" />
-					)}
-					<span>
-						{state.isStarting ? "Starting..." : "Start ChatGPT Login"}
-					</span>
-				</Button>
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={() => void refreshStatus()}
-					disabled={state.isLoadingStatus}
-				>
-					{state.isLoadingStatus ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : null}
-					<span>Refresh Status</span>
-				</Button>
-			</div>
+			<CodexAuthStatusSection
+				status={state.status}
+				isLoadingStatus={state.isLoadingStatus}
+				statusError={state.statusError}
+				isStarting={state.isStarting}
+				isCompleting={state.isCompleting}
+				onStartAuth={() => void handleStartAuth()}
+				onRefreshStatus={() => void refreshStatus()}
+			/>
 
 			{state.startError ? (
 				<p className="mt-3 mb-0 text-sm text-red-600">{state.startError}</p>
 			) : null}
 
-			{state.userCode && state.verificationUrl ? (
-				<div className="mt-4 space-y-3 rounded-[1.25rem] border border-[var(--chip-line)] bg-white/70 px-4 py-4 text-sm text-[var(--sea-ink)]">
-					<p className="m-0">
-						1. Open{" "}
-						<a
-							href={state.verificationUrl}
-							target="_blank"
-							rel="noreferrer"
-							className="inline-flex items-center gap-1 font-medium text-[var(--lagoon-deep)]"
-						>
-							{state.verificationUrl}
-							<ExternalLink className="h-4 w-4" />
-						</a>
-					</p>
-					<p className="m-0">
-						2. Enter this one-time code:{" "}
-						<span className="font-semibold tracking-[0.2em]">
-							{state.userCode}
-						</span>
-					</p>
-					<Button
-						type="button"
-						onClick={() => void pollUntilAuthenticated()}
-						disabled={state.isCompleting}
-					>
-						{state.isCompleting ? (
-							<LoaderCircle className="h-4 w-4 animate-spin" />
-						) : null}
-						<span>
-							{state.isCompleting
-								? "Waiting for approval..."
-								: "I entered the code"}
-						</span>
-					</Button>
-				</div>
-			) : null}
+			<CodexAuthDeviceCodeSection
+				state={state}
+				onPollUntilAuthenticated={() => void pollUntilAuthenticated()}
+			/>
 
 			{state.completeError ? (
 				<p className="mt-3 mb-0 text-sm text-red-600">{state.completeError}</p>

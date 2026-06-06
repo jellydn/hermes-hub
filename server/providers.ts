@@ -5,9 +5,9 @@ import {
 	type AiProviderId,
 	formatAiProviderLabel,
 	getDefaultAiModel,
+	getProviderCredentialPolicy,
 	isAiProviderId,
 	isValidAiModel,
-	usesOAuthDeviceCode,
 } from "../src/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { encryptSecret } from "./crypto";
@@ -18,7 +18,6 @@ import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	buildProviderEnvMap,
-	isApiKeyRequired,
 	PROVIDER_ENV_CONFIGS,
 	type ProviderConfigSummary,
 	type ProviderRequest,
@@ -44,7 +43,8 @@ export async function getCurrentProviderConfig(userId: string) {
 
 	const parsedApiKey = decryptApiKey(record.encryptedApiKey);
 
-	const hasStoredKey = usesOAuthDeviceCode(record.provider)
+	const credentialPolicy = getProviderCredentialPolicy(record.provider);
+	const hasStoredKey = credentialPolicy.reportsStoredKeyWithoutApiKey
 		? true
 		: Boolean(parsedApiKey || record.encryptedApiKey);
 
@@ -99,9 +99,10 @@ export async function saveProviderConfig(context: Context) {
 
 		clearDashboardCache();
 
-		const hasStoredKey = usesOAuthDeviceCode(parsed.provider)
+		const credentialPolicy = getProviderCredentialPolicy(parsed.provider);
+		const hasStoredKey = credentialPolicy.reportsStoredKeyWithoutApiKey
 			? true
-			: isApiKeyRequired(parsed.provider)
+			: credentialPolicy.requiresApiKey
 				? Boolean(resolvedApiKey.apiKey)
 				: Boolean(resolvedApiKey.apiKey || resolvedApiKey.baseUrl);
 
@@ -152,7 +153,7 @@ export async function testProviderConfig(context: Context) {
 	}
 
 	try {
-		if (usesOAuthDeviceCode(parsed.provider)) {
+		if (getProviderCredentialPolicy(parsed.provider).requiresRemoteOAuth) {
 			return context.json({
 				status: "connected",
 				message:
@@ -222,15 +223,16 @@ function resolveProviderApiKey(
 		}
 	}
 
-	if (usesOAuthDeviceCode(parsed.provider)) {
+	const credentialPolicy = getProviderCredentialPolicy(parsed.provider);
+	if (credentialPolicy.requiresRemoteOAuth) {
 		return { apiKey: "", baseUrl: resolvedBaseUrl };
 	}
 
-	if (!isApiKeyRequired(parsed.provider) && !resolvedBaseUrl) {
+	if (credentialPolicy.requiresBaseUrl && !resolvedBaseUrl) {
 		return { error: "Base URL is required." };
 	}
 
-	if (isApiKeyRequired(parsed.provider) && !resolvedApiKey) {
+	if (credentialPolicy.requiresApiKey && !resolvedApiKey) {
 		return { error: "API key is required." };
 	}
 
@@ -249,7 +251,9 @@ export async function getProviderDeployConfig(
 	let decryptedApiKey = "";
 
 	if (config?.apiKeyEnvVar) {
-		const isKeyRequired = isApiKeyRequired(record.provider);
+		const isKeyRequired = getProviderCredentialPolicy(
+			record.provider,
+		).requiresApiKey;
 
 		if (record.encryptedApiKey) {
 			decryptedApiKey = decryptApiKey(record.encryptedApiKey);

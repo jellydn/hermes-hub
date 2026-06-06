@@ -1,15 +1,20 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatAiProviderLabel, usesOAuthDeviceCode } from "@/lib/ai-providers";
+import {
+	formatAiProviderLabel,
+	getProviderCredentialPolicy,
+} from "@/lib/ai-providers";
 import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
+import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
 
 import type { ProviderSettingsSummary } from "./provider-settings";
 
 type ProviderSettingsAsideProps = {
 	savedConfig: ProviderSettingsSummary | null;
 	telegramDeploy?: TelegramDeployInfo | null;
-	codexAuthenticated: boolean;
+	codexAuthStatus: CodexAuthStatus | null;
+	isLoadingCodexAuth: boolean;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
@@ -19,18 +24,21 @@ type ProviderSettingsAsideProps = {
 export function ProviderSettingsAside({
 	savedConfig,
 	telegramDeploy,
-	codexAuthenticated,
+	codexAuthStatus,
+	isLoadingCodexAuth,
 	isDeploying,
 	deployError,
 	deployResult,
 	onDeploy,
 }: ProviderSettingsAsideProps) {
-	const requiresCodexAuth =
-		savedConfig?.provider != null && usesOAuthDeviceCode(savedConfig.provider);
+	const credentialPolicy = savedConfig
+		? getProviderCredentialPolicy(savedConfig.provider)
+		: null;
+	const codexReadyForDeploy =
+		!credentialPolicy?.requiresRemoteOAuth ||
+		(!isLoadingCodexAuth && codexAuthStatus?.authenticated === true);
 	const canDeploy =
-		Boolean(savedConfig) &&
-		Boolean(telegramDeploy) &&
-		(!requiresCodexAuth || codexAuthenticated);
+		Boolean(savedConfig) && Boolean(telegramDeploy) && codexReadyForDeploy;
 
 	return (
 		<aside className="space-y-4">
@@ -73,10 +81,11 @@ export function ProviderSettingsAside({
 								</span>
 							</p>
 						) : null}
-						{requiresCodexAuth && !codexAuthenticated ? (
+						{credentialPolicy?.requiresRemoteOAuth && !codexReadyForDeploy ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								Complete ChatGPT device-code login before deploying Codex to
-								Hermes.
+								{isLoadingCodexAuth
+									? "Checking remote Codex auth status..."
+									: "Complete ChatGPT device-code login before deploying Codex to Hermes."}
 							</p>
 						) : null}
 						<div className="mt-4">

@@ -2,26 +2,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	requireAuthSession,
+	requireOwnedServerSshById,
 	resolveTelegramHermesDeployContext,
 	withSshConnection,
 	requestCodexDeviceCode,
 	pollCodexDeviceAuthorization,
 	exchangeCodexAuthorizationCode,
-	readHermesAuthJson,
+	readHermesAuthStore,
 	writeHermesAuthJson,
 } = vi.hoisted(() => ({
 	requireAuthSession: vi.fn(),
+	requireOwnedServerSshById: vi.fn(),
 	resolveTelegramHermesDeployContext: vi.fn(),
 	withSshConnection: vi.fn(),
 	requestCodexDeviceCode: vi.fn(),
 	pollCodexDeviceAuthorization: vi.fn(),
 	exchangeCodexAuthorizationCode: vi.fn(),
-	readHermesAuthJson: vi.fn(),
+	readHermesAuthStore: vi.fn(),
 	writeHermesAuthJson: vi.fn(),
 }));
 
 vi.mock("../../request-guards", () => ({
 	requireAuthSession,
+	requireOwnedServerSshById,
 }));
 
 vi.mock("../../hermes/telegram-deploy-context", () => ({
@@ -52,7 +55,7 @@ vi.mock("../../hermes/auth-json", async (importOriginal) => {
 		await importOriginal<typeof import("../../hermes/auth-json")>();
 	return {
 		...actual,
-		readHermesAuthJson,
+		readHermesAuthStore,
 		writeHermesAuthJson,
 	};
 });
@@ -98,6 +101,7 @@ describe("codex auth handlers", () => {
 		resetCodexAuthSessionsForTests();
 		requireAuthSession.mockResolvedValue(session);
 		resolveTelegramHermesDeployContext.mockResolvedValue(deployCtx);
+		requireOwnedServerSshById.mockResolvedValue(deployCtx.sshCtx);
 		withSshConnection.mockImplementation(async (_config, handler) =>
 			handler({ execCommand: vi.fn() }),
 		);
@@ -125,7 +129,7 @@ describe("codex auth handlers", () => {
 		});
 	});
 
-	it("returns pending while ChatGPT approval is still outstanding", async () => {
+	it("returns pending without resolving deploy context", async () => {
 		requestCodexDeviceCode.mockResolvedValueOnce({
 			deviceAuthId: "auth_123",
 			userCode: "ABCD-1234",
@@ -134,6 +138,7 @@ describe("codex auth handlers", () => {
 			expiresAt: "2026-06-06T12:15:00.000Z",
 		});
 		await startCodexAuth(createContext());
+		resolveTelegramHermesDeployContext.mockClear();
 
 		const { CodexDeviceFlowError } = await import("./device-flow");
 		pollCodexDeviceAuthorization.mockRejectedValueOnce(
@@ -147,6 +152,8 @@ describe("codex auth handlers", () => {
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ status: "pending" });
+		expect(resolveTelegramHermesDeployContext).not.toHaveBeenCalled();
+		expect(requireOwnedServerSshById).not.toHaveBeenCalled();
 	});
 
 	it("writes remote Hermes auth.json after a successful exchange", async () => {
@@ -167,7 +174,7 @@ describe("codex auth handlers", () => {
 			access_token: "access-token",
 			refresh_token: "refresh-token",
 		});
-		readHermesAuthJson.mockResolvedValueOnce("{}");
+		readHermesAuthStore.mockResolvedValueOnce({});
 		writeHermesAuthJson.mockResolvedValueOnce(undefined);
 
 		const response = await completeCodexAuth(createContext());
@@ -178,6 +185,11 @@ describe("codex auth handlers", () => {
 			authMode: "chatgpt",
 			serverHost: "1.2.3.4",
 		});
+		expect(requireOwnedServerSshById).toHaveBeenCalledWith(
+			expect.anything(),
+			"server_1",
+			session,
+		);
 		expect(writeHermesAuthJson).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.stringContaining('"openai-codex"'),
@@ -185,17 +197,15 @@ describe("codex auth handlers", () => {
 	});
 
 	it("returns auth status without exposing remote tokens", async () => {
-		readHermesAuthJson.mockResolvedValueOnce(
-			JSON.stringify({
-				providers: {
-					"openai-codex": {
-						tokens: { access_token: "secret-token" },
-						auth_mode: "chatgpt",
-						last_refresh: "2026-06-06T12:00:00.000Z",
-					},
+		readHermesAuthStore.mockResolvedValueOnce({
+			providers: {
+				"openai-codex": {
+					tokens: { access_token: "secret-token" },
+					auth_mode: "chatgpt",
+					last_refresh: "2026-06-06T12:00:00.000Z",
 				},
-			}),
-		);
+			},
+		});
 
 		const response = await getCodexAuthStatus(createContext());
 
@@ -230,13 +240,50 @@ describe("codex auth handlers", () => {
 			access_token: "access-token",
 			refresh_token: "refresh-token",
 		});
-		readHermesAuthJson.mockResolvedValueOnce("[]");
+		readHermesAuthStore.mockRejectedValueOnce(
+			new Error(
+				"Remote Hermes auth.json is not valid JSON. Fix it on the VPS before continuing.",
+			),
+		);
 
 		const response = await completeCodexAuth(createContext());
 
 		expect(response.status).toBe(502);
 		expect(await response.json()).toMatchObject({
 			error: expect.stringContaining("auth.json is not valid JSON"),
+		});
+		expect(writeHermesAuthJson).not.toHaveBeenCalled();
+	});
+
+	it("returns 400 when the stored session server no longer matches", async () => {
+		requestCodexDeviceCode.mockResolvedValueOnce({
+			deviceAuthId: "auth_123",
+			userCode: "ABCD-1234",
+			verificationUrl: "https://auth.openai.com/codex/device",
+			pollIntervalSeconds: 5,
+			expiresAt: "2026-06-06T12:15:00.000Z",
+		});
+		await startCodexAuth(createContext());
+
+		pollCodexDeviceAuthorization.mockResolvedValueOnce({
+			authorization_code: "auth-code",
+			code_verifier: "verifier",
+		});
+		exchangeCodexAuthorizationCode.mockResolvedValueOnce({
+			access_token: "access-token",
+			refresh_token: "refresh-token",
+		});
+		requireOwnedServerSshById.mockResolvedValueOnce({
+			...deployCtx.sshCtx,
+			serverId: "server_2",
+			server: { ...deployCtx.sshCtx.server, id: "server_2", host: "5.6.7.8" },
+		});
+
+		const response = await completeCodexAuth(createContext());
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("no longer matches"),
 		});
 		expect(writeHermesAuthJson).not.toHaveBeenCalled();
 	});

@@ -1,9 +1,6 @@
-export type CodexAuthStatus = {
-	authenticated: boolean;
-	authMode: string | null;
-	lastRefresh: string | null;
-	serverHost: string | null;
-};
+import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+
+export type { CodexAuthStatus };
 
 export type CodexAuthPanelState = {
 	status: CodexAuthStatus | null;

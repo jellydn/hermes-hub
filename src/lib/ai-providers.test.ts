@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	getAiProviderOption,
+	getProviderCredentialPolicy,
 	isValidAiModel,
 	isValidModelString,
 	MODEL_VALIDATION_REGEX,
@@ -70,6 +71,28 @@ describe("isValidModelString", () => {
 		expect(isValidModelString("")).toBe(false);
 		expect(isValidModelString("$(id)")).toBe(false);
 		expect(isValidModelString("a".repeat(200))).toBe(false);
+	});
+});
+
+describe("getProviderCredentialPolicy", () => {
+	it("returns oauth policy for OpenAI Codex", () => {
+		expect(getProviderCredentialPolicy("openai-codex")).toEqual({
+			kind: "oauth-device-code",
+			requiresApiKey: false,
+			requiresBaseUrl: false,
+			requiresRemoteOAuth: true,
+			reportsStoredKeyWithoutApiKey: true,
+		});
+	});
+
+	it("returns api-key policy for OpenAI", () => {
+		expect(getProviderCredentialPolicy("openai")).toEqual({
+			kind: "api-key",
+			requiresApiKey: true,
+			requiresBaseUrl: false,
+			requiresRemoteOAuth: false,
+			reportsStoredKeyWithoutApiKey: false,
+		});
 	});
 });
 

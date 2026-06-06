@@ -156,6 +156,46 @@ describe("ProviderSettings", () => {
 		expect(screen.getByText(/chatgpt device-code login/i)).toBeTruthy();
 	});
 
+	it("enables Codex deploy when remote auth is already authenticated", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					codexAuth: {
+						authenticated: true,
+						authMode: "chatgpt",
+						lastRefresh: "2026-06-06T12:00:00.000Z",
+						serverHost: "1.2.3.4",
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ProviderSettings
+				initialConfig={{
+					provider: "openai-codex",
+					model: "gpt-5.5",
+					keyLast4: null,
+					hasStoredKey: true,
+				}}
+				telegramDeploy={{
+					deployedServerHost: "1.2.3.4",
+				}}
+			/>,
+		);
+
+		await flushAsyncWork();
+
+		const deployButton = screen.getByRole("button", {
+			name: /deploy to hermes server/i,
+		});
+		expect(deployButton).toHaveProperty("disabled", false);
+	});
+
 	it("disables Codex deploy until remote auth succeeds", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(

@@ -1,3 +1,5 @@
+import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+
 import type { ProviderSettingsSummary } from "./provider-settings";
 
 export type ProviderSettingsUiState = {
@@ -11,6 +13,9 @@ export type ProviderSettingsUiState = {
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
+	codexAuthStatus: CodexAuthStatus | null;
+	isLoadingCodexAuth: boolean;
+	codexAuthError: string | null;
 };
 
 export type ProviderSettingsUiAction =
@@ -26,7 +31,14 @@ export type ProviderSettingsUiAction =
 	| { type: "deploy_started" }
 	| { type: "deploy_failed"; error: string }
 	| { type: "deploy_succeeded"; message: string }
-	| { type: "deploy_finished" };
+	| { type: "deploy_finished" }
+	| { type: "codex_auth_status_load_started" }
+	| {
+			type: "codex_auth_status_changed";
+			status: CodexAuthStatus | null;
+			isLoading: boolean;
+			error: string | null;
+	  };
 
 export function createInitialProviderSettingsUiState(
 	initialConfig: ProviderSettingsSummary | null,
@@ -42,6 +54,9 @@ export function createInitialProviderSettingsUiState(
 		isDeploying: false,
 		deployError: null,
 		deployResult: null,
+		codexAuthStatus: null,
+		isLoadingCodexAuth: false,
+		codexAuthError: null,
 	};
 }
 
@@ -57,6 +72,22 @@ export function providerSettingsUiReducer(
 				saveError: null,
 				testError: null,
 				isConnected: false,
+				codexAuthStatus: null,
+				isLoadingCodexAuth: false,
+				codexAuthError: null,
+			};
+		case "codex_auth_status_load_started":
+			return {
+				...state,
+				isLoadingCodexAuth: true,
+				codexAuthError: null,
+			};
+		case "codex_auth_status_changed":
+			return {
+				...state,
+				codexAuthStatus: action.status,
+				isLoadingCodexAuth: action.isLoading,
+				codexAuthError: action.error,
 			};
 		case "save_started":
 			return {
