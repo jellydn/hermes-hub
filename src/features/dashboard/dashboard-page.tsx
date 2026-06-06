@@ -1,4 +1,4 @@
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/features/dashboard/app-shell";
@@ -18,9 +18,9 @@ export function DashboardPage() {
 			kicker="Dashboard"
 			actions={
 				<Button asChild size="sm">
-					<a href="/servers">
+					<Link to="/servers">
 						<span>Servers {serverCount > 0 ? `(${serverCount})` : ""}</span>
-					</a>
+					</Link>
 				</Button>
 			}
 		>
