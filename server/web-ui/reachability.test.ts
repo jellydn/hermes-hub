@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { formatWebUiProxyError } from "./reachability";
+import { formatWebUiProxyError, isRemotePortUnreachable } from "./reachability";
+
+describe("isRemotePortUnreachable", () => {
+	it("detects SSH channel and connection refused errors", () => {
+		expect(
+			isRemotePortUnreachable(
+				new Error("(SSH) Channel open failure: Connection refused"),
+			),
+		).toBe(true);
+	});
+
+	it("returns false for unrelated errors", () => {
+		expect(isRemotePortUnreachable(new Error("Upstream timeout"))).toBe(false);
+	});
+});
 
 describe("formatWebUiProxyError", () => {
 	it("translates SSH connection refused into actionable guidance", () => {

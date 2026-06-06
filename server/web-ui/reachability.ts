@@ -1,18 +1,29 @@
 import type { NodeSSH } from "node-ssh";
 
+const REMOTE_PORT_UNREACHABLE_MARKERS = [
+	"Connection refused",
+	"Channel open failure",
+] as const;
+
+const WEB_UI_UNREACHABLE_PROXY_MESSAGE =
+	"Hermes Web UI is not reachable on the server (127.0.0.1:{port}). The container may have stopped or was removed during a later deploy. Open the server page and run Redeploy Web UI.";
+
 const WEB_UI_STARTUP_ATTEMPTS = 15;
 const WEB_UI_STARTUP_DELAY_SECONDS = 2;
 
-export function formatWebUiProxyError(error: unknown, port: number) {
+export function isRemotePortUnreachable(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error);
-	if (
-		message.includes("Connection refused") ||
-		message.includes("Channel open failure")
-	) {
-		return `Hermes Web UI is not reachable on the server (127.0.0.1:${port}). The container may have stopped or was removed during a later deploy. Open the server page and run Redeploy Web UI.`;
+	return REMOTE_PORT_UNREACHABLE_MARKERS.some((marker) =>
+		message.includes(marker),
+	);
+}
+
+export function formatWebUiProxyError(error: unknown, port: number) {
+	if (isRemotePortUnreachable(error)) {
+		return WEB_UI_UNREACHABLE_PROXY_MESSAGE.replace("{port}", String(port));
 	}
 
-	return message;
+	return error instanceof Error ? error.message : String(error);
 }
 
 export async function assertWebUiReachable(ssh: NodeSSH, port: number) {
