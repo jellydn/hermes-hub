@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { render, screen } from "@testing-library/react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
@@ -19,6 +19,16 @@ vi.mock("@tanstack/react-router", () => ({
 		</a>
 	),
 }));
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		ArrowRight: MockIcon,
+		Plus: MockIcon,
+		Rocket: MockIcon,
+		Server: MockIcon,
+	};
+});
 
 import { ServerList } from "./server-list";
 

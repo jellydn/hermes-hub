@@ -5,15 +5,27 @@ import {
 	resetInstallStream,
 } from "./install/sse-stream";
 
-const getAuthSession = vi.fn();
-const selectFrom = vi.fn();
-const selectWhere = vi.fn();
-const selectLimit = vi.fn();
-const dbSelect = vi.fn();
-const streamSSE = vi.fn();
-const writeSSE = vi.fn();
-const close = vi.fn();
-const onAbort = vi.fn();
+const {
+	getAuthSession,
+	selectFrom,
+	selectWhere,
+	selectLimit,
+	dbSelect,
+	streamSSE,
+	writeSSE,
+	close,
+	onAbort,
+} = vi.hoisted(() => ({
+	getAuthSession: vi.fn(),
+	selectFrom: vi.fn(),
+	selectWhere: vi.fn(),
+	selectLimit: vi.fn(),
+	dbSelect: vi.fn(),
+	streamSSE: vi.fn(),
+	writeSSE: vi.fn(),
+	close: vi.fn(),
+	onAbort: vi.fn(),
+}));
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -28,6 +40,8 @@ vi.mock("./db", () => ({
 vi.mock("hono/streaming", () => ({
 	streamSSE,
 }));
+
+import { streamServerInstallEvents } from "./install";
 
 describe("streamServerInstallEvents idle timeout", () => {
 	beforeEach(() => {
@@ -81,7 +95,6 @@ describe("streamServerInstallEvents idle timeout", () => {
 		const state = resetInstallStream("server_123", "install_123");
 		state.status = "running";
 
-		const { streamServerInstallEvents } = await import("./install");
 		const responsePromise = streamServerInstallEvents(createContext());
 
 		await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS);

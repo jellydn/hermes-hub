@@ -1,17 +1,23 @@
 import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { tableAuditLogs, tableInstallEvents, tableInstalls, tableServers } =
-	vi.hoisted(() => ({
-		tableInstalls: { kind: "installs" },
-		tableInstallEvents: { kind: "installEvents" },
-		tableServers: { kind: "servers" },
-		tableAuditLogs: { kind: "auditLogs" },
-	}));
-
-const getAuthSession = vi.fn();
-const deleteWhere = vi.fn();
-const selectFrom = vi.fn();
+const {
+	tableAuditLogs,
+	tableInstallEvents,
+	tableInstalls,
+	tableServers,
+	getAuthSession,
+	deleteWhere,
+	selectFrom,
+} = vi.hoisted(() => ({
+	tableInstalls: { kind: "installs" },
+	tableInstallEvents: { kind: "installEvents" },
+	tableServers: { kind: "servers" },
+	tableAuditLogs: { kind: "auditLogs" },
+	getAuthSession: vi.fn(),
+	deleteWhere: vi.fn(),
+	selectFrom: vi.fn(),
+}));
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -31,6 +37,8 @@ vi.mock("./db/schema", () => ({
 	auditLogs: tableAuditLogs,
 }));
 
+import { clearLogs, getLogs } from "./logs";
+
 describe("logs handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -39,7 +47,6 @@ describe("logs handlers", () => {
 
 	it("returns unauthorized when reading logs without a session", async () => {
 		getAuthSession.mockResolvedValueOnce(null);
-		const { getLogs } = await import("./logs");
 
 		const response = await getLogs(createContext());
 		const payload = await response.json();
@@ -122,7 +129,6 @@ describe("logs handlers", () => {
 			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
 		});
 
-		const { getLogs } = await import("./logs");
 		const response = await getLogs(createContext());
 		const payload = await response.json();
 
@@ -147,7 +153,6 @@ describe("logs handlers", () => {
 			}),
 		});
 
-		const { clearLogs } = await import("./logs");
 		const response = await clearLogs(createContext());
 		const payload = await response.json();
 

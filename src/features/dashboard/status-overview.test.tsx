@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import {
 	act,
@@ -7,9 +7,39 @@ import {
 	render,
 	screen,
 } from "@testing-library/react";
+import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardStatusSnapshot } from "@/lib/dashboard-status";
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		Activity: MockIcon,
+		Bot: MockIcon,
+		Cpu: MockIcon,
+		LoaderCircle: MockIcon,
+		RefreshCcw: MockIcon,
+		Server: MockIcon,
+		Sparkles: MockIcon,
+		TriangleAlert: MockIcon,
+	};
+});
+
+vi.mock("@/components/ui/button", () => ({
+	Button: ({
+		asChild: _asChild,
+		children,
+		disabled,
+		onClick,
+		type = "button",
+		...props
+	}: ComponentPropsWithoutRef<"button"> & { asChild?: boolean }) => (
+		<button type={type} disabled={disabled} onClick={onClick} {...props}>
+			{children}
+		</button>
+	),
+}));
 
 import { DashboardStatusOverview } from "./status-overview";
 

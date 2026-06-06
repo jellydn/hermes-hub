@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InsertAuditLogInput } from "./insert-audit-log";
+import { insertAuditLog } from "./insert-audit-log";
 
-const insertValues = vi.fn();
-const dbInsert = vi.fn();
+const { insertValues, dbInsert } = vi.hoisted(() => ({
+	insertValues: vi.fn(),
+	dbInsert: vi.fn(),
+}));
 
 vi.mock("../db", () => ({
 	getDb: () => ({
@@ -23,7 +26,6 @@ describe("insertAuditLog", () => {
 	});
 
 	it("writes serverId from the explicit parameter when provided", async () => {
-		const { insertAuditLog } = await import("./insert-audit-log");
 		await insertAuditLog({ insert: dbInsert } as never, {
 			userId: "user_123",
 			action: "server.connect.succeeded",
@@ -44,7 +46,6 @@ describe("insertAuditLog", () => {
 	});
 
 	it("derives serverId from details.serverId when not explicit", async () => {
-		const { insertAuditLog } = await import("./insert-audit-log");
 		await insertAuditLog({ insert: dbInsert } as never, {
 			userId: "user_123",
 			action: "server.update.succeeded",
@@ -63,7 +64,6 @@ describe("insertAuditLog", () => {
 	});
 
 	it("writes null serverId when neither the parameter nor details carry one", async () => {
-		const { insertAuditLog } = await import("./insert-audit-log");
 		await insertAuditLog({ insert: dbInsert } as never, {
 			userId: "user_123",
 			action: "telegram.connected",

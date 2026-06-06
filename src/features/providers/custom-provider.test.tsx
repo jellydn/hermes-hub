@@ -1,7 +1,35 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import type { ComponentPropsWithoutRef } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("lucide-react", () => {
+	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
+	return {
+		CheckCircle2: MockIcon,
+		CloudUpload: MockIcon,
+		KeyRound: MockIcon,
+		LoaderCircle: MockIcon,
+		Radio: MockIcon,
+		Server: MockIcon,
+		ShieldCheck: MockIcon,
+	};
+});
+
+vi.mock("@/components/ui/button", () => ({
+	Button: ({
+		children,
+		disabled,
+		onClick,
+		type = "button",
+		...props
+	}: ComponentPropsWithoutRef<"button">) => (
+		<button type={type} disabled={disabled} onClick={onClick} {...props}>
+			{children}
+		</button>
+	),
+}));
 
 import { ProviderSettings } from "./provider-settings";
 

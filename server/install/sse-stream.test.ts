@@ -2,20 +2,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installEvents, installs } from "../db/schema";
 
-const selectLimit = vi.fn();
-const selectOrderBy = vi.fn();
-const insertValues = vi.fn();
-const updateSet = vi.fn();
-const updateWhere = vi.fn();
-const dbSelect = vi.fn();
-const dbInsert = vi.fn();
-const dbUpdate = vi.fn();
-const dbTransaction = vi.fn();
-const txInsert = vi.fn();
-const txUpdate = vi.fn();
-const txSet = vi.fn();
-const txWhere = vi.fn();
-const txInsertValues = vi.fn();
+const {
+	selectLimit,
+	selectOrderBy,
+	insertValues,
+	updateSet,
+	updateWhere,
+	dbSelect,
+	dbInsert,
+	dbUpdate,
+	dbTransaction,
+	txInsert,
+	txUpdate,
+	txSet,
+	txWhere,
+	txInsertValues,
+} = vi.hoisted(() => ({
+	selectLimit: vi.fn(),
+	selectOrderBy: vi.fn(),
+	insertValues: vi.fn(),
+	updateSet: vi.fn(),
+	updateWhere: vi.fn(),
+	dbSelect: vi.fn(),
+	dbInsert: vi.fn(),
+	dbUpdate: vi.fn(),
+	dbTransaction: vi.fn(),
+	txInsert: vi.fn(),
+	txUpdate: vi.fn(),
+	txSet: vi.fn(),
+	txWhere: vi.fn(),
+	txInsertValues: vi.fn(),
+}));
 
 vi.mock("../db", () => ({
 	getDb: () => ({
@@ -25,6 +42,15 @@ vi.mock("../db", () => ({
 		transaction: dbTransaction,
 	}),
 }));
+
+import {
+	emitInstallEvent,
+	ensureInstallStream,
+	hydrateInstallEvents,
+	installStreams,
+	normalizeInstallStatus,
+	resetInstallStream,
+} from "./sse-stream";
 
 describe("install SSE stream helpers", () => {
 	beforeEach(() => {
@@ -102,8 +128,6 @@ describe("install SSE stream helpers", () => {
 	});
 
 	it("normalizes install status values", async () => {
-		const { normalizeInstallStatus } = await import("./sse-stream");
-
 		expect(normalizeInstallStatus("pending")).toBe("pending");
 		expect(normalizeInstallStatus("running")).toBe("running");
 		expect(normalizeInstallStatus("succeeded")).toBe("succeeded");
@@ -113,8 +137,6 @@ describe("install SSE stream helpers", () => {
 	});
 
 	it("hydrates persisted log lines into install events", async () => {
-		const { hydrateInstallEvents } = await import("./sse-stream");
-
 		const events = await hydrateInstallEvents("server_123", {
 			id: "install_123",
 			status: "running",
@@ -125,9 +147,6 @@ describe("install SSE stream helpers", () => {
 	});
 
 	it("resetInstallStream stores a pending in-memory stream and ensureInstallStream reuses it", async () => {
-		const { ensureInstallStream, installStreams, resetInstallStream } =
-			await import("./sse-stream");
-
 		installStreams.clear();
 		const state = resetInstallStream("server_123", "install_123");
 		const ensured = await ensureInstallStream("server_123");
@@ -138,10 +157,6 @@ describe("install SSE stream helpers", () => {
 	});
 
 	it("ensureInstallStream hydrates the latest persisted install when no stream exists", async () => {
-		const { ensureInstallStream, installStreams } = await import(
-			"./sse-stream"
-		);
-
 		installStreams.clear();
 		selectLimit.mockResolvedValueOnce([
 			{
@@ -175,9 +190,6 @@ describe("install SSE stream helpers", () => {
 	});
 
 	it("emitInstallEvent appends events, updates the DB, and notifies listeners", async () => {
-		const { emitInstallEvent, installStreams, resetInstallStream } =
-			await import("./sse-stream");
-
 		installStreams.clear();
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
