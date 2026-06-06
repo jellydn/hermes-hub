@@ -10,6 +10,7 @@ export type ServerWebUiRecord = {
 	port: number;
 	deployStatus: string;
 	deployError: string | null;
+	deployStartedAt: Date | null;
 	updatedAt: Date;
 };
 
@@ -27,6 +28,7 @@ export async function getServerWebUiRecord(
 			port: serverWebUi.port,
 			deployStatus: serverWebUi.deployStatus,
 			deployError: serverWebUi.deployError,
+			deployStartedAt: serverWebUi.deployStartedAt,
 			updatedAt: serverWebUi.updatedAt,
 		})
 		.from(serverWebUi)

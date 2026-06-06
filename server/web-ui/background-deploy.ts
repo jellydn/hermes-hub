@@ -4,7 +4,6 @@ import { serverWebUi } from "../db/schema";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { deployManagedCompose } from "../managed-compose-deploy";
 import type { OwnedServerSshContext } from "../request-guards";
-import { buildWebUiSnapshot } from "./snapshot";
 
 export type WebUiBackgroundDeployInput = {
 	ctx: OwnedServerSshContext;
@@ -47,6 +46,7 @@ export async function runWebUiDeployInBackground(
 					port: webUiPort,
 					deployStatus: "succeeded",
 					deployError: null,
+					deployStartedAt: null,
 					updatedAt,
 				})
 				.onConflictDoUpdate({
@@ -57,6 +57,7 @@ export async function runWebUiDeployInBackground(
 						port: webUiPort,
 						deployStatus: "succeeded",
 						deployError: null,
+						deployStartedAt: null,
 						updatedAt,
 					},
 				});
@@ -81,6 +82,7 @@ export async function runWebUiDeployInBackground(
 				port: webUiPort,
 				deployStatus: "failed",
 				deployError: message,
+				deployStartedAt: null,
 				updatedAt,
 			})
 			.onConflictDoUpdate({
@@ -88,6 +90,7 @@ export async function runWebUiDeployInBackground(
 				set: {
 					deployStatus: "failed",
 					deployError: message,
+					deployStartedAt: null,
 					updatedAt,
 				},
 			});
@@ -100,22 +103,4 @@ export async function runWebUiDeployInBackground(
 			ipAddress,
 		});
 	}
-}
-
-export function buildDeployingWebUiSnapshot(
-	serverId: string,
-	input: {
-		enabled: boolean;
-		port: number;
-		updatedAt: Date;
-	},
-) {
-	return buildWebUiSnapshot(serverId, {
-		enabled: input.enabled,
-		encryptedPassword: null,
-		port: input.port,
-		deployStatus: "deploying",
-		deployError: null,
-		updatedAt: input.updatedAt,
-	});
 }

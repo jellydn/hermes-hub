@@ -8,10 +8,7 @@ import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
-import {
-	buildDeployingWebUiSnapshot,
-	runWebUiDeployInBackground,
-} from "./background-deploy";
+import { runWebUiDeployInBackground } from "./background-deploy";
 import { requireEnabledWebUi } from "./enabled-context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
@@ -21,6 +18,7 @@ import {
 	getServerWebUiRecord,
 	getWebUiProxyPath,
 } from "./records";
+import { buildWebUiSnapshot, isStaleDeploy } from "./snapshot";
 import { proxyRequestOverSsh } from "./ssh-forward";
 import { invalidatePooledSsh } from "./ssh-pool";
 
@@ -50,6 +48,18 @@ export async function deployServerWebUi(context: Context) {
 	const db = getDb();
 	const ipAddress = getClientIp(context);
 	const existingRecord = await getServerWebUiRecord(ctx.serverId);
+
+	// Not atomic: two simultaneous POSTs can both pass this check and start
+	// background deploys. onConflictDoUpdate keeps one DB row, but the VPS may
+	// see concurrent work. SELECT ... FOR UPDATE would need raw SQL; this guard
+	// only narrows the race to nearly-simultaneous requests.
+	if (
+		existingRecord?.deployStatus === "deploying" &&
+		!isStaleDeploy(existingRecord.deployStartedAt)
+	) {
+		const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, existingRecord);
+		return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
+	}
 
 	const passwordResult = resolveWebUiDeployPassword(existingRecord);
 	if ("error" in passwordResult) {
@@ -82,6 +92,7 @@ export async function deployServerWebUi(context: Context) {
 			port: webUiPort,
 			deployStatus: "deploying",
 			deployError: null,
+			deployStartedAt: now,
 			updatedAt: now,
 		})
 		.onConflictDoUpdate({
@@ -90,13 +101,18 @@ export async function deployServerWebUi(context: Context) {
 				encryptedPassword,
 				deployStatus: "deploying",
 				deployError: null,
+				deployStartedAt: now,
 				updatedAt: now,
 			},
 		});
 
-	const webUiSnapshot = buildDeployingWebUiSnapshot(ctx.serverId, {
+	const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, {
 		enabled: existingEnabled,
+		encryptedPassword,
 		port: webUiPort,
+		deployStatus: "deploying",
+		deployError: null,
+		deployStartedAt: now,
 		updatedAt: now,
 	});
 

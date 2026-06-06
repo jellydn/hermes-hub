@@ -232,11 +232,9 @@ function rewriteCookieSegment(segment: string, proxyBasePath: string) {
 
 	const rewritten = [parts[0] ?? ""];
 	for (const attribute of parts.slice(1)) {
-		const separator = attribute.indexOf("=");
-		const name = (
-			separator === -1 ? attribute : attribute.slice(0, separator)
-		).trim();
-		const value = separator === -1 ? "" : attribute.slice(separator + 1).trim();
+		const [namePart, ...valueParts] = attribute.split("=");
+		const name = namePart.trim();
+		const value = valueParts.join("=").trim();
 
 		if (name.toLowerCase() === "path") {
 			const nextPath =
