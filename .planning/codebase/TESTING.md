@@ -1,235 +1,312 @@
-# Testing Patterns
+# Testing Conventions — HermesHub
 
-**Analysis Date:** 2026-06-02
-
-## Test Framework
-
-**Runner:**
-- Vitest 4.1.5 (`package.json` devDependencies).
-- Config: `vite.config.ts` — the same Vite config exports a Vitest `test` block. The config gates Tanstack/React/Tailwind plugins behind `process.env.VITEST !== "true"` so they don't load during tests.
-- Per `vite.config.ts` `test`:
-  - `environment: "node"` is the default.
-  - `include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}", "server/**/*.{test,spec}.{js,ts,jsx,tsx}"]`.
-  - React/DOM tests opt into jsdom per-file with the `// @vitest-environment jsdom` pragma (see `src/features/dashboard/status-overview.test.tsx:1`, `src/features/servers/server-list.test.tsx:1`). `jsdom` is in devDependencies.
-- Server-only modules (`node-ssh`, `ssh2`, `cpu-features`) are excluded from Vite's `optimizeDeps` — do not import them in client tests.
-
-**Assertion Library:**
-- Vitest's built-in `expect` (`import { expect } from "vitest"`).
-- React Testing Library (`@testing-library/react` 16, `@testing-library/dom` 10) for component assertions: `screen.getByRole`, `screen.getByText`, `.toBeTruthy()`, `.toHaveLength(n)`. The repo intentionally uses `.toBeTruthy()` rather than `@testing-library/jest-dom` matchers (no `jest-dom` dependency is installed).
-
-**Run Commands:**
-```bash
-bun run test           # vitest run --passWithNoTests (single pass; CI default)
-just test              # thin wrapper around `bun run test`
-just check             # parallel typecheck + test
-bunx vitest            # watch mode (not wired into a script; invoke directly)
-bunx vitest --coverage # coverage (no coverage tool is configured; see below)
-```
-
-> Per `AGENTS.md`: **do not** run `bun test` — that invokes Bun's built-in runner, which is not the configured one. Always use `bun run test`. CI order is `bunx @biomejs/biome check .` → `bun run typecheck` → `bun run test` → `bun run build`.
-
-## Test File Organization
-
-**Location:**
-- Co-located with the module under test. Examples: `server/install/sse-stream.ts` ↔ `server/install/sse-stream.test.ts`, `src/lib/session.ts` ↔ `src/lib/session.test.ts`, `src/features/servers/server-list.tsx` ↔ `src/features/servers/server-list.test.tsx`.
-- Snapshot artifacts live in a sibling `__snapshots__/` folder (`server/__snapshots__/compose.test.ts.snap`) — Vitest's default layout.
-- No separate `__tests__/` directories or top-level `tests/` folder.
-
-**Naming:**
-- `<module>.test.ts` or `<module>.test.tsx`. The `vite.config.ts` include glob also accepts `.spec.*` but nothing in the repo uses it.
-
-**Structure:**
-```
-server/
-  install/
-    sse-stream.ts
-    sse-stream.test.ts
-    workflow.ts
-    workflow.test.ts
-  __snapshots__/
-    compose.test.ts.snap
-  compose.ts
-  compose.test.ts
-src/
-  features/
-    dashboard/
-      status-overview.tsx
-      status-overview.test.tsx
-  lib/
-    session.ts
-    session.test.ts
-```
-
-## Test Structure
-
-**Suite Organization (from `server/install/sse-stream.test.ts`):**
-```typescript
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { installEvents, installs } from "../db/schema";
-
-const selectLimit = vi.fn();
-// ... shared mock handles declared at module top ...
-
-vi.mock("../db", () => ({
-  getDb: () => ({ select: dbSelect, insert: dbInsert, update: dbUpdate, transaction: dbTransaction }),
-}));
-
-describe("install SSE stream helpers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useRealTimers();
-    // ...wire up mock implementations fresh per test...
-  });
-
-  it("normalizes install status values", async () => {
-    const { normalizeInstallStatus } = await import("./sse-stream");
-    expect(normalizeInstallStatus("pending")).toBe("pending");
-    expect(normalizeInstallStatus(null)).toBe("pending");
-  });
-});
-```
-
-**Patterns:**
-- Setup uses `beforeEach(() => { vi.clearAllMocks(); vi.useRealTimers(); ... })` to keep tests independent.
-- The module under test is often `await import("./module")` *inside* each `it` so `vi.mock` calls earlier in the file take effect before the import (see `src/lib/session.test.ts:14`).
-- Teardown for DOM tests uses `afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); })` from `@testing-library/react` (see `src/features/dashboard/status-overview.test.tsx:18`).
-- Assertions favor explicit, behavioral checks: `expect(state.events).toHaveLength(1)`, `expect(state.events[0]).toMatchObject({ ... })`, `expect(fetchMock).toHaveBeenCalledTimes(3)`.
-
-## Mocking
-
-**Framework:** Vitest's built-in `vi` (`vi.fn`, `vi.mock`, `vi.stubGlobal`, `vi.useFakeTimers`, `vi.setSystemTime`).
-
-**Patterns:**
-
-Module mocking with hoisted `vi.mock` and shared `vi.fn()` handles re-wired per test (`server/install/sse-stream.test.ts`):
-```typescript
-const dbSelect = vi.fn();
-const dbInsert = vi.fn();
-const dbTransaction = vi.fn();
-
-vi.mock("../db", () => ({
-  getDb: () => ({ select: dbSelect, insert: dbInsert, transaction: dbTransaction }),
-}));
-
-beforeEach(() => {
-  dbSelect.mockImplementation(() => ({ from: (table) => { /* ... */ } }));
-  dbTransaction.mockImplementation(async (cb) => cb({ insert: txInsert, update: txUpdate }));
-});
-```
-
-Router mocking for component tests that render `<Link>` without a real router (`src/features/servers/server-list.test.tsx`):
-```typescript
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, params, to, ...props }: MockLinkProps) => (
-    <a href={resolveTo(to, params)} {...props}>{children}</a>
-  ),
-}));
-```
-
-Global `fetch` stubbing with response factories (`src/features/dashboard/status-overview.test.tsx`):
-```typescript
-const fetchMock = vi.fn();
-vi.stubGlobal("fetch", fetchMock);
-fetchMock.mockResolvedValueOnce(createStatusResponse(createSnapshot()));
-```
-
-Fake timers for polling/backoff logic — driven by helpers that wrap `vi.advanceTimersByTime` in `act` (`src/features/dashboard/status-overview.test.tsx`):
-```typescript
-async function advancePollingTime(ms: number) {
-  await act(async () => {
-    vi.advanceTimersByTime(ms);
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
-```
-
-**What to Mock:**
-- The database layer (`vi.mock("../db", ...)`) so server tests stay hermetic and don't need `DATABASE_URL`.
-- External transports: `fetch` (via `vi.stubGlobal`), SSH (`node-ssh`), email senders.
-- TanStack Router primitives (`Link`, `redirect`) when testing isolated components or loaders without a router instance (`src/lib/session.test.ts`, `src/features/servers/server-list.test.tsx`).
-- Time and timers when exercising polling, backoff, or heartbeat logic.
-
-**What NOT to Mock:**
-- Drizzle schema objects — tests import the real `installEvents`, `installs` tables and use them as discriminators inside mock implementations (`server/install/sse-stream.test.ts:3`). Don't replace the schema with stubs.
-- Pure helpers under test (e.g. `buildHermesComposeContent`, `normalizeInstallStatus`) — call the real implementation and assert on output / snapshots.
-- React Testing Library queries / `screen` — use them directly, no wrappers.
-
-## Fixtures and Factories
-
-**Test Data:**
-- Local factory functions defined at the bottom of each test file, returning fully-typed objects with sensible defaults and an `overrides?: Partial<T>` spread (`src/features/servers/server-list.test.tsx`):
-```typescript
-function createServer(overrides?: Partial<ServerListSummary>): ServerListSummary {
-  return {
-    id: "server_123",
-    label: "Production VPS",
-    host: "203.0.113.10",
-    status: "connected",
-    osName: "Ubuntu",
-    osVersion: "24.04",
-    supportLevel: "supported",
-    installStatus: "succeeded",
-    installUpdatedAt: "2026-05-26T04:00:00.000Z",
-    lastActionAt: "2026-05-26T05:00:00.000Z",
-    lastActivityAt: "2026-05-26T05:00:00.000Z",
-    ...overrides,
-  };
-}
-```
-- Response helpers wrap the global `Response` for fetch mocks (`createStatusResponse`, `createErrorResponse` in `src/features/dashboard/status-overview.test.tsx`).
-- IDs in fixtures follow the same `entity_xxx` shape used by `gen_random_uuid()::text` columns (`server_123`, `install_123`, `session_123`, `user_123`) so tests read like real data.
-
-**Location:**
-- In-file. There is no shared `tests/fixtures/` or `test-utils/` directory. If a factory is reused across files, copy it locally rather than introducing a shared module — that matches the current convention.
-
-## Coverage
-
-**Requirements:** None enforced. There is no `coverage` block in `vite.config.ts`, no `@vitest/coverage-*` package in `package.json`, and CI does not gate on coverage.
-
-**View Coverage:**
-```bash
-# Not configured. To experiment locally, install a provider first:
-bun add -d @vitest/coverage-v8
-bunx vitest run --coverage
-```
-
-## Test Types
-
-**Unit Tests:**
-- Cover pure helpers and small modules: `server/compose.test.ts` (template rendering with snapshots), `server/lib/insert-audit-log.test.ts`, `src/lib/ai-providers.test.ts`, `src/lib/session.test.ts`. They mock external dependencies and assert exact outputs.
-
-**Integration Tests:**
-- "Integration" in this repo means exercising a module against mocked I/O boundaries — DB calls mocked at the `getDb()` seam, SSH mocked, but the real Hono handler / workflow runs end-to-end. Examples: `server/app.test.ts`, `server/install.test.ts`, `server/dashboard.test.ts`, `server/server-actions.test.ts`, `server/telegram.test.ts`, `server/install/workflow.test.ts`.
-- Component "integration" tests render a real React feature with mocked router/fetch: `src/features/dashboard/status-overview.test.tsx`, `src/features/servers/connection-wizard.test.tsx`, `src/features/servers/install-progress.test.tsx`.
-
-**E2E Tests:** Not used. No Playwright/Cypress/Puppeteer dependency. Browser-level verification is manual against `bun run dev` (port 3000 per `AGENTS.md`).
-
-## Common Patterns
-
-**Async Testing:**
-```typescript
-// Promise-returning helpers: assert on the resolved/rejected value directly.
-await expect(
-  requireSession("/dashboard", async () => null as never),
-).rejects.toEqual({ to: "/login", search: { redirect: "/dashboard" } });
-
-await expect(
-  requireSession(undefined, async () => session as never),
-).resolves.toEqual(session);
-```
-
-For React polling/SSE flows, drive time with fake timers wrapped in `act` (see `advancePollingTime` / `flushAsyncWork` in `src/features/dashboard/status-overview.test.tsx`).
-
-**Error Testing:**
-- For HTTP handlers, exercise the handler with a stub `Context`, then assert the `Response` status and JSON body returned by `context.json({ error: "..." }, status)` — e.g. unauthorized (401), conflict (409), validation (400).
-- For helpers that throw, use `await expect(fn()).rejects.toThrow(...)` or `.rejects.toEqual(...)` when matching a structured payload (as in `src/lib/session.test.ts`).
-- For UI error states, assert the rendered message and retry affordance: `expect(screen.getAllByText(/unable to load/i)).toHaveLength(5)`, `expect(screen.getAllByRole("button", { name: /retry/i })).toHaveLength(5)`.
-
-**Snapshot Testing:**
-- Used for stable text artifacts only — currently `buildHermesComposeContent` in `server/compose.test.ts` with snapshots stored in `server/__snapshots__/compose.test.ts.snap`. Pair each `toMatchSnapshot()` with structural assertions (e.g. `parse(result)` then `.toEqual(expect.arrayContaining([...]))`) so a snapshot drift still surfaces the meaningful diff.
+Generated from codebase analysis (2026-06-06)
 
 ---
 
-*Testing analysis: 2026-06-02*
+## Test Stack
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Vitest** | 4.1.5 | Test runner (node + happy-dom) |
+| **@testing-library/react** | 16.3.0 | Component testing |
+| **@testing-library/dom** | 10.4.1 | DOM queries |
+| **happy-dom** | 20.10.1 | DOM environment for React tests |
+| **jsdom** | 28.1.0 | Alternative DOM environment |
+
+---
+
+## Test Configuration
+
+### vitest.config.ts (via vite.config.ts)
+```ts
+test: {
+  environment: "node",           // default for server tests
+  include: [
+    "src/**/*.{test,spec}.{js,ts,jsx,tsx}",
+    "server/**/*.{test,spec}.{js,ts,jsx,tsx}",
+  ],
+}
+```
+
+### Environment Selection
+| Test Type | Environment | Directive |
+|-----------|-------------|-----------|
+| Server (unit/integration) | `node` | Default |
+| Client (React components) | `happy-dom` | `// @vitest-environment happy-dom` |
+
+---
+
+## Test Structure
+
+### File Organization
+```
+server/
+├── *.test.ts              # Unit tests alongside source
+├── ssh/
+│   ├── connection.test.ts
+│   └── host-key-fingerprint.test.ts
+└── install/
+    └── sse-stream.test.ts
+
+src/
+├── lib/
+│   ├── session.test.ts
+│   └── ai-providers.test.ts
+└── features/
+    └── {domain}/
+        └── *.test.tsx     # Component tests
+```
+
+### Naming
+- **File**: `{source}.test.{ts,tsx}`
+- **Describe blocks**: Module/function name (`describe("requireSession", ...)`)
+- **Test cases**: Behavioral (`it("redirects to /login when there is no active session", ...)`)
+
+---
+
+## Mocking Patterns
+
+### Global Mock Setup (vi.hoisted)
+```ts
+const { selectLimit, dbInsert, dbUpdate } = vi.hoisted(() => ({
+  selectLimit: vi.fn(),
+  dbInsert: vi.fn(),
+  dbUpdate: vi.fn(),
+}));
+
+vi.mock("./db", () => ({
+  getDb: () => ({
+    select: vi.fn().mockReturnValue({ from: ... }),
+    insert: dbInsert,
+    update: dbUpdate,
+  }),
+}));
+```
+
+### Module Mocking
+```ts
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
+}));
+
+vi.mock("lucide-react", () => ({
+  LoaderCircle: (props) => <svg {...props} />,
+}));
+```
+
+### Fetch Mocking
+```ts
+const fetchMock = vi.fn();
+vi.stubGlobal("fetch", fetchMock);
+
+beforeEach(() => {
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ ... }), { status: 200, headers: { "content-type": "application/json" } })
+  );
+});
+```
+
+### Hono Context Factory
+```ts
+function createContext(url: string, body: unknown) {
+  return {
+    req: {
+      raw: new Request(url, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }),
+      json: () => Promise.resolve(body),
+      header: () => null,
+    },
+    json: (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } }),
+  } as never;
+}
+```
+
+### Timer Mocking (for SSE, time-based logic)
+```ts
+vi.useFakeTimers();
+vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
+// ...
+vi.useRealTimers();
+```
+
+---
+
+## Server-Side Testing Patterns
+
+### 1. Route Dispatch Tests (`server/app.test.ts`)
+- Mock all handlers via `vi.hoisted` + `vi.mock`
+- Test `apiApp.request()` returns correct status + calls correct handler
+- Verify middleware (HTTPS, rate limiting, auth unavailable)
+
+### 2. Handler Unit Tests (`server/providers.test.ts`, `server/server-actions.test.ts`)
+- Mock: `getAuthSession`, `db`, `ssh`, `crypto`, `fetch`
+- Test: Happy path, error paths, validation, edge cases
+- Verify: DB calls, audit logs, SSH commands, response shape
+
+### 3. Utility/Logic Tests (`server/ssh/connection.test.ts`)
+- Mock `node-ssh` at module level
+- Test: Host key verification, error normalization, connection flow
+
+### 4. Database Transaction Tests (`server/install/sse-stream.test.ts`)
+- Mock `db.transaction` to capture tx operations
+- Verify: Both insert + update called in same transaction
+
+---
+
+## Client-Side Testing Patterns
+
+### 1. Component Tests (`src/features/servers/server-detail.test.tsx`)
+- **Environment**: `// @vitest-environment happy-dom`
+- **Render**: `@testing-library/react` `render()`, `screen`
+- **Interactions**: `fireEvent.click()`, `fireEvent.change()`
+- **Async**: `flushAsyncWork()` helper (double `Promise.resolve()` in `act`)
+
+### 2. Mocking Strategy
+| Dependency | Mock Approach |
+|------------|---------------|
+| `@tanstack/react-router` | `Link` → `<a>`, `useNavigate` → mock fn |
+| `lucide-react` | SVG components |
+| `@/components/ui/*` | Simplified HTML equivalents |
+| Child features | Minimal stubs (`data-testid` for queries) |
+| `fetch` | `vi.stubGlobal("fetch", fetchMock)` |
+
+### 3. Test Data Factories
+```ts
+function createDetail(overrides?: { server?: ..., install?: ... }): ServerDetailSnapshot {
+  return {
+    server: { id: "server_123", label: "Production VPS", host: "203.0.113.10", ... },
+    install: { status: "succeeded", version: "latest", updatedAt: "..." },
+    actionHistory: [ ... ],
+    rollbackTarget: "latest",
+    webUi: null,
+  };
+}
+```
+
+---
+
+## Common Test Helpers
+
+### flushAsyncWork
+```ts
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+```
+
+### createContext (Hono)
+```ts
+function createContext(payload: Record<string, unknown>) {
+  return {
+    req: {
+      raw: new Request("http://localhost/api/...", { method: "POST", body: JSON.stringify(payload), headers: { "content-type": "application/json" } }),
+      header: () => null,
+      param: (name) => name === "id" ? "server_123" : undefined,
+      json: async () => payload,
+    },
+    json: (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }),
+  } as never;
+}
+```
+
+### Mock Reset Pattern
+```ts
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Reset specific mocks with fresh implementations
+  fetchMock.mockResolvedValue(...);
+  selectLimit.mockResolvedValue([...]);
+});
+```
+
+---
+
+## Assertion Patterns
+
+### Response Assertions
+```ts
+expect(response.status).toBe(200);
+expect(await response.json()).toMatchObject({ status: "succeeded", action: "restart" });
+```
+
+### Mock Call Assertions
+```ts
+expect(fetchMock).toHaveBeenCalledWith("/api/servers/server_123/actions", expect.objectContaining({ method: "POST" }));
+expect(insertAuditValues).toHaveBeenNthCalledWith(1, expect.objectContaining({ action: "server.action.restart.started" }));
+expect(decryptSecret).toHaveBeenCalledWith("encrypted-secret");
+```
+
+### DOM Assertions (React Testing Library)
+```ts
+expect(screen.getByRole("button", { name: /restart agent/i })).toBeTruthy();
+expect(screen.getByText(/are you sure\?/i)).toBeTruthy();
+expect(screen.getByLabelText(/server label/i)).toBeTruthy();
+expect(screen.getByRole("textbox", { name: /confirm server label/i })).toBeTruthy();
+```
+
+---
+
+## Coverage Expectations
+
+### Current State (from docs/test-coverage-review.md)
+- **58 tests** across **16 test files**
+- **34 source files** total
+
+### Priority Gaps
+| Priority | Module | Reason |
+|----------|--------|--------|
+| High | `server/crypto.ts` | Security-critical encryption, zero tests |
+| High | `src/lib/ai-providers.ts` | Pure validation logic, zero tests |
+| Medium | `server/ssh.ts` | Error classification, connection logic |
+| Medium | `server/install.ts` | Full workflow untested |
+| Medium | `server/server-actions.ts` | Update/rollback commands |
+| Medium | `server/dashboard.ts` | Snapshot pipeline |
+
+### Well-Covered Areas
+- API route dispatch (`server/app.test.ts` — 16 tests)
+- Provider save/test (`server/providers.test.ts` — 12 tests)
+- Server actions restart/expired cred (`server/server-actions.test.ts` — 8 tests)
+- SSE stream hydration/emit (`server/install/sse-stream.test.ts` — 5 tests)
+- All feature components (`src/features/*/test.tsx` — 22 tests)
+
+---
+
+## Running Tests
+
+```bash
+# All tests (CI mode)
+bun run test
+
+# With coverage (if configured)
+bun run test --coverage
+
+# Watch mode
+bun run test --watch
+
+# Single file
+bun run test server/providers.test.ts
+```
+
+### Parallel Execution (just check)
+```bash
+# Runs typecheck + test in parallel
+CPU=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
+VITEST_MAX_WORKERS=$CPU bun run test &
+wait $T1 $T2
+```
+
+---
+
+## Test Maintenance Guidelines
+
+1. **Colocate** — Test file next to source
+2. **Mock at boundaries** — Don't mock internal functions, mock external deps (DB, SSH, fetch, auth)
+3. **Test behavior, not implementation** — Assert on response shape, side effects (audit logs, DB calls)
+4. **Reset mocks** — `vi.clearAllMocks()` in `beforeEach`
+5. **Use factories** — Reusable test data builders for complex objects
+6. **No flaky timers** — `vi.useFakeTimers()` for time-dependent logic
+7. **Clean up** — `afterEach(() => cleanup())` for React tests
+8. **Describe error paths** — Test validation, auth failures, network errors, shell injection attempts
