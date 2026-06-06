@@ -44,10 +44,8 @@ export async function runServerHealthChecks(input: {
 async function collectHealthCheckOutput(
 	ssh: NodeSSH,
 ): Promise<ServerHealthCheckResult> {
-	const [output, hermesRunning] = await Promise.all([
-		runStaticHealthChecks(ssh),
-		isContainerRunning(ssh, hermesContainerName),
-	]);
+	const output = await runStaticHealthChecks(ssh);
+	const hermesRunning = await isContainerRunning(ssh, hermesContainerName);
 
 	if (hermesRunning) {
 		output.hermesReachability = readCommandOutput(
@@ -63,18 +61,16 @@ async function collectHealthCheckOutput(
 async function runStaticHealthChecks(
 	ssh: NodeSSH,
 ): Promise<HealthCheckCommandOutput> {
-	const entries = await Promise.all(
-		STATIC_HEALTH_CHECKS.map(async ([key, command]) => {
-			const result = await ssh.execCommand(command);
-			return [key, readCommandOutput(result)] as const;
-		}),
-	);
+	const output = {} as Omit<HealthCheckCommandOutput, "hermesReachability">;
+
+	for (const [key, command] of STATIC_HEALTH_CHECKS) {
+		// react-doctor-disable-next-line react-doctor/async-await-in-loop
+		const result = await ssh.execCommand(command);
+		output[key] = readCommandOutput(result);
+	}
 
 	return {
-		...(Object.fromEntries(entries) as Omit<
-			HealthCheckCommandOutput,
-			"hermesReachability"
-		>),
+		...output,
 		hermesReachability: "",
 	};
 }
