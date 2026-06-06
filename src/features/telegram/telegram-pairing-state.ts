@@ -71,6 +71,7 @@ export function telegramPairingReducer(
 			return {
 				...state,
 				pairings: action.pairings,
+				error: null,
 				lastLoadedAt: new Date(),
 			};
 		case "load_finished":
