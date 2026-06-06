@@ -239,7 +239,7 @@ describe("web-ui handlers", () => {
 	});
 
 	describe("proxy", () => {
-		it("redirects bare proxy roots to the trailing-slash path", async () => {
+		it("redirects proxy root without trailing slash to chat", async () => {
 			getAuthSession.mockResolvedValue({
 				user: { id: "user_123" },
 				session: { id: "session_123" },
@@ -260,9 +260,37 @@ describe("web-ui handlers", () => {
 				}),
 			);
 
-			expect(response.status).toBe(308);
+			expect(response.status).toBe(302);
 			expect(response.headers.get("location")).toBe(
-				"/api/servers/server_123/web-ui/proxy/",
+				"/api/servers/server_123/web-ui/proxy/chat",
+			);
+			expect(proxyRequestOverSsh).not.toHaveBeenCalled();
+		});
+
+		it("redirects proxy root with trailing slash to chat", async () => {
+			getAuthSession.mockResolvedValue({
+				user: { id: "user_123" },
+				session: { id: "session_123" },
+			});
+			getResolvedServerWebUiRecord.mockResolvedValue({
+				enabled: true,
+				encryptedPassword: "enc:generated-password",
+				port: 8787,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+			});
+
+			const response = await proxyServerWebUi(
+				createContext({
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+				}),
+			);
+
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe(
+				"/api/servers/server_123/web-ui/proxy/chat",
 			);
 			expect(proxyRequestOverSsh).not.toHaveBeenCalled();
 		});
@@ -287,7 +315,7 @@ describe("web-ui handlers", () => {
 
 			const response = await proxyServerWebUi(
 				createContext({
-					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/login",
 				}),
 			);
 			const payload = await response.json();

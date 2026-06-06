@@ -77,10 +77,13 @@ export async function proxyServerWebUi(context: Context) {
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
 	const requestUrl = new URL(context.req.url);
 	const proxyRoot = proxyBasePath.replace(/\/$/, "");
-	if (requestUrl.pathname === proxyRoot) {
+	if (
+		requestUrl.pathname === proxyRoot ||
+		requestUrl.pathname === proxyBasePath
+	) {
 		return new Response(null, {
-			status: 308,
-			headers: { Location: proxyBasePath },
+			status: 302,
+			headers: { Location: `${proxyBasePath}chat` },
 		});
 	}
 	const upstreamPath = getUpstreamPath(context.req.url, proxyBasePath);
