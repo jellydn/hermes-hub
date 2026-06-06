@@ -3,7 +3,7 @@
 exports[`buildHermesComposeContent > adds the hermes-webui service when web UI is enabled 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:v0.4.1
+    image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     command: gateway run
@@ -33,7 +33,7 @@ exports[`buildHermesComposeContent > adds the hermes-webui service when web UI i
 exports[`buildHermesComposeContent > renders a compose with all options including api key and telegram token 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:v0.4.1
+    image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     command: gateway run
@@ -55,7 +55,7 @@ exports[`buildHermesComposeContent > renders a compose with all options includin
 exports[`buildHermesComposeContent > renders a compose with provider env vars only 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:v0.4.1
+    image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     command: gateway run
@@ -74,7 +74,7 @@ exports[`buildHermesComposeContent > renders a compose with provider env vars on
 exports[`buildHermesComposeContent > renders a minimal compose with no optional inputs 1`] = `
 "services:
   hermes:
-    image: nousresearch/hermes-agent:v0.4.1
+    image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     command: gateway run
