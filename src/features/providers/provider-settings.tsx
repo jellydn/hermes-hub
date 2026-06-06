@@ -1,25 +1,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-	CheckCircle2,
-	CloudUpload,
-	KeyRound,
-	LoaderCircle,
-	Radio,
-	Server,
-	ShieldCheck,
-} from "lucide-react";
-import { useState } from "react";
+import { useReducer } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-import { Button } from "@/components/ui/button";
 import {
 	type AiProviderId,
-	aiProviderOptions,
-	formatAiProviderLabel,
 	getAiProviderOption,
 	getDefaultAiModel,
 } from "@/lib/ai-providers";
+import { ProviderSelectionPanel } from "./provider-selection-panel";
+import { ProviderSettingsAside } from "./provider-settings-aside";
+import {
+	createInitialProviderSettingsUiState,
+	providerSettingsUiReducer,
+} from "./provider-settings-state";
 
 export type ProviderSettingsSummary = {
 	provider: AiProviderId;
@@ -45,7 +39,7 @@ type ProviderFormState = {
 	baseUrl: string;
 };
 
-const initialProvider = aiProviderOptions[0]?.id ?? "openai";
+const initialProvider = "openai" as AiProviderId;
 
 const providerSchema = z.object({
 	provider: z.custom<AiProviderId>(),
@@ -58,8 +52,11 @@ export function ProviderSettings({
 	initialConfig,
 	telegramDeploy,
 }: ProviderSettingsProps) {
-	const [savedConfig, setSavedConfig] =
-		useState<ProviderSettingsSummary | null>(initialConfig);
+	const [uiState, dispatch] = useReducer(
+		providerSettingsUiReducer,
+		initialConfig,
+		createInitialProviderSettingsUiState,
+	);
 
 	const { register, watch, setValue } = useForm<ProviderFormState>({
 		resolver: zodResolver(providerSchema),
@@ -67,19 +64,6 @@ export function ProviderSettings({
 	});
 
 	const form = watch();
-	const [isSaving, setIsSaving] = useState(false);
-	const [isTesting, setIsTesting] = useState(false);
-	const [saveMessage, setSaveMessage] = useState<string | null>(null);
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const [testError, setTestError] = useState<string | null>(null);
-	const [isConnected, setIsConnected] = useState(false);
-	const [isDeploying, setIsDeploying] = useState(false);
-	const [deployError, setDeployError] = useState<string | null>(null);
-	const [deployResult, setDeployResult] = useState<string | null>(null);
-
-	const providerOption = getAiProviderOption(form.provider);
-	const existingKeyLast4 =
-		savedConfig?.provider === form.provider ? savedConfig.keyLast4 : null;
 
 	function updateProvider(provider: AiProviderId) {
 		const option = getAiProviderOption(provider);
@@ -88,21 +72,16 @@ export function ProviderSettings({
 		setValue("apiKey", "");
 		setValue(
 			"baseUrl",
-			option?.id === savedConfig?.provider && savedConfig?.baseUrl
-				? savedConfig.baseUrl
+			option?.id === uiState.savedConfig?.provider &&
+				uiState.savedConfig?.baseUrl
+				? uiState.savedConfig.baseUrl
 				: (option?.defaultBaseUrl ?? ""),
 		);
-		setSaveMessage(null);
-		setSaveError(null);
-		setTestError(null);
-		setIsConnected(false);
+		dispatch({ type: "provider_changed" });
 	}
 
 	async function handleSave() {
-		setIsSaving(true);
-		setSaveMessage(null);
-		setSaveError(null);
-		setTestError(null);
+		dispatch({ type: "save_started" });
 
 		try {
 			const response = await fetch("/api/providers", {
@@ -117,23 +96,22 @@ export function ProviderSettings({
 			} | null;
 
 			if (!response.ok || !payload?.provider) {
-				setSaveError(payload?.error ?? "Unable to save provider settings.");
+				dispatch({
+					type: "save_failed",
+					error: payload?.error ?? "Unable to save provider settings.",
+				});
 				return;
 			}
 
-			setSavedConfig(payload.provider);
 			setValue("apiKey", "");
-			setSaveMessage("Provider settings saved.");
+			dispatch({ type: "save_succeeded", config: payload.provider });
 		} finally {
-			setIsSaving(false);
+			dispatch({ type: "save_finished" });
 		}
 	}
 
 	async function handleTestConnection() {
-		setIsTesting(true);
-		setTestError(null);
-		setSaveError(null);
-		setIsConnected(false);
+		dispatch({ type: "test_started" });
 
 		try {
 			const response = await fetch("/api/providers/test", {
@@ -148,20 +126,24 @@ export function ProviderSettings({
 			} | null;
 
 			if (!response.ok) {
-				setTestError(payload?.error ?? "Connection failed");
+				dispatch({
+					type: "test_failed",
+					error: payload?.error ?? "Connection failed",
+				});
 				return;
 			}
 
-			setIsConnected(payload?.status === "connected");
+			dispatch({
+				type: "test_succeeded",
+				connected: payload?.status === "connected",
+			});
 		} finally {
-			setIsTesting(false);
+			dispatch({ type: "test_finished" });
 		}
 	}
 
 	async function handleDeployToHermes() {
-		setIsDeploying(true);
-		setDeployError(null);
-		setDeployResult(null);
+		dispatch({ type: "deploy_started" });
 
 		try {
 			const response = await fetch("/api/providers/deploy", {
@@ -175,311 +157,50 @@ export function ProviderSettings({
 			} | null;
 
 			if (!response.ok) {
-				setDeployError(payload?.error ?? "Deploy failed");
+				dispatch({
+					type: "deploy_failed",
+					error: payload?.error ?? "Deploy failed",
+				});
 				return;
 			}
 
-			setDeployResult(
-				payload?.model
+			dispatch({
+				type: "deploy_succeeded",
+				message: payload?.model
 					? `Model "${payload.model}" deployed successfully.`
 					: "Deployed successfully.",
-			);
+			});
 		} finally {
-			setIsDeploying(false);
+			dispatch({ type: "deploy_finished" });
 		}
 	}
 
 	return (
 		<section className="space-y-6">
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<section className="island-shell rounded-[2rem] p-6 sm:p-8">
-					<div className="mb-8 flex flex-col gap-3">
-						<p className="island-kicker m-0">Provider selection</p>
-						<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
-							Choose your model backend
-						</h3>
-						<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-							Pick a provider, save your API key, and validate the connection
-							before wiring it into Telegram and the dashboard.
-						</p>
-					</div>
+				<ProviderSelectionPanel
+					form={form}
+					register={register}
+					savedConfig={uiState.savedConfig}
+					isSaving={uiState.isSaving}
+					isTesting={uiState.isTesting}
+					saveMessage={uiState.saveMessage}
+					saveError={uiState.saveError}
+					testError={uiState.testError}
+					isConnected={uiState.isConnected}
+					onProviderChange={updateProvider}
+					onSave={() => void handleSave()}
+					onTest={() => void handleTestConnection()}
+				/>
 
-					<fieldset className="grid gap-4 border-0 p-0 sm:grid-cols-2 lg:grid-cols-3">
-						<legend className="sr-only">AI provider</legend>
-						{aiProviderOptions.map((option) => {
-							const isSelected = option.id === form.provider;
-
-							return (
-								<label
-									key={option.id}
-									className={[
-										"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition",
-										isSelected
-											? "border-[color:var(--lagoon)] bg-[rgba(79,184,178,0.14)]"
-											: "border-[var(--chip-line)] bg-[var(--chip-bg)]",
-									].join(" ")}
-								>
-									<input
-										type="radio"
-										name="provider"
-										value={option.id}
-										checked={isSelected}
-										onChange={() => updateProvider(option.id)}
-										className="sr-only"
-									/>
-									<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-white/70 p-3 text-[var(--lagoon-deep)]">
-										<Radio className="h-5 w-5" />
-									</div>
-									<div className="space-y-2">
-										<div className="flex items-center justify-between gap-3">
-											<h4 className="m-0 text-base font-semibold text-[var(--sea-ink)]">
-												{option.label}
-											</h4>
-											<span
-												className={[
-													"rounded-full px-3 py-1 text-xs font-semibold",
-													isSelected
-														? "bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]"
-														: "bg-white/70 text-[var(--sea-ink-soft)]",
-												].join(" ")}
-											>
-												{isSelected ? "Selected" : "Choose"}
-											</span>
-										</div>
-										<p className="m-0 text-sm text-[var(--sea-ink-soft)]">
-											{option.description}
-										</p>
-									</div>
-								</label>
-							);
-						})}
-					</fieldset>
-
-					<div className="mt-8 grid gap-5 md:grid-cols-2">
-						<Field
-							label="API key"
-							name="apiKey"
-							hint={
-								existingKeyLast4
-									? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
-									: providerOption?.requiresBaseUrl
-										? "API Key (optional for providers using a base URL)."
-										: `Paste your ${formatAiProviderLabel(form.provider)} API key.`
-							}
-						>
-							<input
-								id="apiKey"
-								type="password"
-								{...register("apiKey")}
-								className={inputClassName}
-								placeholder={
-									existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
-								}
-							/>
-						</Field>
-
-						{providerOption?.requiresBaseUrl ? (
-							<Field
-								label="Base URL"
-								name="baseUrl"
-								hint={`The base URL for the ${providerOption?.label ?? ""} endpoint.`}
-							>
-								<input
-									id="baseUrl"
-									type="text"
-									{...register("baseUrl")}
-									className={inputClassName}
-									placeholder={
-										providerOption?.defaultBaseUrl ??
-										"https://api.yourprovider.com/v1"
-									}
-								/>
-							</Field>
-						) : null}
-
-						{providerOption?.requiresCustomModel ? (
-							<Field
-								label="Custom model ID"
-								name="model"
-								hint={`Enter the model ID or name for ${providerOption?.label ?? ""}.`}
-							>
-								<input
-									id="model"
-									type="text"
-									{...register("model")}
-									className={inputClassName}
-									placeholder={providerOption?.defaultModel || "deepseek-chat"}
-								/>
-							</Field>
-						) : (
-							<Field
-								label="Model"
-								name="model"
-								hint="Pre-selected default for the chosen provider."
-							>
-								<select
-									id="model"
-									{...register("model")}
-									className={inputClassName}
-								>
-									{providerOption?.models.map((model) => (
-										<option key={model} value={model}>
-											{model}
-										</option>
-									))}
-								</select>
-							</Field>
-						)}
-					</div>
-
-					{saveMessage ? (
-						<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{saveMessage}
-						</div>
-					) : null}
-
-					{saveError ? (
-						<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{saveError}
-						</div>
-					) : null}
-
-					{testError ? (
-						<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							{testError}
-						</div>
-					) : null}
-
-					{isConnected ? (
-						<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							<div className="flex items-center gap-3">
-								<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-								<span>Provider connected</span>
-							</div>
-						</div>
-					) : null}
-
-					<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-						<Button
-							type="button"
-							onClick={() => void handleSave()}
-							disabled={isSaving}
-						>
-							{isSaving ? (
-								<LoaderCircle className="h-4 w-4 animate-spin" />
-							) : (
-								<KeyRound className="h-4 w-4" />
-							)}
-							<span>{isSaving ? "Saving..." : "Save Provider"}</span>
-						</Button>
-						<Button
-							type="button"
-							variant="secondary"
-							onClick={() => void handleTestConnection()}
-							disabled={isTesting}
-						>
-							{isTesting ? (
-								<LoaderCircle className="h-4 w-4 animate-spin" />
-							) : (
-								<ShieldCheck className="h-4 w-4" />
-							)}
-							<span>{isTesting ? "Testing..." : "Test Connection"}</span>
-						</Button>
-					</div>
-				</section>
-
-				<aside className="space-y-4">
-					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Current config</p>
-						<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
-							{savedConfig
-								? formatAiProviderLabel(savedConfig.provider)
-								: "No provider connected"}
-						</h3>
-						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-							{savedConfig
-								? `Model: ${savedConfig.model}`
-								: "Save a provider configuration to power Hermes responses."}
-						</p>
-						{savedConfig?.baseUrl ? (
-							<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-								Base URL: {savedConfig.baseUrl}
-							</p>
-						) : null}
-						{savedConfig?.keyLast4 ? (
-							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-								Stored key ending in {savedConfig.keyLast4}
-							</p>
-						) : null}
-					</section>
-
-					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Hermes deployment</p>
-						{telegramDeploy ? (
-							<>
-								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-									Push your current provider config to the Hermes server.
-								</p>
-								{savedConfig ? (
-									<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-										Model:{" "}
-										<span className="font-semibold text-[var(--sea-ink)]">
-											{savedConfig.model}
-										</span>
-									</p>
-								) : null}
-								<div className="mt-4">
-									<Button
-										type="button"
-										onClick={() => void handleDeployToHermes()}
-										disabled={isDeploying || !savedConfig}
-									>
-										{isDeploying ? (
-											<LoaderCircle className="h-4 w-4 animate-spin" />
-										) : (
-											<CloudUpload className="h-4 w-4" />
-										)}
-										<span>
-											{isDeploying ? "Deploying..." : "Deploy to Hermes Server"}
-										</span>
-									</Button>
-								</div>
-								{deployError ? (
-									<p className="mt-3 mb-0 text-sm text-red-600">
-										{deployError}
-									</p>
-								) : null}
-								{deployResult ? (
-									<p className="mt-3 mb-0 text-sm text-emerald-600">
-										{deployResult}
-									</p>
-								) : null}
-							</>
-						) : (
-							<>
-								<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-									Deploy a Telegram bot to a VPS first to enable Hermes
-									deployment.
-								</p>
-								<div className="mt-4 flex items-center gap-2 text-sm text-[var(--sea-ink-soft)]">
-									<Server className="h-4 w-4" />
-									<span>Not deployed</span>
-								</div>
-							</>
-						)}
-					</section>
-
-					<section className="island-shell rounded-[2rem] p-6">
-						<p className="island-kicker mb-2">Model notes</p>
-						<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
-							<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
-							<li>Anthropic: Sonnet and Haiku variants.</li>
-							<li>OpenRouter accepts any model ID.</li>
-							<li>Ollama: Run local open-weight models (e.g. llama3).</li>
-							<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
-						</ul>
-					</section>
-				</aside>
+				<ProviderSettingsAside
+					savedConfig={uiState.savedConfig}
+					telegramDeploy={telegramDeploy}
+					isDeploying={uiState.isDeploying}
+					deployError={uiState.deployError}
+					deployResult={uiState.deployResult}
+					onDeploy={() => void handleDeployToHermes()}
+				/>
 			</div>
 		</section>
 	);
@@ -496,31 +217,3 @@ function createInitialFormState(initialConfig: ProviderSettingsSummary | null) {
 		baseUrl: initialConfig?.baseUrl ?? option?.defaultBaseUrl ?? "",
 	};
 }
-
-function Field({
-	children,
-	hint,
-	label,
-	name,
-}: {
-	children: React.ReactNode;
-	hint: string;
-	label: string;
-	name: string;
-}) {
-	return (
-		<div className="space-y-2">
-			<label
-				className="block text-sm font-semibold text-[var(--sea-ink)]"
-				htmlFor={name}
-			>
-				{label}
-			</label>
-			{children}
-			<p className="block min-h-5 text-xs text-[var(--sea-ink-soft)]">{hint}</p>
-		</div>
-	);
-}
-
-const inputClassName =
-	"w-full rounded-full border border-[var(--chip-line)] bg-white/80 px-4 py-3 text-sm text-[var(--sea-ink)] outline-none focus:border-[color:var(--lagoon)] focus:ring-2 focus:ring-[rgba(79,184,178,0.18)]";
