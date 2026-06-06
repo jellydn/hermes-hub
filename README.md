@@ -170,6 +170,7 @@ bun run build
 | `API_SERVER_MODEL_NAME` | Model ID injected into Hermes Docker Compose on deploy |
 | `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
 | `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
+| `STALE_DEPLOY_THRESHOLD_MS` | Stale Web UI deploy timeout in milliseconds (default: 600000 = 10 minutes) |
 
 ## Troubleshooting
 
