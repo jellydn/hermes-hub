@@ -7,10 +7,7 @@ import type {
 
 import { subscribeWebUiDeployPolling } from "./web-ui-deploy-poll";
 
-type WebUiSnapshot = NonNullable<ServerDetailSnapshot["webUi"]>;
-
 type HermesWebUiState = {
-	webUiOverride: WebUiSnapshot | null;
 	error: string | null;
 	isSubmitting: boolean;
 	isRevealingPassword: boolean;
@@ -22,23 +19,14 @@ type HermesWebUiState = {
 type HermesWebUiAction =
 	| { type: "deploy_started" }
 	| { type: "deploy_failed"; error: string }
-	| {
-			type: "deploy_succeeded";
-			webUi: WebUiSnapshot | null;
-	  }
-	| {
-			type: "deploy_poll_succeeded";
-			webUi: WebUiSnapshot;
-			successMessage: string;
-	  }
-	| { type: "deploy_poll_failed"; webUi: WebUiSnapshot; error: string }
+	| { type: "deploy_finished" }
+	| { type: "deploy_poll_succeeded"; successMessage: string }
 	| { type: "reveal_toggle" }
 	| { type: "reveal_started" }
 	| { type: "reveal_failed"; error: string }
 	| { type: "reveal_succeeded"; password: string | null };
 
 const initialHermesWebUiState: HermesWebUiState = {
-	webUiOverride: null,
 	error: null,
 	isSubmitting: false,
 	isRevealingPassword: false,
@@ -65,29 +53,17 @@ function hermesWebUiReducer(
 				isSubmitting: false,
 				error: action.error,
 			};
-		case "deploy_succeeded":
+		case "deploy_finished":
 			return {
 				...state,
-				webUiOverride: action.webUi,
 				isSubmitting: false,
-				error: null,
-				successMessage: null,
-				revealedPassword: null,
-				showPassword: false,
 			};
 		case "deploy_poll_succeeded":
 			return {
 				...state,
-				webUiOverride: action.webUi,
 				error: null,
 				successMessage: action.successMessage,
-			};
-		case "deploy_poll_failed":
-			return {
-				...state,
-				webUiOverride: action.webUi,
-				successMessage: null,
-				error: action.error,
+				isSubmitting: false,
 			};
 		case "reveal_toggle":
 			return {
@@ -118,21 +94,6 @@ function hermesWebUiReducer(
 	}
 }
 
-function resolveWebUi(
-	detailWebUi: ServerDetailSnapshot["webUi"],
-	override: WebUiSnapshot | null,
-) {
-	if (!detailWebUi) {
-		return override;
-	}
-
-	if (!override) {
-		return detailWebUi;
-	}
-
-	return override.updatedAt >= detailWebUi.updatedAt ? override : detailWebUi;
-}
-
 export function useHermesWebUi(
 	detail: ServerDetailSnapshot,
 	onDetailChange?: ServerDetailChangeHandler,
@@ -145,26 +106,28 @@ export function useHermesWebUi(
 	const onDetailChangeRef = useRef(onDetailChange);
 	onDetailChangeRef.current = onDetailChange;
 
-	const webUi = resolveWebUi(detail.webUi, state.webUiOverride);
+	const webUi = detail.webUi;
 	const isEnabled = webUi?.enabled === true;
-	const isDeploying = webUi?.deployStatus === "deploying";
+	const isDeploying = webUi?.deployStatus === "deploying" || state.isSubmitting;
 
 	useEffect(() => {
-		if (!isDeploying) {
+		if (webUi?.deployStatus !== "deploying") {
 			return;
 		}
 
-		return subscribeWebUiDeployPolling(detail.server.id, (updated) => {
-			if (!updated.webUi || updated.webUi.deployStatus === "deploying") {
+		return subscribeWebUiDeployPolling(detail.server.id, (updatedWebUi) => {
+			if (updatedWebUi.deployStatus === "deploying") {
 				return;
 			}
 
-			onDetailChangeRef.current?.(updated);
+			onDetailChangeRef.current?.((current) => ({
+				...current,
+				webUi: updatedWebUi,
+			}));
 
-			if (updated.webUi.deployStatus === "succeeded") {
+			if (updatedWebUi.deployStatus === "succeeded") {
 				dispatch({
 					type: "deploy_poll_succeeded",
-					webUi: updated.webUi,
 					successMessage: wasEnabledAtDeployStart.current
 						? "Hermes Web UI redeployed. Try opening it again."
 						: "Hermes Web UI is ready. Open it from HermesHub.",
@@ -172,15 +135,9 @@ export function useHermesWebUi(
 				return;
 			}
 
-			if (updated.webUi.deployStatus === "failed") {
-				dispatch({
-					type: "deploy_poll_failed",
-					webUi: updated.webUi,
-					error: updated.webUi.deployError ?? "Web UI setup failed.",
-				});
-			}
+			dispatch({ type: "deploy_finished" });
 		});
-	}, [detail.server.id, isDeploying]);
+	}, [detail.server.id, webUi?.deployStatus]);
 
 	async function deploy() {
 		wasEnabledAtDeployStart.current = isEnabled;
@@ -211,10 +168,7 @@ export function useHermesWebUi(
 				}));
 			}
 
-			dispatch({
-				type: "deploy_succeeded",
-				webUi: payload?.webUi ?? null,
-			});
+			dispatch({ type: "deploy_finished" });
 		} catch {
 			dispatch({
 				type: "deploy_failed",

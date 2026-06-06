@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
@@ -20,41 +20,20 @@ beforeEach(() => {
 });
 
 describe("useHermesWebUi", () => {
-	it("clears local Web UI override state when incoming detail changes", async () => {
-		const onDetailChange = vi.fn();
-		const initialDetail = createDetail({
+	it("uses detail.webUi as the source of truth", () => {
+		const detail = createDetail({
 			webUi: createWebUi({
-				deployStatus: "deploying",
+				deployStatus: "succeeded",
+				enabled: true,
 				updatedAt: "2026-06-06T04:00:00.000Z",
 			}),
 		});
 
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: async () => ({
-				webUi: createWebUi({ deployStatus: "deploying" }),
-			}),
-		});
+		const { result } = renderHook(() => useHermesWebUi(detail));
 
-		const { result, rerender } = renderHook(
-			({ detail }) => useHermesWebUi(detail, onDetailChange),
-			{ initialProps: { detail: createDetail() } },
-		);
-
-		await act(async () => {
-			await result.current.deploy();
-		});
-
-		expect(result.current.webUi?.deployStatus).toBe("deploying");
-
-		rerender({
-			detail: initialDetail,
-		});
-
-		await waitFor(() => {
-			expect(result.current.webUi?.deployStatus).toBe("deploying");
-			expect(result.current.webUi?.updatedAt).toBe("2026-06-06T04:00:00.000Z");
-		});
+		expect(result.current.webUi?.deployStatus).toBe("succeeded");
+		expect(result.current.webUi?.updatedAt).toBe("2026-06-06T04:00:00.000Z");
+		expect(result.current.isEnabled).toBe(true);
 	});
 
 	it("surfaces password reveal failures without leaving the spinner active", async () => {

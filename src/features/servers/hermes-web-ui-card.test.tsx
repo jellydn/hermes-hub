@@ -8,7 +8,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import { type ComponentPropsWithoutRef, isValidElement } from "react";
+import { type ComponentPropsWithoutRef, isValidElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
@@ -52,6 +52,25 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 import { HermesWebUiCard } from "./hermes-web-ui-card";
+
+function StatefulHermesWebUiCard({
+	initialDetail,
+}: {
+	initialDetail: ServerDetailSnapshot;
+}) {
+	const [detail, setDetail] = useState(initialDetail);
+
+	return (
+		<HermesWebUiCard
+			detail={detail}
+			onDetailChange={(update) => {
+				setDetail((current) =>
+					typeof update === "function" ? update(current) : update,
+				);
+			}}
+		/>
+	);
+}
 
 afterEach(() => {
 	cleanup();
@@ -175,19 +194,17 @@ describe("HermesWebUiCard", () => {
 			.mockResolvedValue({
 				ok: true,
 				json: async () => ({
-					serverDetail: createDetail({
-						webUi: createWebUi({
-							enabled: true,
-							deployStatus: "succeeded",
-							updatedAt: "2026-05-26T05:00:00.000Z",
-						}),
+					webUi: createWebUi({
+						enabled: true,
+						deployStatus: "succeeded",
+						updatedAt: "2026-05-26T05:00:00.000Z",
 					}),
 				}),
 			});
 
 		render(
-			<HermesWebUiCard
-				detail={createDetail({
+			<StatefulHermesWebUiCard
+				initialDetail={createDetail({
 					webUi: createWebUi({
 						enabled: true,
 						deployStatus: "succeeded",
@@ -217,7 +234,7 @@ describe("HermesWebUiCard", () => {
 		).toBeTruthy();
 	});
 
-	it("deploys Web UI without onDetailChange and shows open control after polling", async () => {
+	it("shows open control after polling completes", async () => {
 		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 
 		fetchMock
@@ -230,16 +247,14 @@ describe("HermesWebUiCard", () => {
 			.mockResolvedValue({
 				ok: true,
 				json: async () => ({
-					serverDetail: createDetail({
-						webUi: createWebUi({
-							enabled: true,
-							deployStatus: "succeeded",
-						}),
+					webUi: createWebUi({
+						enabled: true,
+						deployStatus: "succeeded",
 					}),
 				}),
 			});
 
-		render(<HermesWebUiCard detail={createDetail()} />);
+		render(<StatefulHermesWebUiCard initialDetail={createDetail()} />);
 		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
 
 		await waitFor(() => {
@@ -256,7 +271,6 @@ describe("HermesWebUiCard", () => {
 
 	it("deploys Web UI and updates detail on success", async () => {
 		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-		const onDetailChange = vi.fn();
 
 		fetchMock
 			.mockResolvedValueOnce({
@@ -268,21 +282,14 @@ describe("HermesWebUiCard", () => {
 			.mockResolvedValue({
 				ok: true,
 				json: async () => ({
-					serverDetail: createDetail({
-						webUi: createWebUi({
-							enabled: true,
-							deployStatus: "succeeded",
-						}),
+					webUi: createWebUi({
+						enabled: true,
+						deployStatus: "succeeded",
 					}),
 				}),
 			});
 
-		render(
-			<HermesWebUiCard
-				detail={createDetail()}
-				onDetailChange={onDetailChange}
-			/>,
-		);
+		render(<StatefulHermesWebUiCard initialDetail={createDetail()} />);
 
 		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
 
@@ -298,9 +305,7 @@ describe("HermesWebUiCard", () => {
 			await vi.advanceTimersByTimeAsync(5000);
 		});
 
-		await waitFor(() => {
-			expect(onDetailChange).toHaveBeenCalled();
-		});
+		expect(await screen.findByTestId("hermes-web-ui-open")).toBeTruthy();
 	});
 
 	it("shows poll failure error when background deploy fails", async () => {
@@ -316,16 +321,14 @@ describe("HermesWebUiCard", () => {
 			.mockResolvedValue({
 				ok: true,
 				json: async () => ({
-					serverDetail: createDetail({
-						webUi: createWebUi({
-							deployStatus: "failed",
-							deployError: "Container start failed",
-						}),
+					webUi: createWebUi({
+						deployStatus: "failed",
+						deployError: "Container start failed",
 					}),
 				}),
 			});
 
-		render(<HermesWebUiCard detail={createDetail()} />);
+		render(<StatefulHermesWebUiCard initialDetail={createDetail()} />);
 		fireEvent.click(screen.getByTestId("hermes-web-ui-setup"));
 
 		await waitFor(() => {
