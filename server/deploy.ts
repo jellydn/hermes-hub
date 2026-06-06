@@ -2,18 +2,12 @@ import type { Context } from "hono";
 import { getAiProviderOption, isAiProviderId } from "../src/lib/ai-providers";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
+import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
-import {
-	decryptApiKey,
-	getLatestProviderRecord,
-	getTelegramDeployInfo,
-} from "./providers/records";
-import {
-	requireAuthSession,
-	requireOwnedServerSshById,
-} from "./request-guards";
+import { decryptApiKey, getLatestProviderRecord } from "./providers/records";
+import { requireAuthSession } from "./request-guards";
 
 export async function deployProviderToHermes(context: Context) {
 	const session = await requireAuthSession(context);
@@ -32,25 +26,12 @@ export async function deployProviderToHermes(context: Context) {
 		);
 	}
 
-	const telegramInfo = await getTelegramDeployInfo(session.user.id);
-	if (!telegramInfo) {
-		return context.json(
-			{
-				error:
-					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
-			},
-			400,
-		);
+	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
+	if (deployCtx instanceof Response) {
+		return deployCtx;
 	}
 
-	const sshCtx = await requireOwnedServerSshById(
-		context,
-		telegramInfo.deployedServerId,
-		session,
-	);
-	if (sshCtx instanceof Response) {
-		return sshCtx;
-	}
+	const { telegramInfo, sshCtx } = deployCtx;
 
 	try {
 		decryptSecret(telegramInfo.botToken);

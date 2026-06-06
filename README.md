@@ -30,6 +30,7 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🚀 **One-click Hermes deployment** — Install Docker, Compose, and Hermes from the dashboard with live progress
 - 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, and custom endpoints without editing env files
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
+- 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to your VPS
 - 📈 **Live server monitoring** — Dashboard with install logs and VPS metrics (CPU, memory, disk)
 - 🔄 **One-click restart, update, and rollback** — Manage the running agent with audit history
 - 🖥️ **Built-in Hermes Web UI** — Deploy and open the Hermes browser interface from your server detail page
@@ -219,6 +220,7 @@ src/routes/           — TanStack Start file-based routes (11 pages)
 ├── servers.$id.install.tsx  — Live SSE install progress
 ├── ai-provider.tsx    — AI provider selection and API key config
 ├── telegram.tsx       — Telegram bot connection wizard
+├── settings.tsx       — Hermes agent persona editor (SOUL.md)
 ├── logs.tsx           — Install + action log viewer
 └── about.tsx          — About page (Hermes ecosystem context)
 
@@ -235,6 +237,8 @@ server/               — Hono API routes and business logic
 ├── dashboard.ts      — Aggregated status with live VPS metrics
 ├── providers.ts      — AI provider save, test, model validation
 ├── telegram.ts       — Telegram bot token verification + connect/disconnect
+├── settings.ts       — Agent persona save and SOUL.md deploy
+├── hermes/persona.ts — Persona validation and SOUL.md SSH write helper
 ├── logs.ts           — Install + action log queries and clearing
 └── db/               — Drizzle schema, connection, health check
 ```
@@ -264,6 +268,7 @@ Complete documentation for all API endpoints is available in [`docs/api-referenc
 - Install & action logs
 - AI provider configuration and testing
 - Telegram bot connect/disconnect
+- Agent persona save and SOUL.md deploy
 
 ## 📄 License
 

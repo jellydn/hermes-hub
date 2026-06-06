@@ -20,6 +20,7 @@ import {
 	listServers,
 	updateServer,
 } from "./servers";
+import { deployPersonaToHermes, savePersonaSettings } from "./settings";
 import {
 	approveTelegramPairing,
 	connectTelegram,
@@ -230,6 +231,8 @@ apiApp.post("/logs/clear", clearLogs);
 apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
+apiApp.post("/settings/persona", httpsMiddleware, savePersonaSettings);
+apiApp.post("/settings/persona/deploy", httpsMiddleware, deployPersonaToHermes);
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", disconnectTelegram);
 apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);

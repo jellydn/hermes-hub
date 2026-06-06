@@ -745,6 +745,79 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 
 ---
 
+## Settings
+
+HermesHub stores agent persona content in the database and can push it to the deployed Hermes container as `SOUL.md`. The Settings page (`/settings`) exposes a markdown editor for save and deploy. Deploy uses the same Telegram-linked VPS target as AI provider and Telegram deploy.
+
+### POST `/api/settings/persona`
+
+Saves the authenticated user's Hermes agent persona. Content is trimmed, validated, and persisted in `hermes_settings`. Does not write to the VPS until deploy is called.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+```json
+{
+  "agentPersona": "You are Hermes, a thoughtful assistant..."
+}
+```
+
+**Fields:**
+
+| Field          | Type   | Description                                              |
+| -------------- | ------ | -------------------------------------------------------- |
+| `agentPersona` | string | Markdown persona content, 1–20,000 characters (trimmed) |
+
+**Response (200):**
+```json
+{
+  "settings": {
+    "agentPersona": "You are Hermes, a thoughtful assistant...",
+    "updatedAt": "2026-06-06T12:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                              |
+| ------ | ------------------------------------------------------ |
+| 400    | Invalid JSON body / persona content required / empty / exceeds 20,000 characters |
+| 401    | Unauthorized                                           |
+| 500    | Failed to save persona settings                          |
+
+---
+
+### POST `/api/settings/persona/deploy`
+
+Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over SSH, then restarts the Hermes gateway so the new persona takes effect.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None (uses the latest saved persona for the user)
+
+**Response (200):**
+```json
+{
+  "status": "deployed",
+  "serverHost": "192.168.1.100",
+  "deployedAt": "2026-06-06T12:00:00.000Z"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | No persona saved yet                                         |
+| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
+| 400    | Credential unavailable / expired                             |
+| 401    | Unauthorized                                                 |
+| 404    | Deployed server not found                                    |
+| 502    | SSH connect, SOUL.md write, or gateway restart failed        |
+
+---
+
 ## Hermes Web UI
 
 HermesHub can deploy the [Hermes Web UI](https://get-hermes.ai/) alongside the Hermes agent on a connected VPS. After setup, the UI is reachable through an authenticated reverse proxy at `/api/servers/:id/web-ui/proxy/` — traffic is forwarded over SSH to the Web UI container on the VPS (default port `8787`). No manual SSH tunnels are required.
@@ -881,7 +954,8 @@ The following tables are used by the API:
 | `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
 | `ai_providers`     | AI provider configuration with encrypted API keys |
 | `telegram_configs` | Telegram bot connections                     |
-| `audit_logs`       | Action audit trail (connect, install, actions, provider, telegram) |
+| `hermes_settings`  | Per-user Hermes agent persona (`SOUL.md` source) |
+| `audit_logs`       | Action audit trail (connect, install, actions, provider, telegram, persona) |
 | `user`, `session`, `account`, `verification` | Better Auth user management tables |
 
 ---
