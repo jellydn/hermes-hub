@@ -18,14 +18,10 @@ const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
 const insertAuditValues = vi.fn();
-const buildManagedComposeContent = vi.fn();
+const deployManagedCompose = vi.fn();
 const getOwnedServerRecordMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
-const withSshConnection = vi.fn();
-const shellQuote = vi.fn(
-	(value: string) => `'${value.replace(/'/g, "'\\''")}'`,
-);
 
 vi.stubGlobal("fetch", fetchMock);
 
@@ -47,19 +43,14 @@ vi.mock("./db", () => ({
 	}),
 }));
 
-vi.mock("./server-compose", () => ({
-	buildManagedComposeContent,
+vi.mock("./managed-compose-deploy", () => ({
+	deployManagedCompose,
 }));
 
 vi.mock("./server-records", () => ({
 	getOwnedServerRecord: getOwnedServerRecordMock,
 	resolveServerSshConfig,
 	resolveServerSshConfigOrError,
-}));
-
-vi.mock("./ssh", () => ({
-	withSshConnection,
-	shellQuote,
 }));
 
 describe("provider settings", () => {
@@ -107,9 +98,7 @@ describe("provider settings", () => {
 			new Response(JSON.stringify({ data: [] }), { status: 200 }),
 		);
 
-		buildManagedComposeContent.mockResolvedValue(
-			"services:\n  hermes:\n    image: hermes\n",
-		);
+		deployManagedCompose.mockResolvedValue(undefined);
 		resolveServerSshConfig.mockReturnValue({
 			authMethod: "ssh-key",
 			credential: "mock-credential",
@@ -510,13 +499,8 @@ describe("provider settings", () => {
 			});
 		});
 
-		it("returns 502 when SSH compose write fails", async () => {
-			const sshExecCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 1, stdout: "", stderr: "Write failed" });
-			withSshConnection.mockImplementation(async (_input, callback) => {
-				await callback({ execCommand: sshExecCommand });
-			});
+		it("returns 502 when managed compose deploy fails", async () => {
+			deployManagedCompose.mockRejectedValueOnce(new Error("Write failed"));
 
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
@@ -534,13 +518,6 @@ describe("provider settings", () => {
 		});
 
 		it("returns 200 on successful deploy and logs all side effects", async () => {
-			const sshExecCommand = vi
-				.fn()
-				.mockResolvedValue({ code: 0, stdout: "", stderr: "" });
-			withSshConnection.mockImplementation(async (_input, callback) => {
-				await callback({ execCommand: sshExecCommand });
-			});
-
 			selectLimit
 				.mockResolvedValueOnce([providerRecord])
 				.mockResolvedValueOnce([telegramRecord]);
@@ -558,10 +535,18 @@ describe("provider settings", () => {
 				serverHost: "1.2.3.4",
 			});
 
-			expect(buildManagedComposeContent).toHaveBeenCalledWith({
+			expect(deployManagedCompose).toHaveBeenCalledWith({
+				intent: "provider",
 				userId: "user_123",
 				serverId: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "ssh-key",
+				credential: "mock-credential",
+				expectedFingerprint: undefined,
 				apiServerKey: "api-server-key-value",
+				providerModel: "gpt-4o",
 			});
 
 			// resolveServerSshConfigOrError was called with the server ID and session ID
@@ -569,39 +554,6 @@ describe("provider settings", () => {
 				expect.objectContaining({ id: "server_1", host: "1.2.3.4" }),
 				"session_123",
 			);
-
-			// withSshConnection was called with host/port/username
-			expect(withSshConnection).toHaveBeenCalledWith(
-				expect.objectContaining({
-					host: "1.2.3.4",
-					port: 22,
-					username: "root",
-					authMethod: "ssh-key",
-					credential: "mock-credential",
-				}),
-				expect.any(Function),
-			);
-
-			// SSH exec commands: write compose, docker compose up, sleep, set model
-			expect(sshExecCommand).toHaveBeenCalledTimes(4);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				1,
-				expect.stringContaining("cat > ~/hermes/docker-compose.yml"),
-			);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				2,
-				"cd ~/hermes && sudo docker compose up -d",
-			);
-			expect(sshExecCommand).toHaveBeenNthCalledWith(3, "sleep 2");
-			expect(sshExecCommand).toHaveBeenNthCalledWith(
-				4,
-				expect.stringContaining(
-					"docker exec hermes hermes config set model 'gpt-4o'",
-				),
-			);
-
-			// shellQuote was called with the model
-			expect(shellQuote).toHaveBeenCalledWith("gpt-4o");
 
 			// Audit log was written with success action
 			expect(insertAuditValues).toHaveBeenCalledWith(

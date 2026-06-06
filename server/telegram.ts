@@ -7,11 +7,10 @@ import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
-import { deployComposeViaSsh } from "./deploy";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
-import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { shellQuote, withSshConnection } from "./ssh";
 import {
@@ -228,43 +227,20 @@ export async function deployTelegramToServer(context: Context) {
 	const { authMethod, credential } = sshResult;
 
 	const apiServerKey = crypto.randomBytes(32).toString("hex");
-	let composeContent: string;
-	try {
-		composeContent = await buildManagedComposeContent({
-			userId: session.user.id,
-			serverId: serverRecord.id,
-			apiServerKey,
-			telegramBotToken,
-		});
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Failed to resolve provider config";
-
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "telegram.deploy.failed",
-			serverId: serverRecord.id,
-			details: {
-				serverId: serverRecord.id,
-				error: message,
-			},
-			ipAddress,
-		});
-
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
 
 	try {
-		await deployComposeViaSsh({
+		await deployManagedCompose({
+			intent: "telegram",
+			userId: session.user.id,
+			serverId: serverRecord.id,
 			host: serverRecord.host,
 			port: serverRecord.port,
 			username: serverRecord.username,
 			authMethod,
 			credential,
-			composeContent,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			apiServerKey,
+			telegramBotToken,
 		});
 
 		// Persist deploy state in a single transaction so that the config update

@@ -4,14 +4,10 @@ import { defaultHermesWebUiPort } from "../constants";
 import { encryptSecret } from "../crypto";
 import { getDb } from "../db";
 import { serverWebUi } from "../db/schema";
-import { deployComposeViaSsh } from "../deploy";
 import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
-import {
-	buildManagedComposeContentFromSecrets,
-	resolveManagedComposeSecrets,
-} from "../server-compose";
+import { deployManagedCompose } from "../managed-compose-deploy";
 import {
 	requireEnabledWebUi,
 	requireOwnedServer,
@@ -19,7 +15,7 @@ import {
 } from "./context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
-import { assertWebUiReachable, formatWebUiProxyError } from "./reachability";
+import { formatWebUiProxyError } from "./reachability";
 import {
 	decryptWebUiPassword,
 	getServerWebUiRecord,
@@ -72,57 +68,21 @@ export async function deployServerWebUi(context: Context) {
 	const password = passwordResult.password;
 	const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
 
-	let composeContent: string;
-	try {
-		const secrets = await resolveManagedComposeSecrets({
-			userId: ctx.session.user.id,
-			serverId: ctx.serverId,
-		});
-		composeContent = buildManagedComposeContentFromSecrets({
-			serverId: ctx.serverId,
-			secrets,
-			webUiPassword: password,
-		});
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "Failed to resolve managed compose settings";
-
-		await insertAuditLog(db, {
-			userId: ctx.session.user.id,
-			action: "server.web_ui.deploy.failed",
-			serverId: ctx.serverId,
-			details: { serverId: ctx.serverId, error: message },
-			ipAddress,
-		});
-
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
-
 	invalidatePooledSsh(ctx.session.user.id, ctx.serverId);
 
 	try {
-		await deployComposeViaSsh({
+		await deployManagedCompose({
+			intent: "web-ui",
+			userId: ctx.session.user.id,
+			serverId: ctx.serverId,
 			host: ctx.server.host,
 			port: ctx.server.port,
 			username: ctx.server.username,
 			authMethod: ctx.authMethod,
 			credential: ctx.credential,
-			composeContent,
-			composeServices: ["hermes-webui"],
 			expectedFingerprint: ctx.server.hostKeyFingerprint ?? undefined,
-			preSshCommands: async (ssh) => {
-				const workspaceResult = await ssh.execCommand("mkdir -p ~/workspace");
-				if (workspaceResult.code !== 0) {
-					throw new Error(
-						workspaceResult.stderr || "Failed to create workspace directory",
-					);
-				}
-			},
-			extraSshCommands: async (ssh) => {
-				await assertWebUiReachable(ssh, webUiPort);
-			},
+			webUiPassword: password,
+			webUiPort,
 		});
 
 		const updatedAt = new Date();

@@ -5,13 +5,13 @@ import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { deployManagedCompose } from "./managed-compose-deploy";
 import {
 	decryptApiKey,
 	getLatestProviderRecord,
 	getTelegramDeployInfo,
 } from "./providers/records";
-import { buildManagedComposeContent } from "./server-compose";
-import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
+import { type SshAuthMethod, withSshConnection } from "./ssh";
 import {
 	requireAuthSession,
 	requireOwnedServerSshById,
@@ -133,33 +133,19 @@ export async function deployProviderToHermes(context: Context) {
 
 	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
 
-	const composeContent = await buildManagedComposeContent({
-		userId: session.user.id,
-		serverId: sshCtx.serverId,
-		apiServerKey: decryptedApiServerKey,
-	});
-
 	try {
-		await deployComposeViaSsh({
+		await deployManagedCompose({
+			intent: "provider",
+			userId: session.user.id,
+			serverId: sshCtx.serverId,
 			host: sshCtx.server.host,
 			port: sshCtx.server.port,
 			username: sshCtx.server.username,
 			authMethod: sshCtx.authMethod,
 			credential: sshCtx.credential,
-			composeContent,
 			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-			extraSshCommands: async (ssh) => {
-				await ssh.execCommand("sleep 2");
-
-				const configResult = await ssh.execCommand(
-					`docker exec hermes hermes config set model ${shellQuote(providerRecord.model)}`,
-				);
-				if (configResult.code !== 0) {
-					throw new Error(
-						configResult.stderr || "Failed to set model inside Hermes",
-					);
-				}
-			},
+			apiServerKey: decryptedApiServerKey,
+			providerModel: providerRecord.model,
 		});
 
 		await insertAuditLog(db, {

@@ -19,8 +19,7 @@ const getProviderDeployConfig = vi.fn();
 const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
-const buildManagedComposeContent = vi.fn();
-const deployComposeViaSsh = vi.fn();
+const deployManagedCompose = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -82,12 +81,8 @@ vi.mock("./server-records", () => ({
 	resolveServerSshConfigOrError,
 }));
 
-vi.mock("./server-compose", () => ({
-	buildManagedComposeContent,
-}));
-
-vi.mock("./deploy", () => ({
-	deployComposeViaSsh,
+vi.mock("./managed-compose-deploy", () => ({
+	deployManagedCompose,
 }));
 
 describe("telegram handlers", () => {
@@ -107,7 +102,7 @@ describe("telegram handlers", () => {
 			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
 			model: "gpt-4o",
 		});
-		buildManagedComposeContent.mockResolvedValue("# mocked compose content");
+		deployManagedCompose.mockResolvedValue(undefined);
 		transaction.mockImplementation(async (fn) => {
 			const tx = {
 				update: () => ({ set: updateSet }),
@@ -351,7 +346,7 @@ describe("telegram handlers", () => {
 		]);
 
 		// SSH fails
-		deployComposeViaSsh.mockRejectedValueOnce(
+		deployManagedCompose.mockRejectedValueOnce(
 			new Error("SSH connection refused"),
 		);
 
@@ -427,7 +422,7 @@ describe("telegram handlers", () => {
 			credential: "decrypted-credential",
 		});
 
-		deployComposeViaSsh.mockResolvedValueOnce(undefined);
+		deployManagedCompose.mockResolvedValueOnce(undefined);
 
 		let txInsertCalls = 0;
 		let txUpdateCalls = 0;
@@ -456,24 +451,19 @@ describe("telegram handlers", () => {
 			serverHost: "1.2.3.4",
 		});
 
-		// deployComposeViaSsh was invoked with the rendered compose content.
-		expect(deployComposeViaSsh).toHaveBeenCalledTimes(1);
-		const deployArgs = deployComposeViaSsh.mock.calls[0]?.[0];
-		expect(deployArgs).toMatchObject({
-			host: "1.2.3.4",
-			port: 22,
-			username: "root",
-			authMethod: "password",
-			credential: "decrypted-credential",
-			expectedFingerprint: "SHA256:abc",
-		});
-		expect(deployArgs.composeContent).toBe("# mocked compose content");
-
-		expect(buildManagedComposeContent).toHaveBeenCalledWith(
+		expect(deployManagedCompose).toHaveBeenCalledWith(
 			expect.objectContaining({
+				intent: "telegram",
 				userId: "user_123",
 				serverId: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "decrypted-credential",
+				expectedFingerprint: "SHA256:abc",
 				telegramBotToken: "123456:secret-token",
+				apiServerKey: expect.any(String),
 			}),
 		);
 

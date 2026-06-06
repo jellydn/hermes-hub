@@ -5,9 +5,7 @@ const {
 	getAuthSession,
 	encryptSecret,
 	decryptSecret,
-	deployComposeViaSsh,
-	resolveManagedComposeSecrets,
-	buildManagedComposeContentFromSecrets,
+	deployManagedCompose,
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
 	getServerWebUiRecord,
@@ -22,9 +20,7 @@ const {
 	getAuthSession: vi.fn(),
 	encryptSecret: vi.fn(),
 	decryptSecret: vi.fn(),
-	deployComposeViaSsh: vi.fn(),
-	resolveManagedComposeSecrets: vi.fn(),
-	buildManagedComposeContentFromSecrets: vi.fn(),
+	deployManagedCompose: vi.fn(),
 	getOwnedServerRecord: vi.fn(),
 	resolveServerSshConfigOrError: vi.fn(),
 	getServerWebUiRecord: vi.fn(),
@@ -46,13 +42,8 @@ vi.mock("../crypto", () => ({
 	decryptSecret,
 }));
 
-vi.mock("../deploy", () => ({
-	deployComposeViaSsh,
-}));
-
-vi.mock("../server-compose", () => ({
-	resolveManagedComposeSecrets,
-	buildManagedComposeContentFromSecrets,
+vi.mock("../managed-compose-deploy", () => ({
+	deployManagedCompose,
 }));
 
 vi.mock("../server-records", () => ({
@@ -133,14 +124,7 @@ describe("web-ui handlers", () => {
 		decryptSecret.mockImplementation((value: string) =>
 			value.startsWith("enc:") ? value.slice(4) : value,
 		);
-		resolveManagedComposeSecrets.mockResolvedValue({
-			telegramInfo: null,
-			providerConfig: null,
-			webUiRecord: null,
-		});
-		buildManagedComposeContentFromSecrets.mockReturnValue(
-			"services:\n  hermes: {}",
-		);
+		deployManagedCompose.mockResolvedValue(undefined);
 		resolveServerSshConfigOrError.mockReturnValue({
 			ok: true,
 			authMethod: "password",
@@ -159,7 +143,7 @@ describe("web-ui handlers", () => {
 		transaction.mockImplementation(async (fn) =>
 			fn({ insert: () => ({ values: insertValues }) }),
 		);
-		deployComposeViaSsh.mockResolvedValue(undefined);
+
 		getLatestInstallForServer.mockResolvedValue({ status: "succeeded" });
 		getServerWebUiRecord.mockResolvedValue(null);
 		invalidatePooledSsh.mockReturnValue(undefined);
@@ -183,13 +167,11 @@ describe("web-ui handlers", () => {
 
 		expect(response.status).toBe(200);
 		expect(payload.webUi.enabled).toBe(true);
-		expect(resolveManagedComposeSecrets).toHaveBeenCalled();
-		expect(buildManagedComposeContentFromSecrets).toHaveBeenCalled();
-		expect(deployComposeViaSsh).toHaveBeenCalledWith(
+		expect(deployManagedCompose).toHaveBeenCalledWith(
 			expect.objectContaining({
-				composeServices: ["hermes-webui"],
-				preSshCommands: expect.any(Function),
-				extraSshCommands: expect.any(Function),
+				intent: "web-ui",
+				serverId: "server_123",
+				webUiPort: 8787,
 			}),
 		);
 		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
