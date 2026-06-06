@@ -12,19 +12,26 @@ export function parseAndValidateOs(
 	osReleaseContent: string,
 	architectureOutput: string,
 ): VerifiedServerInfo {
-	const raw = Object.fromEntries(
-		osReleaseContent
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean)
-			.filter((line) => line.includes("="))
-			.map((line) => {
-				const separatorIndex = line.indexOf("=");
-				const key = line.slice(0, separatorIndex);
-				const value = line.slice(separatorIndex + 1).replace(/^"|"$/g, "");
-				return [key, value];
-			}),
-	);
+	const raw: Record<string, string> = {};
+	for (const line of osReleaseContent.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed) {
+			continue;
+		}
+
+		const separator = trimmed.split("=");
+		if (separator.length < 2) {
+			continue;
+		}
+
+		const key = separator[0] ?? "";
+		const value = separator.slice(1).join("=").replace(/^"|"$/g, "");
+		if (!key) {
+			continue;
+		}
+
+		raw[key] = value;
+	}
 
 	const osId = raw.ID?.toLowerCase();
 	const prettyName = raw.PRETTY_NAME ?? raw.NAME ?? "Unknown OS";

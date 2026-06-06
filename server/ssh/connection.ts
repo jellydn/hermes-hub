@@ -36,8 +36,10 @@ export async function verifyServerConnection(
 	input: SshConnectionInput,
 ): Promise<VerifiedServerConnection> {
 	return withSshConnection(input, async (ssh, hostKey) => {
-		const osRelease = await execStrict(ssh, "cat /etc/os-release");
-		const architecture = await execStrict(ssh, "uname -m");
+		const [osRelease, architecture] = await Promise.all([
+			execStrict(ssh, "cat /etc/os-release"),
+			execStrict(ssh, "uname -m"),
+		]);
 
 		const verified = parseAndValidateOs(osRelease.stdout, architecture.stdout);
 
