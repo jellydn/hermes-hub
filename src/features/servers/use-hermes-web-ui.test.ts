@@ -93,6 +93,7 @@ function createWebUi(
 		proxyPath: "/api/servers/server_123/web-ui/proxy/",
 		deployStatus: "idle",
 		deployError: null,
+		deployStartedAt: null,
 		updatedAt: "2026-05-26T04:00:00.000Z",
 		...overrides,
 	};

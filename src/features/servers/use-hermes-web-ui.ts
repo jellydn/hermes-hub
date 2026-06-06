@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
 } from "@/lib/server-detail";
 
-type WebUiState = {
+import { subscribeWebUiDeployPolling } from "./web-ui-deploy-poll";
+
+type WebUiSnapshot = NonNullable<ServerDetailSnapshot["webUi"]>;
+
+type HermesWebUiState = {
+	webUiOverride: WebUiSnapshot | null;
 	error: string | null;
 	isSubmitting: boolean;
 	isRevealingPassword: boolean;
@@ -14,105 +19,172 @@ type WebUiState = {
 	successMessage: string | null;
 };
 
+type HermesWebUiAction =
+	| { type: "deploy_started" }
+	| { type: "deploy_failed"; error: string }
+	| {
+			type: "deploy_succeeded";
+			webUi: WebUiSnapshot | null;
+	  }
+	| {
+			type: "deploy_poll_succeeded";
+			webUi: WebUiSnapshot;
+			successMessage: string;
+	  }
+	| { type: "deploy_poll_failed"; webUi: WebUiSnapshot; error: string }
+	| { type: "reveal_toggle" }
+	| { type: "reveal_started" }
+	| { type: "reveal_failed"; error: string }
+	| { type: "reveal_succeeded"; password: string | null };
+
+const initialHermesWebUiState: HermesWebUiState = {
+	webUiOverride: null,
+	error: null,
+	isSubmitting: false,
+	isRevealingPassword: false,
+	revealedPassword: null,
+	showPassword: false,
+	successMessage: null,
+};
+
+function hermesWebUiReducer(
+	state: HermesWebUiState,
+	action: HermesWebUiAction,
+): HermesWebUiState {
+	switch (action.type) {
+		case "deploy_started":
+			return {
+				...state,
+				isSubmitting: true,
+				error: null,
+				successMessage: null,
+			};
+		case "deploy_failed":
+			return {
+				...state,
+				isSubmitting: false,
+				error: action.error,
+			};
+		case "deploy_succeeded":
+			return {
+				...state,
+				webUiOverride: action.webUi,
+				isSubmitting: false,
+				error: null,
+				successMessage: null,
+				revealedPassword: null,
+				showPassword: false,
+			};
+		case "deploy_poll_succeeded":
+			return {
+				...state,
+				webUiOverride: action.webUi,
+				error: null,
+				successMessage: action.successMessage,
+			};
+		case "deploy_poll_failed":
+			return {
+				...state,
+				webUiOverride: action.webUi,
+				successMessage: null,
+				error: action.error,
+			};
+		case "reveal_toggle":
+			return {
+				...state,
+				showPassword: !state.showPassword,
+			};
+		case "reveal_started":
+			return {
+				...state,
+				isRevealingPassword: true,
+				error: null,
+			};
+		case "reveal_failed":
+			return {
+				...state,
+				isRevealingPassword: false,
+				error: action.error,
+			};
+		case "reveal_succeeded":
+			return {
+				...state,
+				isRevealingPassword: false,
+				revealedPassword: action.password,
+				showPassword: true,
+			};
+		default:
+			return state;
+	}
+}
+
+function resolveWebUi(
+	detailWebUi: ServerDetailSnapshot["webUi"],
+	override: WebUiSnapshot | null,
+) {
+	if (!detailWebUi) {
+		return override;
+	}
+
+	if (!override) {
+		return detailWebUi;
+	}
+
+	return override.updatedAt >= detailWebUi.updatedAt ? override : detailWebUi;
+}
+
 export function useHermesWebUi(
 	detail: ServerDetailSnapshot,
 	onDetailChange?: ServerDetailChangeHandler,
 ) {
-	const [deployedWebUi, setDeployedWebUi] =
-		useState<ServerDetailSnapshot["webUi"]>(null);
-	const [state, setState] = useState<WebUiState>({
-		error: null,
-		isSubmitting: false,
-		isRevealingPassword: false,
-		revealedPassword: null,
-		showPassword: false,
-		successMessage: null,
-	});
+	const [state, dispatch] = useReducer(
+		hermesWebUiReducer,
+		initialHermesWebUiState,
+	);
 	const wasEnabledAtDeployStart = useRef(false);
+	const onDetailChangeRef = useRef(onDetailChange);
+	onDetailChangeRef.current = onDetailChange;
 
-	useEffect(() => {
-		setDeployedWebUi((current) => {
-			if (!detail.webUi) {
-				return null;
-			}
-			if (!current) {
-				return null;
-			}
-
-			const matchesIncoming =
-				current.updatedAt === detail.webUi.updatedAt &&
-				current.deployStatus === detail.webUi.deployStatus &&
-				current.enabled === detail.webUi.enabled &&
-				current.deployError === detail.webUi.deployError;
-
-			return matchesIncoming ? current : null;
-		});
-	}, [detail.webUi]);
-
-	const webUi = deployedWebUi ?? detail.webUi;
+	const webUi = resolveWebUi(detail.webUi, state.webUiOverride);
 	const isEnabled = webUi?.enabled === true;
 	const isDeploying = webUi?.deployStatus === "deploying";
 
 	useEffect(() => {
-		if (webUi?.deployStatus !== "deploying") {
+		if (!isDeploying) {
 			return;
 		}
 
-		const interval = setInterval(() => {
-			void (async () => {
-				try {
-					const response = await fetch(`/api/servers/${detail.server.id}`);
-					if (!response.ok) {
-						return;
-					}
+		return subscribeWebUiDeployPolling(detail.server.id, (updated) => {
+			if (!updated.webUi || updated.webUi.deployStatus === "deploying") {
+				return;
+			}
 
-					const payload = (await response.json()) as {
-						serverDetail?: ServerDetailSnapshot;
-					};
-					const updated = payload.serverDetail;
-					if (!updated?.webUi || updated.webUi.deployStatus === "deploying") {
-						return;
-					}
+			onDetailChangeRef.current?.(updated);
 
-					setDeployedWebUi(updated.webUi);
-					onDetailChange?.(updated);
+			if (updated.webUi.deployStatus === "succeeded") {
+				dispatch({
+					type: "deploy_poll_succeeded",
+					webUi: updated.webUi,
+					successMessage: wasEnabledAtDeployStart.current
+						? "Hermes Web UI redeployed. Try opening it again."
+						: "Hermes Web UI is ready. Open it from HermesHub.",
+				});
+				return;
+			}
 
-					if (updated.webUi.deployStatus === "succeeded") {
-						setState((current) => ({
-							...current,
-							error: null,
-							successMessage: wasEnabledAtDeployStart.current
-								? "Hermes Web UI redeployed. Try opening it again."
-								: "Hermes Web UI is ready. Open it from HermesHub.",
-						}));
-						return;
-					}
-
-					if (updated.webUi.deployStatus === "failed") {
-						setState((current) => ({
-							...current,
-							successMessage: null,
-							error: updated.webUi?.deployError ?? "Web UI setup failed.",
-						}));
-					}
-				} catch {
-					// Keep polling on transient fetch failures.
-				}
-			})();
-		}, 5000);
-
-		return () => clearInterval(interval);
-	}, [webUi?.deployStatus, detail.server.id, onDetailChange]);
+			if (updated.webUi.deployStatus === "failed") {
+				dispatch({
+					type: "deploy_poll_failed",
+					webUi: updated.webUi,
+					error: updated.webUi.deployError ?? "Web UI setup failed.",
+				});
+			}
+		});
+	}, [detail.server.id, isDeploying]);
 
 	async function deploy() {
 		wasEnabledAtDeployStart.current = isEnabled;
-
-		setState((current) => ({
-			...current,
-			isSubmitting: true,
-			error: null,
-			successMessage: null,
-		}));
+		dispatch({ type: "deploy_started" });
 
 		try {
 			const response = await fetch(
@@ -125,53 +197,39 @@ export function useHermesWebUi(
 			} | null;
 
 			if (!response.ok) {
-				setState((current) => ({
-					...current,
-					isSubmitting: false,
+				dispatch({
+					type: "deploy_failed",
 					error: payload?.error ?? "Web UI setup failed",
-				}));
+				});
 				return;
 			}
 
 			if (payload?.webUi) {
-				setDeployedWebUi(payload.webUi);
-				onDetailChange?.((current) => ({
+				onDetailChangeRef.current?.((current) => ({
 					...current,
 					webUi: payload.webUi ?? null,
 				}));
 			}
 
-			setState((current) => ({
-				...current,
-				isSubmitting: false,
-				error: null,
-				successMessage: null,
-				revealedPassword: null,
-				showPassword: false,
-			}));
+			dispatch({
+				type: "deploy_succeeded",
+				webUi: payload?.webUi ?? null,
+			});
 		} catch {
-			setState((current) => ({
-				...current,
-				isSubmitting: false,
+			dispatch({
+				type: "deploy_failed",
 				error: "Web UI setup failed: Connection failed.",
-			}));
+			});
 		}
 	}
 
 	async function revealPassword() {
 		if (state.revealedPassword) {
-			setState((current) => ({
-				...current,
-				showPassword: !current.showPassword,
-			}));
+			dispatch({ type: "reveal_toggle" });
 			return;
 		}
 
-		setState((current) => ({
-			...current,
-			isRevealingPassword: true,
-			error: null,
-		}));
+		dispatch({ type: "reveal_started" });
 
 		try {
 			const response = await fetch(
@@ -183,26 +241,22 @@ export function useHermesWebUi(
 			} | null;
 
 			if (!response.ok) {
-				setState((current) => ({
-					...current,
-					isRevealingPassword: false,
+				dispatch({
+					type: "reveal_failed",
 					error: payload?.error ?? "Unable to reveal Web UI password",
-				}));
+				});
 				return;
 			}
 
-			setState((current) => ({
-				...current,
-				isRevealingPassword: false,
-				revealedPassword: payload?.password ?? null,
-				showPassword: true,
-			}));
+			dispatch({
+				type: "reveal_succeeded",
+				password: payload?.password ?? null,
+			});
 		} catch {
-			setState((current) => ({
-				...current,
-				isRevealingPassword: false,
+			dispatch({
+				type: "reveal_failed",
 				error: "Unable to reveal Web UI password",
-			}));
+			});
 		}
 	}
 
@@ -210,7 +264,12 @@ export function useHermesWebUi(
 		webUi,
 		isEnabled,
 		isDeploying,
-		...state,
+		error: state.error,
+		isSubmitting: state.isSubmitting,
+		isRevealingPassword: state.isRevealingPassword,
+		revealedPassword: state.revealedPassword,
+		showPassword: state.showPassword,
+		successMessage: state.successMessage,
 		deploy,
 		revealPassword,
 	};
