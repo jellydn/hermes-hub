@@ -204,6 +204,9 @@ Returns a detailed snapshot of a server, including its install status and action
       "enabled": true,
       "port": 8787,
       "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+      "deployStatus": "succeeded",
+      "deployError": null,
+      "deployStartedAt": "2026-05-26T11:59:00.000Z",
       "updatedAt": "2026-05-26T12:00:00.000Z"
     }
   }
@@ -750,20 +753,28 @@ The server detail page (`/servers/:id`) exposes setup, open, redeploy, and passw
 
 ### POST `/api/servers/:id/web-ui/deploy`
 
-Deploys or redeploys the Hermes Web UI service on the connected VPS. Updates `docker-compose.yml` with the Web UI container, runs `docker compose up`, and verifies the remote port is reachable. Generates and encrypts a Web UI password on first deploy; redeploy reuses the stored password.
+Deploys or redeploys the Hermes Web UI service on the connected VPS. The deploy runs in the background: the endpoint returns `202` immediately and the caller polls `GET /api/servers/:id/web-ui` to watch `deployStatus` advance from `"deploying"` to `"succeeded"` or `"failed"`.
+
+On first deploy, generates and encrypts a Web UI password; redeploys reuse the stored password. If a non-stale deploy is already in progress (started within `STALE_DEPLOY_THRESHOLD_MS`, default 10 minutes), the endpoint returns `202` with the current status instead of starting a duplicate deploy. A deploy that exceeds the threshold without completing is treated as stale and will be replaced by a new deploy on the next request.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body:** None
 
-**Response (200):**
+**Response (202 — deploying or already deploying):**
+
+`enabled` reflects the Web UI state before this deploy; it flips to `true` once `deployStatus` reaches `"succeeded"`.
+
 ```json
 {
-  "status": "deployed",
+  "status": "deploying",
   "webUi": {
-    "enabled": true,
+    "enabled": false,
     "port": 8787,
     "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+    "deployStatus": "deploying",
+    "deployError": null,
+    "deployStartedAt": "2026-05-26T12:00:00.000Z",
     "updatedAt": "2026-05-26T12:00:00.000Z"
   }
 }
@@ -778,6 +789,38 @@ Deploys or redeploys the Hermes Web UI service on the connected VPS. Updates `do
 | 404    | Server not found                                       |
 | 500    | Password resolution failed before deploy               |
 | 502    | SSH connect, compose deploy, or reachability check failed |
+
+---
+
+### GET `/api/servers/:id/web-ui`
+
+Returns the current Hermes Web UI snapshot for a server. Use this lightweight endpoint while a background deploy is running instead of reloading the full server detail payload.
+
+**Auth required:** Yes
+
+**Response (200):**
+```json
+{
+  "webUi": {
+    "enabled": true,
+    "port": 8787,
+    "proxyPath": "/api/servers/uuid/web-ui/proxy/",
+    "deployStatus": "succeeded",
+    "deployError": null,
+    "deployStartedAt": null,
+    "updatedAt": "2026-05-26T12:00:00.000Z"
+  }
+}
+```
+
+Returns `"webUi": null` when no Web UI record exists yet.
+
+**Error responses:**
+
+| Status | Condition      |
+| ------ | -------------- |
+| 401    | Unauthorized   |
+| 404    | Server not found |
 
 ---
 
