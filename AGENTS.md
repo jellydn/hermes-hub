@@ -14,8 +14,8 @@
 - `vite.config.ts` excludes `node-ssh`, `ssh2`, and `cpu-features` from `optimizeDeps` because server-only SSH code pulls native `.node` binaries that break Vite dev prebundling if reintroduced into the client scan.
 - `src/routeTree.gen.ts` is generated. Do not edit it by hand.
 - `biome.json` excludes `src/routeTree.gen.ts` from checks.
-- `drizzle.config.ts` throws at import time if `DATABASE_URL` is missing.
-- There is a `db:generate` script, but no local `db:migrate` script in `package.json`. The checked-in migration path is `drizzle-kit migrate` during deploy (`app.json`, `.github/workflows/deploy.yml`). Do not assume `bun run db:migrate` exists just because `README.md` mentions it.
+- `drizzle.config.ts` imports without `DATABASE_URL`; runtime DB access still throws from `getDb()` when the env var is missing.
+- Local migration commands are `bun run db:migrate` and `just db-migrate`; both require `DATABASE_URL` and wrap `drizzle-kit migrate`. Deploy still runs migrations at startup via `scripts/start-production.mjs`.
 
 ## Architecture
 
@@ -28,7 +28,7 @@
 
 - Route-level `createServerFn` loaders are the normal pattern for authenticated page snapshots such as dashboard, logs, AI provider, and Telegram.
 - `src/routes/servers.$id.tsx` is the exception: it fetches `/api/servers/:id` from the component with `useMountEffect` instead of using a route loader. Follow the existing pattern unless you are intentionally reshaping that page.
-- Install progress lives in two places: persisted `install_events` rows (the single source of truth) and the in-memory SSE stream in `server/install/sse-stream.ts`. `installs.log` is a legacy column kept only for read-fallback during migration; do not write to it. When you change install events or replay behavior, keep both the rows and the in-memory stream in sync.
+- Install progress lives in two places: persisted `install_events` rows (the single source of truth) and the in-memory SSE stream in `server/install/sse-stream.ts`. When you change install events or replay behavior, keep both the rows and the in-memory stream in sync.
 - Server action history is read from `audit_logs` rows named `server.action.*.succeeded|failed`, filtered by the indexed `audit_logs.server_id` column (not by JSON `details.serverId`) before `LIMIT 5`. The list query in `server/servers/list.ts` keys records on the returned `serverId` column.
 - Rollback target resolution is `request targetVersion -> latest installs.version -> "latest"`.
 

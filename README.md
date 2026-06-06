@@ -148,12 +148,14 @@ bun run build
 | `bun run test`        | Run Vitest test suite              |
 | `bun run typecheck`   | Run TypeScript type checking       |
 | `bun run db:generate` | Generate Drizzle migrations        |
+| `bun run db:migrate`  | Apply Drizzle migrations locally   |
 | `just dev`            | Thin wrapper: `bun run dev`        |
 | `just test`           | Thin wrapper: `bun run test`       |
 | `just typecheck`      | Thin wrapper: `bun run typecheck`  |
 | `just check`          | Runs typecheck + test in parallel  |
 | `just lint`           | Biome check (no auto-fix)          |
 | `just format`         | Biome auto-format (`--write`)      |
+| `just db-migrate`     | Thin wrapper: `bun run db:migrate` |
 | `just ci`             | Full pipeline: lint → typecheck → test → build |
 
 ## 🔧 Environment Variables

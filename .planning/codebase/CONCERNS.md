@@ -4,12 +4,11 @@
 
 ## Tech Debt
 
-**[Legacy Install Log Fallback]:**
+**[Legacy Install Log Fallback]:** ✅ Resolved (2026-06-06)
 
-- Issue: `server/install/legacy-log.ts` contains fallback parsing for legacy `installs.log` column kept only for read-fallback during migration
-- Files: `server/install/legacy-log.ts`
-- Impact: Dual code paths for reading install history (new `install_events` table + legacy column); increases complexity
-- Fix approach: Complete migration to `install_events` table and drop `installs.log` column and `legacy-log.ts`
+- Issue: `server/install/legacy-log.ts` contained fallback parsing for legacy `installs.log` column kept only for read-fallback during migration
+- Files: `server/install/log-lines.ts`, `drizzle/0007_drop_installs_log.sql`
+- Resolution: Backfilled legacy `installs.log` rows into `install_events`, dropped the column, and removed the dual read path
 
 **[Generated Route Tree]:**
 
@@ -18,19 +17,17 @@
 - Impact: Risk of accidental edits; regeneration needed on route changes
 - Fix approach: Ensure CI regenerates on build; consider `.gitignore` if regeneration is reliable
 
-**[Drizzle Config Fails at Import Time]:**
+**[Drizzle Config Fails at Import Time]:** ✅ Resolved (2026-06-06)
 
-- Issue: `drizzle.config.ts` throws at import time if `DATABASE_URL` is missing
-- Files: `drizzle.config.ts`
-- Impact: Breaks tooling (IDE, tests) when env not set; non-standard behavior
-- Fix approach: Defer validation to runtime or provide sensible defaults for tooling
+- Issue: `drizzle.config.ts` threw at import time if `DATABASE_URL` was missing
+- Files: `drizzle.config.ts`, `server/db/index.ts`
+- Resolution: Config imports safely with an empty fallback URL; runtime DB access still validates `DATABASE_URL` in `getDb()`
 
-**[No Local Migration Script]:**
+**[No Local Migration Script]:** ✅ Resolved (2026-06-06)
 
-- Issue: `package.json` has `db:generate` but no `db:migrate`; migrations only run during deploy
-- Files: `package.json`, `drizzle.config.ts`
-- Impact: Local schema drift possible; developers can't easily apply migrations
-- Fix approach: Add `db:migrate` script using `drizzle-kit migrate`
+- Issue: `package.json` had `db:generate` but no `db:migrate`; migrations only ran during deploy
+- Files: `package.json`, `justfile`, `scripts/db-migrate.mjs`
+- Resolution: Added `bun run db:migrate` and `just db-migrate` with a clear `DATABASE_URL` guard
 
 ## Known Bugs
 
@@ -173,11 +170,11 @@
 
 ## Missing Critical Features
 
-**[Database Migration Tooling]:**
+**[Database Migration Tooling]:** ✅ Resolved (2026-06-06)
 
-- Problem: No local `db:migrate` command; migrations only run during deploy
-- Blocks: Local development schema sync; branching with schema changes
-- Files: `package.json`, `drizzle.config.ts`
+- Problem: No local `db:migrate` command; migrations only ran during deploy
+- Resolution: Added `bun run db:migrate` and `just db-migrate` for local schema sync
+- Files: `package.json`, `justfile`, `scripts/db-migrate.mjs`
 
 **[Structured Logging/Observability]:**
 
