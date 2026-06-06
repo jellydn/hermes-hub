@@ -3,6 +3,8 @@ import type {
 	McpTransport,
 } from "../../../server/settings/mcp/config";
 
+import type { McpServerPreset } from "./mcp-server-presets";
+
 export type SecretRow = {
 	id: string;
 	key: string;
@@ -91,6 +93,52 @@ function toSecretRows(entries: McpServerSummary["env"]): SecretRow[] {
 		valueLast4: entry.valueLast4,
 		hasStoredValue: entry.hasStoredValue,
 	}));
+}
+
+export type McpPresetOverrides = Record<string, string>;
+
+function buildPresetArgs(
+	preset: McpServerPreset,
+	overrides?: McpPresetOverrides,
+): string[] {
+	if (!preset.configurableFields?.length) {
+		return [...preset.args];
+	}
+
+	const args = [...preset.args];
+
+	for (const field of preset.configurableFields) {
+		const value = overrides?.[field.id]?.trim() || field.defaultValue;
+
+		if (field.id === "allowedDirectory") {
+			return ["-y", "@modelcontextprotocol/server-filesystem", value];
+		}
+	}
+
+	return args;
+}
+
+export function formStateFromPreset(
+	preset: McpServerPreset,
+	overrides?: McpPresetOverrides,
+): McpFormState {
+	return {
+		name: preset.name,
+		transport: preset.transport,
+		enabled: true,
+		command: preset.command,
+		argsText: buildPresetArgs(preset, overrides).join("\n"),
+		url: "",
+		envRows: [emptySecretRow()],
+		headerRows: [emptySecretRow()],
+		toolsIncludeText: "",
+		toolsExcludeText: "",
+		toolsResources: true,
+		toolsPrompts: true,
+		timeout: "",
+		connectTimeout: "",
+		supportsParallelToolCalls: false,
+	};
 }
 
 export function formStateFromServer(server: McpServerSummary): McpFormState {

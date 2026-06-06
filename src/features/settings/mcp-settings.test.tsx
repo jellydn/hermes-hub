@@ -6,6 +6,7 @@ import {
 	fireEvent,
 	render,
 	screen,
+	within,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
 	return {
+		Check: MockIcon,
 		CloudUpload: MockIcon,
 		LoaderCircle: MockIcon,
 		Plus: MockIcon,
@@ -73,6 +75,14 @@ const savedServer = {
 	updatedAt: "2026-06-06T12:00:00.000Z",
 };
 
+const memoryServer = {
+	...savedServer,
+	id: "mcp_memory",
+	name: "memory",
+	args: ["-y", "@modelcontextprotocol/server-memory"],
+	env: [],
+};
+
 beforeEach(() => {
 	fetchMock.mockResolvedValue(
 		new Response(JSON.stringify({ status: "ok" }), {
@@ -83,6 +93,166 @@ beforeEach(() => {
 });
 
 describe("McpSettings", () => {
+	it("renders recommended preset cards before advanced setup", () => {
+		render(<McpSettings initialServers={[]} />);
+
+		expect(screen.getByText(/recommended mcp servers/i)).toBeTruthy();
+		expect(screen.getByText("Memory")).toBeTruthy();
+		expect(screen.getByText("Sequential Thinking")).toBeTruthy();
+		expect(screen.getByText("Filesystem")).toBeTruthy();
+		expect(
+			screen.queryByRole("button", { name: /add custom server/i }),
+		).toBeNull();
+	});
+
+	it("saves the memory preset with the expected POST body", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					server: memoryServer,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(<McpSettings initialServers={[]} />);
+
+		const memoryCard = screen.getByText("Memory").closest("li");
+		expect(memoryCard).toBeTruthy();
+		fireEvent.click(
+			within(memoryCard as HTMLElement).getByRole("button", {
+				name: /^configure$/i,
+			}),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /save server/i }));
+
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/settings/mcp-servers",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({
+					name: "memory",
+					transport: "stdio",
+					enabled: true,
+					command: "npx",
+					args: ["-y", "@modelcontextprotocol/server-memory"],
+					url: "",
+					env: [],
+					headers: [],
+					toolsInclude: [],
+					toolsExclude: [],
+					toolsResources: true,
+					toolsPrompts: true,
+					timeout: null,
+					connectTimeout: null,
+					supportsParallelToolCalls: false,
+				}),
+			}),
+		);
+		expect(
+			screen.getByText(/mcp server saved\. deploy mcp settings/i),
+		).toBeTruthy();
+	});
+
+	it("saves the filesystem preset with the selected allowed directory", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					server: {
+						...memoryServer,
+						id: "mcp_fs",
+						name: "filesystem",
+						args: [
+							"-y",
+							"@modelcontextprotocol/server-filesystem",
+							"/srv/hermes-data",
+						],
+					},
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(<McpSettings initialServers={[]} />);
+
+		const filesystemCard = screen.getByText("Filesystem").closest("li");
+		expect(filesystemCard).toBeTruthy();
+		fireEvent.click(
+			within(filesystemCard as HTMLElement).getByRole("button", {
+				name: /^configure$/i,
+			}),
+		);
+
+		fireEvent.change(screen.getByLabelText(/allowed directory/i), {
+			target: { value: "/srv/hermes-data" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save server/i }));
+
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/settings/mcp-servers",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({
+					name: "filesystem",
+					transport: "stdio",
+					enabled: true,
+					command: "npx",
+					args: [
+						"-y",
+						"@modelcontextprotocol/server-filesystem",
+						"/srv/hermes-data",
+					],
+					url: "",
+					env: [],
+					headers: [],
+					toolsInclude: [],
+					toolsExclude: [],
+					toolsResources: true,
+					toolsPrompts: true,
+					timeout: null,
+					connectTimeout: null,
+					supportsParallelToolCalls: false,
+				}),
+			}),
+		);
+	});
+
+	it("marks a saved preset as saved when initialServers already contains that name", () => {
+		render(<McpSettings initialServers={[memoryServer]} />);
+
+		const memoryCard = screen.getByText("Memory").closest("li");
+		expect(memoryCard).toBeTruthy();
+		expect(
+			within(memoryCard as HTMLElement).getByText(/^saved$/i),
+		).toBeTruthy();
+		expect(
+			within(memoryCard as HTMLElement).getByRole("button", {
+				name: /edit saved server/i,
+			}),
+		).toBeTruthy();
+	});
+
+	it("hides the advanced custom form until advanced setup is opened", () => {
+		render(<McpSettings initialServers={[]} />);
+
+		expect(screen.queryByLabelText(/^server name$/i)).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /^advanced setup$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /add custom server/i }));
+
+		expect(screen.getByLabelText(/^server name$/i)).toBeTruthy();
+	});
+
 	it("renders saved MCP servers with transport and enabled state", () => {
 		render(
 			<McpSettings
@@ -95,10 +265,11 @@ describe("McpSettings", () => {
 		expect(screen.getByText(/stdio · enabled/i)).toBeTruthy();
 	});
 
-	it("switches the form to HTTP transport fields", () => {
+	it("switches the advanced form to HTTP transport fields", () => {
 		render(<McpSettings initialServers={[]} />);
 
-		fireEvent.click(screen.getByRole("button", { name: /add server/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^advanced setup$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /add custom server/i }));
 		fireEvent.click(screen.getByRole("radio", { name: /http/i }));
 
 		expect(screen.getByLabelText(/^url$/i)).toBeTruthy();

@@ -1,18 +1,20 @@
-import { Plus, Trash2 } from "lucide-react";
 import { useReducer, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
-import { cn } from "@/lib/utils";
 import type { McpServerSummary } from "../../../server/settings/mcp/config";
 
+import { McpAdvancedSetupSection } from "./mcp-advanced-setup-section";
 import {
 	buildRequestBody,
 	createEmptyFormState,
 	formStateFromServer,
 	type McpFormState,
 } from "./mcp-form-state";
-import { McpServerForm } from "./mcp-server-form";
+import { McpPresetConfigureForm } from "./mcp-preset-configure-form";
+import { initialMcpPresetState, mcpPresetReducer } from "./mcp-preset-state";
+import { McpRecommendedPresets } from "./mcp-recommended-presets";
+import { McpSavedServersList } from "./mcp-saved-servers-list";
+import { getMcpServerPreset, type McpServerPreset } from "./mcp-server-presets";
 import { McpSettingsAside } from "./mcp-settings-aside";
 
 type McpSettingsProps = {
@@ -47,6 +49,9 @@ const initialEditorState: EditorState = {
 	isSaving: false,
 	isDeleting: false,
 };
+
+const PRESET_SAVE_SUCCESS_MESSAGE =
+	"MCP server saved. Deploy MCP settings to install it on your VPS.";
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
 	switch (action.type) {
@@ -104,8 +109,86 @@ export function McpSettings({
 }: McpSettingsProps) {
 	const [servers, setServers] = useState(() => initialServers);
 	const [editor, dispatch] = useReducer(editorReducer, initialEditorState);
+	const [preset, dispatchPreset] = useReducer(
+		mcpPresetReducer,
+		initialMcpPresetState,
+	);
+	const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
 
-	const showForm = editor.isCreating || editor.editingId !== null;
+	const configuringPreset = preset.configuringPresetId
+		? getMcpServerPreset(preset.configuringPresetId)
+		: undefined;
+	const showAdvancedForm =
+		showAdvancedSetup && (editor.isCreating || editor.editingId !== null);
+
+	function upsertServer(savedServer: McpServerSummary) {
+		setServers((current) => {
+			const withoutCurrent = current.filter(
+				(server) => server.id !== savedServer.id,
+			);
+			return [...withoutCurrent, savedServer].sort((left, right) =>
+				left.name.localeCompare(right.name),
+			);
+		});
+	}
+
+	function handleConfigurePreset(presetItem: McpServerPreset) {
+		dispatch({ type: "cancel" });
+		setShowAdvancedSetup(false);
+		dispatchPreset({ type: "configure", presetId: presetItem.id });
+	}
+
+	function handleEditSaved(server: McpServerSummary) {
+		dispatchPreset({ type: "cancel" });
+		setShowAdvancedSetup(true);
+		dispatch({ type: "start_edit", server });
+	}
+
+	async function handlePresetSave(body: ReturnType<typeof buildRequestBody>) {
+		dispatchPreset({ type: "set_saving", isSaving: true });
+		dispatchPreset({ type: "set_message", message: null });
+
+		try {
+			const response = await fetch("/api/settings/mcp-servers", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			});
+
+			const payload = (await response.json().catch(() => null)) as {
+				error?: string;
+				server?: McpServerSummary;
+			} | null;
+
+			const savedServer = payload?.server;
+			if (!response.ok || !savedServer) {
+				dispatchPreset({
+					type: "set_message",
+					message: {
+						type: "error",
+						text: payload?.error ?? "Unable to save MCP server.",
+					},
+				});
+				return;
+			}
+
+			upsertServer(savedServer);
+			dispatchPreset({
+				type: "saved",
+				message: PRESET_SAVE_SUCCESS_MESSAGE,
+			});
+		} catch {
+			dispatchPreset({
+				type: "set_message",
+				message: {
+					type: "error",
+					text: "Network error. Please check your connection and try again.",
+				},
+			});
+		} finally {
+			dispatchPreset({ type: "set_saving", isSaving: false });
+		}
+	}
 
 	async function handleSave() {
 		dispatch({ type: "set_saving", isSaving: true });
@@ -141,14 +224,7 @@ export function McpSettings({
 				return;
 			}
 
-			setServers((current) => {
-				const withoutCurrent = current.filter(
-					(server) => server.id !== savedServer.id,
-				);
-				return [...withoutCurrent, savedServer].sort((left, right) =>
-					left.name.localeCompare(right.name),
-				);
-			});
+			upsertServer(savedServer);
 			dispatch({
 				type: "saved",
 				server: savedServer,
@@ -211,88 +287,61 @@ export function McpSettings({
 	return (
 		<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 			<div className="space-y-4">
-				<section className="island-shell rounded-[2rem] p-6 sm:p-8">
-					<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-						<div>
-							<p className="island-kicker m-0">MCP servers</p>
-							<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
-								Custom MCP configuration
-							</h3>
-							<p className="m-0 mt-2 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-								Define stdio or HTTP MCP servers for Hermes. Saved settings stay
-								in HermesHub until you deploy them to config.yaml on your VPS.
-							</p>
-						</div>
-						<Button
-							type="button"
-							onClick={() => dispatch({ type: "start_create" })}
-						>
-							<Plus className="h-4 w-4" />
-							<span>Add server</span>
-						</Button>
-					</div>
+				<McpRecommendedPresets
+					servers={servers}
+					configuringPresetId={preset.configuringPresetId}
+					onConfigure={handleConfigurePreset}
+					onEditSaved={handleEditSaved}
+				/>
 
-					{servers.length === 0 ? (
-						<p className="m-0 text-sm text-[var(--sea-ink-soft)]">
-							No MCP servers saved yet.
-						</p>
-					) : (
-						<ul className="m-0 list-none space-y-3 p-0">
-							{servers.map((server) => (
-								<li
-									key={server.id}
-									className={cn(
-										"rounded-[1.25rem] border border-[var(--line)] p-4",
-										editor.editingId === server.id &&
-											"border-[var(--sea-ink-soft)]",
-									)}
-								>
-									<div className="flex flex-wrap items-start justify-between gap-3">
-										<div>
-											<p className="m-0 font-semibold text-[var(--sea-ink)]">
-												{server.name}
-											</p>
-											<p className="m-0 mt-1 text-sm text-[var(--sea-ink-soft)]">
-												{server.transport.toUpperCase()} ·{" "}
-												{server.enabled ? "Enabled" : "Disabled"}
-											</p>
-										</div>
-										<div className="flex flex-wrap gap-2">
-											<Button
-												type="button"
-												variant="secondary"
-												onClick={() => dispatch({ type: "start_edit", server })}
-											>
-												Edit
-											</Button>
-											<Button
-												type="button"
-												variant="secondary"
-												onClick={() => void handleDelete(server.id)}
-												disabled={editor.isDeleting}
-											>
-												<Trash2 className="h-4 w-4" />
-												<span>Delete</span>
-											</Button>
-										</div>
-									</div>
-								</li>
-							))}
-						</ul>
-					)}
-				</section>
+				{preset.formMessage && !configuringPreset ? (
+					<p
+						className={`m-0 text-sm ${
+							preset.formMessage.type === "error"
+								? "text-red-600"
+								: "text-emerald-600"
+						}`}
+					>
+						{preset.formMessage.text}
+					</p>
+				) : null}
 
-				{showForm ? (
-					<McpServerForm
-						editingId={editor.editingId}
-						form={editor.form}
-						formMessage={editor.formMessage}
-						isSaving={editor.isSaving}
-						onCancel={() => dispatch({ type: "cancel" })}
-						onSave={() => void handleSave()}
-						onFormChange={(form) => dispatch({ type: "set_form", form })}
+				{configuringPreset ? (
+					<McpPresetConfigureForm
+						preset={configuringPreset}
+						isSaving={preset.isSaving}
+						formMessage={preset.formMessage}
+						onCancel={() => dispatchPreset({ type: "cancel" })}
+						onSave={(body) => void handlePresetSave(body)}
 					/>
 				) : null}
+
+				<McpSavedServersList
+					servers={servers}
+					editingId={editor.editingId}
+					isDeleting={editor.isDeleting}
+					onEdit={handleEditSaved}
+					onDelete={(serverId) => void handleDelete(serverId)}
+				/>
+
+				<McpAdvancedSetupSection
+					showAdvancedSetup={showAdvancedSetup}
+					showAdvancedForm={showAdvancedForm}
+					editingId={editor.editingId}
+					form={editor.form}
+					formMessage={editor.formMessage}
+					isSaving={editor.isSaving}
+					onToggleAdvancedSetup={() =>
+						setShowAdvancedSetup((current) => !current)
+					}
+					onStartCreate={() => {
+						dispatchPreset({ type: "cancel" });
+						dispatch({ type: "start_create" });
+					}}
+					onCancel={() => dispatch({ type: "cancel" })}
+					onSave={() => void handleSave()}
+					onFormChange={(form) => dispatch({ type: "set_form", form })}
+				/>
 			</div>
 
 			<McpSettingsAside servers={servers} telegramDeploy={telegramDeploy} />
