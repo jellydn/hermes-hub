@@ -17,7 +17,10 @@ vi.mock("lucide-react", () => {
 	return {
 		AlertCircle: MockIcon,
 		CheckCircle2: MockIcon,
+		Circle: MockIcon,
+		Info: MockIcon,
 		LoaderCircle: MockIcon,
+		TriangleAlert: MockIcon,
 		Trash2: MockIcon,
 	};
 });

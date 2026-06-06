@@ -7,12 +7,13 @@ import {
 	RefreshCw,
 	Rocket,
 } from "lucide-react";
-import { useState } from "react";
 
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
-import { StatusIcon } from "@/components/ui/status-icon";
 import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
 import type { ServerDetailSnapshot } from "@/lib/server-detail";
+
+import { useHermesWebUi } from "./use-hermes-web-ui";
 
 type HermesWebUiCardProps = {
 	detail: ServerDetailSnapshot;
@@ -23,92 +24,12 @@ export function HermesWebUiCard({
 	detail,
 	onDetailChange,
 }: HermesWebUiCardProps) {
-	const [localWebUi, setLocalWebUi] = useState(detail.webUi);
-	const [isDeploying, setIsDeploying] = useState(false);
-	const [isRevealingPassword, setIsRevealingPassword] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [successMessage, setSuccessMessage] = useState<string | null>(null);
-	const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
-	const [showPassword, setShowPassword] = useState(false);
+	const webUiState = useHermesWebUi(detail, onDetailChange);
 
 	if (detail.install?.status !== "succeeded") {
 		return null;
 	}
-
-	const webUi = localWebUi ?? detail.webUi;
-	const isEnabled = webUi?.enabled === true;
-
-	async function handleDeploy() {
-		setIsDeploying(true);
-		setError(null);
-		setSuccessMessage(null);
-
-		try {
-			const response = await fetch(
-				`/api/servers/${detail.server.id}/web-ui/deploy`,
-				{ method: "POST" },
-			);
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				webUi?: ServerDetailSnapshot["webUi"];
-			} | null;
-
-			if (!response.ok) {
-				setError(payload?.error ?? "Web UI setup failed");
-				return;
-			}
-
-			if (payload?.webUi) {
-				setLocalWebUi(payload.webUi);
-				onDetailChange?.({
-					...detail,
-					webUi: payload.webUi,
-				});
-			}
-
-			setRevealedPassword(null);
-			setShowPassword(false);
-			setSuccessMessage(
-				isEnabled
-					? "Hermes Web UI redeployed. Try opening it again."
-					: "Hermes Web UI is ready. Open it from HermesHub.",
-			);
-		} catch {
-			setError("Web UI setup failed: Connection failed.");
-		} finally {
-			setIsDeploying(false);
-		}
-	}
-
-	async function handleRevealPassword() {
-		if (revealedPassword) {
-			setShowPassword((current) => !current);
-			return;
-		}
-
-		setIsRevealingPassword(true);
-		setError(null);
-
-		try {
-			const response = await fetch(
-				`/api/servers/${detail.server.id}/web-ui/password`,
-			);
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				password?: string;
-			} | null;
-
-			if (!response.ok) {
-				setError(payload?.error ?? "Unable to reveal Web UI password");
-				return;
-			}
-
-			setRevealedPassword(payload?.password ?? null);
-			setShowPassword(true);
-		} finally {
-			setIsRevealingPassword(false);
-		}
-	}
+	const { webUi, isEnabled } = webUiState;
 
 	return (
 		<section
@@ -136,18 +57,16 @@ export function HermesWebUiCard({
 						.
 					</p>
 
-					{successMessage ? (
-						<div className="mt-4 rounded-[1.25rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)] flex items-center gap-3">
-							<StatusIcon status="success" size={4} />
-							<span>{successMessage}</span>
-						</div>
+					{webUiState.successMessage ? (
+						<Banner tone="success" className="mt-4">
+							{webUiState.successMessage}
+						</Banner>
 					) : null}
 
-					{error ? (
-						<div className="mt-4 rounded-[1.25rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)] flex items-center gap-3">
-							<StatusIcon status="error" size={4} />
-							<span>{error}</span>
-						</div>
+					{webUiState.error ? (
+						<Banner tone="error" className="mt-4">
+							{webUiState.error}
+						</Banner>
 					) : null}
 
 					<div className="mt-4 flex flex-wrap gap-3">
@@ -166,16 +85,18 @@ export function HermesWebUiCard({
 						) : (
 							<Button
 								type="button"
-								onClick={() => void handleDeploy()}
-								disabled={isDeploying}
+								onClick={() => void webUiState.deploy()}
+								disabled={webUiState.isDeploying}
 								data-testid="hermes-web-ui-setup"
 							>
-								{isDeploying ? (
+								{webUiState.isDeploying ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
 								) : (
 									<Rocket className="h-4 w-4" />
 								)}
-								<span>{isDeploying ? "Setting up..." : "Set up Web UI"}</span>
+								<span>
+									{webUiState.isDeploying ? "Setting up..." : "Set up Web UI"}
+								</span>
 							</Button>
 						)}
 
@@ -183,17 +104,19 @@ export function HermesWebUiCard({
 							<Button
 								type="button"
 								variant="secondary"
-								onClick={() => void handleDeploy()}
-								disabled={isDeploying}
+								onClick={() => void webUiState.deploy()}
+								disabled={webUiState.isDeploying}
 								data-testid="hermes-web-ui-redeploy"
 							>
-								{isDeploying ? (
+								{webUiState.isDeploying ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
 								) : (
 									<RefreshCw className="h-4 w-4" />
 								)}
 								<span>
-									{isDeploying ? "Redeploying..." : "Redeploy Web UI"}
+									{webUiState.isDeploying
+										? "Redeploying..."
+										: "Redeploy Web UI"}
 								</span>
 							</Button>
 						) : null}
@@ -202,21 +125,21 @@ export function HermesWebUiCard({
 							<Button
 								type="button"
 								variant="secondary"
-								onClick={() => void handleRevealPassword()}
-								disabled={isRevealingPassword}
+								onClick={() => void webUiState.revealPassword()}
+								disabled={webUiState.isRevealingPassword}
 								data-testid="hermes-web-ui-password"
 							>
-								{isRevealingPassword ? (
+								{webUiState.isRevealingPassword ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
-								) : showPassword ? (
+								) : webUiState.showPassword ? (
 									<EyeOff className="h-4 w-4" />
 								) : (
 									<Eye className="h-4 w-4" />
 								)}
 								<span>
-									{isRevealingPassword
+									{webUiState.isRevealingPassword
 										? "Loading..."
-										: showPassword
+										: webUiState.showPassword
 											? "Hide password"
 											: "Show password"}
 								</span>
@@ -224,7 +147,9 @@ export function HermesWebUiCard({
 						) : null}
 					</div>
 
-					{isEnabled && showPassword && revealedPassword ? (
+					{isEnabled &&
+					webUiState.showPassword &&
+					webUiState.revealedPassword ? (
 						<div className="mt-4 rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-3">
 							<p className="m-0 text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
 								Web UI password
@@ -233,7 +158,7 @@ export function HermesWebUiCard({
 								className="mt-2 mb-0 font-mono text-sm text-[var(--sea-ink)]"
 								data-testid="hermes-web-ui-password-value"
 							>
-								{revealedPassword}
+								{webUiState.revealedPassword}
 							</p>
 						</div>
 					) : null}

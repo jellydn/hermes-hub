@@ -1,6 +1,7 @@
-import { AlertCircle, CheckCircle2, LoaderCircle, Trash2 } from "lucide-react";
+import { LoaderCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "@/lib/logs";
 import { formatActionLabel } from "@/lib/server-detail";
@@ -100,7 +101,7 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 					</div>
 				</div>
 
-				{state.error ? <Banner kind="error" message={state.error} /> : null}
+				{state.error ? <Banner tone="error">{state.error}</Banner> : null}
 
 				{state.showConfirmation ? (
 					<div className="mt-5 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
@@ -187,31 +188,6 @@ function LogPanel({
 				)}
 			</div>
 		</section>
-	);
-}
-
-function Banner({
-	kind,
-	message,
-}: {
-	kind: "success" | "error";
-	message: string;
-}) {
-	const Icon = kind === "success" ? CheckCircle2 : AlertCircle;
-	const className =
-		kind === "success"
-			? "mt-5 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]"
-			: "mt-5 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]";
-	const iconClassName =
-		kind === "success" ? "text-emerald-600" : "text-red-600";
-
-	return (
-		<div className={className}>
-			<div className="flex items-center gap-3">
-				<Icon className={`h-5 w-5 ${iconClassName}`} />
-				<span>{message}</span>
-			</div>
-		</div>
 	);
 }
 

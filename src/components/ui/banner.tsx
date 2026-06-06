@@ -1,7 +1,8 @@
-import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+
+import { StatusIcon } from "./status-icon";
 
 type BannerProps = {
 	children: ReactNode;
@@ -21,11 +22,7 @@ export function Banner({ children, className, tone }: BannerProps) {
 			)}
 		>
 			<div className="flex items-center gap-3">
-				{tone === "success" ? (
-					<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-				) : (
-					<AlertCircle className="h-5 w-5 text-red-600" />
-				)}
+				<StatusIcon status={tone} size={5} />
 				<span>{children}</span>
 			</div>
 		</div>
