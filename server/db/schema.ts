@@ -216,6 +216,29 @@ export const telegramConfigs = pgTable(
 	(table) => [index("telegram_configs_user_id_idx").on(table.userId)],
 );
 
+export const hermesSettings = pgTable(
+	"hermes_settings",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" })
+			.unique(),
+		agentPersona: text("agent_persona").notNull(),
+		deployedServerId: text("deployed_server_id"),
+		deployedServerHost: text("deployed_server_host"),
+		deployedAt: timestamp("deployed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("hermes_settings_user_id_idx").on(table.userId)],
+);
+
 export const serverWebUi = pgTable(
 	"server_web_ui",
 	{
