@@ -88,18 +88,22 @@ export async function deployProviderToHermes(context: Context) {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "provider.deploy.failed",
-			serverId: sshCtx.serverId,
-			details: {
-				provider: providerRecord.provider,
-				model: providerRecord.model,
+		try {
+			await insertAuditLog(db, {
+				userId: session.user.id,
+				action: "provider.deploy.failed",
 				serverId: sshCtx.serverId,
-				error: message,
-			},
-			ipAddress,
-		});
+				details: {
+					provider: providerRecord.provider,
+					model: providerRecord.model,
+					serverId: sshCtx.serverId,
+					error: message,
+				},
+				ipAddress,
+			});
+		} catch {
+			// Audit logging is historical only; still return deploy failure to client.
+		}
 
 		return context.json({ error: `Deploy failed: ${message}` }, 502);
 	}

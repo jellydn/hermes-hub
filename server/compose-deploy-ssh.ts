@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { NodeSSH } from "node-ssh";
 
 import { type SshAuthMethod, withSshConnection } from "./ssh";
@@ -50,7 +51,8 @@ export function buildComposeUpCommand(input?: {
 }
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
-	const writeCmd = `cat > ~/hermes/docker-compose.yml << 'DOCKER_EOF'\n${input.composeContent}\nDOCKER_EOF`;
+	const delimiter = `HERMES_COMPOSE_${randomUUID()}`;
+	const writeCmd = `cat > ~/hermes/docker-compose.yml << '${delimiter}'\n${input.composeContent}\n${delimiter}`;
 
 	await withSshConnection(
 		{

@@ -75,13 +75,11 @@ export function resolveManagedComposeDeployPolicy(
 					const agentSrcDir = `${managedComposeVolumeHome}/.hermes/hermes-agent-src`;
 					const prepResult = await ssh.execCommand(
 						[
-							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
-							`${managedComposeVolumeHome}/workspace`,
-							agentSrcDir,
+							`sudo mkdir -p ${managedComposeVolumeHome}/.hermes ${managedComposeVolumeHome}/workspace ${agentSrcDir}`,
 							`if [ ! -f ${agentSrcDir}/pyproject.toml ]; then`,
 							`sudo docker cp hermes:/opt/hermes/. ${agentSrcDir}/ 2>/dev/null || true`,
 							"fi",
-						].join(" && "),
+						].join("\n"),
 					);
 					if (prepResult.code !== 0) {
 						throw new Error(
