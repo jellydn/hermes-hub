@@ -50,6 +50,19 @@ export const initialDraft: ConnectionDraft = {
 export const inputClassName =
 	"w-full rounded-full border border-[var(--chip-line)] bg-white/80 px-4 py-3 text-sm text-[var(--sea-ink)] outline-none focus:border-[color:var(--lagoon)] focus:ring-2 focus:ring-[rgba(79,184,178,0.18)]";
 
+function isValidIpv6Host(host: string) {
+	if (!host.includes(":")) {
+		return false;
+	}
+
+	try {
+		new URL(`http://[${host}]/`);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function isValidHost(host: string) {
 	const trimmedHost = host.trim();
 	if (!trimmedHost || /\s/.test(trimmedHost)) {
@@ -60,12 +73,11 @@ export function isValidHost(host: string) {
 		/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 	const hostnamePattern =
 		/^(?=.{1,253}$)(?!-)([a-zA-Z0-9-]{1,63}\.)*[a-zA-Z0-9-]{1,63}$/;
-	const ipv6Pattern = /^[0-9a-fA-F:]+$/;
 
 	return (
 		ipv4Pattern.test(trimmedHost) ||
 		hostnamePattern.test(trimmedHost) ||
-		(trimmedHost.includes(":") && ipv6Pattern.test(trimmedHost))
+		isValidIpv6Host(trimmedHost)
 	);
 }
 

@@ -74,22 +74,26 @@ export function ConnectionWizardAuthStep({
 				</WizardField>
 			)}
 
-			<label className="flex items-start gap-4 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
-				<input
-					type="checkbox"
-					{...register("storeCredential")}
-					className="mt-1 h-4 w-4 rounded border-[var(--chip-line)] text-[var(--lagoon-deep)]"
-				/>
-				<span className="space-y-1">
-					<span className="block font-semibold text-[var(--sea-ink)]">
+			<div className="rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
+				<label className="flex items-start gap-4">
+					<input
+						type="checkbox"
+						{...register("storeCredential")}
+						aria-describedby="store-credential-hint"
+						className="mt-1 h-4 w-4 rounded border-[var(--chip-line)] text-[var(--lagoon-deep)]"
+					/>
+					<span className="font-semibold text-[var(--sea-ink)]">
 						Save credentials for future operations
 					</span>
-					<span className="block text-[var(--sea-ink-soft)]">
-						Leave this on if HermesHub should reuse the credential for installs,
-						restarts, and updates later.
-					</span>
-				</span>
-			</label>
+				</label>
+				<p
+					id="store-credential-hint"
+					className="mt-2 pl-8 text-xs text-[var(--sea-ink-soft)]"
+				>
+					Leave this on if HermesHub should reuse the credential for installs,
+					restarts, and updates later.
+				</p>
+			</div>
 		</div>
 	);
 }
