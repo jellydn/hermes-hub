@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type {
 	ServerActionType,
+	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
 } from "@/lib/server-detail";
 
@@ -16,7 +17,7 @@ type ActionState = {
 
 export function useServerActions(
 	detail: ServerDetailSnapshot,
-	onDetailChange: (detail: ServerDetailSnapshot) => void,
+	onDetailChange: ServerDetailChangeHandler,
 ) {
 	const [actionState, setActionState] = useState<ActionState>({
 		activeDialog: null,
@@ -48,7 +49,8 @@ export function useServerActions(
 				message?: string;
 			} | null;
 
-			if (!response.ok || !payload?.message) {
+			const successMessage = payload?.message;
+			if (!response.ok || !successMessage) {
 				setActionState({
 					activeDialog: null,
 					error: payload?.error ?? "Action failed.",
@@ -58,24 +60,24 @@ export function useServerActions(
 				return;
 			}
 
-			onDetailChange({
-				...detail,
+			onDetailChange((current) => ({
+				...current,
 				actionHistory: [
 					createHistoryEntry({
 						action,
 						result: "succeeded",
-						message: payload.message,
+						message: successMessage,
 						imageRef: payload.imageRef ?? null,
 					}),
-					...detail.actionHistory,
+					...current.actionHistory,
 				].slice(0, 5),
-				rollbackTarget: payload.imageRef ?? detail.rollbackTarget,
-			});
+				rollbackTarget: payload.imageRef ?? current.rollbackTarget,
+			}));
 			setActionState({
 				activeDialog: null,
 				error: null,
 				pending: null,
-				success: payload.message,
+				success: successMessage,
 			});
 		} catch {
 			setActionState({

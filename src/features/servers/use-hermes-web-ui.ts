@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerDetailChangeHandler,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 type WebUiState = {
 	error: string | null;
@@ -13,7 +16,7 @@ type WebUiState = {
 
 export function useHermesWebUi(
 	detail: ServerDetailSnapshot,
-	onDetailChange?: (detail: ServerDetailSnapshot) => void,
+	onDetailChange?: ServerDetailChangeHandler,
 ) {
 	const [deployedWebUi, setDeployedWebUi] =
 		useState<ServerDetailSnapshot["webUi"]>(null);
@@ -26,6 +29,25 @@ export function useHermesWebUi(
 		successMessage: null,
 	});
 	const wasEnabledAtDeployStart = useRef(false);
+
+	useEffect(() => {
+		setDeployedWebUi((current) => {
+			if (!detail.webUi) {
+				return null;
+			}
+			if (!current) {
+				return null;
+			}
+
+			const matchesIncoming =
+				current.updatedAt === detail.webUi.updatedAt &&
+				current.deployStatus === detail.webUi.deployStatus &&
+				current.enabled === detail.webUi.enabled &&
+				current.deployError === detail.webUi.deployError;
+
+			return matchesIncoming ? current : null;
+		});
+	}, [detail.webUi]);
 
 	const webUi = deployedWebUi ?? detail.webUi;
 	const isEnabled = webUi?.enabled === true;
@@ -113,10 +135,10 @@ export function useHermesWebUi(
 
 			if (payload?.webUi) {
 				setDeployedWebUi(payload.webUi);
-				onDetailChange?.({
-					...detail,
-					webUi: payload.webUi,
-				});
+				onDetailChange?.((current) => ({
+					...current,
+					webUi: payload.webUi ?? null,
+				}));
 			}
 
 			setState((current) => ({

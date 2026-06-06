@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerDetailChangeHandler,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 import {
 	createServerBasicsDraft,
@@ -11,7 +14,7 @@ import {
 
 export function useServerBasics(
 	detail: ServerDetailSnapshot,
-	onDetailChange: (detail: ServerDetailSnapshot) => void,
+	onDetailChange: ServerDetailChangeHandler,
 ) {
 	const [draft, setDraft] = useState<ServerBasicsDraft>(() =>
 		createServerBasicsDraft(detail),

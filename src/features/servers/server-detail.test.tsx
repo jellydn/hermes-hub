@@ -117,9 +117,9 @@ describe("ServerDetail", () => {
 			/>,
 		);
 
-		expect(screen.getAllByText(/restart agent/i).length).toBeGreaterThanOrEqual(
-			1,
-		);
+		expect(
+			screen.getAllByText(/restart hermes/i).length,
+		).toBeGreaterThanOrEqual(1);
 		expect(
 			screen.getByText(/updated hermes to the latest image successfully/i),
 		).toBeTruthy();
@@ -136,7 +136,7 @@ describe("ServerDetail", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: /restart agent/i }));
+		fireEvent.click(screen.getByRole("button", { name: /restart hermes/i }));
 
 		expect(screen.getByText(/are you sure\?/i)).toBeTruthy();
 
@@ -152,6 +152,40 @@ describe("ServerDetail", () => {
 			"/api/servers/server_123/actions",
 			expect.objectContaining({ method: "POST" }),
 		);
+	});
+
+	it("updates action history with a functional detail updater", async () => {
+		let latestDetail = createDetail();
+		const onDetailChange = vi.fn(
+			(
+				update:
+					| ServerDetailSnapshot
+					| ((prev: ServerDetailSnapshot) => ServerDetailSnapshot),
+			) => {
+				latestDetail =
+					typeof update === "function" ? update(latestDetail) : update;
+			},
+		);
+
+		render(
+			<ServerDetail
+				detail={latestDetail}
+				onDetailChange={onDetailChange}
+				onGoToInstall={vi.fn()}
+				onDeleted={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /restart hermes/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+		await flushAsyncWork();
+
+		expect(onDetailChange).toHaveBeenCalledWith(expect.any(Function));
+		expect(latestDetail.actionHistory[0]?.message).toBe(
+			"Restarted Hermes successfully.",
+		);
+		expect(latestDetail.actionHistory).toHaveLength(3);
 	});
 
 	it("shows a failed action message when the API returns an error", async () => {

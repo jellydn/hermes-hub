@@ -1,6 +1,7 @@
 import { StatusIcon } from "@/components/ui/status-icon";
 import type {
 	ServerActionHistoryItem,
+	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
 } from "@/lib/server-detail";
 import { HermesWebUiCard } from "./hermes-web-ui-card";
@@ -16,7 +17,7 @@ import {
 
 type ServerDetailAsideProps = {
 	detail: ServerDetailSnapshot;
-	onDetailChange?: (detail: ServerDetailSnapshot) => void;
+	onDetailChange?: ServerDetailChangeHandler;
 };
 
 export function ServerDetailAside({

@@ -3,7 +3,10 @@ import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
 import { ServerDetail } from "@/features/servers/server-detail";
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerDetailChangeHandler,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 import { requireSession } from "@/lib/session";
 import { useMountEffect } from "@/lib/use-mount-effect";
 import { AppShell } from "./dashboard";
@@ -24,6 +27,16 @@ function ServerDetailPage() {
 	);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+
+	const handleServerDetailChange: ServerDetailChangeHandler = (update) => {
+		setServerDetail((current) => {
+			if (!current) {
+				return current;
+			}
+
+			return typeof update === "function" ? update(current) : update;
+		});
+	};
 
 	useMountEffect(() => {
 		let isActive = true;
@@ -91,7 +104,7 @@ function ServerDetailPage() {
 			) : serverDetail ? (
 				<ServerDetail
 					detail={serverDetail}
-					onDetailChange={setServerDetail}
+					onDetailChange={handleServerDetailChange}
 					onGoToInstall={(serverId) =>
 						navigate({
 							to: "/servers/$id/install",

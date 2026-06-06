@@ -18,7 +18,7 @@ export function formatActionLabel(action: ServerActionType): string {
 	if (action === "rollback") {
 		return "Rollback";
 	}
-	return "Restart Agent";
+	return "Restart Hermes";
 }
 
 export type ServerWebUiDeployStatus =
@@ -35,6 +35,12 @@ export type ServerWebUiSnapshot = {
 	deployError: string | null;
 	updatedAt: string;
 };
+
+export type ServerDetailUpdater =
+	| ServerDetailSnapshot
+	| ((prev: ServerDetailSnapshot) => ServerDetailSnapshot);
+
+export type ServerDetailChangeHandler = (detail: ServerDetailUpdater) => void;
 
 export type ServerDetailSnapshot = {
 	server: {

@@ -10,7 +10,10 @@ import { useState } from "react";
 
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerDetailChangeHandler,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 import { DeleteServerDialog } from "./delete-server-dialog";
 import { InstallLogCard } from "./install-log-card";
@@ -22,7 +25,7 @@ import { useServerBasics } from "./use-server-basics";
 
 type ServerDetailProps = {
 	detail: ServerDetailSnapshot;
-	onDetailChange: (detail: ServerDetailSnapshot) => void;
+	onDetailChange: ServerDetailChangeHandler;
 	onGoToInstall: (serverId: string) => void | Promise<void>;
 	onDeleted: () => void;
 };

@@ -11,13 +11,16 @@ import {
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import type {
+	ServerDetailChangeHandler,
+	ServerDetailSnapshot,
+} from "@/lib/server-detail";
 
 import { useHermesWebUi } from "./use-hermes-web-ui";
 
 type HermesWebUiCardProps = {
 	detail: ServerDetailSnapshot;
-	onDetailChange?: (detail: ServerDetailSnapshot) => void;
+	onDetailChange?: ServerDetailChangeHandler;
 };
 
 export function HermesWebUiCard({

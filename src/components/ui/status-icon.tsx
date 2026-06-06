@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { cn } from "@/lib/utils";
+
 type StatusType = "success" | "error" | "warning" | "info" | "neutral";
 
 const ICON_MAP: Record<StatusType, ComponentType<{ className?: string }>> = {
@@ -45,9 +47,6 @@ export function StatusIcon({ status, className, size = 4 }: StatusIconProps) {
 	const sizeClass = SIZE_CLASSES[size];
 
 	return (
-		<Icon
-			className={`${colorClass} ${sizeClass} ${className ?? ""}`}
-			aria-hidden="true"
-		/>
+		<Icon className={cn(colorClass, sizeClass, className)} aria-hidden="true" />
 	);
 }

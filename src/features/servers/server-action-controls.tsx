@@ -23,7 +23,7 @@ type ServerActionControlsProps = {
 const actionButtons = [
 	{
 		action: "restart",
-		label: "Restart Agent",
+		label: "Restart Hermes",
 		icon: RefreshCw,
 		variant: "secondary",
 	},
