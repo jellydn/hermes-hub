@@ -553,9 +553,9 @@ describe("telegram handlers", () => {
 		// then runs the Python pairing store as the same `hermes` user as the
 		// live gateway so approved users are readable by Telegram polling.
 		expect(capturedCommand).toMatch(
-			/^docker exec hermes sh -lc 'chown -R hermes:hermes/,
+			/^sudo docker exec hermes sh -lc 'chown -R hermes:hermes/,
 		);
-		expect(capturedCommand).toContain("&& docker exec --user hermes");
+		expect(capturedCommand).toContain("&& sudo docker exec --user hermes");
 		// The python code should be a complete, valid statement inside quotes
 		expect(capturedCommand).toContain(
 			"import json; from gateway.pairing import PairingStore",

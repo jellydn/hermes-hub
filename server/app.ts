@@ -213,7 +213,7 @@ apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
 apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
 apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
-apiApp.get("/servers/:id/web-ui", getServerWebUiStatus);
+apiApp.get("/servers/:id/web-ui", httpsMiddleware, getServerWebUiStatus);
 apiApp.post("/servers/:id/web-ui/deploy", httpsMiddleware, deployServerWebUi);
 apiApp.get(
 	"/servers/:id/web-ui/password",

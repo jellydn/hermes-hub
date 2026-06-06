@@ -8,7 +8,10 @@ import {
 describe("formatWebUiContainerFailureDetails", () => {
 	it("combines state and short logs in full", () => {
 		expect(
-			formatWebUiContainerFailureDetails("exited exit=1 error=", "startup failed"),
+			formatWebUiContainerFailureDetails(
+				"exited exit=1 error=",
+				"startup failed",
+			),
 		).toBe("exited exit=1 error=. Recent logs: startup failed");
 	});
 
@@ -29,9 +32,9 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 
 	it("treats whitespace-only state as missing and uses logs prefix", () => {
-		expect(
-			formatWebUiContainerFailureDetails("   ", "segfault at 0x0"),
-		).toBe("Recent logs: segfault at 0x0");
+		expect(formatWebUiContainerFailureDetails("   ", "segfault at 0x0")).toBe(
+			"Recent logs: segfault at 0x0",
+		);
 	});
 
 	it("returns the state prefix when logs are undefined", () => {
@@ -129,15 +132,15 @@ describe("formatHermesCliImportFailure", () => {
 	});
 
 	it("falls back to 'unknown import error' when importError is undefined", () => {
-		expect(
-			formatHermesCliImportFailure(undefined, undefined, undefined),
-		).toBe("Hermes Web UI cannot import hermes_cli (unknown import error).");
+		expect(formatHermesCliImportFailure(undefined, undefined, undefined)).toBe(
+			"Hermes Web UI cannot import hermes_cli (unknown import error).",
+		);
 	});
 
 	it("falls back to 'unknown import error' when importError is whitespace", () => {
-		expect(
-			formatHermesCliImportFailure("   ", undefined, undefined),
-		).toBe("Hermes Web UI cannot import hermes_cli (unknown import error).");
+		expect(formatHermesCliImportFailure("   ", undefined, undefined)).toBe(
+			"Hermes Web UI cannot import hermes_cli (unknown import error).",
+		);
 	});
 
 	it("returns just the prefix when diagnostics are missing", () => {
@@ -191,10 +194,17 @@ describe("formatHermesCliImportFailure", () => {
 	it("returns full prefix when importError is long and diagnostics are missing", () => {
 		// When !details the function returns prefix without maxLength guard.
 		const longError = "x".repeat(500);
-		const msg = formatHermesCliImportFailure(longError, undefined, undefined, 200);
+		const msg = formatHermesCliImportFailure(
+			longError,
+			undefined,
+			undefined,
+			200,
+		);
 
 		expect(msg).toContain("cannot import hermes_cli");
-		expect(msg.startsWith("Hermes Web UI cannot import hermes_cli (xxxx")).toBe(true);
+		expect(msg.startsWith("Hermes Web UI cannot import hermes_cli (xxxx")).toBe(
+			true,
+		);
 	});
 
 	it("returns only the prefix when maxLength allows no room for details", () => {
@@ -210,8 +220,8 @@ describe("formatHermesCliImportFailure", () => {
 	});
 
 	it("treats whitespace-only details as missing", () => {
-		expect(
-			formatHermesCliImportFailure("ImportError", "   ", "\n\t"),
-		).toBe("Hermes Web UI cannot import hermes_cli (ImportError).");
+		expect(formatHermesCliImportFailure("ImportError", "   ", "\n\t")).toBe(
+			"Hermes Web UI cannot import hermes_cli (ImportError).",
+		);
 	});
 });

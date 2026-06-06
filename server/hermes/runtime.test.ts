@@ -34,14 +34,12 @@ function mockSsh(
 		opts?: unknown,
 	) => { code: number; stdout: string; stderr: string },
 ) {
-	const execCommand = vi.fn(
-		async (cmd: string, opts?: unknown) => {
-			if (execImpl) {
-				return execImpl(cmd, opts);
-			}
-			return { code: 0, stdout: "", stderr: "" };
-		},
-	);
+	const execCommand = vi.fn(async (cmd: string, opts?: unknown) => {
+		if (execImpl) {
+			return execImpl(cmd, opts);
+		}
+		return { code: 0, stdout: "", stderr: "" };
+	});
 	return { execCommand };
 }
 
@@ -59,10 +57,7 @@ describe("isContainerRunning", () => {
 			stdout: "hermes\n",
 			stderr: "",
 		}));
-		const result = await isContainerRunning(
-			{ execCommand } as never,
-			"hermes",
-		);
+		const result = await isContainerRunning({ execCommand } as never, "hermes");
 		expect(result).toBe(true);
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("sudo docker ps"),
@@ -88,10 +83,7 @@ describe("isContainerRunning", () => {
 			stdout: "",
 			stderr: "",
 		}));
-		const result = await isContainerRunning(
-			{ execCommand } as never,
-			"hermes",
-		);
+		const result = await isContainerRunning({ execCommand } as never, "hermes");
 		expect(result).toBe(false);
 	});
 });
@@ -141,9 +133,7 @@ describe("isWebUiContainerRunning", () => {
 			stderr: "",
 		}));
 
-		expect(
-			await isWebUiContainerRunning({ execCommand } as never),
-		).toBe(true);
+		expect(await isWebUiContainerRunning({ execCommand } as never)).toBe(true);
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("hermes-webui"),
 		);
@@ -264,9 +254,7 @@ describe("formatWebUiContainerFailureDetails", () => {
 	});
 
 	it("returns empty string when no diagnostics are available", () => {
-		expect(
-			formatWebUiContainerFailureDetails(undefined, undefined),
-		).toBe("");
+		expect(formatWebUiContainerFailureDetails(undefined, undefined)).toBe("");
 	});
 
 	it("truncates long output and preserves the tail with ellipsis", () => {
@@ -303,9 +291,7 @@ describe("formatHermesCliImportFailure", () => {
 	});
 
 	it("falls back when diagnostics are unavailable", () => {
-		expect(
-			formatHermesCliImportFailure(undefined, undefined, undefined),
-		).toBe(
+		expect(formatHermesCliImportFailure(undefined, undefined, undefined)).toBe(
 			"Hermes Web UI cannot import hermes_cli (unknown import error).",
 		);
 	});
@@ -402,9 +388,9 @@ describe("restartGateway", () => {
 			stderr: "Container not found",
 		}));
 
-		await expect(
-			restartGateway({ execCommand } as never),
-		).rejects.toThrow("Container not found");
+		await expect(restartGateway({ execCommand } as never)).rejects.toThrow(
+			"Container not found",
+		);
 	});
 });
 
@@ -434,9 +420,9 @@ describe("updateGateway", () => {
 			stderr: "Pull failed",
 		}));
 
-		await expect(
-			updateGateway({ execCommand } as never),
-		).rejects.toThrow("Pull failed");
+		await expect(updateGateway({ execCommand } as never)).rejects.toThrow(
+			"Pull failed",
+		);
 	});
 });
 
@@ -468,10 +454,7 @@ describe("rollbackGateway", () => {
 			stderr: "",
 		}));
 
-		const output = await rollbackGateway(
-			{ execCommand } as never,
-			"v1.2.3",
-		);
+		const output = await rollbackGateway({ execCommand } as never, "v1.2.3");
 
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("sudo docker pull"),
@@ -575,11 +558,9 @@ describe("runPairingCommand", () => {
 			return { code: 0, stdout: "{}", stderr: "" };
 		});
 
-		await runPairingCommand(
-			{ execCommand } as never,
-			"print(42)",
-			{ PAIRING_CODE: "ABC12345" },
-		);
+		await runPairingCommand({ execCommand } as never, "print(42)", {
+			PAIRING_CODE: "ABC12345",
+		});
 
 		expect(capturedCmd).toContain("-e 'PAIRING_CODE=ABC12345'");
 	});
@@ -591,14 +572,11 @@ describe("runPairingCommand", () => {
 			return { code: 0, stdout: "{}", stderr: "" };
 		});
 
-		await runPairingCommand(
-			{ execCommand } as never,
-			"print(1)",
-		);
+		await runPairingCommand({ execCommand } as never, "print(1)");
 
-		expect(capturedCmd).toContain("docker exec hermes sh -lc");
+		expect(capturedCmd).toContain("sudo docker exec hermes sh -lc");
 		expect(capturedCmd).toContain("chown -R hermes:hermes");
-		expect(capturedCmd).toContain("&& docker exec --user hermes");
+		expect(capturedCmd).toContain("&& sudo docker exec --user hermes");
 	});
 
 	it("throws when the docker command fails", async () => {
@@ -634,9 +612,9 @@ describe("assertValidComposeServiceNames", () => {
 	});
 
 	it("rejects names with shell metacharacters", () => {
-		expect(() =>
-			assertValidComposeServiceNames(["hermes;rm -rf /"]),
-		).toThrow(/Invalid compose service name/);
+		expect(() => assertValidComposeServiceNames(["hermes;rm -rf /"])).toThrow(
+			/Invalid compose service name/,
+		);
 	});
 });
 
@@ -648,10 +626,7 @@ describe("writeComposeFile", () => {
 			return { code: 0, stdout: "", stderr: "" };
 		});
 
-		await writeComposeFile(
-			{ execCommand } as never,
-			"services:\n  hermes: {}",
-		);
+		await writeComposeFile({ execCommand } as never, "services:\n  hermes: {}");
 
 		expect(capturedCmd).toContain("cat > ~/hermes/docker-compose.yml <<");
 		expect(capturedCmd).toContain("HERMES_COMPOSE_");
@@ -730,9 +705,9 @@ describe("composeUp", () => {
 			stderr: "up failed",
 		}));
 
-		await expect(
-			composeUp({ execCommand } as never),
-		).rejects.toThrow("up failed");
+		await expect(composeUp({ execCommand } as never)).rejects.toThrow(
+			"up failed",
+		);
 	});
 });
 
@@ -758,9 +733,9 @@ describe("composePull", () => {
 			stderr: "Network error",
 		}));
 
-		await expect(
-			composePull({ execCommand } as never),
-		).rejects.toThrow("Network error");
+		await expect(composePull({ execCommand } as never)).rejects.toThrow(
+			"Network error",
+		);
 	});
 });
 
@@ -786,8 +761,8 @@ describe("composeUpAll", () => {
 			stderr: "Startup error",
 		}));
 
-		await expect(
-			composeUpAll({ execCommand } as never),
-		).rejects.toThrow("Startup error");
+		await expect(composeUpAll({ execCommand } as never)).rejects.toThrow(
+			"Startup error",
+		);
 	});
 });

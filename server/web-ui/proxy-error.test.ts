@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { assertWebUiReachable } from "../hermes/runtime";
 import {
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
 } from "../hermes/diagnostics-formatting";
+import { assertWebUiReachable } from "../hermes/runtime";
 import { formatWebUiProxyError, isRemotePortUnreachable } from "./handlers";
 
 describe("isRemotePortUnreachable", () => {

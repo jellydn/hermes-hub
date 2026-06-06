@@ -262,14 +262,14 @@ export async function runPairingCommand(
 		.join(" ");
 
 	const repairOwnership = [
-		"docker exec hermes sh -lc",
+		"sudo docker exec hermes sh -lc",
 		shellQuote(
 			'chown -R hermes:hermes "$HERMES_HOME/platforms/pairing" 2>/dev/null || chown -R hermes:hermes /opt/data/platforms/pairing 2>/dev/null || true',
 		),
 	].join(" ");
 
 	const pairingCommand = [
-		"docker exec --user hermes",
+		"sudo docker exec --user hermes",
 		envArgs,
 		"hermes python -c",
 		shellQuote(pythonCode),

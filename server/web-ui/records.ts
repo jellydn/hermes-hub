@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { defaultHermesWebUiPort } from "../constants";
 import { decryptSecret } from "../crypto";
@@ -113,6 +113,24 @@ function isStaleDeployingRecord(record: ServerWebUiRecord): boolean {
 	);
 }
 
+function buildStaleDeployWhereClause(
+	serverId: string,
+	record: ServerWebUiRecord,
+) {
+	const conditions = [
+		eq(serverWebUi.serverId, serverId),
+		eq(serverWebUi.deployStatus, "deploying"),
+	];
+
+	if (record.deployStartedAt === null) {
+		conditions.push(isNull(serverWebUi.deployStartedAt));
+	} else {
+		conditions.push(eq(serverWebUi.deployStartedAt, record.deployStartedAt));
+	}
+
+	return and(...conditions);
+}
+
 export async function resolveServerWebUiRecord(
 	serverId: string,
 	record: ServerWebUiRecord | null,
@@ -122,21 +140,30 @@ export async function resolveServerWebUiRecord(
 	}
 
 	const updatedAt = new Date();
-	await upsertServerWebUiRecord(getDb(), {
-		serverId,
-		deployStatus: "failed",
-		deployError: STALE_DEPLOY_ERROR,
-		deployStartedAt: null,
-		updatedAt,
-	});
+	const [updatedRecord] = await getDb()
+		.update(serverWebUi)
+		.set({
+			deployStatus: "failed",
+			deployError: STALE_DEPLOY_ERROR,
+			deployStartedAt: null,
+			updatedAt,
+		})
+		.where(buildStaleDeployWhereClause(serverId, record))
+		.returning({
+			enabled: serverWebUi.enabled,
+			encryptedPassword: serverWebUi.encryptedPassword,
+			port: serverWebUi.port,
+			deployStatus: serverWebUi.deployStatus,
+			deployError: serverWebUi.deployError,
+			deployStartedAt: serverWebUi.deployStartedAt,
+			updatedAt: serverWebUi.updatedAt,
+		});
 
-	return {
-		...record,
-		deployStatus: "failed",
-		deployError: STALE_DEPLOY_ERROR,
-		deployStartedAt: null,
-		updatedAt,
-	};
+	if (!updatedRecord) {
+		return getServerWebUiRecord(serverId);
+	}
+
+	return updatedRecord;
 }
 
 export async function getResolvedServerWebUiRecord(serverId: string) {
