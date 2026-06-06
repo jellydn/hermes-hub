@@ -1,8 +1,13 @@
+import {
+	brandMarkAgentDot,
+	brandMarkLetterPath,
+	brandMarkShell,
+	brandMarkViewBox,
+} from "@/lib/brand-mark-graphic";
 import { cn } from "@/lib/utils";
 
 const sizeMap = {
 	sm: 20,
-	md: 28,
 	lg: 40,
 } as const;
 
@@ -11,7 +16,7 @@ type BrandMarkProps = {
 	size?: keyof typeof sizeMap;
 };
 
-export function BrandMark({ className, size = "md" }: BrandMarkProps) {
+export function BrandMark({ className, size = "sm" }: BrandMarkProps) {
 	const dimension = sizeMap[size];
 
 	return (
@@ -19,20 +24,32 @@ export function BrandMark({ className, size = "md" }: BrandMarkProps) {
 			className={cn("shrink-0", className)}
 			width={dimension}
 			height={dimension}
-			viewBox="0 0 40 40"
+			viewBox={brandMarkViewBox}
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden="true"
 		>
-			<rect x="6" y="14" width="28" height="22" rx="9" fill="var(--lagoon)" />
+			<rect
+				x={brandMarkShell.x}
+				y={brandMarkShell.y}
+				width={brandMarkShell.width}
+				height={brandMarkShell.height}
+				rx={brandMarkShell.rx}
+				fill="var(--lagoon)"
+			/>
 			<path
-				d="M14 20V30M26 20V30M14 20H26M14 25H26"
+				d={brandMarkLetterPath}
 				stroke="var(--sea-ink)"
 				strokeWidth="3"
 				strokeLinecap="round"
 				strokeLinejoin="round"
 			/>
-			<circle cx="30" cy="10" r="4" fill="var(--sea-ink)" />
+			<circle
+				cx={brandMarkAgentDot.cx}
+				cy={brandMarkAgentDot.cy}
+				r={brandMarkAgentDot.r}
+				fill="var(--sea-ink)"
+			/>
 		</svg>
 	);
 }
