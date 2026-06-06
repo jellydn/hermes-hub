@@ -91,6 +91,10 @@ describe("web-ui ssh pool", () => {
 		establishSshConnection.mockResolvedValue({ ssh, hostKey: {} });
 
 		let releaseFirst: (() => void) | undefined;
+		let markFirstStarted: (() => void) | undefined;
+		const firstStarted = new Promise<void>((resolve) => {
+			markFirstStarted = resolve;
+		});
 		const firstPromise = withPooledSshConnection(
 			"user_123",
 			"server_123",
@@ -98,10 +102,11 @@ describe("web-ui ssh pool", () => {
 			async () =>
 				new Promise<string>((resolve) => {
 					releaseFirst = () => resolve("first");
+					markFirstStarted?.();
 				}),
 		);
 
-		await Promise.resolve();
+		await firstStarted;
 
 		const secondPromise = withPooledSshConnection(
 			"user_123",
