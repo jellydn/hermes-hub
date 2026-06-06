@@ -20,6 +20,7 @@ vi.mock("lucide-react", () => {
 		ExternalLink: MockIcon,
 		Monitor: MockIcon,
 		Rocket: MockIcon,
+		RefreshCw: MockIcon,
 		LoaderCircle: MockIcon,
 		Eye: MockIcon,
 		EyeOff: MockIcon,
@@ -106,6 +107,48 @@ describe("HermesWebUiCard", () => {
 			"/api/servers/server_123/web-ui/proxy/",
 		);
 		expect(screen.getByTestId("hermes-web-ui-password")).toBeTruthy();
+		expect(screen.getByTestId("hermes-web-ui-redeploy")).toBeTruthy();
+	});
+
+	it("redeploys Web UI when it is already enabled", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				webUi: {
+					enabled: true,
+					port: 8787,
+					proxyPath: "/api/servers/server_123/web-ui/proxy/",
+					updatedAt: "2026-05-26T05:00:00.000Z",
+				},
+			}),
+		});
+
+		render(
+			<HermesWebUiCard
+				detail={createDetail({
+					webUi: {
+						enabled: true,
+						port: 8787,
+						proxyPath: "/api/servers/server_123/web-ui/proxy/",
+						updatedAt: "2026-05-26T04:00:00.000Z",
+					},
+				})}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("hermes-web-ui-redeploy"));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/servers/server_123/web-ui/deploy",
+				{ method: "POST" },
+			);
+		});
+		expect(
+			await screen.findByText(
+				"Hermes Web UI redeployed. Try opening it again.",
+			),
+		).toBeTruthy();
 	});
 
 	it("deploys Web UI without onDetailChange and shows open control", async () => {

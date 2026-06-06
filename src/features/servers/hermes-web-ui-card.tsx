@@ -4,6 +4,7 @@ import {
 	EyeOff,
 	LoaderCircle,
 	Monitor,
+	RefreshCw,
 	Rocket,
 } from "lucide-react";
 import { useState } from "react";
@@ -66,7 +67,11 @@ export function HermesWebUiCard({
 
 			setRevealedPassword(null);
 			setShowPassword(false);
-			setSuccessMessage("Hermes Web UI is ready. Open it from HermesHub.");
+			setSuccessMessage(
+				isEnabled
+					? "Hermes Web UI redeployed. Try opening it again."
+					: "Hermes Web UI is ready. Open it from HermesHub.",
+			);
 		} catch {
 			setError("Web UI setup failed: Connection failed.");
 		} finally {
@@ -170,6 +175,25 @@ export function HermesWebUiCard({
 								<span>{isDeploying ? "Setting up..." : "Set up Web UI"}</span>
 							</Button>
 						)}
+
+						{isEnabled ? (
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={() => void handleDeploy()}
+								disabled={isDeploying}
+								data-testid="hermes-web-ui-redeploy"
+							>
+								{isDeploying ? (
+									<LoaderCircle className="h-4 w-4 animate-spin" />
+								) : (
+									<RefreshCw className="h-4 w-4" />
+								)}
+								<span>
+									{isDeploying ? "Redeploying..." : "Redeploy Web UI"}
+								</span>
+							</Button>
+						) : null}
 
 						{isEnabled ? (
 							<Button
