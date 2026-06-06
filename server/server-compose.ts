@@ -126,7 +126,14 @@ function resolveManagedWebUiPassword(input: {
 	}
 
 	if (input.webUiRecord?.enabled) {
-		return decryptWebUiPassword(input.webUiRecord.encryptedPassword);
+		const password = decryptWebUiPassword(input.webUiRecord.encryptedPassword);
+		if (!password) {
+			throw new Error(
+				"Stored Hermes Web UI password could not be decrypted. Redeploy the Web UI before rewriting compose.",
+			);
+		}
+
+		return password;
 	}
 
 	return null;

@@ -19,6 +19,7 @@ import {
 } from "./context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
+import { assertWebUiReachable, formatWebUiProxyError } from "./reachability";
 import {
 	decryptWebUiPassword,
 	getServerWebUiRecord,
@@ -69,6 +70,7 @@ export async function deployServerWebUi(context: Context) {
 		return context.json({ error: `Deploy failed: ${message}` }, 500);
 	}
 	const password = passwordResult.password;
+	const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
 
 	let composeContent: string;
 	try {
@@ -117,11 +119,13 @@ export async function deployServerWebUi(context: Context) {
 					);
 				}
 			},
+			extraSshCommands: async (ssh) => {
+				await assertWebUiReachable(ssh, webUiPort);
+			},
 		});
 
 		const updatedAt = new Date();
 		const encryptedPassword = encryptSecret(password);
-		const webUiPort = existingRecord?.port ?? defaultHermesWebUiPort;
 		await db.transaction(async (tx) => {
 			await tx
 				.insert(serverWebUi)
@@ -207,6 +211,14 @@ export async function proxyServerWebUi(context: Context) {
 	}
 
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
+	const requestUrl = new URL(context.req.url);
+	const proxyRoot = proxyBasePath.replace(/\/$/, "");
+	if (requestUrl.pathname === proxyRoot) {
+		return new Response(null, {
+			status: 308,
+			headers: { Location: proxyBasePath },
+		});
+	}
 	const upstreamPath = getUpstreamPath(context.req.url, proxyBasePath);
 	const upstreamOrigin = `http://127.0.0.1:${ctx.webUi.port}`;
 
@@ -238,8 +250,9 @@ export async function proxyServerWebUi(context: Context) {
 			),
 		});
 	} catch (error) {
-		const message =
-			error instanceof Error ? error.message : "Proxy request failed";
-		return context.json({ error: message }, 502);
+		return context.json(
+			{ error: formatWebUiProxyError(error, ctx.webUi.port) },
+			502,
+		);
 	}
 }

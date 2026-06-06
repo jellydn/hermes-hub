@@ -24,4 +24,22 @@ describe("buildManagedComposeContentFromSecrets", () => {
 			]),
 		);
 	});
+
+	it("throws when preserve mode cannot decrypt an enabled Web UI password", () => {
+		expect(() =>
+			buildManagedComposeContentFromSecrets({
+				serverId: "server_1",
+				secrets: {
+					telegramInfo: null,
+					providerConfig: null,
+					webUiRecord: {
+						enabled: true,
+						encryptedPassword: "bad-ciphertext",
+						port: 8787,
+						updatedAt: new Date(),
+					},
+				},
+			}),
+		).toThrow(/could not be decrypted/i);
+	});
 });

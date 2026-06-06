@@ -188,6 +188,7 @@ describe("web-ui handlers", () => {
 		expect(deployComposeViaSsh).toHaveBeenCalledWith(
 			expect.objectContaining({
 				preSshCommands: expect.any(Function),
+				extraSshCommands: expect.any(Function),
 			}),
 		);
 		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
@@ -284,6 +285,59 @@ describe("web-ui handlers", () => {
 
 		const response = await revealServerWebUiPassword(createContext());
 		expect(response.status).toBe(401);
+	});
+
+	it("redirects bare proxy roots to the trailing-slash path", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:generated-password",
+			port: 8787,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const response = await proxyServerWebUi(
+			createContext({
+				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy",
+			}),
+		);
+
+		expect(response.status).toBe(308);
+		expect(response.headers.get("location")).toBe(
+			"/api/servers/server_123/web-ui/proxy/",
+		);
+		expect(proxyRequestOverSsh).not.toHaveBeenCalled();
+	});
+
+	it("returns actionable errors when the upstream port is closed", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:generated-password",
+			port: 8787,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		proxyRequestOverSsh.mockRejectedValue(
+			new Error("(SSH) Channel open failure: Connection refused"),
+		);
+
+		const response = await proxyServerWebUi(
+			createContext({
+				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+			}),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain(
+			"Hermes Web UI is not reachable on the server (127.0.0.1:8787)",
+		);
 	});
 
 	it("proxies requests with rewritten response headers", async () => {
