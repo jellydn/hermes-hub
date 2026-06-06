@@ -97,6 +97,7 @@ export default function ThemeToggle() {
 			onClick={toggleMode}
 			aria-label={label}
 			title={label}
+			suppressHydrationWarning
 			className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[var(--chip-line)] hover:text-[var(--sea-ink)]"
 		>
 			<Icon className="h-4 w-4" aria-hidden="true" />
