@@ -31,6 +31,10 @@ typecheck:
 db-generate:
     bun run db:generate
 
+# Apply Drizzle migrations locally
+db-migrate:
+    bun run db:migrate
+
 # Run all checks (typecheck + test, parallel for speed)
 check:
 	#!/usr/bin/env bash
