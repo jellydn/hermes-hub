@@ -14,21 +14,12 @@ export type ServerActionHistoryItem = {
 	imageRef: string | null;
 };
 
-export type ServerWebUiDeployStatus =
-	| "idle"
-	| "deploying"
-	| "succeeded"
-	| "failed";
+import type {
+	ServerWebUiDeployStatus,
+	ServerWebUiSnapshot,
+} from "../../shared/contracts/server-web-ui";
 
-export type ServerWebUiSnapshot = {
-	enabled: boolean;
-	port: number;
-	proxyPath: string;
-	deployStatus: ServerWebUiDeployStatus;
-	deployError: string | null;
-	deployStartedAt: string | null;
-	updatedAt: string;
-};
+export type { ServerWebUiDeployStatus, ServerWebUiSnapshot };
 
 export type ServerDetailUpdater =
 	| ServerDetailSnapshot

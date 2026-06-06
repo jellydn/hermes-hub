@@ -1,5 +1,6 @@
 export {
 	deployServerWebUi,
+	getServerWebUiStatus,
 	proxyServerWebUi,
 	revealServerWebUiPassword,
 } from "./web-ui/handlers";

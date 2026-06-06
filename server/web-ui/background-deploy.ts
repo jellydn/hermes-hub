@@ -1,9 +1,10 @@
 import { encryptSecret } from "../crypto";
 import { getDb } from "../db";
-import { serverWebUi } from "../db/schema";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { deployManagedCompose } from "../managed-compose-deploy";
 import type { OwnedServerSshContext } from "../request-guards";
+import { releaseWebUiDeployLock } from "./deploy-lock";
+import { upsertServerWebUiRecord } from "./records";
 
 export type WebUiBackgroundDeployInput = {
 	ctx: OwnedServerSshContext;
@@ -37,30 +38,16 @@ export async function runWebUiDeployInBackground(
 		const updatedAt = new Date();
 		const encryptedPassword = encryptSecret(password);
 		await db.transaction(async (tx) => {
-			await tx
-				.insert(serverWebUi)
-				.values({
-					serverId: ctx.serverId,
-					enabled: true,
-					encryptedPassword,
-					port: webUiPort,
-					deployStatus: "succeeded",
-					deployError: null,
-					deployStartedAt: null,
-					updatedAt,
-				})
-				.onConflictDoUpdate({
-					target: serverWebUi.serverId,
-					set: {
-						enabled: true,
-						encryptedPassword,
-						port: webUiPort,
-						deployStatus: "succeeded",
-						deployError: null,
-						deployStartedAt: null,
-						updatedAt,
-					},
-				});
+			await upsertServerWebUiRecord(tx, {
+				serverId: ctx.serverId,
+				enabled: true,
+				encryptedPassword,
+				port: webUiPort,
+				deployStatus: "succeeded",
+				deployError: null,
+				deployStartedAt: null,
+				updatedAt,
+			});
 
 			await insertAuditLog(tx, {
 				userId: ctx.session.user.id,
@@ -74,26 +61,15 @@ export async function runWebUiDeployInBackground(
 		const message = error instanceof Error ? error.message : "Deploy failed";
 		const updatedAt = new Date();
 
-		await db
-			.insert(serverWebUi)
-			.values({
-				serverId: ctx.serverId,
-				enabled: existingEnabled,
-				port: webUiPort,
-				deployStatus: "failed",
-				deployError: message,
-				deployStartedAt: null,
-				updatedAt,
-			})
-			.onConflictDoUpdate({
-				target: serverWebUi.serverId,
-				set: {
-					deployStatus: "failed",
-					deployError: message,
-					deployStartedAt: null,
-					updatedAt,
-				},
-			});
+		await upsertServerWebUiRecord(db, {
+			serverId: ctx.serverId,
+			enabled: existingEnabled,
+			port: webUiPort,
+			deployStatus: "failed",
+			deployError: message,
+			deployStartedAt: null,
+			updatedAt,
+		});
 
 		await insertAuditLog(db, {
 			userId: ctx.session.user.id,
@@ -102,5 +78,7 @@ export async function runWebUiDeployInBackground(
 			details: { serverId: ctx.serverId, error: message },
 			ipAddress,
 		});
+	} finally {
+		releaseWebUiDeployLock(ctx.serverId);
 	}
 }

@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 
 import { getAuthSession } from "./auth";
+import { isResponse } from "./lib/is-response";
 import {
 	getOwnedServerRecord,
 	type OwnedServerRecord,
@@ -22,10 +23,6 @@ export type OwnedServerSshContext = OwnedServerContext & {
 	authMethod: SshAuthMethod;
 	credential: string;
 };
-
-function isResponse(value: unknown): value is Response {
-	return value instanceof Response;
-}
 
 export async function requireAuthSession(
 	context: Context,

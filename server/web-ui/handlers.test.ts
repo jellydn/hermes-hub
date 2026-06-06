@@ -8,14 +8,14 @@ const {
 	deployManagedCompose,
 	getOwnedServerRecord,
 	resolveServerSshConfigOrError,
-	getServerWebUiRecord,
+	getResolvedServerWebUiRecord,
+	upsertServerWebUiRecord,
 	insertAuditLog,
-	transaction,
-	insertValues,
-	onConflictDoUpdate,
 	getLatestInstallForServer,
 	proxyRequestOverSsh,
 	invalidatePooledSsh,
+	tryAcquireWebUiDeployLock,
+	releaseWebUiDeployLock,
 } = vi.hoisted(() => ({
 	getAuthSession: vi.fn(),
 	encryptSecret: vi.fn(),
@@ -23,14 +23,14 @@ const {
 	deployManagedCompose: vi.fn(),
 	getOwnedServerRecord: vi.fn(),
 	resolveServerSshConfigOrError: vi.fn(),
-	getServerWebUiRecord: vi.fn(),
+	getResolvedServerWebUiRecord: vi.fn(),
+	upsertServerWebUiRecord: vi.fn(),
 	insertAuditLog: vi.fn(),
-	transaction: vi.fn(),
-	insertValues: vi.fn(),
-	onConflictDoUpdate: vi.fn(),
 	getLatestInstallForServer: vi.fn(),
 	proxyRequestOverSsh: vi.fn(),
 	invalidatePooledSsh: vi.fn(),
+	tryAcquireWebUiDeployLock: vi.fn(),
+	releaseWebUiDeployLock: vi.fn(),
 }));
 
 vi.mock("../auth", () => ({
@@ -56,11 +56,12 @@ vi.mock("../install/records", () => ({
 }));
 
 vi.mock("./records", () => ({
-	getServerWebUiRecord,
+	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
+	upsertServerWebUiRecord,
 }));
 
 vi.mock("./ssh-forward", () => ({
@@ -71,27 +72,22 @@ vi.mock("./ssh-pool", () => ({
 	invalidatePooledSsh,
 }));
 
+vi.mock("./deploy-lock", () => ({
+	tryAcquireWebUiDeployLock,
+	releaseWebUiDeployLock,
+}));
+
 vi.mock("../lib/insert-audit-log", () => ({
 	insertAuditLog,
 }));
 
 vi.mock("../db", () => ({
-	getDb: () => ({
-		insert: () => ({
-			values: insertValues,
-		}),
-		transaction,
-	}),
-}));
-
-vi.mock("../db/schema", () => ({
-	serverWebUi: {
-		serverId: Symbol("serverWebUi.serverId"),
-	},
+	getDb: () => ({}),
 }));
 
 import {
 	deployServerWebUi,
+	getServerWebUiStatus,
 	proxyServerWebUi,
 	revealServerWebUiPassword,
 } from "./handlers";
@@ -138,14 +134,11 @@ describe("web-ui handlers", () => {
 			hostKeyFingerprint: null,
 		});
 		insertAuditLog.mockResolvedValue(undefined);
-		insertValues.mockReturnValue({ onConflictDoUpdate });
-		onConflictDoUpdate.mockResolvedValue(undefined);
-		transaction.mockImplementation(async (fn) =>
-			fn({ insert: () => ({ values: insertValues }) }),
-		);
+		upsertServerWebUiRecord.mockResolvedValue(undefined);
+		tryAcquireWebUiDeployLock.mockReturnValue(true);
 
 		getLatestInstallForServer.mockResolvedValue({ status: "succeeded" });
-		getServerWebUiRecord.mockResolvedValue(null);
+		getResolvedServerWebUiRecord.mockResolvedValue(null);
 		invalidatePooledSsh.mockReturnValue(undefined);
 	});
 
@@ -171,7 +164,8 @@ describe("web-ui handlers", () => {
 		expect(payload.webUi.deployStatus).toBe("deploying");
 		expect(payload.webUi.enabled).toBe(false);
 		expect(invalidatePooledSsh).toHaveBeenCalledWith("user_123", "server_123");
-		expect(insertValues).toHaveBeenCalledWith(
+		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({
 				serverId: "server_123",
 				deployStatus: "deploying",
@@ -185,12 +179,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: true,
 			encryptedPassword: "enc:existing-password",
 			port: 8787,
 			deployStatus: "succeeded",
 			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 		deployManagedCompose.mockReturnValue(new Promise(() => {}));
@@ -200,12 +195,60 @@ describe("web-ui handlers", () => {
 
 		expect(response.status).toBe(202);
 		expect(payload.webUi.enabled).toBe(true);
-		expect(insertValues).toHaveBeenCalledWith(
+		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({
 				enabled: true,
 				deployStatus: "deploying",
 			}),
 		);
+	});
+
+	it("returns 202 when another deploy is already in flight", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		tryAcquireWebUiDeployLock.mockReturnValue(false);
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: false,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "deploying",
+			deployError: null,
+			deployStartedAt: new Date(),
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const response = await deployServerWebUi(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(202);
+		expect(payload.status).toBe("deploying");
+		expect(upsertServerWebUiRecord).not.toHaveBeenCalled();
+	});
+
+	it("returns current Web UI status", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+
+		const response = await getServerWebUiStatus(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload.webUi?.deployStatus).toBe("succeeded");
+		expect(payload.webUi?.enabled).toBe(true);
 	});
 
 	it("rejects deploy when install is missing", async () => {
@@ -258,10 +301,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: false,
 			encryptedPassword: "corrupt",
 			port: 8787,
+			deployStatus: "idle",
+			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 		decryptSecret.mockImplementation(() => null);
@@ -273,6 +319,7 @@ describe("web-ui handlers", () => {
 		expect(payload.error).toMatch(
 			/stored hermes web ui password could not be decrypted/i,
 		);
+		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
 	});
 
 	it("reveals the Web UI password for enabled servers", async () => {
@@ -280,10 +327,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: true,
 			encryptedPassword: "enc:generated-password",
 			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 
@@ -306,10 +356,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: true,
 			encryptedPassword: "enc:generated-password",
 			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 
@@ -331,10 +384,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: true,
 			encryptedPassword: "enc:generated-password",
 			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 		proxyRequestOverSsh.mockRejectedValue(
@@ -359,10 +415,13 @@ describe("web-ui handlers", () => {
 			user: { id: "user_123" },
 			session: { id: "session_123" },
 		});
-		getServerWebUiRecord.mockResolvedValue({
+		getResolvedServerWebUiRecord.mockResolvedValue({
 			enabled: true,
 			encryptedPassword: "enc:generated-password",
 			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
 			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 		});
 

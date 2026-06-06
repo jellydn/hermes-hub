@@ -15,7 +15,7 @@ import {
 	type OwnedServerRecord,
 	readOsInfoValue,
 } from "./server-records";
-import { getServerWebUiRecord } from "./web-ui/records";
+import { getResolvedServerWebUiRecord } from "./web-ui/records";
 import { buildWebUiSnapshot } from "./web-ui/snapshot";
 
 type AuditRecord = {
@@ -41,7 +41,7 @@ export async function getServerDetailSnapshot(input: {
 	const [installRecord, actionHistory, webUiRecord] = await Promise.all([
 		getLatestInstallForServer(input.serverId),
 		getServerActionHistory(input.serverId),
-		getServerWebUiRecord(input.serverId),
+		getResolvedServerWebUiRecord(input.serverId),
 	]);
 	const rollbackTarget = getRollbackTargetFromHistory(actionHistory);
 

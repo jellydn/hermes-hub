@@ -3,24 +3,40 @@ import type { Context } from "hono";
 import { defaultHermesWebUiPort } from "../constants";
 import { encryptSecret } from "../crypto";
 import { getDb } from "../db";
-import { serverWebUi } from "../db/schema";
 import { getLatestInstallForServer } from "../install/records";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
 import { runWebUiDeployInBackground } from "./background-deploy";
+import {
+	releaseWebUiDeployLock,
+	tryAcquireWebUiDeployLock,
+} from "./deploy-lock";
 import { requireEnabledWebUi } from "./enabled-context";
 import { resolveWebUiDeployPassword } from "./password";
 import { getUpstreamPath, rewriteProxyResponseHeaders } from "./proxy-http";
 import { formatWebUiProxyError } from "./reachability";
 import {
 	decryptWebUiPassword,
-	getServerWebUiRecord,
+	getResolvedServerWebUiRecord,
 	getWebUiProxyPath,
+	upsertServerWebUiRecord,
 } from "./records";
-import { buildWebUiSnapshot, isStaleDeploy } from "./snapshot";
+import { buildWebUiSnapshot } from "./snapshot";
 import { proxyRequestOverSsh } from "./ssh-forward";
 import { invalidatePooledSsh } from "./ssh-pool";
+
+export async function getServerWebUiStatus(context: Context) {
+	const owned = await requireOwnedServer(context);
+	if (owned instanceof Response) {
+		return owned;
+	}
+
+	const record = await getResolvedServerWebUiRecord(owned.serverId);
+	return context.json({
+		webUi: record ? buildWebUiSnapshot(owned.serverId, record) : null,
+	});
+}
 
 export async function deployServerWebUi(context: Context) {
 	const ctx = await requireOwnedServerSsh(context);
@@ -47,22 +63,32 @@ export async function deployServerWebUi(context: Context) {
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
-	const existingRecord = await getServerWebUiRecord(ctx.serverId);
+	const existingRecord = await getResolvedServerWebUiRecord(ctx.serverId);
 
-	// Not atomic: two simultaneous POSTs can both pass this check and start
-	// background deploys. onConflictDoUpdate keeps one DB row, but the VPS may
-	// see concurrent work. SELECT ... FOR UPDATE would need raw SQL; this guard
-	// only narrows the race to nearly-simultaneous requests.
-	if (
-		existingRecord?.deployStatus === "deploying" &&
-		!isStaleDeploy(existingRecord.deployStartedAt)
-	) {
+	if (existingRecord?.deployStatus === "deploying") {
 		const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, existingRecord);
+		return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
+	}
+
+	if (!tryAcquireWebUiDeployLock(ctx.serverId)) {
+		const record = await getResolvedServerWebUiRecord(ctx.serverId);
+		const webUiSnapshot = record
+			? buildWebUiSnapshot(ctx.serverId, record)
+			: buildWebUiSnapshot(ctx.serverId, {
+					enabled: false,
+					encryptedPassword: null,
+					port: defaultHermesWebUiPort,
+					deployStatus: "deploying",
+					deployError: null,
+					deployStartedAt: new Date(),
+					updatedAt: new Date(),
+				});
 		return context.json({ status: "deploying", webUi: webUiSnapshot }, 202);
 	}
 
 	const passwordResult = resolveWebUiDeployPassword(existingRecord);
 	if ("error" in passwordResult) {
+		releaseWebUiDeployLock(ctx.serverId);
 		const message = passwordResult.error;
 
 		await insertAuditLog(db, {
@@ -83,9 +109,9 @@ export async function deployServerWebUi(context: Context) {
 
 	const now = new Date();
 	const encryptedPassword = encryptSecret(password);
-	await db
-		.insert(serverWebUi)
-		.values({
+
+	try {
+		await upsertServerWebUiRecord(db, {
 			serverId: ctx.serverId,
 			enabled: existingEnabled,
 			encryptedPassword,
@@ -94,17 +120,11 @@ export async function deployServerWebUi(context: Context) {
 			deployError: null,
 			deployStartedAt: now,
 			updatedAt: now,
-		})
-		.onConflictDoUpdate({
-			target: serverWebUi.serverId,
-			set: {
-				encryptedPassword,
-				deployStatus: "deploying",
-				deployError: null,
-				deployStartedAt: now,
-				updatedAt: now,
-			},
 		});
+	} catch (error) {
+		releaseWebUiDeployLock(ctx.serverId);
+		throw error;
+	}
 
 	const webUiSnapshot = buildWebUiSnapshot(ctx.serverId, {
 		enabled: existingEnabled,
@@ -133,7 +153,7 @@ export async function revealServerWebUiPassword(context: Context) {
 		return owned;
 	}
 
-	const webUiRecord = await getServerWebUiRecord(owned.serverId);
+	const webUiRecord = await getResolvedServerWebUiRecord(owned.serverId);
 	if (!webUiRecord?.enabled) {
 		return context.json(
 			{ error: "Hermes Web UI is not enabled on this server." },

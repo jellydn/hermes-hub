@@ -71,12 +71,12 @@ vi.mock("./server-records", () => ({
 	},
 }));
 
-const { getServerWebUiRecord } = vi.hoisted(() => ({
-	getServerWebUiRecord: vi.fn().mockResolvedValue(null),
+const { getResolvedServerWebUiRecord } = vi.hoisted(() => ({
+	getResolvedServerWebUiRecord: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./web-ui/records", () => ({
-	getServerWebUiRecord,
+	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
 }));
@@ -211,7 +211,7 @@ describe("getServerDetailSnapshot webUi deploy status", () => {
 	});
 
 	it("includes deploying Web UI records in the snapshot", async () => {
-		getServerWebUiRecord.mockResolvedValueOnce({
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
 			enabled: false,
 			encryptedPassword: "enc:password",
 			port: 8787,
@@ -231,7 +231,7 @@ describe("getServerDetailSnapshot webUi deploy status", () => {
 	});
 
 	it("includes failed Web UI records with deploy error", async () => {
-		getServerWebUiRecord.mockResolvedValueOnce({
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
 			enabled: false,
 			encryptedPassword: null,
 			port: 8787,
@@ -251,7 +251,7 @@ describe("getServerDetailSnapshot webUi deploy status", () => {
 	});
 
 	it("includes succeeded Web UI records for enabled servers", async () => {
-		getServerWebUiRecord.mockResolvedValueOnce({
+		getResolvedServerWebUiRecord.mockResolvedValueOnce({
 			enabled: true,
 			encryptedPassword: "enc:password",
 			port: 8787,

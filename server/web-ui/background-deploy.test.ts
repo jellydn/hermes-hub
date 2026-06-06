@@ -4,16 +4,16 @@ const {
 	encryptSecret,
 	deployManagedCompose,
 	insertAuditLog,
-	insertValues,
-	onConflictDoUpdate,
+	upsertServerWebUiRecord,
 	transaction,
+	releaseWebUiDeployLock,
 } = vi.hoisted(() => ({
 	encryptSecret: vi.fn(),
 	deployManagedCompose: vi.fn(),
 	insertAuditLog: vi.fn(),
-	insertValues: vi.fn(),
-	onConflictDoUpdate: vi.fn(),
+	upsertServerWebUiRecord: vi.fn(),
 	transaction: vi.fn(),
+	releaseWebUiDeployLock: vi.fn(),
 }));
 
 vi.mock("../crypto", () => ({
@@ -28,19 +28,18 @@ vi.mock("../lib/insert-audit-log", () => ({
 	insertAuditLog,
 }));
 
-vi.mock("../db", () => ({
-	getDb: () => ({
-		insert: () => ({
-			values: insertValues,
-		}),
-		transaction,
-	}),
+vi.mock("./records", () => ({
+	upsertServerWebUiRecord,
 }));
 
-vi.mock("../db/schema", () => ({
-	serverWebUi: {
-		serverId: Symbol("serverWebUi.serverId"),
-	},
+vi.mock("./deploy-lock", () => ({
+	releaseWebUiDeployLock,
+}));
+
+vi.mock("../db", () => ({
+	getDb: () => ({
+		transaction,
+	}),
 }));
 
 import type { OwnedServerSshContext } from "../request-guards";
@@ -66,12 +65,9 @@ describe("runWebUiDeployInBackground", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		encryptSecret.mockImplementation((value: string) => `enc:${value}`);
-		insertValues.mockReturnValue({ onConflictDoUpdate });
-		onConflictDoUpdate.mockResolvedValue(undefined);
+		upsertServerWebUiRecord.mockResolvedValue(undefined);
 		insertAuditLog.mockResolvedValue(undefined);
-		transaction.mockImplementation(async (fn) =>
-			fn({ insert: () => ({ values: insertValues }) }),
-		);
+		transaction.mockImplementation(async (fn) => fn({}));
 		deployManagedCompose.mockResolvedValue(undefined);
 	});
 
@@ -93,7 +89,8 @@ describe("runWebUiDeployInBackground", () => {
 			}),
 		);
 		expect(transaction).toHaveBeenCalled();
-		expect(insertValues).toHaveBeenCalledWith(
+		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({
 				serverId: "server_123",
 				enabled: true,
@@ -108,6 +105,7 @@ describe("runWebUiDeployInBackground", () => {
 				serverId: "server_123",
 			}),
 		);
+		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
 	});
 
 	it("marks deploy failed and writes failure audit log", async () => {
@@ -121,7 +119,8 @@ describe("runWebUiDeployInBackground", () => {
 			ipAddress: "127.0.0.1",
 		});
 
-		expect(insertValues).toHaveBeenCalledWith(
+		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({
 				serverId: "server_123",
 				enabled: false,
@@ -136,6 +135,7 @@ describe("runWebUiDeployInBackground", () => {
 				details: expect.objectContaining({ error: "SSH timeout" }),
 			}),
 		);
+		expect(releaseWebUiDeployLock).toHaveBeenCalledWith("server_123");
 	});
 
 	it("preserves enabled state when redeploy fails", async () => {
@@ -149,7 +149,8 @@ describe("runWebUiDeployInBackground", () => {
 			ipAddress: null,
 		});
 
-		expect(insertValues).toHaveBeenCalledWith(
+		expect(upsertServerWebUiRecord).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({
 				enabled: true,
 				deployStatus: "failed",

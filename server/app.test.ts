@@ -24,6 +24,7 @@ const {
 	listTelegramPairings,
 	approveTelegramPairing,
 	deployServerWebUi,
+	getServerWebUiStatus,
 	revealServerWebUiPassword,
 	proxyServerWebUi,
 	authHandler,
@@ -52,6 +53,7 @@ const {
 	listTelegramPairings: vi.fn(),
 	approveTelegramPairing: vi.fn(),
 	deployServerWebUi: vi.fn(),
+	getServerWebUiStatus: vi.fn(),
 	revealServerWebUiPassword: vi.fn(),
 	proxyServerWebUi: vi.fn(),
 	authHandler: vi.fn(),
@@ -107,6 +109,7 @@ vi.mock("./telegram", () => ({
 
 vi.mock("./web-ui", () => ({
 	deployServerWebUi,
+	getServerWebUiStatus,
 	revealServerWebUiPassword,
 	proxyServerWebUi,
 }));
@@ -464,6 +467,22 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(connectTelegram).toHaveBeenCalledTimes(1);
+	});
+
+	it("routes Web UI status requests through the Web UI handler", async () => {
+		getServerWebUiStatus.mockResolvedValueOnce(
+			new Response(JSON.stringify({ webUi: { deployStatus: "succeeded" } }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const response = await apiApp.request(
+			"http://localhost/api/servers/server_123/web-ui",
+		);
+
+		expect(response.status).toBe(200);
+		expect(getServerWebUiStatus).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes Web UI deploy requests through the Web UI handler", async () => {
