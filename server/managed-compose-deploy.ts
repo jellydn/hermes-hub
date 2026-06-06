@@ -18,7 +18,7 @@ export type ManagedComposeDeployIntent = "telegram" | "provider" | "web-ui";
  * |----------|-----------|------------------------------------|---------------------|---------------------------------|
  * | telegram | preserve  | full stack (`docker compose up -d`)| —                   | —                               |
  * | provider | preserve  | full stack                         | —                   | sleep + `hermes config set model`|
- * | web-ui   | preserve  | `--no-deps hermes-webui` only      | `mkdir -p ~/workspace` | `assertWebUiReachable`       |
+ * | web-ui   | preserve  | pull + `--no-deps hermes-webui`    | `sudo mkdir -p /root/.hermes /root/workspace` | `assertWebUiReachable` |
  */
 export type ManagedComposeDeployPolicy = {
 	intent: ManagedComposeDeployIntent;
@@ -79,10 +79,13 @@ export function resolveManagedComposeDeployPolicy(
 				webUiMode: "preserve",
 				composeServices: ["hermes-webui"],
 				preSshCommands: async (ssh) => {
-					const workspaceResult = await ssh.execCommand("mkdir -p ~/workspace");
-					if (workspaceResult.code !== 0) {
+					const prepResult = await ssh.execCommand(
+						"sudo mkdir -p /root/.hermes /root/workspace",
+					);
+					if (prepResult.code !== 0) {
 						throw new Error(
-							workspaceResult.stderr || "Failed to create workspace directory",
+							prepResult.stderr ||
+								"Failed to create Hermes Web UI volume directories",
 						);
 					}
 				},

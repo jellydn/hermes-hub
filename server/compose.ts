@@ -3,6 +3,7 @@ import {
 	defaultHermesImage,
 	defaultHermesWebUiPort,
 	hermesWebUiImage,
+	managedComposeVolumeHome,
 } from "./constants";
 
 export type HermesWebUiComposeInput = {
@@ -16,7 +17,10 @@ export function buildHermesComposeContent(input?: {
 	providerEnvVars?: Record<string, string>;
 	hermesModel?: string;
 	webUi?: HermesWebUiComposeInput;
+	/** Host path prefix for bind mounts. Defaults to sudo docker's home (/root). */
+	volumeHome?: string;
 }) {
+	const volumeHome = input?.volumeHome ?? managedComposeVolumeHome;
 	const env: string[] = ["API_SERVER_ENABLED=true", "API_SERVER_HOST=0.0.0.0"];
 
 	if (input?.apiServerKey) {
@@ -43,7 +47,7 @@ export function buildHermesComposeContent(input?: {
 			restart: "unless-stopped",
 			command: "gateway run",
 			ports: ["8642:8642"],
-			volumes: ["~/.hermes:/opt/data"],
+			volumes: [`${volumeHome}/.hermes:/opt/data`],
 			environment: env,
 		},
 	};
@@ -56,8 +60,8 @@ export function buildHermesComposeContent(input?: {
 			restart: "unless-stopped",
 			ports: [`127.0.0.1:${port}:${port}`],
 			volumes: [
-				"~/.hermes:/home/hermeswebui/.hermes",
-				"~/workspace:/workspace",
+				`${volumeHome}/.hermes:/home/hermeswebui/.hermes`,
+				`${volumeHome}/workspace:/workspace`,
 			],
 			environment: [
 				"HERMES_WEBUI_HOST=0.0.0.0",

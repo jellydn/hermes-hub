@@ -31,12 +31,24 @@ type DeployComposeInput = {
 	expectedFingerprint?: string;
 };
 
-export function buildComposeUpCommand(input?: { composeServices?: string[] }) {
-	const command = ["cd ~/hermes && sudo docker compose up -d"];
-	if (input?.composeServices?.length) {
-		command.push("--no-deps", ...input.composeServices);
+export function buildComposeUpCommand(input?: {
+	composeServices?: string[];
+	pull?: boolean;
+}) {
+	const parts = ["cd ~/hermes"];
+	const services = input?.composeServices ?? [];
+
+	if (input?.pull && services.length > 0) {
+		parts.push(`sudo docker compose pull ${services.join(" ")}`);
 	}
-	return command.join(" ");
+
+	const upCommand = ["sudo docker compose up", "-d"];
+	if (services.length > 0) {
+		upCommand.push("--no-deps", ...services);
+	}
+	parts.push(upCommand.join(" "));
+
+	return parts.join(" && ");
 }
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
@@ -64,7 +76,10 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			}
 
 			const restartResult = await ssh.execCommand(
-				buildComposeUpCommand({ composeServices: input.composeServices }),
+				buildComposeUpCommand({
+					composeServices: input.composeServices,
+					pull: input.composeServices?.includes("hermes-webui"),
+				}),
 			);
 			if (restartResult.code !== 0) {
 				throw new Error(restartResult.stderr || "Failed to restart Hermes");

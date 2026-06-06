@@ -150,8 +150,8 @@ describe("buildHermesComposeContent", () => {
 				container_name: "hermes-webui",
 				ports: ["127.0.0.1:8787:8787"],
 				volumes: [
-					"~/.hermes:/home/hermeswebui/.hermes",
-					"~/workspace:/workspace",
+					"/root/.hermes:/home/hermeswebui/.hermes",
+					"/root/workspace:/workspace",
 				],
 			}),
 		);

@@ -72,6 +72,19 @@ describe("resolveManagedComposeDeployPolicy", () => {
 			/webUiPort is required/i,
 		);
 	});
+
+	it("prepares sudo docker volume directories before Web UI deploy", async () => {
+		const execCommand = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+		const policy = resolveManagedComposeDeployPolicy("web-ui", {
+			webUiPort: 8787,
+		});
+
+		await policy.preSshCommands?.({ execCommand } as never);
+
+		expect(execCommand).toHaveBeenCalledWith(
+			"sudo mkdir -p /root/.hermes /root/workspace",
+		);
+	});
 });
 
 describe("deployManagedCompose", () => {

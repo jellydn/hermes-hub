@@ -14,4 +14,15 @@ describe("buildComposeUpCommand", () => {
 			"cd ~/hermes && sudo docker compose up -d --no-deps hermes-webui",
 		);
 	});
+
+	it("pulls the Web UI image before recreating only that service", () => {
+		expect(
+			buildComposeUpCommand({
+				composeServices: ["hermes-webui"],
+				pull: true,
+			}),
+		).toBe(
+			"cd ~/hermes && sudo docker compose pull hermes-webui && sudo docker compose up -d --no-deps hermes-webui",
+		);
+	});
 });
