@@ -81,6 +81,13 @@ const launchChecklist = [
 ] as const;
 
 export const Route = createFileRoute("/")({
+	beforeLoad: async () => {
+		const session = await getCurrentSession();
+
+		if (session) {
+			throw redirect({ to: "/dashboard" });
+		}
+	},
 	head: () => ({
 		meta: [
 			{
@@ -93,13 +100,6 @@ export const Route = createFileRoute("/")({
 			},
 		],
 	}),
-	beforeLoad: async () => {
-		const session = await getCurrentSession();
-
-		if (session) {
-			throw redirect({ to: "/dashboard" });
-		}
-	},
 	component: App,
 });
 

@@ -2,11 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 
-import { TelegramSettings } from "@/features/telegram/telegram-settings";
+import { TelegramPage } from "@/features/telegram/telegram-page";
 import { requireSession } from "@/lib/session";
 import { getAuthSession } from "../../server/auth";
 import { getCurrentTelegramConfig } from "../../server/telegram";
-import { AppShell } from "./dashboard";
 
 const loadCurrentTelegramConfig = createServerFn({ method: "GET" }).handler(
 	async () => {
@@ -21,25 +20,12 @@ const loadCurrentTelegramConfig = createServerFn({ method: "GET" }).handler(
 
 export const Route = createFileRoute("/telegram")({
 	beforeLoad: async ({ location }) => {
-		const session = await requireSession(location.href);
-		const telegramConfig = await loadCurrentTelegramConfig();
+		const [session, telegramConfig] = await Promise.all([
+			requireSession(location.href),
+			loadCurrentTelegramConfig(),
+		]);
 
 		return { session, telegramConfig };
 	},
 	component: TelegramPage,
 });
-
-function TelegramPage() {
-	const { session, telegramConfig } = Route.useRouteContext();
-
-	return (
-		<AppShell
-			userEmail={session.user.email}
-			title="Telegram"
-			description="Connect your Telegram bot, deploy it to Hermes, and test the integration."
-			kicker="Chat Channels"
-		>
-			<TelegramSettings initialConfig={telegramConfig ?? null} />
-		</AppShell>
-	);
-}

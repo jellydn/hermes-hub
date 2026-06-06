@@ -73,6 +73,7 @@ export function DeleteServerDialog({
 						value={confirmLabel}
 						onChange={(e) => setConfirmLabel(e.target.value)}
 						placeholder={serverLabel}
+						aria-label="Confirm server label"
 						className="mt-1 w-full rounded-[1rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-2 text-sm text-[var(--sea-ink)] placeholder:text-[var(--sea-ink-soft)]"
 					/>
 					{error ? (

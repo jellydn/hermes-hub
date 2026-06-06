@@ -1,4 +1,7 @@
-export type ServerActionType = "restart" | "update" | "rollback";
+export type { ServerActionType } from "../../server/lib/action-labels";
+export { formatActionLabel } from "../../server/lib/action-labels";
+
+import type { ServerActionType } from "../../server/lib/action-labels";
 
 export type ServerActionResult = "succeeded" | "failed";
 
@@ -10,16 +13,6 @@ export type ServerActionHistoryItem = {
 	message: string;
 	imageRef: string | null;
 };
-
-export function formatActionLabel(action: ServerActionType): string {
-	if (action === "update") {
-		return "Update Hermes";
-	}
-	if (action === "rollback") {
-		return "Rollback";
-	}
-	return "Restart Hermes";
-}
 
 export type ServerWebUiDeployStatus =
 	| "idle"
@@ -33,6 +26,7 @@ export type ServerWebUiSnapshot = {
 	proxyPath: string;
 	deployStatus: ServerWebUiDeployStatus;
 	deployError: string | null;
+	deployStartedAt: string | null;
 	updatedAt: string;
 };
 

@@ -274,14 +274,13 @@ export function DashboardStatusOverview({
 			{snapshot ? (
 				<>
 					{fetchError ? (
-						<div
-							className="rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
-							role="status"
+						<output
+							className="block rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
 							aria-live="polite"
 						>
 							The latest refresh failed, so these cards may be stale.{" "}
 							{fetchError}
-						</div>
+						</output>
 					) : null}
 
 					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -513,21 +512,21 @@ function StatusCard({
 	);
 }
 
-function DashboardSkeletonGrid() {
-	const skeletonCards = [
-		"servers",
-		"agent",
-		"vps",
-		"provider",
-		"telegram",
-	] as const;
+const dashboardSkeletonCards = [
+	"servers",
+	"agent",
+	"vps",
+	"provider",
+	"telegram",
+] as const;
 
+function DashboardSkeletonGrid() {
 	return (
 		<section
 			className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
 			aria-label="Loading dashboard status"
 		>
-			{skeletonCards.map((card) => (
+			{dashboardSkeletonCards.map((card) => (
 				<article key={card} className="island-shell rounded-[2rem] p-5">
 					<div className="animate-pulse space-y-4">
 						<div className="h-12 w-12 rounded-2xl bg-[var(--chip-bg)]" />
