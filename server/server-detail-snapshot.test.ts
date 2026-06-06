@@ -64,7 +64,7 @@ vi.mock("./server-records", () => ({
 vi.mock("./web-ui/records", () => ({
 	getServerWebUiRecord: vi.fn().mockResolvedValue(null),
 	getWebUiProxyPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy`,
+		`/api/servers/${serverId}/web-ui/proxy/`,
 }));
 
 import { getServerDetailSnapshot } from "./server-detail-snapshot";

@@ -36,12 +36,13 @@ export class WebUiProxyError extends Error {
 
 export function getUpstreamPath(requestUrl: string, proxyBasePath: string) {
 	const url = new URL(requestUrl);
-	const prefix = proxyBasePath.endsWith("/")
-		? proxyBasePath
-		: `${proxyBasePath}/`;
+	const normalizedBase = proxyBasePath.endsWith("/")
+		? proxyBasePath.slice(0, -1)
+		: proxyBasePath;
+	const prefix = `${normalizedBase}/`;
 	const pathname = url.pathname.startsWith(prefix)
 		? `/${url.pathname.slice(prefix.length)}`
-		: url.pathname === proxyBasePath
+		: url.pathname === normalizedBase
 			? "/"
 			: url.pathname;
 	return pathname === "" ? "/" : pathname;

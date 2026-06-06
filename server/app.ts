@@ -218,8 +218,8 @@ apiApp.get(
 	httpsMiddleware,
 	revealServerWebUiPassword,
 );
-apiApp.all("/servers/:id/web-ui/proxy", proxyServerWebUi);
-apiApp.all("/servers/:id/web-ui/proxy/*", proxyServerWebUi);
+apiApp.all("/servers/:id/web-ui/proxy", httpsMiddleware, proxyServerWebUi);
+apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);

@@ -67,7 +67,7 @@ vi.mock("../install/records", () => ({
 vi.mock("./records", () => ({
 	getServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy`,
+		`/api/servers/${serverId}/web-ui/proxy/`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
 }));
@@ -319,7 +319,7 @@ describe("web-ui handlers", () => {
 			"/api/servers/server_123/web-ui/proxy/login",
 		);
 		expect(response.headers.get("set-cookie")).toBe(
-			"session=abc; Path=/api/servers/server_123/web-ui/proxy",
+			"session=abc; Path=/api/servers/server_123/web-ui/proxy/",
 		);
 	});
 });

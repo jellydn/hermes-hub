@@ -12,7 +12,7 @@ export type ServerWebUiRecord = {
 };
 
 export function getWebUiProxyPath(serverId: string) {
-	return `/api/servers/${serverId}/web-ui/proxy`;
+	return `/api/servers/${serverId}/web-ui/proxy/`;
 }
 
 export async function getServerWebUiRecord(
