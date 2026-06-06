@@ -1,9 +1,9 @@
-import type { EncryptedSecretMap } from "../../db/schema";
 import {
 	type SecretKeyInput,
 	toSecretKeySummaries,
 	validateNewSecretEntries,
 } from "./secrets";
+import type { EncryptedSecretMap } from "./types";
 
 export type McpTransport = "stdio" | "http";
 
@@ -95,31 +95,107 @@ function parseOptionalPositiveInt(
 	return { ok: true, value };
 }
 
+export type ParsedMcpServerFields = {
+	name: string;
+	transport: McpTransport;
+	enabled: boolean;
+	command: string | null;
+	args: string[];
+	url: string | null;
+	env: SecretKeyInput[];
+	headers: SecretKeyInput[];
+	toolsInclude: string[];
+	toolsExclude: string[];
+	toolsResources: boolean;
+	toolsPrompts: boolean;
+	timeout: number | null;
+	connectTimeout: number | null;
+	supportsParallelToolCalls: boolean;
+};
+
+export function parseStoredTransport(transport: string): McpTransport {
+	if (transport === "stdio" || transport === "http") {
+		return transport;
+	}
+
+	throw new Error(`Invalid MCP transport stored: ${transport}`);
+}
+
+export function parseMcpServerCreateBody(payload: unknown) {
+	return parseMcpServerBody(payload, { requireAllFields: true });
+}
+
+export function parseMcpServerUpdateBody(
+	existing: {
+		name: string;
+		transport: string;
+		enabled: boolean;
+		command: string | null;
+		args: string[];
+		url: string | null;
+		toolsInclude: string[];
+		toolsExclude: string[];
+		toolsResources: boolean;
+		toolsPrompts: boolean;
+		timeout: number | null;
+		connectTimeout: number | null;
+		supportsParallelToolCalls: boolean;
+	},
+	payload: unknown,
+): { ok: true; data: ParsedMcpServerFields } | { ok: false; error: string } {
+	if (!payload || typeof payload !== "object") {
+		return { ok: false, error: "Request body is required." };
+	}
+
+	const body = payload as McpServerRequest;
+
+	return parseMcpServerBody({
+		name: body.name !== undefined ? body.name : existing.name,
+		transport:
+			body.transport !== undefined
+				? body.transport
+				: parseStoredTransport(existing.transport),
+		enabled: body.enabled !== undefined ? body.enabled : existing.enabled,
+		command:
+			body.command !== undefined
+				? body.command
+				: (existing.command ?? undefined),
+		args: body.args !== undefined ? body.args : existing.args,
+		url: body.url !== undefined ? body.url : (existing.url ?? undefined),
+		env: body.env,
+		headers: body.headers,
+		toolsInclude:
+			body.toolsInclude !== undefined
+				? body.toolsInclude
+				: existing.toolsInclude,
+		toolsExclude:
+			body.toolsExclude !== undefined
+				? body.toolsExclude
+				: existing.toolsExclude,
+		toolsResources:
+			body.toolsResources !== undefined
+				? body.toolsResources
+				: existing.toolsResources,
+		toolsPrompts:
+			body.toolsPrompts !== undefined
+				? body.toolsPrompts
+				: existing.toolsPrompts,
+		timeout: body.timeout !== undefined ? body.timeout : existing.timeout,
+		connectTimeout:
+			body.connectTimeout !== undefined
+				? body.connectTimeout
+				: existing.connectTimeout,
+		supportsParallelToolCalls:
+			body.supportsParallelToolCalls !== undefined
+				? body.supportsParallelToolCalls
+				: existing.supportsParallelToolCalls,
+	});
+}
+
 export function parseMcpServerBody(
 	payload: unknown,
 	options?: { requireAllFields?: boolean },
-):
-	| {
-			ok: true;
-			data: {
-				name: string;
-				transport: McpTransport;
-				enabled: boolean;
-				command: string | null;
-				args: string[];
-				url: string | null;
-				env: SecretKeyInput[];
-				headers: SecretKeyInput[];
-				toolsInclude: string[];
-				toolsExclude: string[];
-				toolsResources: boolean;
-				toolsPrompts: boolean;
-				timeout: number | null;
-				connectTimeout: number | null;
-				supportsParallelToolCalls: boolean;
-			};
-	  }
-	| { ok: false; error: string } {
+): { ok: true; data: ParsedMcpServerFields } | { ok: false; error: string } {
 	if (!payload || typeof payload !== "object") {
 		return { ok: false, error: "Request body is required." };
 	}
@@ -251,7 +327,7 @@ export function toMcpServerSummary(record: {
 	return {
 		id: record.id,
 		name: record.name,
-		transport: record.transport as McpTransport,
+		transport: parseStoredTransport(record.transport),
 		enabled: record.enabled,
 		command: record.command,
 		args: record.args,

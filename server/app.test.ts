@@ -30,7 +30,6 @@ const {
 	proxyServerWebUi,
 	savePersonaSettings,
 	deployPersonaToHermes,
-	listMcpServers,
 	createMcpServer,
 	updateMcpServer,
 	deleteMcpServer,
@@ -67,7 +66,6 @@ const {
 	proxyServerWebUi: vi.fn(),
 	savePersonaSettings: vi.fn(),
 	deployPersonaToHermes: vi.fn(),
-	listMcpServers: vi.fn(),
 	createMcpServer: vi.fn(),
 	updateMcpServer: vi.fn(),
 	deleteMcpServer: vi.fn(),
@@ -140,7 +138,6 @@ vi.mock("./settings", () => ({
 }));
 
 vi.mock("./settings/mcp", () => ({
-	listMcpServers,
 	createMcpServer,
 	updateMcpServer,
 	deleteMcpServer,
@@ -661,22 +658,6 @@ describe("apiApp", () => {
 
 		expect(response.status).toBe(200);
 		expect(deployPersonaToHermes).toHaveBeenCalledTimes(1);
-	});
-
-	it("routes MCP list requests through the MCP settings handler", async () => {
-		listMcpServers.mockResolvedValueOnce(
-			new Response(JSON.stringify({ servers: [] }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
-
-		const response = await apiApp.request(
-			"http://localhost/api/settings/mcp-servers",
-		);
-
-		expect(response.status).toBe(200);
-		expect(listMcpServers).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes MCP deploy requests through the MCP settings handler", async () => {

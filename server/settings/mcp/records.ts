@@ -9,6 +9,7 @@ import {
 	resolveSecretMapOnUpdate,
 	type SecretKeyInput,
 } from "./secrets";
+import type { EncryptedSecretMap } from "./types";
 
 type DbWriter = Pick<
 	ReturnType<typeof getDb>,
@@ -85,22 +86,60 @@ type CreateMcpServerInput = {
 	supportsParallelToolCalls: boolean;
 };
 
+type NormalizedMcpServerFields = {
+	transport: string;
+	command: string | null;
+	args: string[];
+	url: string | null;
+	encryptedEnv: EncryptedSecretMap;
+	encryptedHeaders: EncryptedSecretMap;
+};
+
+function normalizeTransportFields(
+	input: Pick<
+		CreateMcpServerInput,
+		"transport" | "command" | "args" | "url" | "env" | "headers"
+	>,
+): NormalizedMcpServerFields {
+	if (input.transport === "stdio") {
+		return {
+			transport: input.transport,
+			command: input.command,
+			args: input.args,
+			url: null,
+			encryptedEnv: encryptSecretMap(input.env),
+			encryptedHeaders: {},
+		};
+	}
+
+	return {
+		transport: input.transport,
+		command: null,
+		args: [],
+		url: input.url,
+		encryptedEnv: {},
+		encryptedHeaders: encryptSecretMap(input.headers),
+	};
+}
+
 export async function createMcpServerRecord(
 	writer: DbWriter,
 	input: CreateMcpServerInput,
 ): Promise<McpServerSummary> {
+	const normalized = normalizeTransportFields(input);
+
 	const [record] = await writer
 		.insert(mcpServers)
 		.values({
 			userId: input.userId,
 			name: input.name,
-			transport: input.transport,
+			transport: normalized.transport,
 			enabled: input.enabled,
-			command: input.command,
-			args: input.args,
-			url: input.url,
-			encryptedEnv: encryptSecretMap(input.env),
-			encryptedHeaders: encryptSecretMap(input.headers),
+			command: normalized.command,
+			args: normalized.args,
+			url: normalized.url,
+			encryptedEnv: normalized.encryptedEnv,
+			encryptedHeaders: normalized.encryptedHeaders,
 			toolsInclude: input.toolsInclude,
 			toolsExclude: input.toolsExclude,
 			toolsResources: input.toolsResources,
@@ -127,24 +166,26 @@ export async function updateMcpServerRecord(
 	writer: DbWriter,
 	input: UpdateMcpServerInput,
 ): Promise<McpServerSummary> {
-	const encryptedEnv = resolveSecretMapOnUpdate(
-		input.existing.encryptedEnv,
-		input.env,
-	);
-	const encryptedHeaders = resolveSecretMapOnUpdate(
-		input.existing.encryptedHeaders,
-		input.headers,
-	);
+	const normalized = normalizeTransportFields(input);
+
+	const encryptedEnv =
+		input.transport === "stdio"
+			? resolveSecretMapOnUpdate(input.existing.encryptedEnv, input.env)
+			: normalized.encryptedEnv;
+	const encryptedHeaders =
+		input.transport === "http"
+			? resolveSecretMapOnUpdate(input.existing.encryptedHeaders, input.headers)
+			: normalized.encryptedHeaders;
 
 	const [record] = await writer
 		.update(mcpServers)
 		.set({
 			name: input.name,
-			transport: input.transport,
+			transport: normalized.transport,
 			enabled: input.enabled,
-			command: input.command,
-			args: input.args,
-			url: input.url,
+			command: normalized.command,
+			args: normalized.args,
+			url: normalized.url,
 			encryptedEnv,
 			encryptedHeaders,
 			toolsInclude: input.toolsInclude,

@@ -944,55 +944,7 @@ Writes the saved persona to `SOUL.md` on the Telegram-deployed Hermes VPS over S
 
 HermesHub stores custom MCP server definitions in `mcp_servers` and can push them to the Telegram-linked Hermes VPS by replacing only the `mcp_servers` key in `/root/.hermes/config.yaml`. Environment variables and HTTP headers are encrypted at rest; list and edit responses return keys with masked value metadata only.
 
-The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway.
-
-### GET `/api/settings/mcp-servers`
-
-Returns the authenticated user's saved MCP servers with masked secret metadata.
-
-**Auth required:** Yes
-
-**Response (200):**
-```json
-{
-  "servers": [
-    {
-      "id": "mcp_123",
-      "name": "github",
-      "transport": "stdio",
-      "enabled": true,
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "url": null,
-      "env": [
-        {
-          "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
-          "valueLast4": "1234",
-          "hasStoredValue": true
-        }
-      ],
-      "headers": [],
-      "toolsInclude": [],
-      "toolsExclude": [],
-      "toolsResources": true,
-      "toolsPrompts": true,
-      "timeout": null,
-      "connectTimeout": null,
-      "supportsParallelToolCalls": false,
-      "createdAt": "2026-06-06T12:00:00.000Z",
-      "updatedAt": "2026-06-06T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Error responses:**
-
-| Status | Condition    |
-| ------ | ------------ |
-| 401    | Unauthorized |
-
----
+The Settings page (`/settings`) exposes Persona and MCP Servers tabs. Save persists locally; deploy writes over SSH and restarts the gateway. The page loader reads saved MCP servers server-side (same pattern as persona); there is no list GET endpoint for v1.
 
 ### POST `/api/settings/mcp-servers`
 

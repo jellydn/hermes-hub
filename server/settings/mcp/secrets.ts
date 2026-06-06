@@ -1,6 +1,6 @@
 import { decryptSecret, encryptSecret } from "../../crypto";
-import type { EncryptedSecretMap } from "../../db/schema";
 import { getLast4 } from "../../lib/get-last-4";
+import type { EncryptedSecretMap } from "./types";
 
 export type SecretKeySummary = {
 	key: string;

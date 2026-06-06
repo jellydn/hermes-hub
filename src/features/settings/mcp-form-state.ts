@@ -32,11 +32,8 @@ export type McpFormState = {
 export const mcpInputClassName =
 	"w-full rounded-[1.25rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--sea-ink)] outline-none transition focus:border-[var(--sea-ink-soft)]";
 
-let secretRowCounter = 0;
-
 function createSecretRowId() {
-	secretRowCounter += 1;
-	return `secret-row-${secretRowCounter}`;
+	return crypto.randomUUID();
 }
 
 export function emptySecretRow(): SecretRow {

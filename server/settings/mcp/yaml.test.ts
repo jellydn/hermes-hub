@@ -15,7 +15,12 @@ vi.mock("./secrets", () => ({
 		),
 }));
 
-import { buildMcpServersConfig, mergeHermesConfigMcpServers } from "./yaml";
+import {
+	buildMcpServersConfig,
+	InvalidHermesConfigYamlError,
+	mergeHermesConfigMcpServers,
+	parseExistingHermesConfigYaml,
+} from "./yaml";
 
 describe("mcp yaml", () => {
 	it("builds stdio and HTTP server entries", () => {
@@ -105,6 +110,18 @@ describe("mcp yaml", () => {
 				prompts: false,
 			},
 		});
+	});
+
+	it("rejects invalid existing YAML instead of wiping remote config", () => {
+		expect(() =>
+			mergeHermesConfigMcpServers("model: [broken", {
+				github: { enabled: true },
+			}),
+		).toThrow(InvalidHermesConfigYamlError);
+
+		expect(() => parseExistingHermesConfigYaml("- just\n- a\n- list")).toThrow(
+			InvalidHermesConfigYamlError,
+		);
 	});
 
 	it("replaces only mcp_servers while preserving other config keys", () => {

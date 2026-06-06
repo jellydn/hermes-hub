@@ -75,20 +75,44 @@ export function buildMcpServersConfig(
 	return config;
 }
 
+export class InvalidHermesConfigYamlError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "InvalidHermesConfigYamlError";
+	}
+}
+
+export function parseExistingHermesConfigYaml(
+	existingYaml: string,
+): Record<string, unknown> {
+	const trimmed = existingYaml.trim();
+	if (!trimmed) {
+		return {};
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = parse(trimmed);
+	} catch {
+		throw new InvalidHermesConfigYamlError(
+			"Existing Hermes config.yaml is not valid YAML.",
+		);
+	}
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new InvalidHermesConfigYamlError(
+			"Existing Hermes config.yaml must be a YAML object.",
+		);
+	}
+
+	return parsed as Record<string, unknown>;
+}
+
 export function mergeHermesConfigMcpServers(
 	existingYaml: string,
 	mcpServersConfig: Record<string, Record<string, unknown>>,
 ): string {
-	let config: Record<string, unknown> = {};
-
-	const trimmed = existingYaml.trim();
-	if (trimmed) {
-		const parsed = parse(trimmed);
-		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-			config = parsed as Record<string, unknown>;
-		}
-	}
-
+	const config = parseExistingHermesConfigYaml(existingYaml);
 	config.mcp_servers = mcpServersConfig;
 
 	return `${stringify(config).trim()}\n`;

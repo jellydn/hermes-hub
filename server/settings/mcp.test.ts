@@ -185,15 +185,6 @@ describe("mcp settings", () => {
 		});
 	});
 
-	it("returns 401 when listing MCP servers without a session", async () => {
-		getAuthSession.mockResolvedValue(null);
-
-		const { listMcpServers } = await import("./mcp");
-		const response = await listMcpServers(createContext(null, "GET"));
-
-		expect(response.status).toBe(401);
-	});
-
 	it("creates a stdio MCP server with encrypted env values", async () => {
 		selectLimit.mockResolvedValueOnce([]);
 
@@ -276,6 +267,46 @@ describe("mcp settings", () => {
 		expect(insertAuditValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				action: "mcp.deployed",
+			}),
+		);
+	});
+
+	it("returns 400 when create hits a unique name constraint", async () => {
+		selectLimit.mockResolvedValueOnce([]);
+		insertValues.mockReturnValueOnce({
+			returning: vi.fn().mockRejectedValue({ code: "23505" }),
+		});
+
+		const { createMcpServer } = await import("./mcp");
+		const response = await createMcpServer(
+			createContext({
+				name: "github",
+				transport: "stdio",
+				command: "npx",
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "An MCP server with this name already exists.",
+		});
+	});
+
+	it("returns 502 without writing remote config when existing YAML is invalid", async () => {
+		selectOrderBy.mockResolvedValueOnce([baseRecord]);
+		readHermesConfigYaml.mockResolvedValueOnce("model: [broken");
+
+		const { deployMcpServersToHermes } = await import("./mcp");
+		const response = await deployMcpServersToHermes(
+			createContext(null, "POST"),
+		);
+
+		expect(response.status).toBe(502);
+		expect(writeHermesConfigYaml).not.toHaveBeenCalled();
+		expect(restartGateway).not.toHaveBeenCalled();
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "mcp.deploy.failed",
 			}),
 		);
 	});

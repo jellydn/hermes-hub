@@ -26,7 +26,6 @@ import {
 	createMcpServer,
 	deleteMcpServer,
 	deployMcpServersToHermes,
-	listMcpServers,
 	updateMcpServer,
 } from "./settings/mcp";
 import {
@@ -242,7 +241,6 @@ apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
 apiApp.post("/settings/persona", httpsMiddleware, savePersonaSettings);
 apiApp.post("/settings/persona/deploy", httpsMiddleware, deployPersonaToHermes);
-apiApp.get("/settings/mcp-servers", listMcpServers);
 apiApp.post("/settings/mcp-servers", httpsMiddleware, createMcpServer);
 apiApp.put("/settings/mcp-servers/:id", httpsMiddleware, updateMcpServer);
 apiApp.delete("/settings/mcp-servers/:id", httpsMiddleware, deleteMcpServer);

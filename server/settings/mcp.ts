@@ -7,13 +7,15 @@ import {
 	readHermesConfigYaml,
 	writeHermesConfigYaml,
 } from "../hermes/mcp-config";
-import { restartGateway } from "../hermes/runtime";
-import { resolveTelegramHermesDeployContext } from "../hermes/telegram-deploy-context";
+import { deployToTelegramLinkedHermes } from "../hermes/telegram-deploy";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireAuthSession } from "../request-guards";
-import { withSshConnection } from "../ssh";
-import { type McpServerSummary, parseMcpServerBody } from "./mcp/config";
+import {
+	type McpServerSummary,
+	parseMcpServerCreateBody,
+	parseMcpServerUpdateBody,
+} from "./mcp/config";
 import {
 	createMcpServerRecord,
 	deleteMcpServerRecord,
@@ -29,14 +31,16 @@ export type { McpServerSummary };
 
 export { getCurrentMcpServers };
 
-export async function listMcpServers(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+const MCP_SERVER_NAME_CONFLICT_ERROR =
+	"An MCP server with this name already exists.";
 
-	const servers = await getCurrentMcpServers(session.user.id);
-	return context.json({ servers });
+function isMcpServerNameConflict(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		error.code === "23505"
+	);
 }
 
 export async function createMcpServer(context: Context) {
@@ -52,17 +56,14 @@ export async function createMcpServer(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	const parsed = parseMcpServerBody(payload, { requireAllFields: true });
+	const parsed = parseMcpServerCreateBody(payload);
 	if (!parsed.ok) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
 	const existing = await getMcpServerByName(session.user.id, parsed.data.name);
 	if (existing) {
-		return context.json(
-			{ error: "An MCP server with this name already exists." },
-			400,
-		);
+		return context.json({ error: MCP_SERVER_NAME_CONFLICT_ERROR }, 400);
 	}
 
 	const db = getDb();
@@ -92,6 +93,10 @@ export async function createMcpServer(context: Context) {
 		clearDashboardCache();
 		return context.json({ server });
 	} catch (error) {
+		if (isMcpServerNameConflict(error)) {
+			return context.json({ error: MCP_SERVER_NAME_CONFLICT_ERROR }, 400);
+		}
+
 		const message =
 			error instanceof Error ? error.message : "Unable to create MCP server.";
 		return context.json({ error: message }, 500);
@@ -121,22 +126,7 @@ export async function updateMcpServer(context: Context) {
 		return context.json({ error: "MCP server not found." }, 404);
 	}
 
-	const parsed = parseMcpServerBody({
-		name: existing.name,
-		transport: existing.transport,
-		enabled: existing.enabled,
-		command: existing.command ?? undefined,
-		args: existing.args,
-		url: existing.url ?? undefined,
-		toolsInclude: existing.toolsInclude,
-		toolsExclude: existing.toolsExclude,
-		toolsResources: existing.toolsResources,
-		toolsPrompts: existing.toolsPrompts,
-		timeout: existing.timeout,
-		connectTimeout: existing.connectTimeout,
-		supportsParallelToolCalls: existing.supportsParallelToolCalls,
-		...(payload as Record<string, unknown>),
-	});
+	const parsed = parseMcpServerUpdateBody(existing, payload);
 	if (!parsed.ok) {
 		return context.json({ error: parsed.error }, 400);
 	}
@@ -147,10 +137,7 @@ export async function updateMcpServer(context: Context) {
 			parsed.data.name,
 		);
 		if (nameConflict && nameConflict.id !== existing.id) {
-			return context.json(
-				{ error: "An MCP server with this name already exists." },
-				400,
-			);
+			return context.json({ error: MCP_SERVER_NAME_CONFLICT_ERROR }, 400);
 		}
 	}
 
@@ -183,6 +170,10 @@ export async function updateMcpServer(context: Context) {
 		clearDashboardCache();
 		return context.json({ server });
 	} catch (error) {
+		if (isMcpServerNameConflict(error)) {
+			return context.json({ error: MCP_SERVER_NAME_CONFLICT_ERROR }, 400);
+		}
+
 		const message =
 			error instanceof Error ? error.message : "Unable to update MCP server.";
 		return context.json({ error: message }, 500);
@@ -242,84 +233,35 @@ export async function deployMcpServersToHermes(context: Context) {
 		return session;
 	}
 
-	const deployCtx = await resolveTelegramHermesDeployContext(context, session);
-	if (deployCtx instanceof Response) {
-		return deployCtx;
-	}
-
-	const { sshCtx } = deployCtx;
 	const records = await listMcpServerRecords(session.user.id);
 	const mcpServersConfig = buildMcpServersConfig(records);
-	const db = getDb();
-	const ipAddress = getClientIp(context);
 
-	try {
-		await withSshConnection(
-			{
-				host: sshCtx.server.host,
-				port: sshCtx.server.port,
-				username: sshCtx.server.username,
-				authMethod: sshCtx.authMethod,
-				credential: sshCtx.credential,
-				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-			},
-			async (ssh) => {
-				const existingYaml = await readHermesConfigYaml(ssh);
-				const mergedYaml = mergeHermesConfigMcpServers(
-					existingYaml,
-					mcpServersConfig,
-				);
-				await writeHermesConfigYaml(ssh, mergedYaml);
-				await restartGateway(ssh);
-			},
-		);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Deploy failed";
-
-		try {
-			await insertAuditLog(db, {
-				userId: session.user.id,
-				action: "mcp.deploy.failed",
-				serverId: sshCtx.serverId,
-				details: {
-					serverId: sshCtx.serverId,
-					serverHost: sshCtx.server.host,
-					error: message,
-					serverCount: records.length,
-				},
-				ipAddress,
-			});
-		} catch {
-			// Audit logging is historical only; still return deploy failure to client.
-		}
-
-		return context.json({ error: `Deploy failed: ${message}` }, 502);
-	}
-
-	const deployedAt = new Date();
-
-	try {
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "mcp.deployed",
+	return deployToTelegramLinkedHermes(context, session, {
+		deploy: async (ssh) => {
+			const existingYaml = await readHermesConfigYaml(ssh);
+			const mergedYaml = mergeHermesConfigMcpServers(
+				existingYaml,
+				mcpServersConfig,
+			);
+			await writeHermesConfigYaml(ssh, mergedYaml);
+		},
+		failureAuditAction: "mcp.deploy.failed",
+		successAuditAction: "mcp.deployed",
+		buildFailureAuditDetails: (sshCtx, error) => ({
 			serverId: sshCtx.serverId,
-			details: {
-				serverId: sshCtx.serverId,
-				serverHost: sshCtx.server.host,
-				serverCount: records.length,
-			},
-			ipAddress,
-		});
-	} catch {
-		// Deploy already succeeded remotely; audit logging is historical only.
-	}
-
-	clearDashboardCache();
-
-	return context.json({
-		status: "deployed",
-		serverHost: sshCtx.server.host,
-		serverCount: records.length,
-		deployedAt: deployedAt.toISOString(),
+			serverHost: sshCtx.server.host,
+			error,
+			serverCount: records.length,
+		}),
+		buildSuccessAuditDetails: (sshCtx) => ({
+			serverId: sshCtx.serverId,
+			serverHost: sshCtx.server.host,
+			serverCount: records.length,
+		}),
+		buildSuccessResponse: (sshCtx, deployedAt) => ({
+			serverHost: sshCtx.server.host,
+			serverCount: records.length,
+			deployedAt: deployedAt.toISOString(),
+		}),
 	});
 }

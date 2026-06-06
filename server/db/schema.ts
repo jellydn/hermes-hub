@@ -7,7 +7,10 @@ import {
 	pgTable,
 	text,
 	timestamp,
+	uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import type { EncryptedSecretMap } from "../settings/mcp/types";
 
 export const healthChecks = pgTable("health_checks", {
 	id: text("id").primaryKey(),
@@ -258,13 +261,6 @@ export const serverWebUi = pgTable(
 	() => [],
 );
 
-export type EncryptedSecretEntry = {
-	encrypted: string;
-	last4: string;
-};
-
-export type EncryptedSecretMap = Record<string, EncryptedSecretEntry>;
-
 export const mcpServers = pgTable(
 	"mcp_servers",
 	{
@@ -311,7 +307,7 @@ export const mcpServers = pgTable(
 	},
 	(table) => [
 		index("mcp_servers_user_id_idx").on(table.userId),
-		index("mcp_servers_user_name_idx").on(table.userId, table.name),
+		uniqueIndex("mcp_servers_user_name_unique").on(table.userId, table.name),
 	],
 );
 
