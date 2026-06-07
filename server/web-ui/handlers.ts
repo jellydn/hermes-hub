@@ -3,17 +3,17 @@ import type { Context } from "hono";
 import { getClientIp } from "../lib/get-client-ip";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
 import { DeployError, getStatus, startDeploy } from "./deploy";
-import { requireEnabledWebUi } from "./enabled-context";
 import {
+	proxyRequestOverSsh,
+	requireEnabledWebUi,
 	resolveProxyRequestTarget,
 	rewriteProxyResponseHeaders,
-} from "./proxy-http";
+} from "./proxy";
 import {
 	decryptWebUiPassword,
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath,
 } from "./records";
-import { proxyRequestOverSsh } from "./ssh-forward";
 
 // ── Proxy error formatting ───────────────────────────────────────
 

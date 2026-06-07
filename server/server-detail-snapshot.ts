@@ -15,8 +15,10 @@ import {
 	type OwnedServerRecord,
 	readOsInfoValue,
 } from "./server-records";
-import { getResolvedServerWebUiRecord } from "./web-ui/records";
-import { buildWebUiSnapshot } from "./web-ui/snapshot";
+import {
+	buildWebUiSnapshot,
+	getResolvedServerWebUiRecord,
+} from "./web-ui/records";
 
 type AuditRecord = {
 	id: string;

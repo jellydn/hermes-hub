@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import type { ServerWebUiSnapshot } from "../../shared/contracts/server-web-ui";
 import { defaultHermesWebUiPort } from "../constants";
 import { encryptSecret } from "../crypto";
@@ -10,14 +12,62 @@ import {
 	releaseWebUiDeployLock,
 	tryAcquireWebUiDeployLock,
 } from "./deploy-lock";
-import { resolveWebUiDeployPassword } from "./password";
 import {
+	buildWebUiSnapshot,
+	decryptWebUiPassword,
 	getResolvedServerWebUiRecord,
 	type ServerWebUiRecord,
 	upsertServerWebUiRecord,
 } from "./records";
-import { buildWebUiSnapshot } from "./snapshot";
 import { invalidatePooledSsh } from "./ssh-pool";
+
+// ── Password management ────────────────────────────────────────────────
+
+export function generateWebUiPassword() {
+	return crypto.randomBytes(18).toString("base64url");
+}
+
+export function resolveWebUiPasswordForCompose(input: {
+	explicitPassword?: string;
+	record: ServerWebUiRecord | null;
+}): string | null {
+	if (input.explicitPassword) {
+		return input.explicitPassword;
+	}
+
+	if (!input.record?.enabled) {
+		return null;
+	}
+
+	const password = decryptWebUiPassword(input.record.encryptedPassword);
+	if (!password) {
+		throw new Error(
+			"Stored Hermes Web UI password could not be decrypted. Redeploy the Web UI before rewriting compose.",
+		);
+	}
+
+	return password;
+}
+
+function resolveWebUiDeployPassword(
+	existingRecord: ServerWebUiRecord | null,
+): { password: string } | { error: string } {
+	if (existingRecord?.encryptedPassword) {
+		const password = decryptWebUiPassword(existingRecord.encryptedPassword);
+		if (!password) {
+			return {
+				error:
+					"Stored Hermes Web UI password could not be decrypted. Fix encryption configuration before redeploying.",
+			};
+		}
+
+		return { password };
+	}
+
+	return { password: generateWebUiPassword() };
+}
+
+// ── Deploy orchestration ──────────────────────────────────────────────
 
 export class DeployError extends Error {
 	readonly statusCode: 400 | 500;
@@ -131,8 +181,6 @@ export async function startDeploy(
 		updatedAt: now,
 	};
 
-	// Fire background deploy. runDeployInBackground is the single owner of
-	// failure persistence and lock release — no outer .catch needed.
 	void runDeployInBackground({
 		ctx,
 		password,
@@ -147,7 +195,7 @@ export async function startDeploy(
 	};
 }
 
-// ── Internal helpers ──────────────────────────────────────────────
+// ── Internal helpers ────────────────────────────────────────────
 
 type BackgroundDeployInput = {
 	ctx: OwnedServerSshContext;

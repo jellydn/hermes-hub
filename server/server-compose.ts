@@ -2,7 +2,7 @@ import { buildHermesComposeContent, normalizePublicOrigin } from "./compose";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getProviderDeployConfig } from "./providers";
 import { getTelegramDeployInfo } from "./providers/records";
-import { resolveWebUiPasswordForCompose } from "./web-ui/password";
+import { resolveWebUiPasswordForCompose } from "./web-ui/deploy";
 import { getServerWebUiRecord } from "./web-ui/records";
 
 export type ManagedComposeSecrets = {
