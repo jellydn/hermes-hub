@@ -1,4 +1,8 @@
-export type { ServerActionType } from "../../server/lib/action-labels";
+export type {
+	LogActionType,
+	ServerActionType,
+	SettingsDeployActionType,
+} from "../../server/lib/action-labels";
 export { formatActionLabel } from "../../server/lib/action-labels";
 
 import type { ServerActionType } from "../../server/lib/action-labels";
