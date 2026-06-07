@@ -1,4 +1,5 @@
-import type { AiProviderId } from "@/lib/ai-providers";
+import type { ApiProviderId } from "@/lib/ai-providers";
+import type { UserSubscriptionId } from "@/lib/user-subscriptions";
 
 export type DashboardServerSummary = {
 	id: string;
@@ -29,7 +30,7 @@ export type DashboardVpsSummary = {
 
 export type DashboardProviderSummary = {
 	status: "connected" | "disconnected";
-	provider: AiProviderId | null;
+	provider: ApiProviderId | UserSubscriptionId | null;
 	model: string | null;
 	detail: string;
 };

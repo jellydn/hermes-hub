@@ -1,34 +1,35 @@
-export type AiProviderId =
+export type ApiProviderId =
 	| "openai"
 	| "anthropic"
 	| "openrouter"
 	| "ollama"
-	| "custom"
-	| "openai-codex";
+	| "custom";
 
-export type AiProviderCredentialMode = "api-key" | "oauth-device-code";
+/** @deprecated Use ApiProviderId for API-key providers. */
+export type AiProviderId = ApiProviderId;
+
+export type AiProviderCredentialMode = "api-key";
 
 export type ProviderCredentialPolicy = {
 	kind: AiProviderCredentialMode;
 	requiresApiKey: boolean;
 	requiresBaseUrl: boolean;
-	requiresRemoteOAuth: boolean;
-	reportsStoredKeyWithoutApiKey: boolean;
+	requiresRemoteOAuth: false;
+	reportsStoredKeyWithoutApiKey: false;
 };
 
 type AiProviderOption = {
-	id: AiProviderId;
+	id: ApiProviderId;
 	label: string;
 	description: string;
 	models: readonly string[];
 	defaultModel: string;
-	credentialMode?: AiProviderCredentialMode;
 	requiresCustomModel?: boolean;
 	requiresBaseUrl?: boolean;
 	defaultBaseUrl?: string;
 };
 
-export const aiProviderOptions: readonly AiProviderOption[] = [
+export const apiProviderOptions: readonly AiProviderOption[] = [
 	{
 		id: "openai",
 		label: "OpenAI",
@@ -75,32 +76,24 @@ export const aiProviderOptions: readonly AiProviderOption[] = [
 		requiresCustomModel: true,
 		requiresBaseUrl: true,
 	},
-	{
-		id: "openai-codex",
-		label: "OpenAI Codex / ChatGPT",
-		description:
-			"Use ChatGPT subscription models via Codex OAuth on your deployed Hermes server.",
-		credentialMode: "oauth-device-code",
-		models: [
-			"gpt-5.5",
-			"gpt-5.4-mini",
-			"gpt-5.4",
-			"gpt-5.3-codex",
-			"gpt-5.3-codex-spark",
-		],
-		defaultModel: "gpt-5.5",
-	},
 ] as const;
 
-export function isAiProviderId(value: string): value is AiProviderId {
-	return aiProviderOptions.some((option) => option.id === value);
+/** API provider grid options. */
+export const aiProviderOptions = apiProviderOptions;
+
+export function isApiProviderId(value: string): value is ApiProviderId {
+	return apiProviderOptions.some((option) => option.id === value);
 }
 
-export function getAiProviderOption(provider: AiProviderId) {
-	return aiProviderOptions.find((option) => option.id === provider) ?? null;
+export function isAiProviderId(value: string): value is ApiProviderId {
+	return isApiProviderId(value);
 }
 
-export function getDefaultAiModel(provider: AiProviderId) {
+export function getAiProviderOption(provider: ApiProviderId) {
+	return apiProviderOptions.find((option) => option.id === provider) ?? null;
+}
+
+export function getDefaultAiModel(provider: ApiProviderId) {
 	return getAiProviderOption(provider)?.defaultModel ?? "";
 }
 
@@ -119,7 +112,7 @@ export function isValidModelString(model: string): boolean {
 	return MODEL_VALIDATION_REGEX.test(model);
 }
 
-export function isValidAiModel(provider: AiProviderId, model: string) {
+export function isValidAiModel(provider: ApiProviderId, model: string) {
 	const option = getAiProviderOption(provider);
 	if (!option) {
 		return false;
@@ -140,38 +133,35 @@ export function isValidAiModel(provider: AiProviderId, model: string) {
 	return option.models.includes(model);
 }
 
-export function formatAiProviderLabel(provider: AiProviderId) {
+export function formatAiProviderLabel(provider: ApiProviderId) {
 	return getAiProviderOption(provider)?.label ?? provider;
 }
 
 export function getProviderCredentialPolicy(
-	provider: AiProviderId,
+	provider: ApiProviderId,
 ): ProviderCredentialPolicy {
 	const option = getAiProviderOption(provider);
-	const kind = option?.credentialMode ?? "api-key";
-	const requiresRemoteOAuth = kind === "oauth-device-code";
 	const requiresBaseUrl = Boolean(option?.requiresBaseUrl);
-	const requiresApiKey = !requiresRemoteOAuth && !requiresBaseUrl;
 
 	return {
-		kind,
-		requiresApiKey,
+		kind: "api-key",
+		requiresApiKey: !requiresBaseUrl,
 		requiresBaseUrl,
-		requiresRemoteOAuth,
-		reportsStoredKeyWithoutApiKey: requiresRemoteOAuth,
+		requiresRemoteOAuth: false,
+		reportsStoredKeyWithoutApiKey: false,
 	};
 }
 
 export function getAiProviderCredentialMode(
-	provider: AiProviderId,
+	provider: ApiProviderId,
 ): AiProviderCredentialMode {
 	return getProviderCredentialPolicy(provider).kind;
 }
 
-export function usesOAuthDeviceCode(provider: AiProviderId): boolean {
-	return getProviderCredentialPolicy(provider).requiresRemoteOAuth;
+export function usesOAuthDeviceCode(_provider: ApiProviderId): boolean {
+	return false;
 }
 
-export function providerRequiresApiKey(provider: AiProviderId): boolean {
+export function providerRequiresApiKey(provider: ApiProviderId): boolean {
 	return getProviderCredentialPolicy(provider).requiresApiKey;
 }

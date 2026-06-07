@@ -6,28 +6,28 @@ import { AiProviderPage } from "@/features/providers/ai-provider-page";
 import { loadTelegramDeploy } from "@/lib/load-telegram-deploy";
 import { requireSession } from "@/lib/session";
 import { getAuthSession } from "../../server/auth";
-import { getCurrentProviderConfig } from "../../server/providers";
+import { getModelAccessSnapshot } from "../../server/providers";
 
-const loadCurrentProviderConfig = createServerFn({ method: "GET" }).handler(
+const loadModelAccessSnapshot = createServerFn({ method: "GET" }).handler(
 	async () => {
 		const session = await getAuthSession(getRequestHeaders());
 		if (!session) {
 			return null;
 		}
 
-		return getCurrentProviderConfig(session.user.id);
+		return getModelAccessSnapshot(session.user.id);
 	},
 );
 
 export const Route = createFileRoute("/ai-provider")({
 	beforeLoad: async ({ location }) => {
-		const [session, providerConfig, telegramDeploy] = await Promise.all([
+		const [session, modelAccess, telegramDeploy] = await Promise.all([
 			requireSession(location.href),
-			loadCurrentProviderConfig(),
+			loadModelAccessSnapshot(),
 			loadTelegramDeploy(),
 		]);
 
-		return { session, providerConfig, telegramDeploy };
+		return { session, modelAccess, telegramDeploy };
 	},
 	component: AiProviderPage,
 });

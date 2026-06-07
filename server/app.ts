@@ -12,7 +12,11 @@ import {
 	streamServerInstallEvents,
 } from "./install";
 import { clearLogs, getLogs } from "./logs";
-import { saveProviderConfig, testProviderConfig } from "./providers";
+import {
+	saveProviderConfig,
+	saveSubscriptionConfig,
+	testProviderConfig,
+} from "./providers";
 import {
 	completeCodexAuth,
 	getCodexAuthStatus,
@@ -242,6 +246,11 @@ apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
 apiApp.post("/logs/clear", httpsMiddleware, clearLogs);
 apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
+apiApp.post(
+	"/providers/subscriptions",
+	httpsMiddleware,
+	saveSubscriptionConfig,
+);
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
 apiApp.post("/providers/codex-auth/start", httpsMiddleware, startCodexAuth);

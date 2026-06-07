@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	getAiProviderOption,
+	apiProviderOptions,
 	getProviderCredentialPolicy,
 	isValidAiModel,
 	isValidModelString,
@@ -75,16 +75,6 @@ describe("isValidModelString", () => {
 });
 
 describe("getProviderCredentialPolicy", () => {
-	it("returns oauth policy for OpenAI Codex", () => {
-		expect(getProviderCredentialPolicy("openai-codex")).toEqual({
-			kind: "oauth-device-code",
-			requiresApiKey: false,
-			requiresBaseUrl: false,
-			requiresRemoteOAuth: true,
-			reportsStoredKeyWithoutApiKey: true,
-		});
-	});
-
 	it("returns api-key policy for OpenAI", () => {
 		expect(getProviderCredentialPolicy("openai")).toEqual({
 			kind: "api-key",
@@ -96,29 +86,17 @@ describe("getProviderCredentialPolicy", () => {
 	});
 });
 
-describe("openai-codex provider metadata", () => {
-	it("exposes oauth device-code credential mode and static model list", () => {
-		const option = getAiProviderOption("openai-codex");
-
-		expect(option).toMatchObject({
-			label: "OpenAI Codex / ChatGPT",
-			credentialMode: "oauth-device-code",
-			defaultModel: "gpt-5.5",
-			models: [
-				"gpt-5.5",
-				"gpt-5.4-mini",
-				"gpt-5.4",
-				"gpt-5.3-codex",
-				"gpt-5.3-codex-spark",
-			],
-		});
-		expect(usesOAuthDeviceCode("openai-codex")).toBe(true);
-		expect(providerRequiresApiKey("openai-codex")).toBe(false);
+describe("api provider metadata", () => {
+	it("does not include subscription providers in the API grid", () => {
+		expect(apiProviderOptions.map((option) => option.id)).not.toContain(
+			"openai-codex",
+		);
+		expect(usesOAuthDeviceCode("openai")).toBe(false);
+		expect(providerRequiresApiKey("openai")).toBe(true);
 	});
 
-	it("accepts only whitelisted Codex models", () => {
-		expect(isValidAiModel("openai-codex", "gpt-5.5")).toBe(true);
-		expect(isValidAiModel("openai-codex", "gpt-5.3-codex-spark")).toBe(true);
-		expect(isValidAiModel("openai-codex", "gpt-4o")).toBe(false);
+	it("accepts only whitelisted OpenAI models", () => {
+		expect(isValidAiModel("openai", "gpt-4o-mini")).toBe(true);
+		expect(isValidAiModel("openai", "gpt-5.5")).toBe(false);
 	});
 });

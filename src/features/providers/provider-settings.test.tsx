@@ -6,6 +6,7 @@ import {
 	fireEvent,
 	render,
 	screen,
+	within,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,35 +59,47 @@ beforeEach(() => {
 });
 
 describe("ProviderSettings", () => {
-	it("shows a masked stored key and keeps the saved provider visible", () => {
+	it("shows a masked stored key and keeps the saved API provider visible", () => {
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "openai",
-					model: "gpt-4o-mini",
-					keyLast4: "1234",
-					hasStoredKey: true,
+				initialAccess={{
+					apiProvider: {
+						kind: "api-provider",
+						provider: "openai",
+						model: "gpt-4o-mini",
+						keyLast4: "1234",
+						hasStoredKey: true,
+					},
+					subscription: null,
+					activeBackend: "api-provider",
 				}}
 			/>,
 		);
 
 		expect(screen.getByText(/^stored key ending in 1234$/i)).toBeTruthy();
-		expect(screen.queryByText(/no provider connected/i)).toBeNull();
+		expect(screen.getByText(/^active model access$/i)).toBeTruthy();
 		expect(screen.getByDisplayValue("gpt-4o-mini")).toBeTruthy();
 	});
 
 	it("switches to a custom model field for OpenRouter", () => {
-		render(<ProviderSettings initialConfig={null} />);
+		render(<ProviderSettings initialAccess={null} />);
+
+		const apiSection = screen
+			.getByRole("heading", { name: /connect with an api key/i })
+			.closest("section");
+		if (!apiSection) {
+			throw new Error("Expected API provider section to render.");
+		}
 
 		fireEvent.click(screen.getByRole("radio", { name: /openrouter/i }));
 
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
-		expect(screen.queryByLabelText(/^model$/i)).toBeNull();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).queryByRole("combobox")).toBeNull();
 		expect(screen.getByDisplayValue("openai/gpt-4o-mini")).toBeTruthy();
 	});
 
 	it("tests the provider connection and shows the connected state", async () => {
-		render(<ProviderSettings initialConfig={null} />);
+		render(<ProviderSettings initialAccess={null} />);
 
 		fireEvent.change(screen.getByLabelText(/api key/i), {
 			target: { value: "sk-live-secret" },
@@ -106,7 +119,7 @@ describe("ProviderSettings", () => {
 	});
 
 	it("shows Base URL and Custom Model fields when Ollama is selected", () => {
-		render(<ProviderSettings initialConfig={null} />);
+		render(<ProviderSettings initialAccess={null} />);
 
 		fireEvent.click(screen.getByRole("radio", { name: /ollama \/ local/i }));
 
@@ -116,7 +129,16 @@ describe("ProviderSettings", () => {
 		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
 	});
 
-	it("hides the API key field and test button for OpenAI Codex", async () => {
+	it("does not show ChatGPT in the API provider grid", () => {
+		render(<ProviderSettings initialAccess={null} />);
+
+		expect(
+			screen.queryByRole("radio", { name: /openai codex \/ chatgpt/i }),
+		).toBeNull();
+		expect(screen.getByText(/user subscriptions/i)).toBeTruthy();
+	});
+
+	it("hides the API key field in the subscription section", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
@@ -136,27 +158,22 @@ describe("ProviderSettings", () => {
 
 		render(
 			<ProviderSettings
-				initialConfig={null}
+				initialAccess={null}
 				telegramDeploy={{
 					deployedServerHost: "1.2.3.4",
 				}}
 			/>,
 		);
 
-		fireEvent.click(
-			screen.getByRole("radio", { name: /openai codex \/ chatgpt/i }),
-		);
-
 		await flushAsyncWork();
 
-		expect(screen.queryByLabelText(/api key/i)).toBeNull();
+		expect(screen.getAllByLabelText(/api key/i)).toHaveLength(1);
 		expect(
-			screen.queryByRole("button", { name: /test connection/i }),
-		).toBeNull();
-		expect(screen.getByText(/chatgpt device-code login/i)).toBeTruthy();
+			screen.getAllByText(/chatgpt device-code login/i).length,
+		).toBeGreaterThan(0);
 	});
 
-	it("enables Codex deploy when remote auth is already authenticated", async () => {
+	it("enables ChatGPT deploy when remote auth is already authenticated", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
@@ -176,11 +193,15 @@ describe("ProviderSettings", () => {
 
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "openai-codex",
-					model: "gpt-5.5",
-					keyLast4: null,
-					hasStoredKey: true,
+				initialAccess={{
+					apiProvider: null,
+					subscription: {
+						kind: "subscription",
+						subscriptionProvider: "chatgpt",
+						model: "gpt-5.4-mini",
+						authMode: "chatgpt",
+					},
+					activeBackend: "subscription",
 				}}
 				telegramDeploy={{
 					deployedServerHost: "1.2.3.4",
@@ -194,9 +215,10 @@ describe("ProviderSettings", () => {
 			name: /deploy to hermes server/i,
 		});
 		expect(deployButton).toHaveProperty("disabled", false);
+		expect(screen.getAllByText(/gpt-5\.4-mini/i).length).toBeGreaterThan(0);
 	});
 
-	it("disables Codex deploy until remote auth succeeds", async () => {
+	it("disables ChatGPT deploy until remote auth succeeds", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
@@ -216,11 +238,15 @@ describe("ProviderSettings", () => {
 
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "openai-codex",
-					model: "gpt-5.5",
-					keyLast4: null,
-					hasStoredKey: true,
+				initialAccess={{
+					apiProvider: null,
+					subscription: {
+						kind: "subscription",
+						subscriptionProvider: "chatgpt",
+						model: "gpt-5.5",
+						authMode: "chatgpt",
+					},
+					activeBackend: "subscription",
 				}}
 				telegramDeploy={{
 					deployedServerHost: "1.2.3.4",
@@ -236,7 +262,7 @@ describe("ProviderSettings", () => {
 		expect(deployButton).toHaveProperty("disabled", true);
 		expect(
 			screen.getByText(
-				/complete chatgpt device-code login before deploying codex/i,
+				/complete chatgpt device-code login before deploying to hermes/i,
 			),
 		).toBeTruthy();
 	});

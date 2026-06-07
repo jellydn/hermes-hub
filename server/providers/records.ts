@@ -52,6 +52,7 @@ export async function getLatestProviderRecord(userId: string) {
 			model: aiProviders.model,
 			encryptedApiKey: aiProviders.encryptedApiKey,
 			baseUrl: aiProviders.baseUrl,
+			isActive: aiProviders.isActive,
 		})
 		.from(aiProviders)
 		.where(eq(aiProviders.userId, userId))

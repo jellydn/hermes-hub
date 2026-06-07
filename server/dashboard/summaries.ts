@@ -1,13 +1,13 @@
-import {
-	formatAiProviderLabel,
-	isAiProviderId,
-} from "../../src/lib/ai-providers";
 import type {
 	DashboardAgentSummary,
 	DashboardProviderSummary,
 	DashboardServerSummary,
 	DashboardTelegramSummary,
 } from "../../src/lib/dashboard-status";
+import {
+	type ActiveModelBackend,
+	formatActiveBackendLabel,
+} from "../providers/active-backend";
 import { readOsInfoValue } from "../server-records";
 
 export type ServerRecord = {
@@ -28,12 +28,6 @@ export type ServerRecord = {
 export type InstallRecord = {
 	status: string;
 	updatedAt: Date;
-};
-
-export type ProviderRecord = {
-	provider: string;
-	model: string;
-	isActive: boolean;
 };
 
 export type TelegramRecord = {
@@ -101,9 +95,9 @@ export function toAgentSummary(
 }
 
 export function toProviderSummary(
-	providerRecord: ProviderRecord | null,
+	activeBackend: ActiveModelBackend | null,
 ): DashboardProviderSummary {
-	if (!providerRecord?.isActive || !isAiProviderId(providerRecord.provider)) {
+	if (!activeBackend) {
 		return {
 			status: "disconnected",
 			provider: null,
@@ -114,9 +108,12 @@ export function toProviderSummary(
 
 	return {
 		status: "connected",
-		provider: providerRecord.provider,
-		model: providerRecord.model,
-		detail: `${formatAiProviderLabel(providerRecord.provider)} is ready to power Hermes responses.`,
+		provider:
+			activeBackend.kind === "subscription"
+				? activeBackend.subscriptionProvider
+				: activeBackend.provider,
+		model: activeBackend.model,
+		detail: `${formatActiveBackendLabel(activeBackend)} is ready to power Hermes responses.`,
 	};
 }
 

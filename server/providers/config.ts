@@ -1,5 +1,5 @@
 import {
-	type AiProviderId,
+	type ApiProviderId,
 	providerRequiresApiKey,
 } from "../../src/lib/ai-providers";
 
@@ -10,19 +10,17 @@ export type ProviderRequest = {
 	baseUrl?: string;
 };
 
+export type SubscriptionRequest = {
+	subscriptionProvider: string;
+	model?: string;
+};
+
 export type StoredProviderRecord = {
 	provider: string;
 	model: string;
 	encryptedApiKey: string;
 	baseUrl: string | null;
-};
-
-export type ProviderConfigSummary = {
-	provider: AiProviderId;
-	model: string;
-	keyLast4: string | null;
-	hasStoredKey: boolean;
-	baseUrl?: string;
+	isActive?: boolean;
 };
 
 type ProviderEnvConfig = {
@@ -32,7 +30,7 @@ type ProviderEnvConfig = {
 	extraBaseUrlEnvVars?: string[];
 };
 
-export const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
+export const PROVIDER_ENV_CONFIGS: Record<ApiProviderId, ProviderEnvConfig> = {
 	openai: { apiKeyEnvVar: "OPENAI_API_KEY", hermesProvider: "openai-api" },
 	anthropic: { apiKeyEnvVar: "ANTHROPIC_API_KEY", hermesProvider: "anthropic" },
 	openrouter: {
@@ -50,13 +48,10 @@ export const PROVIDER_ENV_CONFIGS: Record<AiProviderId, ProviderEnvConfig> = {
 		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
 		hermesProvider: "custom",
 	},
-	"openai-codex": {
-		hermesProvider: "openai-codex",
-	},
 };
 
 export function buildProviderEnvMap(
-	provider: AiProviderId,
+	provider: ApiProviderId,
 	apiKey: string,
 	baseUrl: string | null | undefined,
 ): Record<string, string> {
@@ -88,7 +83,13 @@ export function buildProviderEnvMap(
 	return envVars;
 }
 
-export function isApiKeyRequired(provider: AiProviderId): boolean {
+export function buildSubscriptionEnvMap(hermesProviderId: string) {
+	return {
+		HERMES_INFERENCE_PROVIDER: hermesProviderId,
+	};
+}
+
+export function isApiKeyRequired(provider: ApiProviderId): boolean {
 	return providerRequiresApiKey(provider);
 }
 
