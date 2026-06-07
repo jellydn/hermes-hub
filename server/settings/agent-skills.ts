@@ -275,6 +275,31 @@ type DeployPlan = {
 	shellCommands: string[];
 };
 
+/**
+ * `hermes skills install` always exits 0, even on failure: a scanner block
+ * ("Installation blocked: ...") or an unreachable/unknown source
+ * ("Error: Could not fetch '<id>' from any source."). Scan the combined
+ * command output for those markers so a silent failure becomes a real error.
+ *
+ * Returns a human-readable failure message, or null when no failure is found.
+ */
+export function detectSkillInstallFailure(output: string): string | null {
+	const failures: string[] = [];
+	for (const rawLine of output.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (!line) {
+			continue;
+		}
+		if (
+			line.includes("Installation blocked:") ||
+			/Could not fetch .* from any source/.test(line)
+		) {
+			failures.push(line);
+		}
+	}
+	return failures.length > 0 ? failures.join("\n") : null;
+}
+
 export function buildDeployCommands(
 	previousManifest: ManifestEntry[],
 	enabledSkills: Array<{
@@ -382,6 +407,15 @@ export async function deploySkillsToHermes(context: Context) {
 					throw new Error(
 						result.stderr || "Failed to deploy agent skills changes",
 					);
+				}
+				// `hermes skills install` exits 0 even when the security scanner blocks
+				// a skill or the source cannot be fetched, so the &&-chain never aborts.
+				// Detect those failures from the command output and surface them.
+				const installFailure = detectSkillInstallFailure(
+					`${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+				);
+				if (installFailure) {
+					throw new Error(installFailure);
 				}
 			}
 		},

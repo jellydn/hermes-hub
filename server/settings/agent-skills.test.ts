@@ -638,6 +638,52 @@ Installed Skills
 			);
 		});
 	});
+
+	describe("detectSkillInstallFailure", () => {
+		it("returns null when no failure markers are present", async () => {
+			const { detectSkillInstallFailure } = await import("./agent-skills");
+			const output = [
+				"Installing skill: geo-weather-fetch",
+				"✓ Installed geo-weather-fetch",
+			].join("\n");
+			expect(detectSkillInstallFailure(output)).toBeNull();
+		});
+
+		it("detects a scanner block (caution/dangerous verdict)", async () => {
+			const { detectSkillInstallFailure } = await import("./agent-skills");
+			const output = [
+				"Scanning skill...",
+				"Installation blocked: Blocked (community source + dangerous verdict, 2 findings). --force does not override a dangerous verdict.",
+			].join("\n");
+			expect(detectSkillInstallFailure(output)).toBe(
+				"Installation blocked: Blocked (community source + dangerous verdict, 2 findings). --force does not override a dangerous verdict.",
+			);
+		});
+
+		it("detects an unfetchable source", async () => {
+			const { detectSkillInstallFailure } = await import("./agent-skills");
+			const output =
+				"Error: Could not fetch 'browse-sh/windy.com/geo-weather-fetch-w3o49h' from any source.";
+			expect(detectSkillInstallFailure(output)).toBe(
+				"Error: Could not fetch 'browse-sh/windy.com/geo-weather-fetch-w3o49h' from any source.",
+			);
+		});
+
+		it("collects multiple failures across skills", async () => {
+			const { detectSkillInstallFailure } = await import("./agent-skills");
+			const output = [
+				"Installation blocked: Blocked (community source + caution verdict, 1 findings). Use --force to override.",
+				"✓ Installed something-else",
+				"Error: Could not fetch 'browse-sh/foo/bar' from any source.",
+			].join("\n");
+			expect(detectSkillInstallFailure(output)).toBe(
+				[
+					"Installation blocked: Blocked (community source + caution verdict, 1 findings). Use --force to override.",
+					"Error: Could not fetch 'browse-sh/foo/bar' from any source.",
+				].join("\n"),
+			);
+		});
+	});
 });
 
 function createContext(body: unknown, method = "POST", id?: string) {
