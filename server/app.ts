@@ -32,6 +32,12 @@ import {
 } from "./servers";
 import { deployPersonaToHermes, savePersonaSettings } from "./settings";
 import {
+	createAgentSkill,
+	deleteAgentSkill,
+	deploySkillsToHermes,
+	updateAgentSkill,
+} from "./settings/agent-skills";
+import {
 	createMcpServer,
 	deleteMcpServer,
 	deployMcpServersToHermes,
@@ -269,6 +275,14 @@ apiApp.post(
 	"/settings/mcp-servers/deploy",
 	httpsMiddleware,
 	deployMcpServersToHermes,
+);
+apiApp.post("/settings/agent-skills", httpsMiddleware, createAgentSkill);
+apiApp.put("/settings/agent-skills/:id", httpsMiddleware, updateAgentSkill);
+apiApp.delete("/settings/agent-skills/:id", httpsMiddleware, deleteAgentSkill);
+apiApp.post(
+	"/settings/agent-skills/deploy",
+	httpsMiddleware,
+	deploySkillsToHermes,
 );
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", httpsMiddleware, disconnectTelegram);

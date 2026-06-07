@@ -10,6 +10,7 @@ type DeployResponsePayload = {
 	serverHost?: string;
 	deployedAt?: string;
 	serverCount?: number;
+	skillCount?: number;
 };
 
 type HermesDeployPanelProps = {

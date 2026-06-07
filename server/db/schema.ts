@@ -333,6 +333,32 @@ export const mcpServers = pgTable(
 	],
 );
 
+export const agentSkills = pgTable(
+	"agent_skills",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		sourceType: text("source_type").notNull(),
+		installRef: text("install_ref"),
+		content: text("content"),
+		enabled: boolean("enabled").default(true).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("agent_skills_user_id_idx").on(table.userId),
+		uniqueIndex("agent_skills_user_name_unique").on(table.userId, table.name),
+	],
+);
+
 export const auditLogs = pgTable(
 	"audit_logs",
 	{
