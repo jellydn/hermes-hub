@@ -17,6 +17,7 @@ const {
 	clearLogs,
 	deployProviderToHermes,
 	saveProviderConfig,
+	saveSubscriptionConfig,
 	testProviderConfig,
 	connectTelegram,
 	disconnectTelegram,
@@ -53,6 +54,7 @@ const {
 	clearLogs: vi.fn(),
 	deployProviderToHermes: vi.fn(),
 	saveProviderConfig: vi.fn(),
+	saveSubscriptionConfig: vi.fn(),
 	testProviderConfig: vi.fn(),
 	connectTelegram: vi.fn(),
 	disconnectTelegram: vi.fn(),
@@ -113,6 +115,7 @@ vi.mock("./logs", () => ({
 vi.mock("./providers", () => ({
 	deployProviderToHermes,
 	saveProviderConfig,
+	saveSubscriptionConfig,
 	testProviderConfig,
 }));
 
@@ -604,7 +607,7 @@ describe("apiApp", () => {
 		);
 
 		const response = await apiApp.request(
-			"http://localhost/api/servers/server_123/web-ui/proxy/chat",
+			"http://localhost/api/servers/server_123/web-ui/proxy/",
 		);
 
 		expect(response.status).toBe(200);

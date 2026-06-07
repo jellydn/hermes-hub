@@ -125,7 +125,7 @@ describe("HermesWebUiCard", () => {
 
 		const openLink = screen.getByTestId("hermes-web-ui-open");
 		expect(openLink.getAttribute("href")).toBe(
-			"/api/servers/server_123/web-ui/proxy/chat",
+			"/api/servers/server_123/web-ui/proxy/",
 		);
 		expect(screen.getByTestId("hermes-web-ui-password")).toBeTruthy();
 		expect(screen.getByTestId("hermes-web-ui-redeploy")).toBeTruthy();
@@ -404,7 +404,6 @@ function createWebUi(
 		enabled: false,
 		port: 8787,
 		proxyPath: "/api/servers/server_123/web-ui/proxy/",
-		landingPath: "/api/servers/server_123/web-ui/proxy/chat",
 		deployStatus: "idle",
 		deployError: null,
 		deployStartedAt: null,

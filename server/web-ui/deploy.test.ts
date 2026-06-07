@@ -48,8 +48,6 @@ vi.mock("./records", () => ({
 	upsertServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
-	getWebUiProxyLandingPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/chat`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
 }));

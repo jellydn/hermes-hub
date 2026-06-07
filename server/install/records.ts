@@ -7,7 +7,7 @@ import { installSteps } from "./workflow";
 export async function upsertInstallRecord(serverId: string) {
 	const db = getDb();
 	const [existingInstall] = await db
-		.select({ id: installs.id })
+		.select({ id: installs.id, version: installs.version })
 		.from(installs)
 		.where(eq(installs.serverId, serverId))
 		.orderBy(desc(installs.createdAt))
@@ -39,7 +39,7 @@ export async function upsertInstallRecord(serverId: string) {
 			.set({
 				status: "pending",
 				step: installSteps[0]?.id ?? "pending",
-				version: "latest",
+				version: existingInstall.version ?? "latest",
 				updatedAt: new Date(),
 			})
 			.where(eq(installs.id, existingInstall.id))

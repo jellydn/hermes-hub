@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiProviders, auditLogs } from "./db/schema";
+import { aiProviders, aiUserSubscriptions, auditLogs } from "./db/schema";
 
 const getAuthSession = vi.fn();
 const encryptSecret = vi.fn();
@@ -18,11 +18,9 @@ const selectWhere = vi.fn();
 const selectOrderBy = vi.fn();
 const selectLimit = vi.fn();
 const insertProviderValues = vi.fn();
+const insertSubscriptionValues = vi.fn();
 const insertAuditValues = vi.fn();
-const deployManagedCompose = vi.fn();
-const getOwnedServerRecordMock = vi.fn();
-const resolveServerSshConfig = vi.fn();
-const resolveServerSshConfigOrError = vi.fn();
+const loadModelAccessRecords = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
@@ -45,15 +43,14 @@ vi.mock("./db", () => ({
 	}),
 }));
 
-vi.mock("./managed-compose-deploy", () => ({
-	deployManagedCompose,
-}));
-
-vi.mock("./server-records", () => ({
-	getOwnedServerRecord: getOwnedServerRecordMock,
-	resolveServerSshConfig,
-	resolveServerSshConfigOrError,
-}));
+vi.mock("./providers/active-backend", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("./providers/active-backend")>();
+	return {
+		...actual,
+		loadModelAccessRecords,
+	};
+});
 
 describe("provider settings", () => {
 	beforeEach(() => {
@@ -87,6 +84,10 @@ describe("provider settings", () => {
 				return { values: insertProviderValues };
 			}
 
+			if (table === aiUserSubscriptions) {
+				return { values: insertSubscriptionValues };
+			}
+
 			if (table === auditLogs) {
 				return { values: insertAuditValues };
 			}
@@ -95,6 +96,7 @@ describe("provider settings", () => {
 		});
 
 		insertProviderValues.mockResolvedValue(undefined);
+		insertSubscriptionValues.mockResolvedValue(undefined);
 		insertAuditValues.mockResolvedValue(undefined);
 		transaction.mockImplementation(async (fn) =>
 			fn({
@@ -105,17 +107,6 @@ describe("provider settings", () => {
 		fetchMock.mockResolvedValue(
 			new Response(JSON.stringify({ data: [] }), { status: 200 }),
 		);
-
-		deployManagedCompose.mockResolvedValue(undefined);
-		resolveServerSshConfig.mockReturnValue({
-			authMethod: "ssh-key",
-			credential: "mock-credential",
-		});
-		resolveServerSshConfigOrError.mockReturnValue({
-			ok: true,
-			authMethod: "ssh-key",
-			credential: "mock-credential",
-		});
 	});
 
 	it("saves an encrypted provider configuration", async () => {
@@ -132,7 +123,7 @@ describe("provider settings", () => {
 		expect(response.status).toBe(200);
 		// API key is now stored directly — no JSON wrapping.
 		expect(encryptSecret).toHaveBeenCalledWith("sk-live-secret");
-		expect(updateWhere).toHaveBeenCalledTimes(1);
+		expect(updateWhere).toHaveBeenCalledTimes(2);
 		expect(insertProviderValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				userId: "user_123",
@@ -349,7 +340,7 @@ describe("provider settings", () => {
 	});
 
 	it("builds Hermes deploy env for OpenRouter provider configs", async () => {
-		selectLimit.mockResolvedValue([
+		mockActiveApiProviderLookup([
 			{
 				provider: "openrouter",
 				model: "openai/gpt-4o-mini",
@@ -370,8 +361,81 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("saves ChatGPT subscription configuration", async () => {
+		const { saveSubscriptionConfig } = await import("./providers");
+
+		const saveResponse = await saveSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions", {
+				subscriptionProvider: "chatgpt",
+				model: "gpt-5.5",
+			}),
+		);
+
+		expect(saveResponse.status).toBe(200);
+		expect(encryptSecret).not.toHaveBeenCalled();
+		expect(updateWhere).toHaveBeenCalledTimes(2);
+		expect(insertSubscriptionValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				subscriptionProvider: "chatgpt",
+				model: "gpt-5.5",
+				authMode: "chatgpt",
+				isActive: true,
+			}),
+		);
+		expect(insertProviderValues).not.toHaveBeenCalled();
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "subscription.saved",
+			}),
+		);
+		expect(await saveResponse.json()).toMatchObject({
+			subscription: {
+				kind: "subscription",
+				subscriptionProvider: "chatgpt",
+				model: "gpt-5.5",
+				authMode: "chatgpt",
+			},
+		});
+	});
+
+	it("rejects invalid ChatGPT subscription model IDs", async () => {
+		const { saveSubscriptionConfig } = await import("./providers");
+
+		const response = await saveSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions", {
+				subscriptionProvider: "chatgpt",
+				model: "gpt-4o",
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "Choose a valid model for the selected subscription.",
+		});
+	});
+
+	it("builds Hermes deploy env for ChatGPT subscription without decrypting API keys", async () => {
+		mockActiveSubscriptionLookup({
+			subscriptionProvider: "chatgpt",
+			model: "gpt-5.5",
+			authMode: "chatgpt",
+		});
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "gpt-5.5",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "openai-codex",
+			},
+		});
+		expect(decryptSecret).not.toHaveBeenCalled();
+	});
+
 	it("builds Hermes deploy env for custom provider configs", async () => {
-		selectLimit.mockResolvedValue([
+		mockActiveApiProviderLookup([
 			{
 				provider: "custom",
 				model: "deepseek-chat",
@@ -395,208 +459,112 @@ describe("provider settings", () => {
 		});
 	});
 
-	describe("deployProviderToHermes", () => {
-		const providerRecord = {
-			provider: "openai",
-			model: "gpt-4o",
-			encryptedApiKey: "encrypted-api-key",
-			baseUrl: null,
-		};
+	it("builds Hermes deploy env for custom providers with an empty stored key", async () => {
+		decryptSecret.mockImplementation((value: string) => {
+			if (value === "encrypted-empty-key") {
+				return "";
+			}
 
-		const telegramRecord = {
-			botToken: "encrypted-bot-token",
-			apiServerKey: "encrypted-api-server-key",
-			deployedServerId: "server_1",
-			deployedServerHost: "1.2.3.4",
-		};
-
-		const serverRecord = {
-			id: "server_1",
-			label: "prod",
-			host: "1.2.3.4",
-			port: 22,
-			username: "root",
-			authMethod: "ssh-key",
-			encryptedCredential: "encrypted-credential",
-			storeCredential: true,
-			status: "connected",
-			osInfo: {},
-			hostKeyFingerprint: null,
-			hostKeyAlgorithm: null,
-		};
-
-		beforeEach(() => {
-			getOwnedServerRecordMock.mockResolvedValue(serverRecord);
+			return "stored-api-key";
 		});
+		mockActiveApiProviderLookup([
+			{
+				provider: "custom",
+				model: "deepseek-chat",
+				encryptedApiKey: "encrypted-empty-key",
+				baseUrl: "https://api.deepseek.com/v1",
+			},
+		]);
 
-		it("returns 401 when unauthenticated", async () => {
-			getAuthSession.mockResolvedValue(null);
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
 
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(401);
-			expect(await response.json()).toMatchObject({ error: "Unauthorized" });
-		});
-
-		it("returns 400 when no provider record exists", async () => {
-			// selectLimit already defaults to [] from beforeEach
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(400);
-			expect(await response.json()).toMatchObject({
-				error: "No provider config found. Save a provider first.",
-			});
-		});
-
-		it("returns 400 when no Telegram deploy info exists", async () => {
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([]);
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(400);
-			expect(await response.json()).toMatchObject({
-				error:
-					"No Hermes deployment found. Deploy a Telegram bot to a server first.",
-			});
-		});
-
-		it("returns 404 when deployed server is not found", async () => {
-			getOwnedServerRecordMock.mockResolvedValue(null);
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord]);
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(404);
-			expect(await response.json()).toMatchObject({
-				error: "Server not found",
-			});
-		});
-
-		it("returns 500 when bot token decryption fails", async () => {
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord]);
-			decryptSecret.mockImplementationOnce(() => {
-				throw new Error("decrypt failed");
-			});
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(500);
-			expect(await response.json()).toMatchObject({
-				error: "Failed to decrypt bot token.",
-			});
-		});
-
-		it("returns 502 when managed compose deploy fails", async () => {
-			deployManagedCompose.mockRejectedValueOnce(new Error("Write failed"));
-
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord]);
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(502);
-			expect(await response.json()).toMatchObject({
-				error: "Deploy failed: Write failed",
-			});
-		});
-
-		it("returns 200 when deploy succeeds but success audit logging fails", async () => {
-			insertAuditValues.mockRejectedValueOnce(new Error("audit db down"));
-
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord]);
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(200);
-			expect(await response.json()).toMatchObject({
-				status: "deployed",
-				provider: "openai",
-				model: "gpt-4o",
-			});
-		});
-
-		it("returns 200 on successful deploy and logs all side effects", async () => {
-			selectLimit
-				.mockResolvedValueOnce([providerRecord])
-				.mockResolvedValueOnce([telegramRecord]);
-
-			const { deployProviderToHermes } = await import("./deploy");
-			const response = await deployProviderToHermes(
-				createContext("http://localhost/api/providers/deploy", {}),
-			);
-
-			expect(response.status).toBe(200);
-			expect(await response.json()).toMatchObject({
-				status: "deployed",
-				provider: "openai",
-				model: "gpt-4o",
-				serverHost: "1.2.3.4",
-			});
-
-			expect(deployManagedCompose).toHaveBeenCalledWith({
-				intent: "provider",
-				userId: "user_123",
-				serverId: "server_1",
-				host: "1.2.3.4",
-				port: 22,
-				username: "root",
-				authMethod: "ssh-key",
-				credential: "mock-credential",
-				expectedFingerprint: undefined,
-				apiServerKey: "api-server-key-value",
-				providerModel: "gpt-4o",
-			});
-
-			// resolveServerSshConfigOrError was called with the server ID and session ID
-			expect(resolveServerSshConfigOrError).toHaveBeenCalledWith(
-				expect.objectContaining({ id: "server_1", host: "1.2.3.4" }),
-				"session_123",
-			);
-
-			// Audit log was written with success action
-			expect(insertAuditValues).toHaveBeenCalledWith(
-				expect.objectContaining({
-					userId: "user_123",
-					action: "provider.deploy.succeeded",
-					details: expect.objectContaining({
-						provider: "openai",
-						model: "gpt-4o",
-					}),
-				}),
-			);
+		expect(config).toEqual({
+			model: "deepseek-chat",
+			envVars: {
+				CUSTOM_BASE_URL: "https://api.deepseek.com/v1",
+				HERMES_INFERENCE_PROVIDER: "custom",
+				OPENAI_BASE_URL: "https://api.deepseek.com/v1",
+			},
 		});
 	});
+
+	it("rejects deploy config when stored API-key ciphertext is unreadable", async () => {
+		decryptSecret.mockImplementation((value: string) => {
+			if (value === "corrupt-ciphertext") {
+				throw new Error("decrypt failed");
+			}
+
+			return "stored-api-key";
+		});
+		mockActiveApiProviderLookup([
+			{
+				provider: "openai",
+				model: "gpt-4o",
+				encryptedApiKey: "corrupt-ciphertext",
+				baseUrl: null,
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+
+		await expect(getProviderDeployConfig("user_123")).rejects.toThrow(
+			"Stored API key could not be read. Paste a new key.",
+		);
+	});
 });
+
+function mockActiveSubscriptionLookup(subscription: {
+	subscriptionProvider: "chatgpt";
+	model: string;
+	authMode: string;
+}) {
+	const subscriptionRecord = {
+		...subscription,
+		isActive: true,
+	};
+
+	loadModelAccessRecords.mockResolvedValueOnce({
+		apiRecord: null,
+		subscriptionRecord,
+		activeBackend: {
+			kind: "subscription",
+			subscriptionProvider: subscription.subscriptionProvider,
+			model: subscription.model,
+			authMode: subscription.authMode,
+			hermesProviderId: "openai-codex",
+		},
+	});
+}
+
+function mockActiveApiProviderLookup(
+	providers: Array<{
+		provider: "openai" | "anthropic" | "openrouter" | "ollama" | "custom";
+		model: string;
+		encryptedApiKey: string;
+		baseUrl: string | null;
+		isActive?: boolean;
+	}>,
+) {
+	const apiRecord = {
+		...providers[0],
+		isActive: providers[0]?.isActive ?? true,
+	};
+
+	loadModelAccessRecords.mockResolvedValueOnce({
+		apiRecord,
+		subscriptionRecord: null,
+		activeBackend: apiRecord.isActive
+			? {
+					kind: "api-provider",
+					provider: apiRecord.provider,
+					model: apiRecord.model,
+					encryptedApiKey: apiRecord.encryptedApiKey,
+					baseUrl: apiRecord.baseUrl,
+				}
+			: null,
+	});
+}
 
 function createContext(url: string, body: unknown) {
 	return {

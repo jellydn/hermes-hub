@@ -79,11 +79,60 @@ vi.mock("./web-ui/records", () => ({
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
-	getWebUiProxyLandingPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/chat`,
 }));
 
-import { getServerDetailSnapshot } from "./server-detail-snapshot";
+import {
+	getDisplayRollbackTarget,
+	getServerDetailSnapshot,
+	resolveRollbackTargetFromSources,
+} from "./server-detail-snapshot";
+
+describe("rollback target resolution", () => {
+	it("prefers audit history over installs.version", () => {
+		expect(
+			resolveRollbackTargetFromSources({
+				actionHistory: [
+					{
+						id: "audit_1",
+						action: "rollback",
+						result: "succeeded",
+						createdAt: "2026-05-29T00:00:00.000Z",
+						message: "Rolled back.",
+						imageRef: "v2.0.0",
+					},
+				],
+				installVersion: "v1.0.0",
+			}),
+		).toBe("v2.0.0");
+	});
+
+	it("falls back to installs.version when audit history has no rollback tag", () => {
+		expect(
+			resolveRollbackTargetFromSources({
+				actionHistory: [],
+				installVersion: "v1.0.0",
+			}),
+		).toBe("v1.0.0");
+	});
+
+	it("returns latest when no rollback sources exist", () => {
+		expect(
+			resolveRollbackTargetFromSources({
+				actionHistory: [],
+				installVersion: null,
+			}),
+		).toBe("latest");
+	});
+
+	it("maps latest fallback to null for UI display", () => {
+		expect(
+			getDisplayRollbackTarget({
+				actionHistory: [],
+				installVersion: "latest",
+			}),
+		).toBeNull();
+	});
+});
 
 describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 	beforeEach(() => {
@@ -103,6 +152,22 @@ describe("getServerDetailSnapshot action history with >100 audit rows", () => {
 
 		selectLimit.mockResolvedValue([]);
 		getLatestInstallForServer.mockResolvedValue(null);
+	});
+
+	it("exposes installs.version as rollbackTarget when audit history has no rollback tag", async () => {
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version: "v1.4.2",
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		selectLimit.mockResolvedValueOnce([]);
+
+		const snapshot = await getServerDetailSnapshot({
+			serverId: "server_123",
+			userId: "user_123",
+		});
+
+		expect(snapshot?.rollbackTarget).toBe("v1.4.2");
 	});
 
 	it("queries the action history through the indexed serverId column", async () => {

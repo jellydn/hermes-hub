@@ -2,6 +2,7 @@ import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
 import {
 	assertWebUiReachable,
+	setProviderInferenceProvider,
 	setProviderModel,
 	syncAgentSourceForWebUi,
 } from "./hermes/runtime";
@@ -32,6 +33,7 @@ export type ManagedComposeDeployPolicy = {
 export type ManagedComposeDeployPolicyOptions = {
 	webUiPort?: number;
 	providerModel?: string;
+	providerHermesId?: string;
 };
 
 export function resolveManagedComposeDeployPolicy(
@@ -43,15 +45,22 @@ export function resolveManagedComposeDeployPolicy(
 			return { intent };
 		case "provider": {
 			const providerModel = options.providerModel;
+			const providerHermesId = options.providerHermesId;
 			if (!providerModel) {
 				throw new Error(
 					"providerModel is required for provider deploy intent.",
+				);
+			}
+			if (!providerHermesId) {
+				throw new Error(
+					"providerHermesId is required for provider deploy intent.",
 				);
 			}
 
 			return {
 				intent,
 				extraSshCommands: async (ssh) => {
+					await setProviderInferenceProvider(ssh, providerHermesId);
 					await setProviderModel(ssh, providerModel);
 				},
 			};
@@ -90,6 +99,7 @@ export type ManagedComposeDeployInput = {
 	telegramBotToken?: string;
 	webUiPassword?: string;
 	providerModel?: string;
+	providerHermesId?: string;
 	webUiPort?: number;
 };
 
@@ -97,6 +107,7 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 	const policy = resolveManagedComposeDeployPolicy(input.intent, {
 		webUiPort: input.webUiPort,
 		providerModel: input.providerModel,
+		providerHermesId: input.providerHermesId,
 	});
 
 	const composeContent = await buildManagedComposeContent({

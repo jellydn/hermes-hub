@@ -39,7 +39,8 @@ afterEach(() => {
 
 describe("ProviderSettings - custom provider", () => {
 	it("selects custom provider without crashing", () => {
-		render(<ProviderSettings initialConfig={null} />);
+		render(<ProviderSettings initialAccess={null} />);
+		fireEvent.click(screen.getByRole("tab", { name: /api providers/i }));
 
 		fireEvent.click(screen.getByRole("radio", { name: /custom \/ byo/i }));
 
@@ -51,12 +52,17 @@ describe("ProviderSettings - custom provider", () => {
 	it("loads saved custom config without crashing", () => {
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "custom",
-					model: "deepseek-chat",
-					keyLast4: null,
-					hasStoredKey: true,
-					baseUrl: "https://api.deepseek.com/v1",
+				initialAccess={{
+					apiProvider: {
+						kind: "api-provider",
+						provider: "custom",
+						model: "deepseek-chat",
+						keyLast4: null,
+						hasStoredKey: true,
+						baseUrl: "https://api.deepseek.com/v1",
+					},
+					subscription: null,
+					activeBackend: "api-provider",
 				}}
 			/>,
 		);
@@ -70,12 +76,17 @@ describe("ProviderSettings - custom provider", () => {
 	it("loads saved custom config with empty model without crashing", () => {
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "custom",
-					model: "",
-					keyLast4: null,
-					hasStoredKey: true,
-					baseUrl: "",
+				initialAccess={{
+					apiProvider: {
+						kind: "api-provider",
+						provider: "custom",
+						model: "",
+						keyLast4: null,
+						hasStoredKey: true,
+						baseUrl: "",
+					},
+					subscription: null,
+					activeBackend: "api-provider",
 				}}
 			/>,
 		);
@@ -88,11 +99,16 @@ describe("ProviderSettings - custom provider", () => {
 	it("loads saved custom config with baseUrl undefined without crashing", () => {
 		render(
 			<ProviderSettings
-				initialConfig={{
-					provider: "custom",
-					model: "",
-					keyLast4: null,
-					hasStoredKey: true,
+				initialAccess={{
+					apiProvider: {
+						kind: "api-provider",
+						provider: "custom",
+						model: "",
+						keyLast4: null,
+						hasStoredKey: true,
+					},
+					subscription: null,
+					activeBackend: "api-provider",
 				}}
 			/>,
 		);

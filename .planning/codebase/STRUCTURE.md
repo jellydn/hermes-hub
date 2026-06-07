@@ -1,183 +1,209 @@
-# Directory Structure
+# Codebase Structure
 
-Generated: 2026-06-06
+**Analysis Date:** 2026-06-06
 
-## Top-Level Layout
-
-```
-.
-├── server/              # Backend business logic
-├── src/                 # Frontend application
-│   ├── routes/          # TanStack Start file-based routes
-│   ├── features/        # Feature-specific UI components & hooks
-│   ├── components/      # Shared UI components
-│   ├── lib/             # Shared utilities, types, helpers
-│   └── scripts/         # Client-side scripts (theme init)
-├── shared/              # Contracts shared between server and client
-├── drizzle/             # Database migration SQL files + snapshots
-├── docs/                # Documentation (ADR, API reference, test review)
-├── scripts/             # Build/deploy utility scripts
-├── public/              # Static assets (manifest, robots.txt)
-└── .github/             # CI/CD workflows
-```
-
-## Server (`server/`)
+## Directory Layout
 
 ```
-server/
-├── app.ts                   # Hono API router (all route bindings)
-├── app.test.ts              # API route dispatch tests
-├── auth.ts                  # Better Auth instance (lazy)
-├── constants.ts             # Image digests, ports, shared constants
-├── crypto.ts                # AES-256-GCM encrypt/decrypt
-├── credentials.ts           # In-memory ephemeral credential cache
-├── dashboard.ts             # Aggregated status snapshot
-├── dashboard.test.ts        # Dashboard helper tests
-├── install.ts               # Hermes install pipeline + SSE streaming
-├── install.test.ts          # Install workflow tests
-├── logs.ts                  # Install + action log queries
-├── logs.test.ts             # Log query tests
-├── providers.ts             # AI provider save, test, deploy
-├── providers.test.ts        # Provider flow tests
-├── request-guards.ts        # Auth, ownership, HTTPS guards
-├── server-actions.ts        # Restart/update/rollback via SSH
-├── server-actions.test.ts   # Server action tests
-├── servers.ts               # VPS connection + credential handling
-├── servers.test.ts          # Server connection tests
-├── telegram.ts              # Telegram bot connect/disconnect/deploy
-├── telegram.test.ts         # Telegram flow tests
-├── compose.ts               # Docker Compose file builder
-├── compose.test.ts          # Compose builder tests
-├── deploy.ts                # Hermes deployment orchestration
-├── db/
-│   ├── index.ts             # Database connection singleton
-│   ├── health.ts            # Health check query
-│   └── schema.ts            # Drizzle ORM table definitions
-├── install/
-│   ├── workflow.ts          # Install step execution
-│   └── sse-stream.ts        # SSE event streaming
-├── lib/
-│   ├── action-labels.ts     # Server action type + label formatting
-│   ├── get-client-ip.ts     # Client IP extraction
-│   └── insert-audit-log.ts  # Audit log insertion helper
-├── servers/
-│   ├── records.ts           # Server record queries
-│   └── list.ts              # Server list queries
-├── ssh/
-│   ├── connection.ts        # SSH connection + verification
-│   └── os.ts                # OS info parsing
-├── web-ui/
-│   ├── handlers.ts          # HTTP handlers (status, deploy, password, proxy)
-│   ├── deploy.ts            # Deploy orchestration + background execution
-│   ├── deploy.test.ts       # Deploy orchestration tests
-│   ├── snapshot.ts          # Web UI state snapshot builder
-│   ├── snapshot.test.ts     # Snapshot logic tests
-│   ├── records.ts           # Web UI record persistence + stale-deploy resolution
-│   ├── reachability.ts      # Port reachability probes
-│   ├── proxy-http.ts        # HTTP proxy logic
-│   ├── ssh-forward.ts       # SSH tunnel for proxy
-│   ├── ssh-pool.ts          # SSH connection pooling
-│   ├── password.ts          # Password generation + resolution
-│   └── enabled-context.ts   # Web UI enabled guard
-├── providers/
-│   └── config.ts            # Provider API key/env derivation
-└── __snapshots__/
-    └── compose.test.ts.snap # Compose snapshot
+hermes-hub/
+├── src/                    # TanStack Start frontend (routes, features, components, lib)
+├── server/                 # Hono API handlers and backend domain logic
+├── shared/                 # Cross-boundary TypeScript contracts
+├── drizzle/                # SQL migration files (generated/applied by drizzle-kit)
+├── scripts/                # Production start, DB migrate, brand assets, ralph tooling
+├── docs/                   # API reference and test coverage notes
+├── .github/workflows/      # CI (biome, typecheck, test, build) and deploy
+├── vite.config.ts          # Vite + TanStack Start + Vitest config
+├── drizzle.config.ts       # Drizzle Kit schema/migration config
+├── tsconfig.json           # TS paths: @/* and #/* → src/*
+├── package.json            # Bun scripts and dependencies
+├── compose.yaml            # Local/docker compose for Postgres
+├── Dockerfile              # Production container build
+├── justfile                # Thin wrappers around bun scripts
+└── AGENTS.md               # Repo-specific agent/dev conventions
 ```
 
-## Frontend (`src/`)
+## Directory Purposes
 
-```
-src/
-├── server.ts                    # Server entry (dispatches /api/* to Hono)
-├── router.tsx                   # TanStack Router setup
-├── routeTree.gen.ts             # Generated route tree (do not edit)
-├── styles.css                   # TailwindCSS v4 + custom CSS variables
-├── routes/
-│   ├── __root.tsx               # Root layout (html, head, header, footer)
-│   ├── index.tsx                # Landing page
-│   ├── login.tsx                # Magic link login
-│   ├── dashboard.tsx            # Authenticated dashboard shell
-│   ├── servers.index.tsx        # Server list
-│   ├── servers.$id.tsx          # Server detail
-│   ├── servers.$id.install.tsx  # Live install progress
-│   ├── servers.new.tsx          # New server connection wizard
-│   ├── ai-provider.tsx          # AI provider configuration
-│   ├── telegram.tsx             # Telegram bot management
-│   ├── logs.tsx                 # Logs viewer
-│   ├── settings.tsx             # Settings page
-│   └── about.tsx                # About page
-├── features/
-│   ├── about/                   # About page component
-│   ├── auth/                    # Login page component
-│   ├── dashboard/               # Dashboard page, app shell, status overview
-│   ├── logs/                    # Logs viewer component
-│   ├── providers/               # AI provider settings, panels, state
-│   ├── servers/                 # Server detail, connection wizard, install,
-│   │                            #   Web UI card, action controls, delete dialog
-│   ├── settings/                # Settings page component
-│   └── telegram/                # Telegram page, pairing, deploy, sidebar
-├── components/
-│   ├── root-document.tsx        # Root HTML document (Devtools, Scripts)
-│   ├── Header.tsx               # Global header with nav
-│   ├── Footer.tsx               # Global footer
-│   ├── ThemeToggle.tsx          # Light/dark/auto theme toggle
-│   └── ui/
-│       ├── button.tsx           # Button with asChild support (Radix Slot)
-│       ├── button-variants.ts   # Button variant definitions (cva)
-│       └── status-icon.tsx      # Status indicator icon
-├── lib/
-│   ├── ai-providers.ts          # AI provider validation + formatting
-│   ├── auth-client.ts           # Better Auth client
-│   ├── dashboard-status.ts      # Dashboard status types
-│   ├── logs.ts                  # Log types
-│   ├── server-detail.ts         # Server detail snapshot types
-│   ├── servers.ts               # Server types
-│   ├── session.ts               # Session guard server function
-│   ├── status-pill.ts           # Status pill CSS helper
-│   ├── use-mount-effect.ts      # Mount-only useEffect hook
-│   └── utils.ts                 # cn() utility
-└── scripts/
-    └── theme-init.js            # Inline theme initialization (prevents FOUC)
-```
+**`src/`:**
+- Purpose: Client and SSR frontend — routing, pages, UI components, client helpers
+- Contains: `routes/` (file-based TanStack Router), `features/` (page logic), `components/` (shared UI), `lib/` (auth, session, loaders), `server.ts` (unified entry)
+- Key files: `src/server.ts`, `src/router.tsx`, `src/routeTree.gen.ts`, `src/routes/*.tsx`, `src/features/**`, `src/lib/session.ts`, `src/lib/auth-client.ts`
 
-## Shared Contracts (`shared/`)
+**`server/`:**
+- Purpose: All backend logic consumed by Hono API and `createServerFn` loaders
+- Contains: Top-level domain modules, `db/`, `install/`, `ssh/`, `hermes/`, `web-ui/`, `dashboard/`, `servers/`, `settings/`, `telegram/`, `lib/` helpers
+- Key files: `server/app.ts`, `server/auth.ts`, `server/db/schema.ts`, `server/install.ts`, `server/servers.ts`, `server/server-actions.ts`
 
-```
-shared/
-└── contracts/
-    └── server-web-ui.ts         # ServerWebUiSnapshot, ServerWebUiDeployStatus types
-```
+**`shared/`:**
+- Purpose: Types/contracts safe to import from both `src/` and `server/`
+- Contains: `contracts/server-health-check.ts`, `contracts/server-web-ui.ts`
+- Key files: `shared/contracts/*.ts`
 
-## Documentation (`docs/`)
+**`drizzle/`:**
+- Purpose: Versioned PostgreSQL migrations and Drizzle metadata snapshots
+- Contains: `0000_*.sql` … `0014_*.sql`, `meta/_journal.json`, `meta/*_snapshot.json`
+- Key files: `drizzle/meta/_journal.json`, latest `drizzle/0014_*.sql`
 
-```
-docs/
-├── adr/                         # Architecture Decision Records (11 ADRs)
-│   ├── 0001-tanstack-start-with-hono-api.md
-│   ├── 0002-postgresql-with-drizzle-orm.md
-│   ├── 0003-better-auth-with-magic-link.md
-│   ├── 0004-docker-multi-stage-build.md
-│   ├── 0005-aes-256-gcm-credential-encryption.md
-│   ├── 0006-file-based-routing-with-tanstack-router.md
-│   ├── 0007-tailwind-css-v4-with-island-components.md
-│   ├── 0008-react-hook-form-with-zod.md
-│   ├── 0009-single-instance-boundary-for-operational-state.md
-│   ├── 0010-hermes-runtime-management-from-telegram-page.md
-│   └── 0011-hermes-web-ui-with-ssh-tcp-proxy.md
-├── api-reference.md             # Complete API endpoint documentation
-└── test-coverage-review.md      # Test coverage analysis
-```
+**`scripts/`:**
+- Purpose: Operational scripts outside the main app bundle
+- Contains: `start-production.mjs`, `db-migrate.mjs`, `generate-brand-assets.ts`, `ralph/` agent tooling
+- Key files: `scripts/start-production.mjs`, `scripts/db-migrate.mjs`
+
+**`docs/`:**
+- Purpose: Human-written reference documentation
+- Contains: `api-reference.md`, `test-coverage-review.md`
+
+**`.github/workflows/`:**
+- Purpose: CI/CD automation
+- Contains: `ci.yml` (biome → typecheck → test → build), `deploy.yml`, `react-doctor.yml`
+
+## Key File Locations
+
+**Entry Points:**
+- `src/server.ts`: Unified fetch — `/api/*` → Hono, else TanStack Start SSR
+- `server/app.ts`: Hono `apiApp` with all REST route registrations
+- `src/router.tsx`: TanStack Router factory using generated route tree
+- `scripts/start-production.mjs`: Production HTTP server (migrations + static + SSR)
+- `vite.config.ts`: Dev/build tooling; Vitest test glob for `src/` and `server/`
+
+**Configuration:**
+- `package.json`: Scripts (`dev`, `build`, `test`, `typecheck`, `db:migrate`, `db:generate`)
+- `tsconfig.json`: Strict TS, path aliases `@/*` and `#/*` → `./src/*`
+- `drizzle.config.ts`: Schema at `server/db/schema.ts`, migrations out to `drizzle/`
+- `biome.json`: Lint/format (excludes `src/routeTree.gen.ts`)
+- `compose.yaml`: Local Postgres for development
+- `.env.example`: Expected environment variables
+- `justfile`: `just dev`, `just test`, `just db-migrate` wrappers
+
+**Core Logic:**
+- `server/db/schema.ts`: All Drizzle table definitions (users, servers, installs, providers, telegram, mcp, audit_logs, etc.)
+- `server/db/index.ts`: `getDb()` singleton (requires `DATABASE_URL`)
+- `server/auth.ts`: Better Auth lazy singleton, `getAuthSession()`
+- `server/ssh/connection.ts`: SSH connect/verify/execute abstraction
+- `server/install/workflow.ts`: VPS install orchestration
+- `server/install/sse-stream.ts`: In-memory install SSE + `emitInstallEvent` transactions
+- `server/hermes/runtime.ts`: Remote Hermes container restart/update/rollback
+- `server/hermes/deploy.ts`: Config deployment over SSH
+- `server/credentials.ts`: Session-scoped in-memory SSH credential cache
+- `server/crypto.ts`: Encrypt/decrypt secrets at rest
+- `server/request-guards.ts`: Auth + server ownership + SSH resolution guards
+- `server/lib/insert-audit-log.ts`: Shared audit log writer
+
+**Frontend Routes (thin — delegate to features):**
+- `src/routes/__root.tsx`: Root layout shell (`RootDocument`)
+- `src/routes/index.tsx`: Landing page; redirects authed users to `/dashboard`
+- `src/routes/login.tsx`: Magic-link login
+- `src/routes/dashboard.tsx`: Dashboard with `createServerFn` loader
+- `src/routes/servers.index.tsx`, `src/routes/servers.new.tsx`, `src/routes/servers.$id.tsx`, `src/routes/servers.$id.install.tsx`: Server management
+- `src/routes/ai-provider.tsx`, `src/routes/telegram.tsx`, `src/routes/settings.tsx`, `src/routes/logs.tsx`: Config and observability pages
+- `src/routes/about.tsx`: About page
+
+**Frontend Features (page implementations):**
+- `src/features/dashboard/`: `app-shell.tsx`, `dashboard-page.tsx`, `status-overview.tsx`
+- `src/features/servers/`: Connection wizard, detail, install progress, web-ui card, hooks
+- `src/features/providers/`: AI provider configuration page
+- `src/features/telegram/`: Telegram bot connect/deploy/pairing UI
+- `src/features/settings/`: Persona and MCP server management
+- `src/features/logs/`: Audit log viewer
+- `src/features/auth/`: Login page
+- `src/features/landing/`: Marketing landing page
+
+**Testing:**
+- `src/**/*.{test,spec}.{ts,tsx}`: Frontend unit/component tests (Vitest + Testing Library)
+- `server/**/*.{test,spec}.ts`: Backend unit/integration tests (Vitest, `environment: "node"`)
+- `vite.config.ts`: Test include globs for both trees
 
 ## Naming Conventions
 
-| Convention | Example |
-|------------|---------|
-| Route files | `servers.$id.tsx` (dynamic segment: `$id`) |
-| Route loaders | `beforeLoad` with `createServerFn` for SSR data |
-| Feature components | `*-page.tsx` for top-level pages, `*-card.tsx`, `*-section.tsx` for sub-components |
-| State files | `*-state.ts` for reducers/state machines |
-| Test files | `*.test.ts` or `*.test.tsx`, co-located with source |
-| Hooks | `use-*.ts` for custom hooks |
-| Server modules | Domain-named: `servers.ts`, `providers.ts`, `telegram.ts` |
-| Utilities | `lib/` directory in both `src/` and `server/` |
+**Files:**
+- Routes: TanStack file-based naming — `dashboard.tsx`, `servers.$id.tsx`, `servers.$id.install.tsx` in `src/routes/`
+- Features: kebab-case component files — `server-detail-page.tsx`, `connection-wizard.tsx` in `src/features/<domain>/`
+- Server handlers: kebab-case or domain name — `server-actions.ts`, `server-detail-snapshot.ts` in `server/`
+- Server submodules: directory per domain — `server/install/workflow.ts`, `server/web-ui/proxy-http.ts`
+- Tests: co-located `*.test.ts` / `*.test.tsx` next to source (e.g. `server/ssh/connection.test.ts`)
+- Shared UI: `src/components/ui/button.tsx`, `button-variants.ts` (CVA variants separated)
+
+**Directories:**
+- `src/features/<domain>/`: One folder per product area (servers, telegram, settings, providers, dashboard, logs, auth, landing, about)
+- `server/<domain>/`: Backend subsystems with multiple files (install, ssh, hermes, web-ui, dashboard, servers, settings, telegram)
+- `server/lib/`: Small shared backend utilities (not domain-specific)
+- `shared/contracts/`: Cross-layer type definitions
+
+**Imports:**
+- Frontend uses `@/` or `#/` aliases for `src/` (both map to `./src/*` in `tsconfig.json`; `package.json` `imports` uses `#/*`)
+- Routes and `src/lib/` import `server/` via relative paths like `../../server/auth` (no `@server` alias)
+- Route files stay thin; heavy UI lives in `src/features/`
+
+**Database:**
+- Tables: snake_case plural (`servers`, `install_events`, `audit_logs`, `mcp_servers`)
+- App-owned PKs: `text(...).primaryKey().default(sql\`gen_random_uuid()::text\`)` per `AGENTS.md`
+- Better Auth tables use singular export aliases (`user`, `session`, `account`, `verification`) at bottom of `server/db/schema.ts`
+
+## Where to Add New Code
+
+**New Feature (authenticated page):**
+- Primary code: `src/routes/<route>.tsx` (route + `createServerFn` loader), `src/features/<domain>/<page>.tsx` (UI)
+- API (if needed): handler in `server/<domain>.ts` or new module, register in `server/app.ts`
+- Tests: `src/features/<domain>/*.test.tsx`, `server/<domain>.test.ts`
+
+**New API Endpoint:**
+- Implementation: new exported handler function in appropriate `server/` module
+- Registration: `server/app.ts` (add `httpsMiddleware` for credential-bearing mutating routes in production)
+- Guards: use `requireAuthSession` / `requireOwnedServerSsh` from `server/request-guards.ts` where applicable
+
+**New Component/Module:**
+- Implementation: `src/features/<domain>/` for page-specific; `src/components/` for shared layout/chrome; `src/components/ui/` for primitives
+- Use `cn()` from `src/lib/utils.ts` and existing UI primitives
+
+**Utilities:**
+- Shared frontend helpers: `src/lib/`
+- Shared backend helpers: `server/lib/`
+- Cross-boundary types only: `shared/contracts/`
+
+**Database Changes:**
+- Schema: `server/db/schema.ts`
+- Generate migration: `bun run db:generate`
+- Apply locally: `bun run db:migrate` (requires `DATABASE_URL`)
+- Production: auto-migrate at startup in `scripts/start-production.mjs`
+
+**SSH / Remote Operations:**
+- Connection primitives: `server/ssh/`
+- Hermes-specific remote commands: `server/hermes/`
+- Compose generation: `server/compose.ts`, `server/server-compose.ts`
+
+## Special Directories
+
+**`src/routeTree.gen.ts`:**
+- Purpose: Auto-generated TanStack Router route tree
+- Generated: Yes (TanStack Router plugin during dev/build)
+- Committed: Yes (do not hand-edit; excluded from Biome checks per `AGENTS.md`)
+
+**`drizzle/meta/`:**
+- Purpose: Drizzle Kit migration journal and schema snapshots
+- Generated: Yes (`bun run db:generate`)
+- Committed: Yes
+
+**`dist/`:**
+- Purpose: Vite build output (`dist/client/` static, `dist/server/` SSR bundle)
+- Generated: Yes (`bun run build`)
+- Committed: No (build artifact)
+
+**`node_modules/`:**
+- Purpose: Dependencies (managed by Bun, lockfile `bun.lock`)
+- Generated: Yes
+- Committed: No
+
+**`scripts/ralph/`:**
+- Purpose: Agent/automation tooling (PRD, prompts, progress tracking)
+- Generated: Partially (progress files)
+- Committed: Mixed — not part of runtime app
+
+**`.tsbuildinfo`:**
+- Purpose: TypeScript incremental build cache (`tsconfig.json`)
+- Generated: Yes
+- Committed: No (typically gitignored)
+
+---
+
+*Structure analysis: 2026-06-06*

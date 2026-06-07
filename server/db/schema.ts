@@ -199,6 +199,28 @@ export const aiProviders = pgTable(
 	(table) => [index("ai_providers_user_id_idx").on(table.userId)],
 );
 
+export const aiUserSubscriptions = pgTable(
+	"ai_user_subscriptions",
+	{
+		id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		subscriptionProvider: text("subscription_provider").notNull(),
+		model: text("model").notNull(),
+		authMode: text("auth_mode").notNull(),
+		isActive: boolean("is_active").default(false).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("ai_user_subscriptions_user_id_idx").on(table.userId)],
+);
+
 export const telegramConfigs = pgTable(
 	"telegram_configs",
 	{

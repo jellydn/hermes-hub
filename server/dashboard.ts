@@ -11,7 +11,6 @@ import {
 } from "./dashboard/records";
 import {
 	type InstallRecord,
-	type ProviderRecord,
 	type ServerRecord,
 	type TelegramRecord,
 	toAgentSummary,
@@ -19,6 +18,7 @@ import {
 	toServerSummary,
 	toTelegramSummary,
 } from "./dashboard/summaries";
+import type { ActiveModelBackend } from "./providers/active-backend";
 
 // Re-exports for tests and route files
 export {
@@ -41,7 +41,7 @@ type StaticDashboardData = {
 	serverRecord: ServerRecord | null;
 	serverCount: number;
 	installRecord: InstallRecord | null;
-	providerRecord: ProviderRecord | null;
+	activeBackend: ActiveModelBackend | null;
 	telegramRecord: TelegramRecord | null;
 	staticGeneratedAt: string;
 };
@@ -80,7 +80,7 @@ export async function getDashboardStatusSnapshot(input: {
 	let serverRecord: ServerRecord | null;
 	let serverCount: number;
 	let installRecord: InstallRecord | null;
-	let providerRecord: ProviderRecord | null;
+	let activeBackend: ActiveModelBackend | null;
 	let telegramRecord: TelegramRecord | null;
 	let staticGeneratedAt: string;
 
@@ -88,7 +88,7 @@ export async function getDashboardStatusSnapshot(input: {
 		serverRecord = cachedStatic.data.serverRecord;
 		serverCount = cachedStatic.data.serverCount;
 		installRecord = cachedStatic.data.installRecord;
-		providerRecord = cachedStatic.data.providerRecord;
+		activeBackend = cachedStatic.data.activeBackend;
 		telegramRecord = cachedStatic.data.telegramRecord;
 		staticGeneratedAt = cachedStatic.data.staticGeneratedAt;
 	} else {
@@ -101,7 +101,7 @@ export async function getDashboardStatusSnapshot(input: {
 
 		serverRecord = results[0];
 		serverCount = results[1];
-		providerRecord = results[2];
+		activeBackend = results[2];
 		telegramRecord = results[3];
 		installRecord = serverRecord
 			? await getLatestInstall(serverRecord.id)
@@ -113,7 +113,7 @@ export async function getDashboardStatusSnapshot(input: {
 				serverRecord,
 				serverCount,
 				installRecord,
-				providerRecord,
+				activeBackend,
 				telegramRecord,
 				staticGeneratedAt,
 			},
@@ -129,7 +129,7 @@ export async function getDashboardStatusSnapshot(input: {
 		serverCount,
 		agent: toAgentSummary(serverRecord, installRecord),
 		vps: await getVpsSummary(serverRecord, input.sessionId),
-		provider: toProviderSummary(providerRecord),
+		provider: toProviderSummary(activeBackend),
 		telegram: toTelegramSummary(telegramRecord),
 	};
 }

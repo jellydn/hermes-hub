@@ -9,20 +9,20 @@ import type { UseFormRegister } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import {
-	type AiProviderId,
-	aiProviderOptions,
+	type ApiProviderId,
+	apiProviderOptions,
 	formatAiProviderLabel,
 	getAiProviderOption,
 } from "@/lib/ai-providers";
 
-import type { ProviderSettingsSummary } from "./provider-settings";
+import type { ApiProviderConfigSummary } from "../../../shared/contracts/model-access";
 import {
 	ProviderSettingsField,
 	providerInputClassName,
 } from "./provider-settings-ui";
 
 type ProviderFormState = {
-	provider: AiProviderId;
+	provider: ApiProviderId;
 	model: string;
 	apiKey: string;
 	baseUrl: string;
@@ -31,14 +31,14 @@ type ProviderFormState = {
 type ProviderSelectionPanelProps = {
 	form: ProviderFormState;
 	register: UseFormRegister<ProviderFormState>;
-	savedConfig: ProviderSettingsSummary | null;
+	savedConfig: ApiProviderConfigSummary | null;
 	isSaving: boolean;
 	isTesting: boolean;
 	saveMessage: string | null;
 	saveError: string | null;
 	testError: string | null;
 	isConnected: boolean;
-	onProviderChange: (provider: AiProviderId) => void;
+	onProviderChange: (provider: ApiProviderId) => void;
 	onSave: () => void;
 	onTest: () => void;
 };
@@ -64,19 +64,18 @@ export function ProviderSelectionPanel({
 	return (
 		<section className="island-shell rounded-[2rem] p-6 sm:p-8">
 			<div className="mb-8 flex flex-col gap-3">
-				<p className="island-kicker m-0">Provider selection</p>
 				<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
-					Choose your model backend
+					Connect with an API key
 				</h3>
 				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					Pick a provider, save your API key, and validate the connection before
-					wiring it into Telegram and the dashboard.
+					Pick an API provider, save your settings, and validate the connection
+					before deploying to Hermes.
 				</p>
 			</div>
 
 			<fieldset className="grid gap-4 border-0 p-0 sm:grid-cols-2 lg:grid-cols-3">
-				<legend className="sr-only">AI provider</legend>
-				{aiProviderOptions.map((option) => {
+				<legend className="sr-only">API provider</legend>
+				{apiProviderOptions.map((option) => {
 					const isSelected = option.id === form.provider;
 
 					return (

@@ -43,7 +43,10 @@ export async function getServerDetailSnapshot(input: {
 		getServerActionHistory(input.serverId),
 		getResolvedServerWebUiRecord(input.serverId),
 	]);
-	const rollbackTarget = getRollbackTargetFromHistory(actionHistory);
+	const rollbackTarget = getDisplayRollbackTarget({
+		actionHistory,
+		installVersion: installRecord?.version,
+	});
 
 	return {
 		server: buildServerSnapshot(serverRecord),
@@ -58,6 +61,56 @@ export async function getServerDetailSnapshot(input: {
 		rollbackTarget,
 		webUi: webUiRecord ? buildWebUiSnapshot(input.serverId, webUiRecord) : null,
 	};
+}
+
+export async function resolveRollbackTarget(input: {
+	serverId: string;
+	requestedVersion?: string;
+}): Promise<string> {
+	const [actionHistory, installRecord] = await Promise.all([
+		getServerActionHistory(input.serverId),
+		getLatestInstallForServer(input.serverId),
+	]);
+
+	return resolveRollbackTargetFromSources({
+		requestedVersion: input.requestedVersion,
+		actionHistory,
+		installVersion: installRecord?.version,
+	});
+}
+
+export function resolveRollbackTargetFromSources(input: {
+	requestedVersion?: string;
+	actionHistory: ServerActionHistoryItem[];
+	installVersion?: string | null;
+}): string {
+	const requested = input.requestedVersion?.trim();
+	if (requested) {
+		return requested;
+	}
+
+	const historyTarget = getRollbackTargetFromHistory(input.actionHistory);
+	if (historyTarget) {
+		return historyTarget;
+	}
+
+	if (input.installVersion) {
+		return input.installVersion;
+	}
+
+	return "latest";
+}
+
+export function getDisplayRollbackTarget(input: {
+	actionHistory: ServerActionHistoryItem[];
+	installVersion?: string | null;
+}): string | null {
+	const resolved = resolveRollbackTargetFromSources({
+		actionHistory: input.actionHistory,
+		installVersion: input.installVersion,
+	});
+
+	return resolved === "latest" ? null : resolved;
 }
 
 export function getRollbackTargetFromHistory(

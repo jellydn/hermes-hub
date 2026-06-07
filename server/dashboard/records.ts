@@ -1,6 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { aiProviders, installs, servers, telegramConfigs } from "../db/schema";
+import { installs, servers, telegramConfigs } from "../db/schema";
+import { resolveActiveModelBackend } from "../providers/active-backend";
 import type { ServerRecord } from "./summaries";
 
 export async function getLatestServer(userId: string) {
@@ -51,18 +52,7 @@ export async function getLatestInstall(serverId: string) {
 }
 
 export async function getLatestProvider(userId: string) {
-	const [providerRecord] = await getDb()
-		.select({
-			provider: aiProviders.provider,
-			model: aiProviders.model,
-			isActive: aiProviders.isActive,
-		})
-		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
-		.orderBy(desc(aiProviders.createdAt))
-		.limit(1);
-
-	return providerRecord ?? null;
+	return resolveActiveModelBackend(userId);
 }
 
 export async function getLatestTelegram(userId: string) {

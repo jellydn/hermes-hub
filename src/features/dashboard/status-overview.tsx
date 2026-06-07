@@ -12,7 +12,7 @@ import { type ComponentType, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { formatAiProviderLabel } from "@/lib/ai-providers";
+
 import type {
 	DashboardProviderSummary,
 	DashboardServerSummary,
@@ -22,6 +22,7 @@ import type {
 } from "@/lib/dashboard-status";
 import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
 import { useMountEffect } from "@/lib/use-mount-effect";
+import { formatModelAccessProviderLabel } from "../../../server/providers/active-backend";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;
@@ -383,11 +384,7 @@ function ProviderCard({ provider }: { provider: DashboardProviderSummary }) {
 		<StatusCard
 			icon={Sparkles}
 			label="AI provider"
-			title={
-				provider.provider
-					? formatAiProviderLabel(provider.provider)
-					: "Disconnected"
-			}
+			title={formatDashboardProviderLabel(provider.provider)}
 			status={provider.status}
 			detail={provider.detail}
 			meta={provider.model ? `Model: ${provider.model}` : "No active provider"}
@@ -605,4 +602,14 @@ function formatRelativeTimestamp(timestamp: string) {
 		minute: "2-digit",
 		second: "2-digit",
 	});
+}
+
+function formatDashboardProviderLabel(
+	provider: DashboardProviderSummary["provider"],
+) {
+	if (!provider) {
+		return "Disconnected";
+	}
+
+	return formatModelAccessProviderLabel(provider);
 }

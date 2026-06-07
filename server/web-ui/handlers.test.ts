@@ -39,8 +39,6 @@ vi.mock("./records", () => ({
 	getResolvedServerWebUiRecord,
 	getWebUiProxyPath: (serverId: string) =>
 		`/api/servers/${serverId}/web-ui/proxy/`,
-	getWebUiProxyLandingPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/chat`,
 	decryptWebUiPassword: (value: string | null) =>
 		value ? decryptSecret(value) : null,
 }));
@@ -120,7 +118,6 @@ describe("web-ui handlers", () => {
 				enabled: false,
 				port: 8787,
 				proxyPath: "/api/servers/server_123/web-ui/proxy/",
-				landingPath: "/api/servers/server_123/web-ui/proxy/chat",
 				deployStatus: "deploying",
 				deployError: null,
 				deployStartedAt: new Date().toISOString(),
@@ -245,7 +242,7 @@ describe("web-ui handlers", () => {
 		it.each([
 			["without trailing slash", "/api/servers/server_123/web-ui/proxy"],
 			["with trailing slash", "/api/servers/server_123/web-ui/proxy/"],
-		])("redirects proxy root %s to chat", async (_label, proxyRootPath) => {
+		])("forwards proxy root %s to upstream /", async (_label, proxyRootPath) => {
 			getAuthSession.mockResolvedValue({
 				user: { id: "user_123" },
 				session: { id: "session_123" },
@@ -259,6 +256,12 @@ describe("web-ui handlers", () => {
 				deployStartedAt: null,
 				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
 			});
+			proxyRequestOverSsh.mockResolvedValue(
+				new Response("<html>ok</html>", {
+					status: 200,
+					headers: { "content-type": "text/html" },
+				}),
+			);
 
 			const response = await proxyServerWebUi(
 				createContext({
@@ -266,11 +269,12 @@ describe("web-ui handlers", () => {
 				}),
 			);
 
-			expect(response.status).toBe(302);
-			expect(response.headers.get("location")).toBe(
-				"/api/servers/server_123/web-ui/proxy/chat",
+			expect(response.status).toBe(200);
+			expect(proxyRequestOverSsh).toHaveBeenCalledWith(
+				expect.objectContaining({
+					upstreamPath: "/",
+				}),
 			);
-			expect(proxyRequestOverSsh).not.toHaveBeenCalled();
 		});
 
 		it("returns actionable errors when the upstream port is closed", async () => {
@@ -304,7 +308,7 @@ describe("web-ui handlers", () => {
 			);
 		});
 
-		it("rewrites upstream root redirects to the chat landing path", async () => {
+		it("rewrites upstream root redirects to the proxy path", async () => {
 			getAuthSession.mockResolvedValue({
 				user: { id: "user_123" },
 				session: { id: "session_123" },
@@ -336,7 +340,7 @@ describe("web-ui handlers", () => {
 
 			expect(response.status).toBe(302);
 			expect(response.headers.get("location")).toBe(
-				"/api/servers/server_123/web-ui/proxy/chat",
+				"/api/servers/server_123/web-ui/proxy/",
 			);
 		});
 
@@ -367,7 +371,7 @@ describe("web-ui handlers", () => {
 
 			const response = await proxyServerWebUi(
 				createContext({
-					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
+					url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
 				}),
 			);
 

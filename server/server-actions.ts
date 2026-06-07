@@ -17,6 +17,7 @@ import { insertAuditLog } from "./lib/insert-audit-log";
 import {
 	getRollbackTargetFromHistory,
 	getServerDetailSnapshot,
+	resolveRollbackTarget,
 } from "./server-detail-snapshot";
 import {
 	getOwnedServerRecord,
@@ -95,9 +96,10 @@ export async function runServerAction(context: Context) {
 
 	const versionTarget =
 		action === "rollback"
-			? payload.targetVersion?.trim() ||
-				(await getRollbackTarget(serverId)) ||
-				"latest"
+			? await resolveRollbackTarget({
+					serverId,
+					requestedVersion: payload.targetVersion,
+				})
 			: null;
 	const ipAddress = getClientIp(context);
 
@@ -261,15 +263,4 @@ function actionSuccessMessage(
 		default:
 			return `Rolled Hermes back to ${versionTarget ?? "the previous image"}.`;
 	}
-}
-
-async function getRollbackTarget(serverId: string) {
-	const [latestInstall] = await getDb()
-		.select({ version: installs.version })
-		.from(installs)
-		.where(eq(installs.serverId, serverId))
-		.orderBy(desc(installs.createdAt))
-		.limit(1);
-
-	return latestInstall?.version ?? null;
 }

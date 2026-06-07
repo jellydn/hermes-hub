@@ -90,7 +90,7 @@ export function HermesWebUiCard({
 						{isEnabled && webUi ? (
 							<Button asChild>
 								<a
-									href={webUi.landingPath}
+									href={webUi.proxyPath}
 									target="_blank"
 									rel="noopener noreferrer"
 									data-testid="hermes-web-ui-open"

@@ -10,39 +10,36 @@ import {
 } from "./proxy-http";
 
 const proxyBasePath = "/api/servers/server_123/web-ui/proxy/";
-const landingPath = "/api/servers/server_123/web-ui/proxy/chat";
 
 describe("web-ui proxy helpers", () => {
 	it.each([
 		["without trailing slash", "/api/servers/server_123/web-ui/proxy"],
 		["with trailing slash", "/api/servers/server_123/web-ui/proxy/"],
-	])("redirects proxy root %s to the landing path", (_label, proxyRootPath) => {
+	])("forwards proxy root %s to upstream /", (_label, proxyRootPath) => {
 		expect(
 			resolveProxyRequestTarget(
 				`http://localhost:3000${proxyRootPath}`,
 				proxyBasePath,
-				landingPath,
 			),
-		).toEqual({ kind: "redirect", location: landingPath });
+		).toBe("/");
 	});
 
 	it("forwards nested proxy paths to the upstream web UI", () => {
 		expect(
 			resolveProxyRequestTarget(
-				"http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
+				"http://localhost:3000/api/servers/server_123/web-ui/proxy/login",
 				proxyBasePath,
-				landingPath,
 			),
-		).toEqual({ kind: "forward", upstreamPath: "/chat" });
+		).toBe("/login");
 	});
 
 	it("maps nested paths under the proxy base to upstream paths", () => {
 		expect(
 			getUpstreamPath(
-				"http://localhost:3000/api/servers/server_123/web-ui/proxy/chat",
+				"http://localhost:3000/api/servers/server_123/web-ui/proxy/login",
 				proxyBasePath,
 			),
-		).toBe("/chat");
+		).toBe("/login");
 	});
 
 	it("rewrites Location headers to the proxy path", () => {
@@ -51,15 +48,34 @@ describe("web-ui proxy helpers", () => {
 		).toBe("/api/servers/server_123/web-ui/proxy/login");
 	});
 
-	it("rewrites upstream root redirects to the landing path", () => {
+	it("rewrites upstream root redirects to the proxy path", () => {
+		expect(
+			rewriteLocationHeader("/", proxyBasePath, "http://127.0.0.1:8787"),
+		).toBe(proxyBasePath);
+	});
+
+	it("rewrites relative login redirects and proxied next targets", () => {
 		expect(
 			rewriteLocationHeader(
-				"/",
+				"login?next=/",
 				proxyBasePath,
 				"http://127.0.0.1:8787",
-				landingPath,
 			),
-		).toBe(landingPath);
+		).toBe(
+			"/api/servers/server_123/web-ui/proxy/login?next=%2Fapi%2Fservers%2Fserver_123%2Fweb-ui%2Fproxy%2F",
+		);
+	});
+
+	it("rewrites session redirects with proxied next targets", () => {
+		expect(
+			rewriteLocationHeader(
+				"/login?next=/session/abc123",
+				proxyBasePath,
+				"http://127.0.0.1:8787",
+			),
+		).toBe(
+			"/api/servers/server_123/web-ui/proxy/login?next=%2Fapi%2Fservers%2Fserver_123%2Fweb-ui%2Fproxy%2Fsession%2Fabc123",
+		);
 	});
 
 	it("rewrites upstream origin redirects to the proxy path", () => {
@@ -75,7 +91,7 @@ describe("web-ui proxy helpers", () => {
 	it("forwards public host and proto headers to the upstream web UI", () => {
 		const headers = buildUpstreamProxyHeaders(
 			new Request(
-				"https://hermes-hub.itman.fyi/api/servers/server_123/web-ui/proxy/chat",
+				"https://hermes-hub.itman.fyi/api/servers/server_123/web-ui/proxy/",
 				{
 					headers: {
 						Origin: "https://hermes-hub.itman.fyi",
@@ -96,7 +112,7 @@ describe("web-ui proxy helpers", () => {
 	it("prefers reverse-proxy forwarded headers when the app URL is internal", () => {
 		const endpoint = getPublicRequestEndpoint(
 			new Request(
-				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/chat",
+				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/",
 				{
 					headers: {
 						host: "hermes-hub.itman.fyi",
@@ -108,7 +124,7 @@ describe("web-ui proxy helpers", () => {
 		);
 		const headers = buildUpstreamProxyHeaders(
 			new Request(
-				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/chat",
+				"http://172.17.0.2:5000/api/servers/server_123/web-ui/proxy/",
 				{
 					headers: {
 						host: "hermes-hub.itman.fyi",

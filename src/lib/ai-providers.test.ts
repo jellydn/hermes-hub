@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isValidModelString, MODEL_VALIDATION_REGEX } from "./ai-providers";
+import {
+	apiProviderOptions,
+	getProviderCredentialPolicy,
+	isValidAiModel,
+	isValidModelString,
+	MODEL_VALIDATION_REGEX,
+	providerRequiresApiKey,
+	usesOAuthDeviceCode,
+} from "./ai-providers";
 
 describe("MODEL_VALIDATION_REGEX", () => {
 	it("matches common production model IDs", () => {
@@ -63,5 +71,32 @@ describe("isValidModelString", () => {
 		expect(isValidModelString("")).toBe(false);
 		expect(isValidModelString("$(id)")).toBe(false);
 		expect(isValidModelString("a".repeat(200))).toBe(false);
+	});
+});
+
+describe("getProviderCredentialPolicy", () => {
+	it("returns api-key policy for OpenAI", () => {
+		expect(getProviderCredentialPolicy("openai")).toEqual({
+			kind: "api-key",
+			requiresApiKey: true,
+			requiresBaseUrl: false,
+			requiresRemoteOAuth: false,
+			reportsStoredKeyWithoutApiKey: false,
+		});
+	});
+});
+
+describe("api provider metadata", () => {
+	it("does not include subscription providers in the API grid", () => {
+		expect(apiProviderOptions.map((option) => option.id)).not.toContain(
+			"openai-codex",
+		);
+		expect(usesOAuthDeviceCode("openai")).toBe(false);
+		expect(providerRequiresApiKey("openai")).toBe(true);
+	});
+
+	it("accepts only whitelisted OpenAI models", () => {
+		expect(isValidAiModel("openai", "gpt-4o-mini")).toBe(true);
+		expect(isValidAiModel("openai", "gpt-5.5")).toBe(false);
 	});
 });

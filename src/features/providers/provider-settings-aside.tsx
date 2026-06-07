@@ -3,12 +3,21 @@ import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatAiProviderLabel } from "@/lib/ai-providers";
 import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
-
-import type { ProviderSettingsSummary } from "./provider-settings";
+import { formatUserSubscriptionLabel } from "@/lib/user-subscriptions";
+import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+import type {
+	ApiProviderConfigSummary,
+	ModelAccessSnapshot,
+	UserSubscriptionConfigSummary,
+} from "../../../shared/contracts/model-access";
 
 type ProviderSettingsAsideProps = {
-	savedConfig: ProviderSettingsSummary | null;
+	activeBackend: ModelAccessSnapshot["activeBackend"];
+	savedApiConfig: ApiProviderConfigSummary | null;
+	savedSubscription: UserSubscriptionConfigSummary | null;
 	telegramDeploy?: TelegramDeployInfo | null;
+	codexAuthStatus: CodexAuthStatus | null;
+	isLoadingCodexAuth: boolean;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
@@ -16,35 +25,53 @@ type ProviderSettingsAsideProps = {
 };
 
 export function ProviderSettingsAside({
-	savedConfig,
+	activeBackend,
+	savedApiConfig,
+	savedSubscription,
 	telegramDeploy,
+	codexAuthStatus,
+	isLoadingCodexAuth,
 	isDeploying,
 	deployError,
 	deployResult,
 	onDeploy,
 }: ProviderSettingsAsideProps) {
+	const activeModel =
+		activeBackend === "subscription"
+			? savedSubscription?.model
+			: savedApiConfig?.model;
+	const activeLabel =
+		activeBackend === "subscription" && savedSubscription
+			? formatUserSubscriptionLabel(savedSubscription.subscriptionProvider)
+			: savedApiConfig
+				? formatAiProviderLabel(savedApiConfig.provider)
+				: null;
+	const codexReadyForDeploy =
+		activeBackend !== "subscription" ||
+		(!isLoadingCodexAuth && codexAuthStatus?.authenticated === true);
+	const canDeploy =
+		Boolean(activeBackend) && Boolean(telegramDeploy) && codexReadyForDeploy;
+
 	return (
 		<aside className="space-y-4">
 			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Current config</p>
+				<p className="island-kicker mb-2">Active model access</p>
 				<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
-					{savedConfig
-						? formatAiProviderLabel(savedConfig.provider)
-						: "No provider connected"}
+					{activeLabel ?? "No model access configured"}
 				</h3>
 				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-					{savedConfig
-						? `Model: ${savedConfig.model}`
-						: "Save a provider configuration to power Hermes responses."}
+					{activeModel
+						? `Model: ${activeModel}`
+						: "Save an API provider or subscription to power Hermes responses."}
 				</p>
-				{savedConfig?.baseUrl ? (
+				{savedApiConfig?.baseUrl ? (
 					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-						Base URL: {savedConfig.baseUrl}
+						Base URL: {savedApiConfig.baseUrl}
 					</p>
 				) : null}
-				{savedConfig?.keyLast4 ? (
+				{savedApiConfig?.keyLast4 ? (
 					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						Stored key ending in {savedConfig.keyLast4}
+						Stored key ending in {savedApiConfig.keyLast4}
 					</p>
 				) : null}
 			</section>
@@ -54,21 +81,28 @@ export function ProviderSettingsAside({
 				{telegramDeploy ? (
 					<>
 						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-							Push your current provider config to the Hermes server.
+							Push your active model access config to the Hermes server.
 						</p>
-						{savedConfig ? (
+						{activeModel ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 								Model:{" "}
 								<span className="font-semibold text-[var(--sea-ink)]">
-									{savedConfig.model}
+									{activeModel}
 								</span>
+							</p>
+						) : null}
+						{activeBackend === "subscription" && !codexReadyForDeploy ? (
+							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+								{isLoadingCodexAuth
+									? "Checking remote Codex auth status..."
+									: "Complete ChatGPT device-code login before deploying to Hermes."}
 							</p>
 						) : null}
 						<div className="mt-4">
 							<Button
 								type="button"
 								onClick={onDeploy}
-								disabled={isDeploying || !savedConfig}
+								disabled={isDeploying || !canDeploy}
 							>
 								{isDeploying ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
@@ -110,6 +144,10 @@ export function ProviderSettingsAside({
 					<li>OpenRouter accepts any model ID.</li>
 					<li>Ollama: Run local open-weight models (e.g. llama3).</li>
 					<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
+					<li>
+						ChatGPT: Subscription models via device-code OAuth on the deployed
+						Hermes server.
+					</li>
 				</ul>
 			</section>
 		</aside>

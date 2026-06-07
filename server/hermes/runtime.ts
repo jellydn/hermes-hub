@@ -250,6 +250,20 @@ export async function setProviderModel(
 	}
 }
 
+export async function setProviderInferenceProvider(
+	ssh: NodeSSH,
+	provider: string,
+): Promise<void> {
+	const result = await ssh.execCommand(
+		`sudo docker exec hermes hermes config set model.provider ${shellQuote(provider)}`,
+	);
+	if (result.code !== 0) {
+		throw new Error(
+			result.stderr || "Failed to set model.provider inside Hermes",
+		);
+	}
+}
+
 // ── Telegram pairing ─────────────────────────────────────────────
 
 export async function runPairingCommand(

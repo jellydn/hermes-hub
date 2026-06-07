@@ -1,7 +1,7 @@
 import type { ServerWebUiSnapshot } from "../../shared/contracts/server-web-ui";
 import { normalizeDeployStatus } from "./deploy-status";
 import type { ServerWebUiRecord } from "./records";
-import { getWebUiProxyLandingPath, getWebUiProxyPath } from "./records";
+import { getWebUiProxyPath } from "./records";
 
 export function buildWebUiSnapshot(
 	serverId: string,
@@ -11,7 +11,6 @@ export function buildWebUiSnapshot(
 		enabled: record.enabled,
 		port: record.port,
 		proxyPath: getWebUiProxyPath(serverId),
-		landingPath: getWebUiProxyLandingPath(serverId),
 		deployStatus: normalizeDeployStatus(record.deployStatus),
 		deployError: record.deployError,
 		deployStartedAt: record.deployStartedAt?.toISOString() ?? null,

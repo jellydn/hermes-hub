@@ -1,24 +1,44 @@
-import type { ProviderSettingsSummary } from "./provider-settings";
+import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+import type {
+	ApiProviderConfigSummary,
+	ModelAccessSnapshot,
+	UserSubscriptionConfigSummary,
+} from "../../../shared/contracts/model-access";
 
 export type ProviderSettingsUiState = {
-	savedConfig: ProviderSettingsSummary | null;
-	isSaving: boolean;
+	savedApiConfig: ApiProviderConfigSummary | null;
+	savedSubscription: UserSubscriptionConfigSummary | null;
+	activeBackend: ModelAccessSnapshot["activeBackend"];
+	isSavingProvider: boolean;
+	isSavingSubscription: boolean;
 	isTesting: boolean;
-	saveMessage: string | null;
-	saveError: string | null;
+	providerSaveMessage: string | null;
+	subscriptionSaveMessage: string | null;
+	providerSaveError: string | null;
+	subscriptionSaveError: string | null;
 	testError: string | null;
 	isConnected: boolean;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
+	codexAuthStatus: CodexAuthStatus | null;
+	isLoadingCodexAuth: boolean;
+	codexAuthError: string | null;
 };
 
 export type ProviderSettingsUiAction =
 	| { type: "provider_changed" }
-	| { type: "save_started" }
-	| { type: "save_failed"; error: string }
-	| { type: "save_succeeded"; config: ProviderSettingsSummary }
-	| { type: "save_finished" }
+	| { type: "provider_save_started" }
+	| { type: "provider_save_failed"; error: string }
+	| { type: "provider_save_succeeded"; config: ApiProviderConfigSummary }
+	| { type: "provider_save_finished" }
+	| { type: "subscription_save_started" }
+	| { type: "subscription_save_failed"; error: string }
+	| {
+			type: "subscription_save_succeeded";
+			config: UserSubscriptionConfigSummary;
+	  }
+	| { type: "subscription_save_finished" }
 	| { type: "test_started" }
 	| { type: "test_failed"; error: string }
 	| { type: "test_succeeded"; connected: boolean }
@@ -26,22 +46,37 @@ export type ProviderSettingsUiAction =
 	| { type: "deploy_started" }
 	| { type: "deploy_failed"; error: string }
 	| { type: "deploy_succeeded"; message: string }
-	| { type: "deploy_finished" };
+	| { type: "deploy_finished" }
+	| { type: "codex_auth_status_load_started" }
+	| {
+			type: "codex_auth_status_changed";
+			status: CodexAuthStatus | null;
+			isLoading: boolean;
+			error: string | null;
+	  };
 
 export function createInitialProviderSettingsUiState(
-	initialConfig: ProviderSettingsSummary | null,
+	initialAccess: ModelAccessSnapshot | null,
 ): ProviderSettingsUiState {
 	return {
-		savedConfig: initialConfig,
-		isSaving: false,
+		savedApiConfig: initialAccess?.apiProvider ?? null,
+		savedSubscription: initialAccess?.subscription ?? null,
+		activeBackend: initialAccess?.activeBackend ?? null,
+		isSavingProvider: false,
+		isSavingSubscription: false,
 		isTesting: false,
-		saveMessage: null,
-		saveError: null,
+		providerSaveMessage: null,
+		subscriptionSaveMessage: null,
+		providerSaveError: null,
+		subscriptionSaveError: null,
 		testError: null,
 		isConnected: false,
 		isDeploying: false,
 		deployError: null,
 		deployResult: null,
+		codexAuthStatus: null,
+		isLoadingCodexAuth: false,
+		codexAuthError: null,
 	};
 }
 
@@ -53,41 +88,79 @@ export function providerSettingsUiReducer(
 		case "provider_changed":
 			return {
 				...state,
-				saveMessage: null,
-				saveError: null,
+				providerSaveMessage: null,
+				providerSaveError: null,
 				testError: null,
 				isConnected: false,
 			};
-		case "save_started":
+		case "codex_auth_status_load_started":
 			return {
 				...state,
-				isSaving: true,
-				saveMessage: null,
-				saveError: null,
+				isLoadingCodexAuth: true,
+				codexAuthError: null,
+			};
+		case "codex_auth_status_changed":
+			return {
+				...state,
+				codexAuthStatus: action.status,
+				isLoadingCodexAuth: action.isLoading,
+				codexAuthError: action.error,
+			};
+		case "provider_save_started":
+			return {
+				...state,
+				isSavingProvider: true,
+				providerSaveMessage: null,
+				providerSaveError: null,
 				testError: null,
 			};
-		case "save_failed":
+		case "provider_save_failed":
 			return {
 				...state,
-				saveError: action.error,
+				providerSaveError: action.error,
 			};
-		case "save_succeeded":
+		case "provider_save_succeeded":
 			return {
 				...state,
-				savedConfig: action.config,
-				saveMessage: "Provider settings saved.",
+				savedApiConfig: action.config,
+				activeBackend: "api-provider",
+				providerSaveMessage: "API provider settings saved.",
 			};
-		case "save_finished":
+		case "provider_save_finished":
 			return {
 				...state,
-				isSaving: false,
+				isSavingProvider: false,
+			};
+		case "subscription_save_started":
+			return {
+				...state,
+				isSavingSubscription: true,
+				subscriptionSaveMessage: null,
+				subscriptionSaveError: null,
+			};
+		case "subscription_save_failed":
+			return {
+				...state,
+				subscriptionSaveError: action.error,
+			};
+		case "subscription_save_succeeded":
+			return {
+				...state,
+				savedSubscription: action.config,
+				activeBackend: "subscription",
+				subscriptionSaveMessage: "Subscription settings saved.",
+			};
+		case "subscription_save_finished":
+			return {
+				...state,
+				isSavingSubscription: false,
 			};
 		case "test_started":
 			return {
 				...state,
 				isTesting: true,
 				testError: null,
-				saveError: null,
+				providerSaveError: null,
 				isConnected: false,
 			};
 		case "test_failed":

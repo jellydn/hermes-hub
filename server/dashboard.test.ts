@@ -5,6 +5,7 @@ const {
 	getSessionCredential,
 	decryptSecret,
 	withSshConnection,
+	resolveActiveModelBackend,
 	dbSelect,
 	selectFrom,
 	selectWhere,
@@ -15,6 +16,7 @@ const {
 	getSessionCredential: vi.fn(),
 	decryptSecret: vi.fn(),
 	withSshConnection: vi.fn(),
+	resolveActiveModelBackend: vi.fn(),
 	dbSelect: vi.fn(),
 	selectFrom: vi.fn(),
 	selectWhere: vi.fn(),
@@ -43,6 +45,15 @@ vi.mock("./db", () => ({
 		select: dbSelect,
 	}),
 }));
+
+vi.mock("./providers/active-backend", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("./providers/active-backend")>();
+	return {
+		...actual,
+		resolveActiveModelBackend,
+	};
+});
 
 import {
 	clearDashboardCache,
@@ -93,9 +104,11 @@ describe("dashboard helpers", () => {
 	it("formats connected provider and Telegram summaries", () => {
 		expect(
 			toProviderSummary({
+				kind: "api-provider",
 				provider: "openai",
 				model: "gpt-4o-mini",
-				isActive: true,
+				encryptedApiKey: "encrypted-key",
+				baseUrl: null,
 			}),
 		).toMatchObject({
 			status: "connected",
@@ -145,14 +158,8 @@ describe("dashboard helpers", () => {
 		});
 	});
 
-	it("reports provider disconnected when isActive is false", () => {
-		expect(
-			toProviderSummary({
-				provider: "openai",
-				model: "gpt-4o-mini",
-				isActive: false,
-			}),
-		).toMatchObject({
+	it("reports provider disconnected when no active backend exists", () => {
+		expect(toProviderSummary(null)).toMatchObject({
 			status: "disconnected",
 		});
 	});
@@ -188,6 +195,7 @@ describe("dashboard snapshot integration", () => {
 
 		// reset to clear stale _onceImpl chains from prior tests
 		selectLimit.mockReset();
+		resolveActiveModelBackend.mockResolvedValue(null);
 	});
 
 	afterEach(() => {
@@ -196,6 +204,13 @@ describe("dashboard snapshot integration", () => {
 
 	it("builds a full dashboard snapshot with server, install, provider, telegram, and VPS metrics", async () => {
 		mockDashboardServerCount(1);
+		resolveActiveModelBackend.mockResolvedValueOnce({
+			kind: "api-provider",
+			provider: "anthropic",
+			model: "claude-sonnet-4-20250514",
+			encryptedApiKey: "encrypted-key",
+			baseUrl: null,
+		});
 		selectLimit
 			// getLatestServer
 			.mockResolvedValueOnce([
@@ -211,14 +226,6 @@ describe("dashboard snapshot integration", () => {
 					status: "connected",
 					osInfo: { name: "Ubuntu", version: "24.04" },
 					updatedAt: now,
-				},
-			])
-			// getLatestProvider
-			.mockResolvedValueOnce([
-				{
-					provider: "anthropic",
-					model: "claude-sonnet-4-20250514",
-					isActive: true,
 				},
 			])
 			// getLatestTelegram
@@ -278,10 +285,7 @@ describe("dashboard snapshot integration", () => {
 
 	it("returns empty summaries when no server exists", async () => {
 		mockDashboardServerCount(0);
-		selectLimit
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([]);
+		selectLimit.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
 		const snapshot = await getDashboardStatusSnapshot({
 			userId: "user_123",
@@ -315,7 +319,6 @@ describe("dashboard snapshot integration", () => {
 					updatedAt: now,
 				},
 			])
-			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 
@@ -355,7 +358,6 @@ describe("dashboard snapshot integration", () => {
 				},
 			])
 			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 
 		const snapshot = await getDashboardStatusSnapshot({
@@ -391,7 +393,6 @@ describe("dashboard snapshot integration", () => {
 					updatedAt: now,
 				},
 			])
-			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 
@@ -437,7 +438,6 @@ describe("dashboard snapshot integration", () => {
 					updatedAt: now,
 				},
 			])
-			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 

@@ -12,7 +12,16 @@ import {
 	streamServerInstallEvents,
 } from "./install";
 import { clearLogs, getLogs } from "./logs";
-import { saveProviderConfig, testProviderConfig } from "./providers";
+import {
+	saveProviderConfig,
+	saveSubscriptionConfig,
+	testProviderConfig,
+} from "./providers";
+import {
+	completeCodexAuth,
+	getCodexAuthStatus,
+	startCodexAuth,
+} from "./providers/codex-auth";
 import { getServerDetail, runServerAction } from "./server-actions";
 import {
 	acceptHostKey,
@@ -229,16 +238,28 @@ apiApp.get(
 	httpsMiddleware,
 	revealServerWebUiPassword,
 );
-// Root path redirects to chat; the catch-all handles nested proxied assets.
+// Proxy root forwards upstream /; the catch-all handles nested proxied assets.
 apiApp.all("/servers/:id/web-ui/proxy", httpsMiddleware, proxyServerWebUi);
 apiApp.all("/servers/:id/web-ui/proxy/*", httpsMiddleware, proxyServerWebUi);
 apiApp.post("/servers/:id/host-key/accept", httpsMiddleware, acceptHostKey);
 apiApp.get("/dashboard/status", getDashboardStatus);
 apiApp.get("/logs", getLogs);
-apiApp.post("/logs/clear", clearLogs);
+apiApp.post("/logs/clear", httpsMiddleware, clearLogs);
 apiApp.post("/providers", httpsMiddleware, saveProviderConfig);
+apiApp.post(
+	"/providers/subscriptions",
+	httpsMiddleware,
+	saveSubscriptionConfig,
+);
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);
+apiApp.post("/providers/codex-auth/start", httpsMiddleware, startCodexAuth);
+apiApp.post(
+	"/providers/codex-auth/complete",
+	httpsMiddleware,
+	completeCodexAuth,
+);
+apiApp.get("/providers/codex-auth/status", httpsMiddleware, getCodexAuthStatus);
 apiApp.post("/settings/persona", httpsMiddleware, savePersonaSettings);
 apiApp.post("/settings/persona/deploy", httpsMiddleware, deployPersonaToHermes);
 apiApp.post("/settings/mcp-servers", httpsMiddleware, createMcpServer);
@@ -250,7 +271,7 @@ apiApp.post(
 	deployMcpServersToHermes,
 );
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
-apiApp.post("/telegram/disconnect", disconnectTelegram);
+apiApp.post("/telegram/disconnect", httpsMiddleware, disconnectTelegram);
 apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);
 apiApp.post("/telegram/test", httpsMiddleware, testTelegramBot);
 apiApp.get("/telegram/pairings", listTelegramPairings);

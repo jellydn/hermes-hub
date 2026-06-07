@@ -4,7 +4,6 @@ import {
 	LoaderCircle,
 	RotateCcw,
 } from "lucide-react";
-import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -12,27 +11,14 @@ import {
 	formatInstallTimestamp,
 	type InstallEvent,
 	type InstallStatus,
-	mergeInstallSnapshot,
 	quantizeInstallProgress,
 } from "@/features/servers/install-snapshot";
-import { useMountEffect } from "@/lib/use-mount-effect";
+import { useInstallEventStream } from "@/features/servers/use-install-event-stream";
 import { cn } from "@/lib/utils";
-
-type InstallSnapshot = {
-	events: InstallEvent[];
-	status: InstallStatus;
-	error: string | null;
-};
 
 type ServerInstallProgressProps = {
 	serverId: string;
 	onGoToDashboard: () => void;
-};
-
-const initialSnapshot: InstallSnapshot = {
-	events: [],
-	status: "pending",
-	error: null,
 };
 
 function getStatusIconType(
@@ -48,100 +34,8 @@ export function ServerInstallProgress({
 	serverId,
 	onGoToDashboard,
 }: ServerInstallProgressProps) {
-	const [snapshot, setSnapshot] = useState(initialSnapshot);
-	const [connectionState, setConnectionState] = useState<
-		"connecting" | "open" | "error" | "closed"
-	>("connecting");
-	const [isRetrying, setIsRetrying] = useState(false);
-	const [retryError, setRetryError] = useState<string | null>(null);
-	const streamRef = useRef<EventSource | null>(null);
-	const statusRef = useRef<InstallStatus>(initialSnapshot.status);
-
-	statusRef.current = snapshot.status;
-
-	function closeStream() {
-		streamRef.current?.close();
-		streamRef.current = null;
-	}
-
-	function openStream() {
-		closeStream();
-		setConnectionState("connecting");
-
-		const stream = new EventSource(`/api/servers/${serverId}/install/events`);
-		streamRef.current = stream;
-
-		stream.addEventListener("install-progress", (messageEvent) => {
-			const nextEvent = parseInstallEvent(messageEvent);
-			if (!nextEvent) {
-				return;
-			}
-
-			statusRef.current = nextEvent.status;
-
-			setConnectionState("open");
-			setRetryError(null);
-			setSnapshot((current) => mergeInstallSnapshot(current, nextEvent));
-
-			if (isTerminalStatus(nextEvent.status)) {
-				stream.close();
-				if (streamRef.current === stream) {
-					streamRef.current = null;
-				}
-				setConnectionState("closed");
-			}
-		});
-
-		stream.onerror = () => {
-			if (isTerminalStatus(statusRef.current)) {
-				stream.close();
-				if (streamRef.current === stream) {
-					streamRef.current = null;
-				}
-				setConnectionState("closed");
-				return;
-			}
-
-			setConnectionState("error");
-		};
-	}
-
-	useMountEffect(() => {
-		openStream();
-
-		return () => {
-			closeStream();
-		};
-	});
-
-	async function handleRetry() {
-		setIsRetrying(true);
-		setRetryError(null);
-		setSnapshot(initialSnapshot);
-
-		closeStream();
-
-		try {
-			const response = await fetch(`/api/servers/${serverId}/install`, {
-				method: "POST",
-			});
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-			} | null;
-
-			if (!response.ok) {
-				const message = payload?.error ?? "Unable to retry install.";
-				setRetryError(message);
-				setSnapshot({ events: [], status: "failed", error: message });
-				setConnectionState("closed");
-				return;
-			}
-
-			openStream();
-		} finally {
-			setIsRetrying(false);
-		}
-	}
+	const { connectionState, isRetrying, retryError, retryInstall, snapshot } =
+		useInstallEventStream(serverId);
 
 	const latestEvent = snapshot.events.at(-1) ?? null;
 	const progressValue = quantizeInstallProgress(latestEvent?.progress ?? 0);
@@ -214,7 +108,7 @@ export function ServerInstallProgress({
 										<Button
 											type="button"
 											onClick={() => {
-												void handleRetry();
+												void retryInstall();
 											}}
 											disabled={isRetrying}
 										>
@@ -242,10 +136,10 @@ export function ServerInstallProgress({
 						</div>
 					</div>
 
-					{connectionState === "error" && isRunning ? (
+					{connectionState === "reconnecting" && isRunning ? (
 						<div className="mt-4 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							The live stream dropped. HermesHub will reconnect when the browser
-							can reach the server again.
+							The live stream dropped. HermesHub is reconnecting and will replay
+							persisted install events when the connection returns.
 						</div>
 					) : null}
 
@@ -334,14 +228,6 @@ function getInstallEventKey(event: InstallEvent) {
 	return [event.installId, event.timestamp, event.step, event.message].join(
 		":",
 	);
-}
-
-function parseInstallEvent(messageEvent: MessageEvent<string>) {
-	try {
-		return JSON.parse(messageEvent.data) as InstallEvent;
-	} catch {
-		return null;
-	}
 }
 
 function getInstallHeadline(status: InstallStatus) {

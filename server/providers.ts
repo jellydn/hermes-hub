@@ -1,55 +1,62 @@
-import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 
+import type { ModelAccessSnapshot } from "../shared/contracts/model-access";
 import {
-	type AiProviderId,
-	formatAiProviderLabel,
+	type ApiProviderId,
 	getDefaultAiModel,
-	isAiProviderId,
+	getProviderCredentialPolicy,
+	isApiProviderId,
 	isValidAiModel,
 } from "../src/lib/ai-providers";
+import {
+	getDefaultSubscriptionModel,
+	getUserSubscriptionOption,
+	isUserSubscriptionId,
+	isValidSubscriptionModel,
+} from "../src/lib/user-subscriptions";
 import { getAuthSession } from "./auth";
-import { encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { aiProviders } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
-import { insertAuditLog } from "./lib/insert-audit-log";
+import { loadModelAccessRecords } from "./providers/active-backend";
 import {
 	buildProviderEnvMap,
-	isApiKeyRequired,
-	PROVIDER_ENV_CONFIGS,
-	type ProviderConfigSummary,
+	buildSubscriptionEnvMap,
 	type ProviderRequest,
 	type StoredProviderRecord,
+	type SubscriptionRequest,
 } from "./providers/config";
 import {
 	ProviderConnectionError,
 	verifyProviderConnection,
 } from "./providers/connection";
+import { readApiBackendKeyForEnvMap } from "./providers/deploy-material";
+import { buildModelAccessSnapshot } from "./providers/model-access";
 import {
-	decryptApiKey,
+	activateApiProvider,
+	activateSubscription,
+} from "./providers/model-access-persistence";
+import {
+	decryptStoredApiKey,
 	getApiKeyLast4,
 	getLatestProviderRecord,
 } from "./providers/records";
 
-export type { ProviderConfigSummary };
+export async function getModelAccessSnapshot(
+	userId: string,
+): Promise<ModelAccessSnapshot> {
+	const records = await loadModelAccessRecords(userId);
+	return buildModelAccessSnapshot(records);
+}
 
+/** @deprecated Use getModelAccessSnapshot(). */
 export async function getCurrentProviderConfig(userId: string) {
-	const record = await getLatestProviderRecord(userId);
-	if (!record || !isAiProviderId(record.provider)) {
+	const snapshot = await getModelAccessSnapshot(userId);
+	if (snapshot.activeBackend === "subscription" && snapshot.subscription) {
 		return null;
 	}
 
-	const parsedApiKey = decryptApiKey(record.encryptedApiKey);
-
-	return {
-		provider: record.provider,
-		model: record.model,
-		keyLast4: getApiKeyLast4(parsedApiKey),
-		hasStoredKey: true,
-		baseUrl: record.baseUrl ?? undefined,
-	} satisfies ProviderConfigSummary;
+	return snapshot.apiProvider;
 }
 
 export async function saveProviderConfig(context: Context) {
@@ -82,7 +89,7 @@ export async function saveProviderConfig(context: Context) {
 
 	try {
 		await db.transaction(async (tx) => {
-			await persistProviderConfig(tx, {
+			await activateApiProvider(tx, {
 				userId: session.user.id,
 				provider: parsed.provider,
 				apiKey: resolvedApiKey.apiKey,
@@ -94,20 +101,82 @@ export async function saveProviderConfig(context: Context) {
 
 		clearDashboardCache();
 
+		const credentialPolicy = getProviderCredentialPolicy(parsed.provider);
+		const hasStoredKey = credentialPolicy.requiresApiKey
+			? Boolean(resolvedApiKey.apiKey)
+			: Boolean(resolvedApiKey.apiKey || resolvedApiKey.baseUrl);
+
 		return context.json({
 			provider: {
+				kind: "api-provider",
 				provider: parsed.provider,
 				model: parsed.model,
-				keyLast4: getApiKeyLast4(resolvedApiKey.apiKey),
-				hasStoredKey: true,
+				keyLast4: resolvedApiKey.apiKey
+					? getApiKeyLast4(resolvedApiKey.apiKey)
+					: null,
+				hasStoredKey,
 				baseUrl: resolvedApiKey.baseUrl || undefined,
-			} satisfies ProviderConfigSummary,
+			},
 		});
 	} catch (error) {
 		const message =
 			error instanceof Error
 				? error.message
 				: "Unable to save AI provider settings";
+
+		return context.json({ error: message }, 500);
+	}
+}
+
+export async function saveSubscriptionConfig(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	let payload: SubscriptionRequest;
+
+	try {
+		payload = await context.req.json<SubscriptionRequest>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const parsed = parseSubscriptionRequest(payload);
+	if ("error" in parsed) {
+		return context.json({ error: parsed.error }, 400);
+	}
+
+	const db = getDb();
+	const ipAddress = getClientIp(context);
+	const option = getUserSubscriptionOption(parsed.subscriptionProvider);
+
+	try {
+		await db.transaction(async (tx) => {
+			await activateSubscription(tx, {
+				userId: session.user.id,
+				subscriptionProvider: parsed.subscriptionProvider,
+				model: parsed.model,
+				authMode: option?.authMode ?? "chatgpt",
+				ipAddress,
+			});
+		});
+
+		clearDashboardCache();
+
+		return context.json({
+			subscription: {
+				kind: "subscription",
+				subscriptionProvider: parsed.subscriptionProvider,
+				model: parsed.model,
+				authMode: option?.authMode ?? "chatgpt",
+			},
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Unable to save subscription settings";
 
 		return context.json({ error: message }, 500);
 	}
@@ -159,8 +228,8 @@ export async function testProviderConfig(context: Context) {
 }
 
 function parseProviderRequest(payload: ProviderRequest) {
-	if (!isAiProviderId(payload.provider)) {
-		return { error: "Choose a valid provider." };
+	if (!isApiProviderId(payload.provider)) {
+		return { error: "Choose a valid API provider." };
 	}
 
 	const model = payload.model?.trim() || getDefaultAiModel(payload.provider);
@@ -176,9 +245,27 @@ function parseProviderRequest(payload: ProviderRequest) {
 	};
 }
 
+function parseSubscriptionRequest(payload: SubscriptionRequest) {
+	if (!isUserSubscriptionId(payload.subscriptionProvider)) {
+		return { error: "Choose a valid subscription provider." };
+	}
+
+	const model =
+		payload.model?.trim() ||
+		getDefaultSubscriptionModel(payload.subscriptionProvider);
+	if (!isValidSubscriptionModel(payload.subscriptionProvider, model)) {
+		return { error: "Choose a valid model for the selected subscription." };
+	}
+
+	return {
+		subscriptionProvider: payload.subscriptionProvider,
+		model,
+	};
+}
+
 function resolveProviderApiKey(
 	parsed: {
-		provider: AiProviderId;
+		provider: ApiProviderId;
 		model: string;
 		apiKey: string;
 		baseUrl?: string;
@@ -189,23 +276,27 @@ function resolveProviderApiKey(
 	let resolvedBaseUrl = parsed.baseUrl;
 
 	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
-		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
-		if (
-			!resolvedApiKey &&
-			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
-		) {
-			return { error: "Stored API key could not be read. Paste a new key." };
+		if (existingRecord.encryptedApiKey) {
+			const decryptResult = decryptStoredApiKey(existingRecord.encryptedApiKey);
+			if (!decryptResult.ok) {
+				return { error: "Stored API key could not be read. Paste a new key." };
+			}
+
+			resolvedApiKey = decryptResult.apiKey;
 		}
+
 		if (!resolvedBaseUrl) {
 			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
 		}
 	}
 
-	if (!isApiKeyRequired(parsed.provider) && !resolvedBaseUrl) {
+	const credentialPolicy = getProviderCredentialPolicy(parsed.provider);
+
+	if (credentialPolicy.requiresBaseUrl && !resolvedBaseUrl) {
 		return { error: "Base URL is required." };
 	}
 
-	if (isApiKeyRequired(parsed.provider) && !resolvedApiKey) {
+	if (credentialPolicy.requiresApiKey && !resolvedApiKey) {
 		return { error: "API key is required." };
 	}
 
@@ -215,82 +306,28 @@ function resolveProviderApiKey(
 export async function getProviderDeployConfig(
 	userId: string,
 ): Promise<{ envVars: Record<string, string>; model: string } | null> {
-	const record = await getLatestProviderRecord(userId);
-	if (!record || !isAiProviderId(record.provider)) {
+	const { activeBackend } = await loadModelAccessRecords(userId);
+	if (!activeBackend) {
 		return null;
 	}
 
-	const config = PROVIDER_ENV_CONFIGS[record.provider];
-	let decryptedApiKey = "";
-
-	if (config?.apiKeyEnvVar) {
-		const isKeyRequired = isApiKeyRequired(record.provider);
-
-		if (record.encryptedApiKey) {
-			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
-			if (!decryptedApiKey) {
-				throw new Error(
-					"Stored API key could not be decrypted. Paste a new key.",
-				);
-			}
-		}
-
-		if (isKeyRequired && !decryptedApiKey) {
-			throw new Error(`API key is required for provider ${record.provider}.`);
-		}
+	if (activeBackend.kind === "subscription") {
+		return {
+			envVars: buildSubscriptionEnvMap(activeBackend.hermesProviderId),
+			model: activeBackend.model,
+		};
 	}
+
+	const { apiKey } = readApiBackendKeyForEnvMap(activeBackend);
 
 	return {
 		envVars: buildProviderEnvMap(
-			record.provider,
-			decryptedApiKey,
-			record.baseUrl,
+			activeBackend.provider,
+			apiKey,
+			activeBackend.baseUrl,
 		),
-		model: record.model,
+		model: activeBackend.model,
 	};
 }
 
-type ProviderPersistenceInput = {
-	userId: string;
-	provider: AiProviderId;
-	apiKey: string;
-	baseUrl: string | undefined;
-	model: string;
-	ipAddress: string | null;
-};
-
-type ProviderPersistenceWriter = Pick<
-	ReturnType<typeof getDb>,
-	"update" | "insert"
->;
-
-async function persistProviderConfig(
-	writer: ProviderPersistenceWriter,
-	input: ProviderPersistenceInput,
-) {
-	// react-doctor-disable-next-line react-doctor/async-parallel
-	await writer
-		.update(aiProviders)
-		.set({ isActive: false })
-		.where(eq(aiProviders.userId, input.userId));
-
-	await writer.insert(aiProviders).values({
-		userId: input.userId,
-		provider: input.provider,
-		encryptedApiKey: encryptSecret(input.apiKey),
-		baseUrl: input.baseUrl || null,
-		model: input.model,
-		label: formatAiProviderLabel(input.provider),
-		isActive: true,
-	});
-
-	await insertAuditLog(writer, {
-		userId: input.userId,
-		action: "provider.saved",
-		details: {
-			provider: input.provider,
-			model: input.model,
-		},
-		ipAddress: input.ipAddress,
-	});
-}
+export { resolveActiveModelBackend } from "./providers/active-backend";

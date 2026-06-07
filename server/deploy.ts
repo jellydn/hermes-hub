@@ -1,12 +1,16 @@
 import type { Context } from "hono";
-import { getAiProviderOption, isAiProviderId } from "../src/lib/ai-providers";
 import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
-import { decryptApiKey, getLatestProviderRecord } from "./providers/records";
+import { resolveActiveModelBackend } from "./providers/active-backend";
+import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
+import {
+	assertApiBackendDeployable,
+	resolveSubscriptionDeployTarget,
+} from "./providers/deploy-material";
 import { requireAuthSession } from "./request-guards";
 
 export async function deployProviderToHermes(context: Context) {
@@ -18,10 +22,13 @@ export async function deployProviderToHermes(context: Context) {
 	const db = getDb();
 	const ipAddress = getClientIp(context);
 
-	const providerRecord = await getLatestProviderRecord(session.user.id);
-	if (!providerRecord || !isAiProviderId(providerRecord.provider)) {
+	const activeBackend = await resolveActiveModelBackend(session.user.id);
+	if (!activeBackend) {
 		return context.json(
-			{ error: "No provider config found. Save a provider first." },
+			{
+				error:
+					"No model access config found. Save an API provider or subscription first.",
+			},
 			400,
 		);
 	}
@@ -39,15 +46,51 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
 
-	const decryptedApiKey = decryptApiKey(providerRecord.encryptedApiKey);
-	if (providerRecord.encryptedApiKey && !decryptedApiKey) {
-		return context.json({ error: "Failed to decrypt API key." }, 500);
-	}
+	let providerHermesId: string;
+	let deployModel: string;
+	let deployProviderLabel: string;
 
-	const isKeyRequired = !getAiProviderOption(providerRecord.provider)
-		?.requiresBaseUrl;
-	if (isKeyRequired && !decryptedApiKey) {
-		return context.json({ error: "API key is required." }, 400);
+	if (activeBackend.kind === "subscription") {
+		try {
+			const codexAuth = await resolveRemoteCodexAuthStatus({
+				host: sshCtx.server.host,
+				port: sshCtx.server.port,
+				username: sshCtx.server.username,
+				authMethod: sshCtx.authMethod,
+				credential: sshCtx.credential,
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+			});
+
+			if (!codexAuth.authenticated) {
+				return context.json(
+					{
+						error:
+							"Codex is not authenticated on the deployed Hermes server. Complete ChatGPT device-code login first.",
+					},
+					400,
+				);
+			}
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: "Unable to verify Codex authentication.";
+			return context.json({ error: message }, 502);
+		}
+
+		const deployTarget = resolveSubscriptionDeployTarget(activeBackend);
+		providerHermesId = deployTarget.hermesProviderId;
+		deployModel = deployTarget.model;
+		deployProviderLabel = deployTarget.deployLabel;
+	} else {
+		const deployable = assertApiBackendDeployable(activeBackend);
+		if (!deployable.ok) {
+			return context.json({ error: deployable.error }, 400);
+		}
+
+		providerHermesId = deployable.hermesProviderId;
+		deployModel = deployable.model;
+		deployProviderLabel = deployable.deployLabel;
 	}
 
 	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
@@ -64,7 +107,8 @@ export async function deployProviderToHermes(context: Context) {
 			credential: sshCtx.credential,
 			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
 			apiServerKey: decryptedApiServerKey,
-			providerModel: providerRecord.model,
+			providerModel: deployModel,
+			providerHermesId,
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Deploy failed";
@@ -75,8 +119,8 @@ export async function deployProviderToHermes(context: Context) {
 				action: "provider.deploy.failed",
 				serverId: sshCtx.serverId,
 				details: {
-					provider: providerRecord.provider,
-					model: providerRecord.model,
+					provider: deployProviderLabel,
+					model: deployModel,
 					serverId: sshCtx.serverId,
 					error: message,
 				},
@@ -95,8 +139,8 @@ export async function deployProviderToHermes(context: Context) {
 			action: "provider.deploy.succeeded",
 			serverId: sshCtx.serverId,
 			details: {
-				provider: providerRecord.provider,
-				model: providerRecord.model,
+				provider: deployProviderLabel,
+				model: deployModel,
 				serverId: sshCtx.serverId,
 				serverHost: sshCtx.server.host,
 			},
@@ -108,8 +152,8 @@ export async function deployProviderToHermes(context: Context) {
 
 	return context.json({
 		status: "deployed",
-		provider: providerRecord.provider,
-		model: providerRecord.model,
+		provider: deployProviderLabel,
+		model: deployModel,
 		serverHost: sshCtx.server.host,
 	});
 }

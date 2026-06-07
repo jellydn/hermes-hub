@@ -6,18 +6,18 @@ import { ProviderSettings } from "@/features/providers/provider-settings";
 const aiProviderRouteApi = getRouteApi("/ai-provider");
 
 export function AiProviderPage() {
-	const { providerConfig, session, telegramDeploy } =
+	const { modelAccess, session, telegramDeploy } =
 		aiProviderRouteApi.useRouteContext();
 
 	return (
 		<AppShell
 			userEmail={session.user.email}
 			title="AI Provider"
-			description="Choose where Hermes should run, encrypt the API key, and verify the provider before you connect downstream channels."
+			description="Connect an API provider or use your ChatGPT subscription, then deploy the active model access to Hermes."
 			kicker="Model Access"
 		>
 			<ProviderSettings
-				initialConfig={providerConfig ?? null}
+				initialAccess={modelAccess ?? null}
 				telegramDeploy={telegramDeploy}
 			/>
 		</AppShell>
