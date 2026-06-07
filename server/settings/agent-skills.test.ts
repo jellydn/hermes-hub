@@ -373,7 +373,7 @@ describe("agent skills settings", () => {
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
 			const compoundCommand = calledCommands[1] || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one'",
+				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes",
 			);
 			expect(compoundCommand).toContain("skill-two/SKILL.md");
 			expect(compoundCommand).toContain("hermeshub-agent-skills.json");
@@ -430,7 +430,7 @@ describe("agent skills settings", () => {
 
 			// should uninstall old hub skill
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills uninstall 'skill-old-hub'",
+				"echo y | sudo docker exec -i hermes hermes skills uninstall 'skill-old-hub'",
 			);
 			// should remove old custom skill directory
 			expect(compoundCommand).toContain("rm -rf");
@@ -514,7 +514,7 @@ file-reader  hub      true
 			const mockExec = vi.fn().mockResolvedValue({
 				code: 0,
 				stdout: `
-Installed Skills                                
+Installed Skills
 ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓
 ┃ Name                 ┃ Category             ┃ Source   ┃ Trust    ┃ Status   ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩

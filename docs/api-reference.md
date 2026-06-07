@@ -1395,6 +1395,43 @@ Deploys the user's enabled agent skills list to a selected Hermes VPS, uninstall
 
 ---
 
+### POST `/api/settings/agent-skills/remote-list`
+
+Fetches the list of agent skills currently installed/configured on the remote Hermes container of a selected VPS. This is a read-only endpoint that SSHes into the server and runs `sudo docker exec hermes hermes skills list`.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (optional):**
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Server ID from which to fetch the remote skills list. Defaults to the server with the most recent successful install when omitted. |
+
+**Response (200):**
+```json
+{
+  "raw": "Installed Skills\n┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓\n┃ Name                 ┃ Category             ┃ Source   ┃ Trust    ┃ Status   ┃\n┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩\n│ dogfood              │                      │ builtin  │ builtin  │ enabled  │\n│ claude-code          │ autonomous-ai-agents │ builtin  │ builtin  │ enabled  │\n└──────────────────────┴──────────────────────┴──────────┴──────────┴──────────┘",
+  "skills": ["dogfood", "claude-code"],
+  "count": 2
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Selected server does not have a successful Hermes install    |
+| 401    | Unauthorized |
+| 404    | Server not found |
+| 502    | SSH connection error or remote command execution failure |
+
+---
+
 ## Hermes Web UI
 
 HermesHub can deploy the [Hermes Web UI](https://get-hermes.ai/) alongside the Hermes agent on a connected VPS. After setup, the UI is reachable through an authenticated reverse proxy at `/api/servers/:id/web-ui/proxy/` — traffic is forwarded over SSH to the Web UI container on the VPS (default port `8787`). No manual SSH tunnels are required.

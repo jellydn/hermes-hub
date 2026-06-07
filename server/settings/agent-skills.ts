@@ -13,6 +13,7 @@ import {
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
 	parseRemoteSkillsList,
+	resolveManifestName,
 	type SkillSourceType,
 } from "./agent-skills/config";
 import {
@@ -225,9 +226,11 @@ export async function deleteAgentSkill(context: Context) {
 
 export const MANIFEST_PATH = `${managedComposeVolumeHome}/.hermes/hermeshub-agent-skills.json`;
 
+export type ManifestEntry = { name: string; sourceType: string };
+
 export async function readRemoteManifest(
 	ssh: NodeSSH,
-): Promise<Array<{ name: string; sourceType: string }>> {
+): Promise<ManifestEntry[]> {
 	const result = await ssh.execCommand(
 		`sudo cat ${MANIFEST_PATH} 2>/dev/null || true`,
 	);
@@ -243,9 +246,7 @@ export async function readRemoteManifest(
 	}
 }
 
-export function buildManifestWriteCommand(
-	manifest: Array<{ name: string; sourceType: string }>,
-): string {
+export function buildManifestWriteCommand(manifest: ManifestEntry[]): string {
 	const content = JSON.stringify(manifest, null, 2);
 	const encoded = Buffer.from(content, "utf8").toString("base64");
 	return [
@@ -265,6 +266,62 @@ export function buildCustomSkillWriteCommand(
 		`sudo mkdir -p ${shellQuote(skillDir)}`,
 		`printf '%s' '${encoded}' | base64 -d | sudo tee ${shellQuote(skillPath)} > /dev/null`,
 	].join(" && ");
+}
+
+export function buildDeployCommands(
+	previousManifest: ManifestEntry[],
+	enabledSkills: Array<{
+		name: string;
+		sourceType: string;
+		installRef?: string | null;
+		content?: string | null;
+	}>,
+): string[] {
+	const commands: string[] = [];
+
+	// Remove previously managed skills missing from enabledSkills
+	for (const prev of previousManifest) {
+		if (!prev || typeof prev !== "object" || !prev.name) {
+			continue;
+		}
+		const isStillEnabled = enabledSkills.some(
+			(curr) => resolveManifestName(curr) === prev.name,
+		);
+		if (!isStillEnabled) {
+			if (prev.sourceType === "hub" || prev.sourceType === "url") {
+				commands.push(
+					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)}`,
+				);
+			} else if (prev.sourceType === "custom") {
+				commands.push(
+					`sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`,
+				);
+			}
+		}
+	}
+
+	// Install/write enabled skills
+	for (const skill of enabledSkills) {
+		if (skill.sourceType === "hub" || skill.sourceType === "url") {
+			const installRef = skill.installRef || "";
+			commands.push(
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)} --yes`,
+			);
+		} else if (skill.sourceType === "custom") {
+			commands.push(
+				buildCustomSkillWriteCommand(skill.name, skill.content || ""),
+			);
+		}
+	}
+
+	// Write new manifest
+	const newManifest = enabledSkills.map((s) => ({
+		name: resolveManifestName(s),
+		sourceType: s.sourceType,
+	}));
+	commands.push(buildManifestWriteCommand(newManifest));
+
+	return commands;
 }
 
 export async function deploySkillsToHermes(context: Context) {
@@ -293,52 +350,8 @@ export async function deploySkillsToHermes(context: Context) {
 			// 1. Read previous manifest
 			const previousManifest = await readRemoteManifest(ssh);
 
-			// 2. Build deployment commands
-			const commands: string[] = [];
-
-			// Remove previously managed skills missing from enabledSkills
-			for (const prev of previousManifest) {
-				if (!prev || typeof prev !== "object" || !prev.name) {
-					continue;
-				}
-				const isStillEnabled = enabledSkills.some(
-					(curr) => curr.name === prev.name,
-				);
-				if (!isStillEnabled) {
-					if (prev.sourceType === "hub" || prev.sourceType === "url") {
-						commands.push(
-							`sudo docker exec hermes hermes skills uninstall ${shellQuote(prev.name)}`,
-						);
-					} else if (prev.sourceType === "custom") {
-						commands.push(
-							`sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`,
-						);
-					}
-				}
-			}
-
-			// Install/write enabled skills
-			for (const skill of enabledSkills) {
-				if (skill.sourceType === "hub" || skill.sourceType === "url") {
-					const installRef = skill.installRef || "";
-					commands.push(
-						`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)}`,
-					);
-				} else if (skill.sourceType === "custom") {
-					commands.push(
-						buildCustomSkillWriteCommand(skill.name, skill.content || ""),
-					);
-				}
-			}
-
-			// Write new manifest
-			const newManifest = enabledSkills.map((s) => ({
-				name: s.name,
-				sourceType: s.sourceType,
-			}));
-			commands.push(buildManifestWriteCommand(newManifest));
-
-			// 3. Execute all commands in a single chained shell execution
+			// 2. Build and execute deployment commands
+			const commands = buildDeployCommands(previousManifest, enabledSkills);
 			if (commands.length > 0) {
 				const compoundCommand = commands.join(" && ");
 				const result = await ssh.execCommand(compoundCommand);

@@ -22,10 +22,77 @@ export type AgentSkillRequest = {
 	enabled?: boolean;
 };
 
+/**
+ * For hub sources, the actual installed name is derived from the installRef.
+ * The name is the part after the last slash, or the whole thing if no slash.
+ * Version specifiers (@version) are stripped.
+ */
+export function getHubInstalledName(installRef: string): string {
+	if (!installRef) return "";
+
+	// Take the part after the last slash
+	const withoutPath = installRef.includes("/")
+		? (installRef.split("/").pop() ?? installRef)
+		: installRef;
+
+	// Strip version specifier
+	const withoutVersion = withoutPath.split("@")[0];
+
+	return withoutVersion;
+}
+
+/**
+ * Resolve the manifest name for a skill.
+ * Hub skills use the upstream bundle name (from installRef), not the UI name.
+ */
+export function resolveManifestName(skill: {
+	sourceType: string;
+	name: string;
+	installRef?: string | null;
+}): string {
+	if (skill.sourceType === "hub") {
+		return getHubInstalledName(skill.installRef ?? "");
+	}
+	return skill.name;
+}
+
 const AGENT_SKILL_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
 export function isValidAgentSkillName(name: string): boolean {
 	return AGENT_SKILL_NAME_PATTERN.test(name);
+}
+
+const HUB_REF_PATTERN = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
+
+function validateHubInstallRef(ref: string): string | null {
+	if (!ref.trim()) return "installRef is required for hub skills.";
+	if (!HUB_REF_PATTERN.test(ref)) {
+		return "installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).";
+	}
+	return null;
+}
+
+function validateUrlInstallRef(ref: string): string | null {
+	if (!ref.trim()) return "installRef is required for url skills.";
+	try {
+		const url = new URL(ref);
+		if (url.protocol !== "http:" && url.protocol !== "https:") {
+			throw new Error();
+		}
+	} catch {
+		return "installRef for url skills must be a valid http or https URL.";
+	}
+	return null;
+}
+
+function validateCustomContent(
+	content: string | null | undefined,
+): string | null {
+	if (!content?.trim()) return "content is required for custom skills.";
+	if (content.trim().length > 50000) {
+		return "Custom skill content cannot exceed 50,000 characters.";
+	}
+	return null;
 }
 
 export const agentSkillCreateSchema = z
@@ -45,63 +112,31 @@ export const agentSkillCreateSchema = z
 	})
 	.superRefine((data, ctx) => {
 		if (data.sourceType === "hub") {
-			if (!data.installRef?.trim()) {
+			const error = validateHubInstallRef(data.installRef ?? "");
+			if (error) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ["installRef"],
-					message: "installRef is required for hub skills.",
+					message: error,
 				});
-			} else {
-				const ref = data.installRef.trim();
-				const hubRefPattern = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
-				if (!hubRefPattern.test(ref)) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						path: ["installRef"],
-						message:
-							"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
-					});
-				}
 			}
 		} else if (data.sourceType === "url") {
-			if (!data.installRef?.trim()) {
+			const error = validateUrlInstallRef(data.installRef ?? "");
+			if (error) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ["installRef"],
-					message: "installRef is required for url skills.",
+					message: error,
 				});
-			} else {
-				const ref = data.installRef.trim();
-				try {
-					const url = new URL(ref);
-					if (url.protocol !== "http:" && url.protocol !== "https:") {
-						throw new Error();
-					}
-				} catch {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						path: ["installRef"],
-						message:
-							"installRef for url skills must be a valid http or https URL.",
-					});
-				}
 			}
 		} else if (data.sourceType === "custom") {
-			if (!data.content?.trim()) {
+			const error = validateCustomContent(data.content);
+			if (error) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ["content"],
-					message: "content is required for custom skills.",
+					message: error,
 				});
-			} else {
-				const rawContent = data.content.trim();
-				if (rawContent.length > 50000) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						path: ["content"],
-						message: "Custom skill content cannot exceed 50,000 characters.",
-					});
-				}
 			}
 		}
 	});
@@ -187,52 +222,21 @@ export function parseAgentSkillUpdateBody(
 
 	if (existing.sourceType === "hub") {
 		if (data.installRef !== undefined) {
-			if (data.installRef === null || !data.installRef.trim()) {
-				return { ok: false, error: "installRef is required for hub skills." };
-			}
-			const ref = data.installRef.trim();
-			const hubRefPattern = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
-			if (!hubRefPattern.test(ref)) {
-				return {
-					ok: false,
-					error:
-						"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
-				};
-			}
-			updates.installRef = ref;
+			const error = validateHubInstallRef(data.installRef ?? "");
+			if (error) return { ok: false, error };
+			updates.installRef = data.installRef?.trim() ?? null;
 		}
 	} else if (existing.sourceType === "url") {
 		if (data.installRef !== undefined) {
-			if (data.installRef === null || !data.installRef.trim()) {
-				return { ok: false, error: "installRef is required for url skills." };
-			}
-			const ref = data.installRef.trim();
-			try {
-				const url = new URL(ref);
-				if (url.protocol !== "http:" && url.protocol !== "https:") {
-					throw new Error();
-				}
-			} catch {
-				return {
-					ok: false,
-					error: "installRef for url skills must be a valid http or https URL.",
-				};
-			}
-			updates.installRef = ref;
+			const error = validateUrlInstallRef(data.installRef ?? "");
+			if (error) return { ok: false, error };
+			updates.installRef = data.installRef?.trim() ?? null;
 		}
 	} else if (existing.sourceType === "custom") {
 		if (data.content !== undefined) {
-			if (data.content === null || !data.content.trim()) {
-				return { ok: false, error: "content is required for custom skills." };
-			}
-			const rawContent = data.content.trim();
-			if (rawContent.length > 50000) {
-				return {
-					ok: false,
-					error: "Custom skill content cannot exceed 50,000 characters.",
-				};
-			}
-			updates.content = rawContent;
+			const error = validateCustomContent(data.content);
+			if (error) return { ok: false, error };
+			updates.content = data.content?.trim() ?? null;
 		}
 	}
 
