@@ -107,15 +107,25 @@ export async function updateAgentSkillRecord(
 	writer: DbWriter,
 	input: UpdateAgentSkillInput,
 ): Promise<AgentSkillSummary> {
+	const updateFields: Partial<typeof agentSkills.$inferInsert> = {
+		updatedAt: new Date(),
+	};
+	if (input.updates.name !== undefined) {
+		updateFields.name = input.updates.name;
+	}
+	if (input.updates.enabled !== undefined) {
+		updateFields.enabled = input.updates.enabled;
+	}
+	if (input.updates.installRef !== undefined) {
+		updateFields.installRef = input.updates.installRef;
+	}
+	if (input.updates.content !== undefined) {
+		updateFields.content = input.updates.content;
+	}
+
 	const [record] = await writer
 		.update(agentSkills)
-		.set({
-			name: input.updates.name,
-			enabled: input.updates.enabled,
-			installRef: input.updates.installRef,
-			content: input.updates.content,
-			updatedAt: new Date(),
-		})
+		.set(updateFields)
 		.where(
 			and(
 				eq(agentSkills.userId, input.userId),

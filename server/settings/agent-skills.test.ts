@@ -199,7 +199,25 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(400);
 			expect(await response.json()).toMatchObject({
-				error: "installRef for hub skills must be a single-line string.",
+				error:
+					"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
+			});
+		});
+
+		it("returns 400 when hub installRef has invalid characters", async () => {
+			const { createAgentSkill } = await import("./agent-skills");
+			const response = await createAgentSkill(
+				createContext({
+					name: "my-skill",
+					sourceType: "hub",
+					installRef: "nous/my skill; rm -rf /",
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error:
+					"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
 			});
 		});
 

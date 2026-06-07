@@ -53,11 +53,13 @@ export const agentSkillCreateSchema = z
 				});
 			} else {
 				const ref = data.installRef.trim();
-				if (ref.includes("\n") || ref.includes("\r")) {
+				const hubRefPattern = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
+				if (!hubRefPattern.test(ref)) {
 					ctx.addIssue({
 						code: z.ZodIssueCode.custom,
 						path: ["installRef"],
-						message: "installRef for hub skills must be a single-line string.",
+						message:
+							"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
 					});
 				}
 			}
@@ -189,10 +191,12 @@ export function parseAgentSkillUpdateBody(
 				return { ok: false, error: "installRef is required for hub skills." };
 			}
 			const ref = data.installRef.trim();
-			if (ref.includes("\n") || ref.includes("\r")) {
+			const hubRefPattern = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
+			if (!hubRefPattern.test(ref)) {
 				return {
 					ok: false,
-					error: "installRef for hub skills must be a single-line string.",
+					error:
+						"installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).",
 				};
 			}
 			updates.installRef = ref;

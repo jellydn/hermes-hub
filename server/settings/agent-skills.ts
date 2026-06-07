@@ -234,7 +234,8 @@ export async function readRemoteManifest(
 		return [];
 	}
 	try {
-		return JSON.parse(content);
+		const parsed = JSON.parse(content);
+		return Array.isArray(parsed) ? parsed : [];
 	} catch {
 		return [];
 	}
@@ -295,6 +296,9 @@ export async function deploySkillsToHermes(context: Context) {
 
 			// Remove previously managed skills missing from enabledSkills
 			for (const prev of previousManifest) {
+				if (!prev || typeof prev !== "object" || !prev.name) {
+					continue;
+				}
 				const isStillEnabled = enabledSkills.some(
 					(curr) => curr.name === prev.name,
 				);
