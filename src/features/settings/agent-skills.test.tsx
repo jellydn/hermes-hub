@@ -84,17 +84,49 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-	fetchMock.mockResolvedValue(
-		new Response(JSON.stringify({ status: "ok" }), {
-			status: 200,
-			headers: { "content-type": "application/json" },
-		}),
-	);
+	fetchMock.mockImplementation((url) => {
+		if (url.includes("/api/settings/agent-skills/remote-list")) {
+			return Promise.resolve(
+				new Response(
+					JSON.stringify({
+						raw: "Name         Source   Enabled\nweb-search   hub      true",
+						skills: ["web-search"],
+						count: 1,
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			);
+		}
+		if (url.includes("/api/settings/agent-skills/deploy")) {
+			return Promise.resolve(
+				new Response(
+					JSON.stringify({
+						deployedAt: "2026-06-07T12:00:00.000Z",
+						skillCount: 1,
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			);
+		}
+		// Default response
+		return Promise.resolve(
+			new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+	});
 	vi.stubGlobal("confirm", () => true);
 });
 
 describe("AgentSkills UI Component", () => {
-	it("renders list of agent skills and sidebar state", () => {
+	it("renders list of agent skills and sidebar state", async () => {
 		render(
 			<AgentSkills
 				initialSkills={mockSkills}
@@ -110,16 +142,35 @@ describe("AgentSkills UI Component", () => {
 				"1 enabled, 1 disabled. Changes apply on the VPS after deploy.",
 			),
 		).toBeTruthy();
+
+		// Wait for initial remote inventory fetch
+		await waitFor(() => {
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
+		});
 	});
 
 	it("toggles enabled state when checkbox is clicked", async () => {
 		const updatedSkill = { ...mockSkills[0], enabled: false };
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ skill: updatedSkill }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							raw: "Name         Source   Enabled\nweb-search   hub      true",
+							skills: ["web-search"],
+							count: 1,
+						}),
+						{ status: 200 },
+					),
+				);
+			}
+			return Promise.resolve(
+				new Response(JSON.stringify({ skill: updatedSkill }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			);
+		});
 
 		render(
 			<AgentSkills
@@ -156,12 +207,21 @@ describe("AgentSkills UI Component", () => {
 			updatedAt: "2026-06-07T12:00:00.000Z",
 		};
 
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ skill: newSkill }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
+						status: 200,
+					}),
+				);
+			}
+			return Promise.resolve(
+				new Response(JSON.stringify({ skill: newSkill }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			);
+		});
 
 		render(
 			<AgentSkills initialSkills={[]} deploymentTargets={[primaryTarget]} />,
@@ -213,12 +273,21 @@ describe("AgentSkills UI Component", () => {
 			updatedAt: "2026-06-07T12:00:00.000Z",
 		};
 
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ skill: newSkill }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
+						status: 200,
+					}),
+				);
+			}
+			return Promise.resolve(
+				new Response(JSON.stringify({ skill: newSkill }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			);
+		});
 
 		render(
 			<AgentSkills initialSkills={[]} deploymentTargets={[primaryTarget]} />,
@@ -263,12 +332,21 @@ describe("AgentSkills UI Component", () => {
 	});
 
 	it("deletes a skill successfully", async () => {
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ success: true }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
+						status: 200,
+					}),
+				);
+			}
+			return Promise.resolve(
+				new Response(JSON.stringify({ success: true }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			);
+		});
 
 		render(
 			<AgentSkills
@@ -295,18 +373,27 @@ describe("AgentSkills UI Component", () => {
 	});
 
 	it("deploys skills and shows success message", async () => {
-		fetchMock.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({
-					deployedAt: "2026-06-07T12:00:00.000Z",
-					skillCount: 1,
-				}),
-				{
-					status: 200,
-					headers: { "content-type": "application/json" },
-				},
-			),
-		);
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
+						status: 200,
+					}),
+				);
+			}
+			return Promise.resolve(
+				new Response(
+					JSON.stringify({
+						deployedAt: "2026-06-07T12:00:00.000Z",
+						skillCount: 1,
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			);
+		});
 
 		render(
 			<AgentSkills
@@ -323,5 +410,105 @@ describe("AgentSkills UI Component", () => {
 		await waitFor(() => {
 			expect(screen.getByText(/deployed 1 skill to 1\.2\.3\.4/i)).toBeTruthy();
 		});
+	});
+
+	it("fetches remote inventory for the selected target and displays count/raw output", async () => {
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							raw: "Name         Source   Enabled\nweb-search   hub      true\nfile-reader  hub      true",
+							skills: ["web-search", "file-reader"],
+							count: 2,
+						}),
+						{ status: 200 },
+					),
+				);
+			}
+			return Promise.resolve(new Response(JSON.stringify({})));
+		});
+
+		render(
+			<AgentSkills
+				initialSkills={mockSkills}
+				deploymentTargets={[primaryTarget]}
+			/>,
+		);
+
+		// Wait for remote inventory loading
+		await waitFor(() => {
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
+		});
+
+		const textarea = screen.getByLabelText(
+			"Raw CLI Output",
+		) as HTMLTextAreaElement;
+		expect(textarea.value).toContain("web-search   hub      true");
+		expect(textarea.value).toContain("file-reader  hub      true");
+		expect(textarea.readOnly).toBe(true);
+
+		expect(
+			screen.getByText(/Only HermesHub-managed skills are changed by Deploy/i),
+		).toBeTruthy();
+	});
+
+	it("changing deployment target refreshes remote inventory", async () => {
+		const secondaryTarget = {
+			serverId: "server_2",
+			label: "Secondary",
+			host: "5.6.7.8",
+			installUpdatedAt: "2026-06-06T12:00:00.000Z",
+		};
+
+		fetchMock.mockImplementation((url, init) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				const body = JSON.parse((init as RequestInit).body as string);
+				const skills =
+					body.serverId === "server_1"
+						? ["web-search"]
+						: ["web-search", "code-exec"];
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							raw: `Skills on ${body.serverId}:\n${skills.join("\n")}`,
+							skills,
+							count: skills.length,
+						}),
+						{ status: 200 },
+					),
+				);
+			}
+			return Promise.resolve(new Response(JSON.stringify({})));
+		});
+
+		render(
+			<AgentSkills
+				initialSkills={mockSkills}
+				deploymentTargets={[primaryTarget, secondaryTarget]}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
+		});
+
+		const textarea = screen.getByLabelText(
+			"Raw CLI Output",
+		) as HTMLTextAreaElement;
+		expect(textarea.value).toContain("Skills on server_1");
+
+		const select = screen.getByRole("combobox", { name: /deploy target/i });
+		await act(async () => {
+			fireEvent.change(select, { target: { value: "server_2" } });
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
+		});
+		const updatedTextarea = screen.getByLabelText(
+			"Raw CLI Output",
+		) as HTMLTextAreaElement;
+		expect(updatedTextarea.value).toContain("Skills on server_2");
 	});
 });

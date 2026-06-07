@@ -10,12 +10,18 @@ import { useReducer } from "react";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
+import { useMountEffect } from "@/lib/use-mount-effect";
 import { cn } from "@/lib/utils";
 import {
 	type AgentSkillSummary,
 	agentSkillCreateSchema,
 	type SkillSourceType,
 } from "../../../server/settings/agent-skills/config";
+import {
+	deleteAgentSkill,
+	fetchRemoteSkills,
+	persistAgentSkill,
+} from "./agent-skills-api";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
 type SkillFormState = {
@@ -26,6 +32,12 @@ type SkillFormState = {
 	enabled: boolean;
 };
 
+type RemoteInventoryState = {
+	raw: string;
+	skills: string[];
+	count: number;
+} | null;
+
 type AgentSkillsState = {
 	skills: AgentSkillSummary[];
 	isAdding: boolean;
@@ -34,6 +46,10 @@ type AgentSkillsState = {
 	isSaving: boolean;
 	isDeleting: boolean;
 	message: { type: "success" | "error"; text: string } | null;
+	selectedServerId: string;
+	remoteInventory: RemoteInventoryState;
+	remoteLoading: boolean;
+	remoteError: string | null;
 };
 
 const initialFormState: SkillFormState = {
@@ -43,6 +59,23 @@ const initialFormState: SkillFormState = {
 	content: "",
 	enabled: true,
 };
+
+const getInitialState = (
+	initialSkills: AgentSkillSummary[],
+	initialServerId: string,
+): AgentSkillsState => ({
+	skills: initialSkills,
+	isAdding: false,
+	editingSkill: null,
+	form: initialFormState,
+	isSaving: false,
+	isDeleting: false,
+	message: null,
+	selectedServerId: initialServerId,
+	remoteInventory: null,
+	remoteLoading: false,
+	remoteError: null,
+});
 
 function agentSkillsReducer(
 	state: AgentSkillsState,
@@ -66,7 +99,11 @@ function agentSkillsReducer(
 		  }
 		| { type: "SAVE_SUCCESS"; skill: AgentSkillSummary; message: string }
 		| { type: "DELETE_SUCCESS"; skillId: string; message: string }
-		| { type: "UPDATE_SKILL"; skill: AgentSkillSummary },
+		| { type: "UPDATE_SKILL"; skill: AgentSkillSummary }
+		| { type: "SET_SERVER_ID"; serverId: string }
+		| { type: "FETCH_REMOTE_START" }
+		| { type: "FETCH_REMOTE_SUCCESS"; inventory: RemoteInventoryState }
+		| { type: "FETCH_REMOTE_FAILURE"; error: string },
 ): AgentSkillsState {
 	switch (action.type) {
 		case "SET_SKILLS":
@@ -148,6 +185,29 @@ function agentSkillsReducer(
 				skills: state.skills.map((s) =>
 					s.id === action.skill.id ? action.skill : s,
 				),
+			};
+		case "SET_SERVER_ID":
+			return {
+				...state,
+				selectedServerId: action.serverId,
+				remoteInventory: null,
+				remoteError: null,
+			};
+		case "FETCH_REMOTE_START":
+			return { ...state, remoteLoading: true, remoteError: null };
+		case "FETCH_REMOTE_SUCCESS":
+			return {
+				...state,
+				remoteLoading: false,
+				remoteInventory: action.inventory,
+				remoteError: null,
+			};
+		case "FETCH_REMOTE_FAILURE":
+			return {
+				...state,
+				remoteLoading: false,
+				remoteError: action.error,
+				remoteInventory: null,
 			};
 		default:
 			return state;
@@ -470,12 +530,22 @@ type SkillsDeployAsideProps = {
 	skills: AgentSkillSummary[];
 	enabledCount: number;
 	deploymentTargets: HermesDeploymentTarget[];
+	selectedServerId: string;
+	onServerIdChange: (serverId: string) => void;
+	remoteInventory: RemoteInventoryState;
+	remoteLoading: boolean;
+	remoteError: string | null;
 };
 
 function SkillsDeployAside({
 	skills,
 	enabledCount,
 	deploymentTargets,
+	selectedServerId,
+	onServerIdChange,
+	remoteInventory,
+	remoteLoading,
+	remoteError,
 }: SkillsDeployAsideProps) {
 	return (
 		<aside className="space-y-4">
@@ -505,6 +575,8 @@ function SkillsDeployAside({
 				buttonLabel="Deploy Agent Skills"
 				deployingLabel="Deploying..."
 				noDeploymentMessage="Install Hermes on a server first to enable agent skills deployment."
+				selectedServerId={selectedServerId}
+				onServerIdChange={onServerIdChange}
 				formatSuccess={(payload, serverHost) => {
 					const deployedAt = payload.deployedAt
 						? new Date(payload.deployedAt).toLocaleString()
@@ -516,20 +588,76 @@ function SkillsDeployAside({
 						: `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost}. Hermes is restarting...`;
 				}}
 			/>
+
+			{selectedServerId && (
+				<section
+					className="island-shell rounded-[2rem] p-6 space-y-4"
+					id="remote-inventory-section"
+				>
+					<p className="island-kicker mb-2">Remote Inventory</p>
+
+					{remoteLoading ? (
+						<div
+							className="flex items-center gap-2 text-sm text-[var(--sea-ink-soft)]"
+							id="remote-inventory-loading"
+						>
+							<LoaderCircle className="h-4 w-4 animate-spin" />
+							<span>Fetching remote inventory...</span>
+						</div>
+					) : remoteError ? (
+						<p className="m-0 text-sm text-red-600" id="remote-inventory-error">
+							{remoteError}
+						</p>
+					) : remoteInventory ? (
+						<div className="space-y-3" id="remote-inventory-details">
+							<h4 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
+								{remoteInventory.count} remote skill
+								{remoteInventory.count === 1 ? "" : "s"}
+							</h4>
+							<div className="space-y-1">
+								<label
+									htmlFor="remote-raw-output"
+									className="text-xs font-semibold text-[var(--sea-ink-soft)] uppercase tracking-wider"
+								>
+									Raw CLI Output
+								</label>
+								<textarea
+									id="remote-raw-output"
+									readOnly
+									value={remoteInventory.raw}
+									rows={6}
+									className="w-full rounded-[1rem] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-mono text-[var(--sea-ink)] outline-none resize-none"
+								/>
+							</div>
+						</div>
+					) : (
+						<p
+							className="m-0 text-sm text-[var(--sea-ink-soft)]"
+							id="remote-inventory-empty"
+						>
+							Select a server target to load its remote inventory.
+						</p>
+					)}
+
+					<p className="m-0 text-xs text-[var(--sea-ink-soft)] italic">
+						Note: Only HermesHub-managed skills are changed by Deploy. Remote
+						unmanaged skills are not removed.
+					</p>
+				</section>
+			)}
 		</aside>
 	);
 }
 
-function useAgentSkills(initialSkills: AgentSkillSummary[]) {
-	const [state, dispatch] = useReducer(agentSkillsReducer, {
-		skills: initialSkills,
-		isAdding: false,
-		editingSkill: null,
-		form: initialFormState,
-		isSaving: false,
-		isDeleting: false,
-		message: null,
-	});
+function useAgentSkills(
+	initialSkills: AgentSkillSummary[],
+	deploymentTargets: HermesDeploymentTarget[],
+) {
+	const initialServerId = deploymentTargets[0]?.serverId ?? "";
+	const [state, dispatch] = useReducer(
+		agentSkillsReducer,
+		getInitialState(initialSkills, initialServerId),
+	);
 
 	const {
 		skills,
@@ -539,8 +667,36 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 		isSaving,
 		isDeleting,
 		message,
+		selectedServerId,
+		remoteInventory,
+		remoteLoading,
+		remoteError,
 	} = state;
 	const enabledCount = skills.filter((s) => s.enabled).length;
+
+	async function loadRemoteInventory(serverId: string) {
+		if (!serverId) {
+			return;
+		}
+		dispatch({ type: "FETCH_REMOTE_START" });
+		const result = await fetchRemoteSkills(serverId);
+		if (result.ok) {
+			dispatch({ type: "FETCH_REMOTE_SUCCESS", inventory: result.data });
+		} else {
+			dispatch({ type: "FETCH_REMOTE_FAILURE", error: result.error });
+		}
+	}
+
+	useMountEffect(() => {
+		if (initialServerId) {
+			void loadRemoteInventory(initialServerId);
+		}
+	});
+
+	function handleServerIdChange(serverId: string) {
+		dispatch({ type: "SET_SERVER_ID", serverId });
+		void loadRemoteInventory(serverId);
+	}
 
 	function onChangeField<K extends keyof SkillFormState>(
 		field: K,
@@ -569,36 +725,20 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 		dispatch({ type: "SET_MESSAGE", message: null });
 		const updatedEnabled = !skill.enabled;
 
-		try {
-			const response = await fetch(`/api/settings/agent-skills/${skill.id}`, {
-				method: "PUT",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ enabled: updatedEnabled }),
-			});
+		const result = await persistAgentSkill({
+			method: "PUT",
+			url: `/api/settings/agent-skills/${skill.id}`,
+			body: { enabled: updatedEnabled },
+		});
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				skill?: AgentSkillSummary;
-			} | null;
-
-			if (!response.ok || !payload?.skill) {
-				dispatch({
-					type: "SET_MESSAGE",
-					message: {
-						type: "error",
-						text: payload?.error || "Failed to update skill status.",
-					},
-				});
-				return;
-			}
-
-			dispatch({ type: "UPDATE_SKILL", skill: payload.skill });
-		} catch {
+		if (result.ok) {
+			dispatch({ type: "UPDATE_SKILL", skill: result.skill });
+		} else {
 			dispatch({
 				type: "SET_MESSAGE",
 				message: {
 					type: "error",
-					text: "Network error. Failed to update skill status.",
+					text: result.error,
 				},
 			});
 		}
@@ -646,45 +786,24 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 			body.content = form.content;
 		}
 
-		try {
-			const response = await fetch(url, {
-				method,
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-			});
+		const result = await persistAgentSkill({ method, url, body });
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				skill?: AgentSkillSummary;
-			} | null;
-
-			if (!response.ok || !payload?.skill) {
-				dispatch({
-					type: "SET_MESSAGE",
-					message: {
-						type: "error",
-						text: payload?.error || "Failed to save skill.",
-					},
-				});
-				return;
-			}
-
+		if (result.ok) {
 			dispatch({
 				type: "SAVE_SUCCESS",
-				skill: payload.skill,
+				skill: result.skill,
 				message: "Skill saved. Deploy settings to apply changes.",
 			});
-		} catch {
+		} else {
 			dispatch({
 				type: "SET_MESSAGE",
 				message: {
 					type: "error",
-					text: "Network error. Failed to save skill.",
+					text: result.error,
 				},
 			});
-		} finally {
-			dispatch({ type: "SET_SAVING", isSaving: false });
 		}
+		dispatch({ type: "SET_SAVING", isSaving: false });
 	}
 
 	async function handleDelete(skillId: string) {
@@ -695,43 +814,24 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 		dispatch({ type: "SET_MESSAGE", message: null });
 		dispatch({ type: "SET_DELETING", isDeleting: true });
 
-		try {
-			const response = await fetch(`/api/settings/agent-skills/${skillId}`, {
-				method: "DELETE",
-			});
+		const result = await deleteAgentSkill(skillId);
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				success?: boolean;
-			} | null;
-
-			if (!response.ok || !payload?.success) {
-				dispatch({
-					type: "SET_MESSAGE",
-					message: {
-						type: "error",
-						text: payload?.error || "Failed to delete skill.",
-					},
-				});
-				return;
-			}
-
+		if (result.ok) {
 			dispatch({
 				type: "DELETE_SUCCESS",
 				skillId,
 				message: "Skill deleted. Deploy settings to apply changes.",
 			});
-		} catch {
+		} else {
 			dispatch({
 				type: "SET_MESSAGE",
 				message: {
 					type: "error",
-					text: "Network error. Failed to delete skill.",
+					text: result.error,
 				},
 			});
-		} finally {
-			dispatch({ type: "SET_DELETING", isDeleting: false });
 		}
+		dispatch({ type: "SET_DELETING", isDeleting: false });
 	}
 
 	return {
@@ -743,6 +843,10 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 		isDeleting,
 		message,
 		enabledCount,
+		selectedServerId,
+		remoteInventory,
+		remoteLoading,
+		remoteError,
 		onChangeField,
 		handleAddClick,
 		handleEditClick,
@@ -750,6 +854,7 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 		handleToggleEnabled,
 		handleSave,
 		handleDelete,
+		handleServerIdChange,
 	};
 }
 
@@ -771,6 +876,10 @@ export function AgentSkills({
 		isDeleting,
 		message,
 		enabledCount,
+		selectedServerId,
+		remoteInventory,
+		remoteLoading,
+		remoteError,
 		onChangeField,
 		handleAddClick,
 		handleEditClick,
@@ -778,7 +887,8 @@ export function AgentSkills({
 		handleToggleEnabled,
 		handleSave,
 		handleDelete,
-	} = useAgentSkills(initialSkills);
+		handleServerIdChange,
+	} = useAgentSkills(initialSkills, deploymentTargets);
 
 	return (
 		<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -817,6 +927,11 @@ export function AgentSkills({
 				skills={skills}
 				enabledCount={enabledCount}
 				deploymentTargets={deploymentTargets}
+				selectedServerId={selectedServerId}
+				onServerIdChange={handleServerIdChange}
+				remoteInventory={remoteInventory}
+				remoteLoading={remoteLoading}
+				remoteError={remoteError}
 			/>
 		</div>
 	);
