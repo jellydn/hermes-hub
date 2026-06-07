@@ -13,7 +13,6 @@
 		"module": "ESNext",
 		"paths": {
 			"#/*": ["./src/*"],
-			"@/*": ["./src/*"],
 			"#server/*": ["./server/*"],
 			"#shared/*": ["./shared/*"]
 		},

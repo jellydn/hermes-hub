@@ -41,22 +41,13 @@ The replacement was automated across ~72 files using a regex pattern, then manua
 
 ### Alias consolidation
 
-The existing `@/*` alias (173 files as of June 2026) was left in place to avoid scope creep in this PR. Both `@/*` and `#/*` resolve to `./src/*`. The `#/` alias has only 2 uses (added in this PR for agent-skills components), while `@/` has 173 uses across all `src/` files.
+The existing `@/*` alias (173 files as of June 2026) was consolidated into `#/*` immediately after the initial PR landed. Both aliases resolved to `./src/*`, so this was a mechanical `sed` replacement with zero behavioral change, reducing the alias table from 4 entries to 3.
 
-Consolidating `@/*` into `#/*` is a mechanical `sed` replacement — no behavioral change, no architectural trade-off. It should happen in a dedicated cleanup PR after this one lands to keep the diff reviewable. The final alias table will be 3 entries instead of 4:
-
-| Alias | Target | Files (after consolidation) |
-|-------|--------|-------|
-| `#/*` | `./src/*` | 175 |
-| `#server/*` | `./server/*` | 40 |
-| `#shared/*` | `./shared/*` | 35 |
-
-### Current alias configuration (pre-consolidation)
+### Current alias configuration
 
 | Alias | Target | Files |
 |-------|--------|-------|
-| `@/*` | `./src/*` | 173 (legacy) |
-| `#/*` | `./src/*` | 2 |
+| `#/*` | `./src/*` | 175 |
 | `#server/*` | `./server/*` | 40 |
 | `#shared/*` | `./shared/*` | 35 |
 
@@ -74,7 +65,7 @@ Both `tsconfig.json` `paths` and `package.json` `imports` were updated so that b
 
 ### Negative
 
-- Four aliases total with `@/*` and `#/*` both resolving to `./src/*` — duplicate configuration; consolidate `@/*` → `#/*` in a follow-up cleanup PR
+- The alias configuration is now 3 entries instead of 4 after `@/*` → `#/*` consolidation
 - The regex-based migration may have missed edge cases in dynamically constructed import paths
 - New contributors must learn the alias conventions before understanding the import graph
 - The `package.json` `imports` field must stay in sync with `tsconfig.json` `paths` for Vite resolution to work correctly
