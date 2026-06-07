@@ -353,19 +353,12 @@ describe("agent skills settings", () => {
 			// check that uninstall was NOT run since manifest was empty
 			// check that install commands were called for skill-one (hub) and skill-two (custom write)
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			expect(calledCommands).toContain(
+			const compoundCommand = calledCommands[1] || "";
+			expect(compoundCommand).toContain(
 				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one'",
 			);
-			expect(
-				calledCommands.some(
-					(cmd) => cmd.includes("printf") && cmd.includes("skill-two/SKILL.md"),
-				),
-			).toBe(true);
-			expect(
-				calledCommands.some((cmd) =>
-					cmd.includes("hermeshub-agent-skills.json"),
-				),
-			).toBe(true);
+			expect(compoundCommand).toContain("skill-two/SKILL.md");
+			expect(compoundCommand).toContain("hermeshub-agent-skills.json");
 
 			expect(insertAuditValues).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -415,17 +408,15 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(200);
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const compoundCommand = calledCommands[1] || "";
 
 			// should uninstall old hub skill
-			expect(calledCommands).toContain(
+			expect(compoundCommand).toContain(
 				"sudo docker exec hermes hermes skills uninstall 'skill-old-hub'",
 			);
 			// should remove old custom skill directory
-			expect(
-				calledCommands.some(
-					(cmd) => cmd.includes("rm -rf") && cmd.includes("skill-old-custom"),
-				),
-			).toBe(true);
+			expect(compoundCommand).toContain("rm -rf");
+			expect(compoundCommand).toContain("skill-old-custom");
 		});
 
 		it("aborts deploy and logs failure if any installation fails", async () => {

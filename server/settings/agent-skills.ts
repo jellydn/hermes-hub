@@ -290,69 +290,57 @@ export async function deploySkillsToHermes(context: Context) {
 			// 1. Read previous manifest
 			const previousManifest = await readRemoteManifest(ssh);
 
-			// 2. Remove previously managed skills missing from enabledSkills
+			// 2. Build deployment commands
+			const commands: string[] = [];
+
+			// Remove previously managed skills missing from enabledSkills
 			for (const prev of previousManifest) {
 				const isStillEnabled = enabledSkills.some(
 					(curr) => curr.name === prev.name,
 				);
 				if (!isStillEnabled) {
 					if (prev.sourceType === "hub" || prev.sourceType === "url") {
-						const uninstallCmd = `sudo docker exec hermes hermes skills uninstall ${shellQuote(prev.name)}`;
-						const result = await ssh.execCommand(uninstallCmd);
-						if (result.code !== 0) {
-							throw new Error(
-								result.stderr || `Failed to uninstall skill: ${prev.name}`,
-							);
-						}
+						commands.push(
+							`sudo docker exec hermes hermes skills uninstall ${shellQuote(prev.name)}`,
+						);
 					} else if (prev.sourceType === "custom") {
-						const removeCmd = `sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`;
-						const result = await ssh.execCommand(removeCmd);
-						if (result.code !== 0) {
-							throw new Error(
-								result.stderr || `Failed to remove custom skill: ${prev.name}`,
-							);
-						}
+						commands.push(
+							`sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`,
+						);
 					}
 				}
 			}
 
-			// 3. Install/write enabled skills
+			// Install/write enabled skills
 			for (const skill of enabledSkills) {
 				if (skill.sourceType === "hub" || skill.sourceType === "url") {
 					const installRef = skill.installRef || "";
-					const installCmd = `sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)}`;
-					const result = await ssh.execCommand(installCmd);
-					if (result.code !== 0) {
-						throw new Error(
-							result.stderr || `Failed to install skill: ${skill.name}`,
-						);
-					}
-				} else if (skill.sourceType === "custom") {
-					const writeCmd = buildCustomSkillWriteCommand(
-						skill.name,
-						skill.content || "",
+					commands.push(
+						`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)}`,
 					);
-					const result = await ssh.execCommand(writeCmd);
-					if (result.code !== 0) {
-						throw new Error(
-							result.stderr ||
-								`Failed to write custom skill file: ${skill.name}`,
-						);
-					}
+				} else if (skill.sourceType === "custom") {
+					commands.push(
+						buildCustomSkillWriteCommand(skill.name, skill.content || ""),
+					);
 				}
 			}
 
-			// 4. Write new manifest
+			// Write new manifest
 			const newManifest = enabledSkills.map((s) => ({
 				name: s.name,
 				sourceType: s.sourceType,
 			}));
-			const writeManifestCmd = buildManifestWriteCommand(newManifest);
-			const result = await ssh.execCommand(writeManifestCmd);
-			if (result.code !== 0) {
-				throw new Error(
-					result.stderr || "Failed to write agent skills manifest file",
-				);
+			commands.push(buildManifestWriteCommand(newManifest));
+
+			// 3. Execute all commands in a single chained shell execution
+			if (commands.length > 0) {
+				const compoundCommand = commands.join(" && ");
+				const result = await ssh.execCommand(compoundCommand);
+				if (result.code !== 0) {
+					throw new Error(
+						result.stderr || "Failed to deploy agent skills changes",
+					);
+				}
 			}
 		},
 		failureAuditAction: "agent_skills.deploy.failed",

@@ -11,9 +11,10 @@ import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import { cn } from "@/lib/utils";
-import type {
-	AgentSkillSummary,
-	SkillSourceType,
+import {
+	type AgentSkillSummary,
+	agentSkillCreateSchema,
+	type SkillSourceType,
 } from "../../../server/settings/agent-skills/config";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
@@ -606,45 +607,22 @@ function useAgentSkills(initialSkills: AgentSkillSummary[]) {
 	async function handleSave() {
 		dispatch({ type: "SET_MESSAGE", message: null });
 
-		// Simple client-side validations
-		if (!form.name.trim()) {
-			dispatch({
-				type: "SET_MESSAGE",
-				message: { type: "error", text: "Skill name is required." },
-			});
-			return;
-		}
+		// Client-side validation using shared Zod schema
+		const parsed = agentSkillCreateSchema.safeParse({
+			name: form.name,
+			sourceType: form.sourceType,
+			enabled: form.enabled,
+			installRef: form.installRef || undefined,
+			content: form.content || undefined,
+		});
 
-		const nameRegex = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-		if (!nameRegex.test(form.name.trim())) {
+		if (!parsed.success) {
 			dispatch({
 				type: "SET_MESSAGE",
 				message: {
 					type: "error",
-					text: "Skill name must start with a letter and contain only letters, numbers, underscores, or hyphens.",
+					text: parsed.error.issues[0].message,
 				},
-			});
-			return;
-		}
-
-		if (
-			(form.sourceType === "hub" || form.sourceType === "url") &&
-			!form.installRef.trim()
-		) {
-			dispatch({
-				type: "SET_MESSAGE",
-				message: {
-					type: "error",
-					text: "Reference (hub ID or URL) is required.",
-				},
-			});
-			return;
-		}
-
-		if (form.sourceType === "custom" && !form.content.trim()) {
-			dispatch({
-				type: "SET_MESSAGE",
-				message: { type: "error", text: "Markdown content is required." },
 			});
 			return;
 		}
