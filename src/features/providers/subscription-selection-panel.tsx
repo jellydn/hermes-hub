@@ -49,7 +49,6 @@ export function SubscriptionSelectionPanel({
 	return (
 		<section className="island-shell rounded-[2rem] p-6 sm:p-8">
 			<div className="mb-8 flex flex-col gap-3">
-				<p className="island-kicker m-0">User subscriptions</p>
 				<h3 className="m-0 text-2xl font-semibold text-[var(--sea-ink)]">
 					Use your ChatGPT subscription
 				</h3>

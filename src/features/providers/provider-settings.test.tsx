@@ -83,6 +83,7 @@ describe("ProviderSettings", () => {
 
 	it("switches to a custom model field for OpenRouter", () => {
 		render(<ProviderSettings initialAccess={null} />);
+		selectApiProvidersTab();
 
 		const apiSection = screen
 			.getByRole("heading", { name: /connect with an api key/i })
@@ -100,6 +101,7 @@ describe("ProviderSettings", () => {
 
 	it("tests the provider connection and shows the connected state", async () => {
 		render(<ProviderSettings initialAccess={null} />);
+		selectApiProvidersTab();
 
 		fireEvent.change(screen.getByLabelText(/api key/i), {
 			target: { value: "sk-live-secret" },
@@ -120,6 +122,7 @@ describe("ProviderSettings", () => {
 
 	it("shows Base URL and Custom Model fields when Ollama is selected", () => {
 		render(<ProviderSettings initialAccess={null} />);
+		selectApiProvidersTab();
 
 		fireEvent.click(screen.getByRole("radio", { name: /ollama \/ local/i }));
 
@@ -131,11 +134,35 @@ describe("ProviderSettings", () => {
 
 	it("does not show ChatGPT in the API provider grid", () => {
 		render(<ProviderSettings initialAccess={null} />);
+		selectApiProvidersTab();
 
 		expect(
 			screen.queryByRole("radio", { name: /openai codex \/ chatgpt/i }),
 		).toBeNull();
-		expect(screen.getByText(/user subscriptions/i)).toBeTruthy();
+		expect(
+			screen.getByRole("tab", { name: /user subscriptions/i }),
+		).toBeTruthy();
+	});
+
+	it("marks the active backend on the matching tab", () => {
+		render(
+			<ProviderSettings
+				initialAccess={{
+					apiProvider: {
+						kind: "api-provider",
+						provider: "openai",
+						model: "gpt-4o-mini",
+						keyLast4: "1234",
+						hasStoredKey: true,
+					},
+					subscription: null,
+					activeBackend: "api-provider",
+				}}
+			/>,
+		);
+
+		const apiTab = screen.getByRole("tab", { name: /api providers/i });
+		expect(within(apiTab).getByText(/^active$/i)).toBeTruthy();
 	});
 
 	it("hides the API key field in the subscription section", async () => {
@@ -167,10 +194,14 @@ describe("ProviderSettings", () => {
 
 		await flushAsyncWork();
 
-		expect(screen.getAllByLabelText(/api key/i)).toHaveLength(1);
+		expect(screen.queryByLabelText(/api key/i)).toBeNull();
 		expect(
 			screen.getAllByText(/chatgpt device-code login/i).length,
 		).toBeGreaterThan(0);
+
+		selectApiProvidersTab();
+
+		expect(screen.getAllByLabelText(/api key/i)).toHaveLength(1);
 	});
 
 	it("enables ChatGPT deploy when remote auth is already authenticated", async () => {
@@ -267,6 +298,10 @@ describe("ProviderSettings", () => {
 		).toBeTruthy();
 	});
 });
+
+function selectApiProvidersTab() {
+	fireEvent.click(screen.getByRole("tab", { name: /api providers/i }));
+}
 
 async function flushAsyncWork() {
 	await act(async () => {

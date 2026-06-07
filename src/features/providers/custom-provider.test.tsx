@@ -40,6 +40,7 @@ afterEach(() => {
 describe("ProviderSettings - custom provider", () => {
 	it("selects custom provider without crashing", () => {
 		render(<ProviderSettings initialAccess={null} />);
+		fireEvent.click(screen.getByRole("tab", { name: /api providers/i }));
 
 		fireEvent.click(screen.getByRole("radio", { name: /custom \/ byo/i }));
 

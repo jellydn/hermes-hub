@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import {
@@ -17,6 +17,11 @@ import type {
 
 export type { ApiProviderConfigSummary, UserSubscriptionConfigSummary };
 
+import {
+	type ProviderAccessTab,
+	resolveInitialProviderAccessTab,
+} from "./provider-access-tab";
+import { ProviderAccessTabs } from "./provider-access-tabs";
 import { ProviderSelectionPanel } from "./provider-selection-panel";
 import { ProviderSettingsAside } from "./provider-settings-aside";
 import {
@@ -64,6 +69,9 @@ export function ProviderSettings({
 		providerSettingsUiReducer,
 		initialAccess,
 		createInitialProviderSettingsUiState,
+	);
+	const [selectedTab, setSelectedTab] = useState<ProviderAccessTab>(() =>
+		resolveInitialProviderAccessTab(initialAccess?.activeBackend ?? null),
 	);
 	const providerForm = useForm<ProviderFormState>({
 		resolver: zodResolver(providerSchema),
@@ -119,6 +127,7 @@ export function ProviderSettings({
 
 			providerForm.setValue("apiKey", "");
 			dispatch({ type: "provider_save_succeeded", config: payload.provider });
+			setSelectedTab("api");
 		} finally {
 			dispatch({ type: "provider_save_finished" });
 		}
@@ -151,6 +160,7 @@ export function ProviderSettings({
 				type: "subscription_save_succeeded",
 				config: payload.subscription,
 			});
+			setSelectedTab("subscription");
 		} finally {
 			dispatch({ type: "subscription_save_finished" });
 		}
@@ -224,40 +234,60 @@ export function ProviderSettings({
 	return (
 		<section className="space-y-6">
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<div className="space-y-6">
-					<ProviderSelectionPanel
-						form={apiForm}
-						register={providerForm.register}
-						savedConfig={uiState.savedApiConfig}
-						isSaving={uiState.isSavingProvider}
-						isTesting={uiState.isTesting}
-						saveMessage={uiState.providerSaveMessage}
-						saveError={uiState.providerSaveError}
-						testError={uiState.testError}
-						isConnected={uiState.isConnected}
-						onProviderChange={updateProvider}
-						onSave={() => void handleSaveProvider()}
-						onTest={() => void handleTestConnection()}
+				<div className="space-y-4">
+					<ProviderAccessTabs
+						selectedTab={selectedTab}
+						activeBackend={uiState.activeBackend}
+						onTabChange={setSelectedTab}
 					/>
 
-					<SubscriptionSelectionPanel
-						form={subscriptionFormValues}
-						register={subscriptionForm.register}
-						savedSubscription={uiState.savedSubscription}
-						isSaving={uiState.isSavingSubscription}
-						saveMessage={uiState.subscriptionSaveMessage}
-						saveError={uiState.subscriptionSaveError}
-						telegramDeployed={Boolean(telegramDeploy)}
-						onCodexAuthStatusChange={(change) =>
-							dispatch({
-								type: "codex_auth_status_changed",
-								status: change.status,
-								isLoading: change.isLoading,
-								error: change.error,
-							})
-						}
-						onSave={() => void handleSaveSubscription()}
-					/>
+					{selectedTab === "subscription" ? (
+						<div
+							role="tabpanel"
+							id="provider-access-panel-subscription"
+							aria-labelledby="provider-access-tab-subscription"
+						>
+							<SubscriptionSelectionPanel
+								form={subscriptionFormValues}
+								register={subscriptionForm.register}
+								savedSubscription={uiState.savedSubscription}
+								isSaving={uiState.isSavingSubscription}
+								saveMessage={uiState.subscriptionSaveMessage}
+								saveError={uiState.subscriptionSaveError}
+								telegramDeployed={Boolean(telegramDeploy)}
+								onCodexAuthStatusChange={(change) =>
+									dispatch({
+										type: "codex_auth_status_changed",
+										status: change.status,
+										isLoading: change.isLoading,
+										error: change.error,
+									})
+								}
+								onSave={() => void handleSaveSubscription()}
+							/>
+						</div>
+					) : (
+						<div
+							role="tabpanel"
+							id="provider-access-panel-api"
+							aria-labelledby="provider-access-tab-api"
+						>
+							<ProviderSelectionPanel
+								form={apiForm}
+								register={providerForm.register}
+								savedConfig={uiState.savedApiConfig}
+								isSaving={uiState.isSavingProvider}
+								isTesting={uiState.isTesting}
+								saveMessage={uiState.providerSaveMessage}
+								saveError={uiState.providerSaveError}
+								testError={uiState.testError}
+								isConnected={uiState.isConnected}
+								onProviderChange={updateProvider}
+								onSave={() => void handleSaveProvider()}
+								onTest={() => void handleTestConnection()}
+							/>
+						</div>
+					)}
 				</div>
 
 				<ProviderSettingsAside
