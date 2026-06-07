@@ -474,6 +474,98 @@ describe("agent skills settings", () => {
 			);
 		});
 	});
+
+	describe("getRemoteSkillsList", () => {
+		it("returns parsed skills and count on successful command execution", async () => {
+			const mockExec = vi.fn().mockResolvedValue({
+				code: 0,
+				stdout: `
+Name         Source   Enabled
+web-search   hub      true
+file-reader  hub      true
+				`,
+			});
+
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { getRemoteSkillsList } = await import("./agent-skills");
+			const response = await getRemoteSkillsList(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+			const payload = await response.json();
+			expect(payload.count).toBe(2);
+			expect(payload.skills).toEqual(["web-search", "file-reader"]);
+			expect(payload.raw).toContain("web-search   hub      true");
+			expect(mockExec).toHaveBeenCalledWith(
+				"sudo docker exec hermes hermes skills list",
+			);
+		});
+
+		it("returns raw output but zero parsed count if output format is unknown", async () => {
+			const mockExec = vi.fn().mockResolvedValue({
+				code: 0,
+				stdout: "Random text output without list structure or headers",
+			});
+
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { getRemoteSkillsList } = await import("./agent-skills");
+			const response = await getRemoteSkillsList(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+			const payload = await response.json();
+			expect(payload.count).toBe(0);
+			expect(payload.skills).toEqual([]);
+			expect(payload.raw).toBe(
+				"Random text output without list structure or headers",
+			);
+		});
+
+		it("returns 502 error when SSH or hermes command fails", async () => {
+			const mockExec = vi.fn().mockResolvedValue({
+				code: 1,
+				stderr: "Container hermes not found",
+			});
+
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { getRemoteSkillsList } = await import("./agent-skills");
+			const response = await getRemoteSkillsList(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(502);
+			const payload = await response.json();
+			expect(payload.error).toContain(
+				"Failed to fetch remote skills: Container hermes not found",
+			);
+		});
+	});
 });
 
 function createContext(body: unknown, method = "POST", id?: string) {

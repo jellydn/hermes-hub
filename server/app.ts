@@ -35,6 +35,7 @@ import {
 	createAgentSkill,
 	deleteAgentSkill,
 	deploySkillsToHermes,
+	getRemoteSkillsList,
 	updateAgentSkill,
 } from "./settings/agent-skills";
 import {
@@ -283,6 +284,11 @@ apiApp.post(
 	"/settings/agent-skills/deploy",
 	httpsMiddleware,
 	deploySkillsToHermes,
+);
+apiApp.post(
+	"/settings/agent-skills/remote-list",
+	httpsMiddleware,
+	getRemoteSkillsList,
 );
 apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", httpsMiddleware, disconnectTelegram);

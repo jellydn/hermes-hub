@@ -4,13 +4,15 @@ import { managedComposeVolumeHome } from "../constants";
 import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
 import { deployToHermesAgent } from "../hermes/deploy";
+import { resolveHermesDeployContext } from "../hermes/deploy-context";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireAuthSession } from "../request-guards";
-import { shellQuote } from "../ssh";
+import { shellQuote, withSshConnection } from "../ssh";
 import {
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
+	parseRemoteSkillsList,
 	type SkillSourceType,
 } from "./agent-skills/config";
 import {
@@ -366,4 +368,72 @@ export async function deploySkillsToHermes(context: Context) {
 			deployedAt: deployedAt.toISOString(),
 		}),
 	});
+}
+
+export async function getRemoteSkillsList(context: Context) {
+	const session = await requireAuthSession(context);
+	if (session instanceof Response) {
+		return session;
+	}
+
+	let payload: unknown;
+	try {
+		payload = await context.req.json();
+	} catch {
+		payload = null;
+	}
+
+	const parsed = parseDeployServerIdBody(payload);
+	if (!parsed.ok) {
+		return context.json({ error: parsed.error }, 400);
+	}
+
+	const deployCtx = await resolveHermesDeployContext(
+		context,
+		session,
+		parsed.serverId,
+	);
+	if (deployCtx instanceof Response) {
+		return deployCtx;
+	}
+
+	const { sshCtx } = deployCtx;
+
+	try {
+		const result = await withSshConnection(
+			{
+				host: sshCtx.server.host,
+				port: sshCtx.server.port,
+				username: sshCtx.server.username,
+				authMethod: sshCtx.authMethod,
+				credential: sshCtx.credential,
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+			},
+			async (ssh) => {
+				const cmdResult = await ssh.execCommand(
+					"sudo docker exec hermes hermes skills list",
+				);
+				if (cmdResult.code !== 0) {
+					throw new Error(
+						cmdResult.stderr || "Hermes skills list command failed",
+					);
+				}
+				return cmdResult.stdout || "";
+			},
+		);
+
+		const parsedSkills = parseRemoteSkillsList(result);
+		return context.json({
+			raw: result,
+			skills: parsedSkills.skills,
+			count: parsedSkills.count,
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Remote command failed";
+		return context.json(
+			{ error: `Failed to fetch remote skills: ${message}` },
+			502,
+		);
+	}
 }

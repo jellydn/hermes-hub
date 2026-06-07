@@ -263,3 +263,82 @@ export function toAgentSkillSummary(record: {
 		updatedAt: record.updatedAt.toISOString(),
 	};
 }
+
+export function parseRemoteSkillsList(stdout: string): {
+	skills: string[];
+	count: number;
+} {
+	const lines = stdout
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	const skills: string[] = [];
+	if (lines.length === 0) {
+		return { skills: [], count: 0 };
+	}
+
+	// Detect format type
+	const hasListMarker = lines.some((line) => /^[-*•]\s+/.test(line));
+	const hasHeader = lines.some((line) => {
+		const lower = line.toLowerCase();
+		return (
+			lower.includes("name") &&
+			(lower.includes("source") ||
+				lower.includes("status") ||
+				lower.includes("enabled"))
+		);
+	});
+
+	// If it doesn't look like a list or a table, treat as unknown format
+	if (!hasListMarker && !hasHeader) {
+		return { skills: [], count: 0 };
+	}
+
+	for (const line of lines) {
+		const lower = line.toLowerCase();
+		if (
+			(lower.includes("name") &&
+				(lower.includes("source") ||
+					lower.includes("status") ||
+					lower.includes("enabled"))) ||
+			lower.includes("---") ||
+			lower.includes("===")
+		) {
+			continue;
+		}
+
+		// Check if bullet point list
+		const bulletMatch = line.match(/^[-*•]\s+([a-zA-Z][a-zA-Z0-9_-]*)/);
+		if (bulletMatch) {
+			const skillName = bulletMatch[1];
+			if (skillName && !skills.includes(skillName)) {
+				skills.push(skillName);
+			}
+			continue;
+		}
+
+		// Check if tabular format (e.g. "web-search   hub   enabled")
+		const parts = line.split(/\s+/);
+		if (parts.length >= 2) {
+			const firstWord = parts[0];
+			if (firstWord && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord)) {
+				const lowerWord = firstWord.toLowerCase();
+				if (
+					lowerWord !== "name" &&
+					lowerWord !== "source" &&
+					lowerWord !== "status" &&
+					lowerWord !== "enabled" &&
+					lowerWord !== "disabled"
+				) {
+					skills.push(firstWord);
+				}
+			}
+		}
+	}
+
+	return {
+		skills,
+		count: skills.length,
+	};
+}
