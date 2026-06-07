@@ -313,7 +313,7 @@ export function buildDeployCommands(
 		if (skill.sourceType === "hub" || skill.sourceType === "url") {
 			const installRef = skill.installRef || "";
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)} --yes`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(
