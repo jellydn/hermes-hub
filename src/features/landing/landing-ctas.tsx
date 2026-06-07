@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { githubRepoUrl } from "@/lib/github-repo";
-import { cn } from "@/lib/utils";
+import { Button } from "#/components/ui/button";
+import { githubRepoUrl } from "#/lib/github-repo";
+import { cn } from "#/lib/utils";
 
 type LandingCtasProps = {
 	className?: string;

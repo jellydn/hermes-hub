@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
+import { Button } from "#/components/ui/button";
+import { authClient } from "#/lib/auth-client";
 
 const loginSchema = z.object({
 	email: z.string().min(1, "Email is required").email("Invalid email address"),

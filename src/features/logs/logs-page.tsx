@@ -1,7 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { LogsViewer } from "@/features/logs/logs-viewer";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { LogsViewer } from "#/features/logs/logs-viewer";
 
 const logsRouteApi = getRouteApi("/logs");
 

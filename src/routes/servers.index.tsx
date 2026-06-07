@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
+import { ServersIndexPage } from "#/features/servers/servers-index-page";
+import { requireSession } from "#/lib/session";
 import { getAuthSession } from "#server/auth";
-import { ServersIndexPage } from "@/features/servers/servers-index-page";
-import { requireSession } from "@/lib/session";
 
 const loadServers = createServerFn({ method: "GET" }).handler(async () => {
 	const session = await getAuthSession(getRequestHeaders());

@@ -1,7 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { ProviderSettings } from "@/features/providers/provider-settings";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { ProviderSettings } from "#/features/providers/provider-settings";
 
 const aiProviderRouteApi = getRouteApi("/ai-provider");
 

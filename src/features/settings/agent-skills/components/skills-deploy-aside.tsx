@@ -1,9 +1,9 @@
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
 import { HermesDeployPanel } from "#/features/settings/hermes-deploy-panel";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
 import { resolveManifestName } from "#shared/contracts/agent-skills";
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 
 type RemoteInventoryState = {
 	raw: string;

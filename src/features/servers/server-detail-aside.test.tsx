@@ -4,8 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { type ComponentPropsWithoutRef, isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
+import type { ServerDetailSnapshot } from "#/lib/server-detail";
 
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
@@ -24,7 +24,7 @@ vi.mock("lucide-react", () => {
 	};
 });
 
-vi.mock("@/components/ui/button", () => ({
+vi.mock("#/components/ui/button", () => ({
 	Button: ({
 		children,
 		asChild,

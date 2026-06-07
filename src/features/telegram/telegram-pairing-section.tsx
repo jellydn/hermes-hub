@@ -7,8 +7,8 @@ import {
 } from "lucide-react";
 import { useReducer } from "react";
 
-import { Button } from "@/components/ui/button";
-import { useMountEffect } from "@/lib/use-mount-effect";
+import { Button } from "#/components/ui/button";
+import { useMountEffect } from "#/lib/use-mount-effect";
 
 import { inputClassName } from "./telegram-input-class";
 import {

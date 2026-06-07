@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { LoginPage } from "@/features/auth/login-page";
-import { getCurrentSession } from "@/lib/session";
+import { LoginPage } from "#/features/auth/login-page";
+import { getCurrentSession } from "#/lib/session";
 
 type LoginSearch = {
 	redirect?: string;

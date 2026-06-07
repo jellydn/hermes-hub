@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ServerListSummary } from "@/lib/servers";
+import type { ServerListSummary } from "#/lib/servers";
 
 type MockLinkProps = {
 	children?: ReactNode;

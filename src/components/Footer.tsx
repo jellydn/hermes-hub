@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "#/lib/auth-client";
 
 export default function Footer() {
 	const { data: session } = authClient.useSession();

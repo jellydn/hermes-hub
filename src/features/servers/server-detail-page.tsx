@@ -2,13 +2,13 @@ import { getRouteApi } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { ServerDetail } from "@/features/servers/server-detail";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { ServerDetail } from "#/features/servers/server-detail";
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
-import { useMountEffect } from "@/lib/use-mount-effect";
+} from "#/lib/server-detail";
+import { useMountEffect } from "#/lib/use-mount-effect";
 
 const serverDetailRouteApi = getRouteApi("/servers/$id");
 

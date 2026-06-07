@@ -1,7 +1,7 @@
 import { LoaderCircle, Save } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import { type McpFormMessage, McpFormMessageBanner } from "./mcp-form-message";
 import {
 	formStateFromPreset,

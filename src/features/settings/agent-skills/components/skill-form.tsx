@@ -1,7 +1,7 @@
 import { LoaderCircle, Save } from "lucide-react";
+import { Button } from "#/components/ui/button";
+import { cn } from "#/lib/utils";
 import type { SkillSourceType } from "#shared/contracts/agent-skills";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export type SkillFormState = {
 	name: string;

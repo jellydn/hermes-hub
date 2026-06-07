@@ -1,7 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { ServerInstallProgress } from "@/features/servers/install-progress";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { ServerInstallProgress } from "#/features/servers/install-progress";
 
 const serverInstallRouteApi = getRouteApi("/servers/$id/install");
 

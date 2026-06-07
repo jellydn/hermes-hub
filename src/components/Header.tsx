@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "#/lib/auth-client";
 import { BrandMark } from "./brand-mark";
 import ThemeToggle from "./ThemeToggle";
 

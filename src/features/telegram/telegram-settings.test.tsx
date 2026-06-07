@@ -26,7 +26,7 @@ vi.mock("lucide-react", () => {
 	};
 });
 
-vi.mock("@/components/ui/button", () => ({
+vi.mock("#/components/ui/button", () => ({
 	Button: ({
 		asChild: _asChild,
 		children,

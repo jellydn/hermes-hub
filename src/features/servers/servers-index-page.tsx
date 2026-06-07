@@ -1,9 +1,9 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { AppShell } from "@/features/dashboard/app-shell";
-import { ServerList } from "@/features/servers/server-list";
+import { Button } from "#/components/ui/button";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { ServerList } from "#/features/servers/server-list";
 
 const serversRouteApi = getRouteApi("/servers/");
 

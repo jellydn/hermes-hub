@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { type ComponentType, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { StatusIcon } from "@/components/ui/status-icon";
+import { Button } from "#/components/ui/button";
+import { StatusIcon } from "#/components/ui/status-icon";
 
 import type {
 	DashboardProviderSummary,
@@ -19,10 +19,10 @@ import type {
 	DashboardStatusSnapshot,
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
-} from "@/lib/dashboard-status";
-import { formatModelAccessProviderLabel } from "@/lib/provider-labels";
-import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
-import { useMountEffect } from "@/lib/use-mount-effect";
+} from "#/lib/dashboard-status";
+import { formatModelAccessProviderLabel } from "#/lib/provider-labels";
+import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
+import { useMountEffect } from "#/lib/use-mount-effect";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;

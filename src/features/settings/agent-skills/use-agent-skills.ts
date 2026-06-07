@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
+import { useMountEffect } from "#/lib/use-mount-effect";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
 import { agentSkillCreateSchema } from "#shared/contracts/agent-skills";
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import { useMountEffect } from "@/lib/use-mount-effect";
 import {
 	deleteAgentSkill,
 	fetchRemoteSkills,

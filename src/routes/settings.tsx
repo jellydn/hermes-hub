@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
+import { SettingsPage } from "#/features/settings/settings-page";
+import { loadHermesDeploymentTargets } from "#/lib/load-hermes-deployment-targets";
+import { requireSession } from "#/lib/session";
 import { getAuthSession } from "#server/auth";
 import { getCurrentPersonaSettings } from "#server/settings";
 import { getCurrentAgentSkills } from "#server/settings/agent-skills/records";
 import { getCurrentMcpServers } from "#server/settings/mcp";
-import { SettingsPage } from "@/features/settings/settings-page";
-import { loadHermesDeploymentTargets } from "@/lib/load-hermes-deployment-targets";
-import { requireSession } from "@/lib/session";
 
 const loadMcpServers = createServerFn({ method: "GET" }).handler(async () => {
 	const session = await getAuthSession(getRequestHeaders());

@@ -1,7 +1,7 @@
 import { LoaderCircle, Save } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "#/components/ui/button";
+import { cn } from "#/lib/utils";
 import { type McpFormMessage, McpFormMessageBanner } from "./mcp-form-message";
 import {
 	emptySecretRow,

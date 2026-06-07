@@ -2,7 +2,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { type Path, useForm } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import { ConnectionWizardAuthStep } from "./connection-wizard-auth-step";
 import { ConnectionWizardBasicsStep } from "./connection-wizard-basics-step";
 import { ConnectionWizardReviewStep } from "./connection-wizard-review-step";

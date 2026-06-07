@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	formatActionLabel,
 	type ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 type MockLinkProps = {
 	children?: ReactNode;
@@ -66,7 +66,7 @@ vi.mock("lucide-react", () => {
 	};
 });
 
-vi.mock("@/components/ui/button", () => ({
+vi.mock("#/components/ui/button", () => ({
 	Button: ({
 		children,
 		disabled,

@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 
-import { DashboardPage } from "@/features/dashboard/dashboard-page";
-import { requireSession } from "@/lib/session";
+import { DashboardPage } from "#/features/dashboard/dashboard-page";
+import { requireSession } from "#/lib/session";
 
 const loadDashboardStatus = createServerFn({ method: "GET" }).handler(
 	async () => {

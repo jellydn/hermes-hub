@@ -4,7 +4,7 @@ import type {
 	ServerActionType,
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 import { createHistoryEntry } from "./server-detail-helpers";
 

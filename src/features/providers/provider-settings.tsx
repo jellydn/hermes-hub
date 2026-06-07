@@ -2,18 +2,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useReducer, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import {
+	type ApiProviderId,
+	getAiProviderOption,
+	getDefaultAiModel,
+} from "#/lib/ai-providers";
+import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
+import { getDefaultSubscriptionModel } from "#/lib/user-subscriptions";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
 	UserSubscriptionConfigSummary,
 } from "#shared/contracts/model-access";
-import {
-	type ApiProviderId,
-	getAiProviderOption,
-	getDefaultAiModel,
-} from "@/lib/ai-providers";
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
-import { getDefaultSubscriptionModel } from "@/lib/user-subscriptions";
 
 export type { ApiProviderConfigSummary, UserSubscriptionConfigSummary };
 

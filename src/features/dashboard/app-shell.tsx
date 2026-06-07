@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
+import { Button } from "#/components/ui/button";
+import { authClient } from "#/lib/auth-client";
+import { cn } from "#/lib/utils";
 
 const appNavigation = [
 	{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },

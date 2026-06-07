@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
+import { Button } from "#/components/ui/button";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
-import { Button } from "@/components/ui/button";
 import { SkillListItem } from "./skill-list-item";
 
 type SkillsListProps = {

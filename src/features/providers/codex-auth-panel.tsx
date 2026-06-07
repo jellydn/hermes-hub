@@ -1,4 +1,5 @@
 import { useReducer, useRef } from "react";
+import { useMountEffect } from "#/lib/use-mount-effect";
 import {
 	CODEX_MAX_POLL_ATTEMPTS,
 	type CodexAuthCompleteResponse,
@@ -6,7 +7,6 @@ import {
 	type CodexAuthStatus,
 	type CodexAuthStatusResponse,
 } from "#shared/contracts/codex-auth";
-import { useMountEffect } from "@/lib/use-mount-effect";
 
 import {
 	codexAuthPanelReducer,

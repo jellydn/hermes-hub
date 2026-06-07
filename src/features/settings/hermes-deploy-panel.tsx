@@ -1,8 +1,8 @@
 import { CloudUpload, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
+import { Button } from "#/components/ui/button";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 
 export type DeployResponsePayload = {
 	error?: string;

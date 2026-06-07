@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import type { McpFormMessage } from "./mcp-form-message";
 import type { McpFormState } from "./mcp-form-state";
 import { McpServerForm } from "./mcp-server-form";

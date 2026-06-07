@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
+import { Button } from "#/components/ui/button";
+import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
 
 export function AboutPage() {
 	return (

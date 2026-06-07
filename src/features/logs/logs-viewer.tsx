@@ -1,10 +1,10 @@
 import { LoaderCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { Banner } from "@/components/ui/banner";
-import { Button } from "@/components/ui/button";
-import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "@/lib/logs";
-import { formatActionLabel } from "@/lib/server-detail";
+import { Banner } from "#/components/ui/banner";
+import { Button } from "#/components/ui/button";
+import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "#/lib/logs";
+import { formatActionLabel } from "#/lib/server-detail";
 
 type LogsViewerProps = {
 	initialLogs: LogsSnapshot;

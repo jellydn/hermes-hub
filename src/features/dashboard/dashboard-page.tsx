@@ -1,8 +1,8 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 
-import { Button } from "@/components/ui/button";
-import { AppShell } from "@/features/dashboard/app-shell";
-import { DashboardStatusOverview } from "@/features/dashboard/status-overview";
+import { Button } from "#/components/ui/button";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { DashboardStatusOverview } from "#/features/dashboard/status-overview";
 
 const dashboardRouteApi = getRouteApi("/dashboard");
 

@@ -1,8 +1,8 @@
 import { getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { cn } from "@/lib/utils";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { cn } from "#/lib/utils";
 import { AgentSkills } from "./agent-skills";
 import { McpSettings } from "./mcp-settings";
 import { PersonaSettings } from "./persona-settings";

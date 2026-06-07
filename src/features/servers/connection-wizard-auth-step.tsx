@@ -1,7 +1,7 @@
 import { KeyRound, LockKeyhole } from "lucide-react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
-import { cn } from "@/lib/utils";
+import { cn } from "#/lib/utils";
 
 import { AuthCard } from "./connection-wizard-auth-card";
 import { WizardField } from "./connection-wizard-field";

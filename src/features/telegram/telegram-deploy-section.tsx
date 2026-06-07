@@ -1,7 +1,7 @@
 import { CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 
 import type { TelegramSettingsSummary } from "./telegram-settings";
 

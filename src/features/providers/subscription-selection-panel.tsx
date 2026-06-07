@@ -1,12 +1,12 @@
 import { KeyRound, LoaderCircle } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import {
 	formatUserSubscriptionLabel,
 	getUserSubscriptionOption,
 	userSubscriptionOptions,
-} from "@/lib/user-subscriptions";
+} from "#/lib/user-subscriptions";
+import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
 import { CodexAuthPanel, type CodexAuthStatusChange } from "./codex-auth-panel";
 import {
 	ProviderSettingsField,

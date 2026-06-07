@@ -1,6 +1,6 @@
+import { Banner } from "#/components/ui/banner";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
-import { Banner } from "@/components/ui/banner";
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import { SkillForm } from "./agent-skills/components/skill-form";
 import { SkillsDeployAside } from "./agent-skills/components/skills-deploy-aside";
 import { SkillsList } from "./agent-skills/components/skills-list";
