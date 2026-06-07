@@ -1226,6 +1226,175 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 
 ---
 
+## Agent Skills
+
+HermesHub stores custom and community agent skills in `agent_skills` and can push them to a selected Hermes VPS. Skills can be imported from the Nous Hub (via a Hub ID), from a custom URL pointing to a `SKILL.md` file, or authored directly in the UI as markdown. Deploying skills synchronizes the list to the remote Hermes target, writes custom skill files, and runs `hermes skills install/uninstall` commands inside the Hermes container before restarting the gateway.
+
+The Settings page (`/settings`) exposes an **Agent Skills** tab. Save persists locally; deploy writes over SSH and restarts the gateway.
+
+### POST `/api/settings/agent-skills`
+
+Creates a new agent skill. Content is validated (including size constraints <= 50,000 characters and valid URL/repository formats) and persisted in the database. Does not write to the VPS until deploy is called.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+```json
+{
+  "name": "my-skill",
+  "sourceType": "hub",
+  "installRef": "owner/repo",
+  "enabled": true
+}
+```
+
+| Field        | Type    | Description                                                                 |
+| ------------ | ------- | --------------------------------------------------------------------------- |
+| `name`       | string  | Required. Unique name for the skill. Must start with a letter and contain only letters, numbers, underscores, or hyphens. |
+| `sourceType` | string  | Required. Must be one of `"hub"`, `"url"`, or `"custom"`.                    |
+| `installRef` | string  | Required if `sourceType` is `"hub"` or `"url"`. Repository/package reference pattern `/^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/` for `"hub"`, or valid http/https URL for `"url"`. |
+| `content`    | string  | Required if `sourceType` is `"custom"`. Markdown content, up to 50,000 characters. |
+| `enabled`    | boolean | Optional. Defaults to `true`.                                               |
+
+**Response (200):**
+```json
+{
+  "skill": {
+    "id": "uuid",
+    "name": "my-skill",
+    "sourceType": "hub",
+    "installRef": "owner/repo",
+    "content": null,
+    "enabled": true,
+    "createdAt": "2026-06-07T12:00:00.000Z",
+    "updatedAt": "2026-06-07T12:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Invalid JSON payload, missing required fields, or validation failed |
+| 400    | An agent skill with this name already exists                 |
+| 401    | Unauthorized                                                 |
+| 500    | Database save failed                                         |
+
+---
+
+### PUT `/api/settings/agent-skills/:id`
+
+Updates an existing agent skill by ID. Only modifies fields sent in the request body.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+```json
+{
+  "enabled": false
+}
+```
+
+| Field        | Type    | Description                                                                 |
+| ------------ | ------- | --------------------------------------------------------------------------- |
+| `name`       | string  | Optional. New name for the skill. Must follow the unique naming constraints. |
+| `installRef` | string  | Optional. Must match format constraints of the skill's original `sourceType`. |
+| `content`    | string  | Optional. Must match content constraints of the skill's original `sourceType`. |
+| `enabled`    | boolean | Optional. Updates activation status.                                        |
+
+**Response (200):**
+```json
+{
+  "skill": {
+    "id": "uuid",
+    "name": "my-skill",
+    "sourceType": "hub",
+    "installRef": "owner/repo",
+    "content": null,
+    "enabled": false,
+    "createdAt": "2026-06-07T12:00:00.000Z",
+    "updatedAt": "2026-06-07T13:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Validation failed, or attempting to set invalid/empty references |
+| 400    | Rename conflict with an existing skill name                   |
+| 401    | Unauthorized                                                 |
+| 404    | Agent skill not found                                        |
+| 500    | Database update failed                                       |
+
+---
+
+### DELETE `/api/settings/agent-skills/:id`
+
+Deletes an agent skill by ID. Does not remove it from connected servers until the next deploy runs.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None
+
+**Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+**Error responses:**
+
+| Status | Condition            |
+| ------ | -------------------- |
+| 401    | Unauthorized         |
+| 404    | Agent skill not found |
+| 500    | Database deletion failed |
+
+---
+
+### POST `/api/settings/agent-skills/deploy`
+
+Deploys the user's enabled agent skills list to a selected Hermes VPS, uninstalls disabled/removed skills, writes custom skill files, records the changes in a remote manifest file `/root/.hermes/hermeshub-agent-skills.json`, and restarts the Hermes gateway.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (optional):**
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Deploys to this server. Defaults to the server with the most recent successful install when omitted. |
+
+**Response (200):**
+```json
+{
+  "status": "deployed",
+  "serverId": "uuid",
+  "serverHost": "192.168.1.100",
+  "skillCount": 3,
+  "deployedAt": "2026-06-07T13:00:00.000Z"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Selected server does not have a successful Hermes install    |
+| 401    | Unauthorized                                                 |
+| 404    | Server not found                                             |
+| 502    | SSH connection error, command execution failure, or gateway restart failed |
+
+---
+
 ## Hermes Web UI
 
 HermesHub can deploy the [Hermes Web UI](https://get-hermes.ai/) alongside the Hermes agent on a connected VPS. After setup, the UI is reachable through an authenticated reverse proxy at `/api/servers/:id/web-ui/proxy/` — traffic is forwarded over SSH to the Web UI container on the VPS (default port `8787`). No manual SSH tunnels are required.
@@ -1362,9 +1531,10 @@ The following tables are used by the API:
 | `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
 | `ai_providers`     | AI provider configuration with encrypted API keys |
 | `telegram_configs` | Telegram bot connections                     |
-| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram, persona, MCP) |
+| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram, persona, MCP, agent_skills) |
 | `hermes_settings`  | Per-user Hermes agent persona (`SOUL.md` source) |
 | `mcp_servers`      | Per-user MCP server definitions with encrypted secrets |
+| `agent_skills`     | Per-user Agent Skill configurations |
 | `user`, `session`, `account`, `verification` | Better Auth user management tables |
 
 ---
