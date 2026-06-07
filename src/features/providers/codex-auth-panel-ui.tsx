@@ -1,7 +1,6 @@
 import { ExternalLink, KeyRound, LoaderCircle } from "lucide-react";
-
+import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import { Button } from "@/components/ui/button";
-import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
 
 import type { CodexAuthPanelState } from "./codex-auth-panel-state";
 

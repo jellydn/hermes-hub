@@ -10,4 +10,4 @@ export {
 	CODEX_DEFAULT_POLL_INTERVAL_SECONDS,
 	CODEX_MAX_POLL_ATTEMPTS,
 	CODEX_SESSION_TTL_MS,
-} from "../../../shared/contracts/codex-auth";
+} from "#shared/contracts/codex-auth";

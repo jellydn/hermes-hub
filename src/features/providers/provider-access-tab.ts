@@ -1,4 +1,4 @@
-import type { ModelAccessSnapshot } from "../../../shared/contracts/model-access";
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 
 export type ProviderAccessTab = "subscription" | "api";
 

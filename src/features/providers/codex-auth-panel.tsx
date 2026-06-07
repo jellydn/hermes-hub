@@ -1,13 +1,12 @@
 import { useReducer, useRef } from "react";
-
-import { useMountEffect } from "@/lib/use-mount-effect";
 import {
 	CODEX_MAX_POLL_ATTEMPTS,
 	type CodexAuthCompleteResponse,
 	type CodexAuthStartResponse,
 	type CodexAuthStatus,
 	type CodexAuthStatusResponse,
-} from "../../../shared/contracts/codex-auth";
+} from "#shared/contracts/codex-auth";
+import { useMountEffect } from "@/lib/use-mount-effect";
 
 import {
 	codexAuthPanelReducer,

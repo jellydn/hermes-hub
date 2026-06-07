@@ -3,7 +3,7 @@ import {
 	defaultStreamHandler,
 } from "@tanstack/react-start/server";
 import { createServerEntry } from "@tanstack/react-start/server-entry";
-import { apiApp } from "../server/app";
+import { apiApp } from "#server/app";
 
 const startHandler = createStartHandler(defaultStreamHandler);
 

@@ -1,5 +1,5 @@
+import type { PersonaSettingsSummary } from "#server/settings/config";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { PersonaSettingsSummary } from "../../../server/settings/config";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
 type PersonaSettingsAsideProps = {

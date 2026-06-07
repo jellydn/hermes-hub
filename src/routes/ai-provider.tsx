@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-
+import { getAuthSession } from "#server/auth";
+import { getModelAccessSnapshot } from "#server/providers";
 import { AiProviderPage } from "@/features/providers/ai-provider-page";
 import { loadTelegramDeploy } from "@/lib/load-telegram-deploy";
 import { requireSession } from "@/lib/session";
-import { getAuthSession } from "../../server/auth";
-import { getModelAccessSnapshot } from "../../server/providers";
 
 const loadModelAccessSnapshot = createServerFn({ method: "GET" }).handler(
 	async () => {

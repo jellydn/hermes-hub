@@ -1,7 +1,4 @@
-import {
-	type ApiProviderId,
-	providerRequiresApiKey,
-} from "../../src/lib/ai-providers";
+import { type ApiProviderId, providerRequiresApiKey } from "#/lib/ai-providers";
 
 export type ProviderRequest = {
 	provider: string;

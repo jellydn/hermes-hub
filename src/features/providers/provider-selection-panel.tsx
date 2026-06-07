@@ -6,7 +6,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-
+import type { ApiProviderConfigSummary } from "#shared/contracts/model-access";
 import { Button } from "@/components/ui/button";
 import {
 	type ApiProviderId,
@@ -14,8 +14,6 @@ import {
 	formatAiProviderLabel,
 	getAiProviderOption,
 } from "@/lib/ai-providers";
-
-import type { ApiProviderConfigSummary } from "../../../shared/contracts/model-access";
 import {
 	ProviderSettingsField,
 	providerInputClassName,

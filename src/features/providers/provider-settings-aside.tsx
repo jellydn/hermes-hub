@@ -1,15 +1,14 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { formatAiProviderLabel } from "@/lib/ai-providers";
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
-import { formatUserSubscriptionLabel } from "@/lib/user-subscriptions";
-import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
 	UserSubscriptionConfigSummary,
-} from "../../../shared/contracts/model-access";
+} from "#shared/contracts/model-access";
+import { Button } from "@/components/ui/button";
+import { formatAiProviderLabel } from "@/lib/ai-providers";
+import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
+import { formatUserSubscriptionLabel } from "@/lib/user-subscriptions";
 
 type ProviderSettingsAsideProps = {
 	activeBackend: ModelAccessSnapshot["activeBackend"];

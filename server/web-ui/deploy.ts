@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import type { ServerWebUiSnapshot } from "../../shared/contracts/server-web-ui";
+import type { ServerWebUiSnapshot } from "#shared/contracts/server-web-ui";
 import { defaultHermesWebUiPort } from "../constants";
 import { encryptSecret } from "../crypto";
 import { getDb } from "../db";

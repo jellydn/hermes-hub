@@ -1,6 +1,6 @@
 import type { NodeSSH } from "node-ssh";
 
-import type { ServerHealthCheckResult } from "../../shared/contracts/server-health-check";
+import type { ServerHealthCheckResult } from "#shared/contracts/server-health-check";
 import { hermesContainerName } from "../constants";
 import { isContainerRunning } from "../hermes/runtime";
 import type { OwnedServerRecord } from "../server-records";

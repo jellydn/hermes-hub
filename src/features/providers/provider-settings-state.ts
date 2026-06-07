@@ -1,9 +1,9 @@
-import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
 	UserSubscriptionConfigSummary,
-} from "../../../shared/contracts/model-access";
+} from "#shared/contracts/model-access";
 
 export type ProviderSettingsUiState = {
 	savedApiConfig: ApiProviderConfigSummary | null;

@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type {
 	ServerWebUiDeployStatus,
 	ServerWebUiSnapshot,
-} from "../../shared/contracts/server-web-ui";
+} from "#shared/contracts/server-web-ui";
 import { defaultHermesWebUiPort } from "../constants";
 import { decryptSecret } from "../crypto";
 import { getDb } from "../db";

@@ -1,7 +1,6 @@
 import { Check } from "lucide-react";
-
+import type { McpServerSummary } from "#server/settings/mcp/config";
 import { Button } from "@/components/ui/button";
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
 
 import {
 	findSavedPresetServer,

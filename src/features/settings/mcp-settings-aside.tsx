@@ -1,5 +1,5 @@
+import type { McpServerSummary } from "#server/settings/mcp/config";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
 type McpSettingsAsideProps = {

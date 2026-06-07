@@ -1,4 +1,4 @@
-import type { DashboardVpsSummary } from "../../src/lib/dashboard-status";
+import type { DashboardVpsSummary } from "#/lib/dashboard-status";
 import {
 	normalizeAuthMethod,
 	resolveServerCredential,

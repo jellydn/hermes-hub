@@ -1,9 +1,8 @@
 import { LoaderCircle, Save } from "lucide-react";
 import { useState } from "react";
-
+import type { PersonaSettingsSummary } from "#server/settings/config";
 import { Button } from "@/components/ui/button";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { PersonaSettingsSummary } from "../../../server/settings/config";
 
 import { PersonaSettingsAside } from "./persona-settings-aside";
 

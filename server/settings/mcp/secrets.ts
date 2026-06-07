@@ -1,5 +1,5 @@
-import { decryptSecret, encryptSecret } from "../../crypto";
-import { getLast4 } from "../../lib/get-last-4";
+import { decryptSecret, encryptSecret } from "#server/crypto";
+import { getLast4 } from "#server/lib/get-last-4";
 import type { EncryptedSecretMap } from "./types";
 
 export type SecretKeySummary = {

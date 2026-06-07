@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
-import type { ServerActionType } from "../src/lib/server-detail";
+import type { ServerActionType } from "#/lib/server-detail";
 import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";

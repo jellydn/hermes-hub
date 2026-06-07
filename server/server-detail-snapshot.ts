@@ -4,7 +4,7 @@ import type {
 	ServerActionResult,
 	ServerActionType,
 	ServerDetailSnapshot,
-} from "../src/lib/server-detail";
+} from "#/lib/server-detail";
 import { getDb } from "./db";
 import { auditLogs } from "./db/schema";
 import { getLatestInstallForServer } from "./install/records";

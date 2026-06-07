@@ -3,7 +3,7 @@ import type {
 	DashboardProviderSummary,
 	DashboardServerSummary,
 	DashboardTelegramSummary,
-} from "../../src/lib/dashboard-status";
+} from "#/lib/dashboard-status";
 import {
 	type ActiveModelBackend,
 	formatActiveBackendLabel,

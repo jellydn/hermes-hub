@@ -1,10 +1,9 @@
 import { Activity, LoaderCircle } from "lucide-react";
-
+import type { ServerHealthCheckResult } from "#shared/contracts/server-health-check";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
-import type { ServerHealthCheckResult } from "../../../shared/contracts/server-health-check";
 
 type ServerHealthCheckPanelProps = {
 	error: string | null;

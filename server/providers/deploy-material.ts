@@ -1,4 +1,4 @@
-import { getProviderCredentialPolicy } from "../../src/lib/ai-providers";
+import { getProviderCredentialPolicy } from "#/lib/ai-providers";
 import type {
 	ActiveApiProviderBackend,
 	ActiveModelBackend,
