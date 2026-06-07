@@ -20,9 +20,9 @@ import type {
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
 } from "@/lib/dashboard-status";
+import { formatModelAccessProviderLabel } from "@/lib/provider-labels";
 import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
 import { useMountEffect } from "@/lib/use-mount-effect";
-import { formatModelAccessProviderLabel } from "../../../server/providers/active-backend";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;
