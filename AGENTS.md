@@ -9,6 +9,8 @@
 - CI runs `bunx @biomejs/biome check .`, then `bun run typecheck`, then `bun run test`, then `bun run build`. Match that order when you touch JS/TS files.
 - Do not use `bun test`; Vitest is configured in `vite.config.ts`, and the repo’s test command is `bun run test`.
 - Pre-commit (`.pre-commit-config.yaml`) runs biome-check, then `bun run typecheck`, then `react-doctor --staged --blocking warning` on staged changes.
+- `just check` runs typecheck + test in parallel (unlike `just ci` which is `lint -> typecheck -> test -> build`). Use `VITEST_MAX_WORKERS` to limit parallel test processes.
+- All current tests live in `server/` (none in `src/`). Add new tests as `*.test.ts` co-located in `server/`.
 
 ## Verified Gotchas
 
@@ -20,7 +22,9 @@
 - Local migration commands are `bun run db:migrate` and `just db-migrate`; both require `DATABASE_URL` and wrap `drizzle-kit migrate`. Deploy still runs migrations at startup via `scripts/start-production.mjs`.
 - Path aliases: both `@/*` and `#/*` resolve to `./src/*` (set in `tsconfig.json` `paths` and `package.json` `imports`; Vite uses `resolve.tsconfigPaths: true`). `server/` is outside `src/`, so `src/routes/*` and `src/features/*` import backend modules via relative paths (`../../server/...`), and `server/` modules never use the `@/` alias.
 - `tsc` is strict: `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax: true`. Use `import type` for type-only imports — Biome and the build will flag plain `import` of a type-only symbol.
-- Vitest is configured with `environment: "node"` in `vite.config.ts` and globs `src/**` and `server/**` for `*.test.{ts,tsx}` files (no `*.spec.*` in this repo). Use `node:test`-style globals or import from `vitest`; do not assume a DOM. Tests are co-located with the code they cover.
+- Vitest is configured with `environment: "node"` in `vite.config.ts` and globs `src/**` and `server/**` for `*.test.{ts,tsx}` files (no `*.spec.*` in practice). Use `node:test`-style globals or import from `vitest`; do not assume a DOM. Tests are co-located with the code they cover.
+- Required env vars: `DATABASE_URL`, `ENCRYPTION_KEY` (generate with `openssl rand -hex 32`), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`. See `.env.example`.
+- Production startup (`scripts/start-production.mjs`) runs `drizzle-kit migrate` before starting the server — migrations run automatically on deploy.
 - The deploy pipeline ships to two targets, both via GitHub Actions on `main` push: VPS (Docker Compose, image built from `Dockerfile`) and Dokku (`git push dokku HEAD:master`). Workflows live in `.github/workflows/`.
 - Single-instance boundary (per `docs/adr/0009-single-instance-boundary-for-operational-state.md`): install SSE streams, session credentials, the magic-link rate limiter, and the dashboard caches are in-memory module-level state. They are not shared across nodes and are accepted as a temporary constraint.
 
