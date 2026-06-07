@@ -286,7 +286,8 @@ export function parseRemoteSkillsList(stdout: string): {
 			lower.includes("name") &&
 			(lower.includes("source") ||
 				lower.includes("status") ||
-				lower.includes("enabled"))
+				lower.includes("enabled") ||
+				lower.includes("category"))
 		);
 	});
 
@@ -295,16 +296,48 @@ export function parseRemoteSkillsList(stdout: string): {
 		return { skills: [], count: 0 };
 	}
 
+	const isIgnoredWord = (word: string) => {
+		const lower = word.toLowerCase();
+		return (
+			lower === "name" ||
+			lower === "source" ||
+			lower === "status" ||
+			lower === "enabled" ||
+			lower === "disabled" ||
+			lower === "installed" ||
+			lower === "skills" ||
+			lower === "category" ||
+			lower === "trust"
+		);
+	};
+
+	const borderRegex = /[━─═┏┳┓┗┻┛┡┧└┘]/;
+
 	for (const line of lines) {
-		const lower = line.toLowerCase();
-		if (
-			(lower.includes("name") &&
-				(lower.includes("source") ||
-					lower.includes("status") ||
-					lower.includes("enabled"))) ||
-			lower.includes("---") ||
-			lower.includes("===")
-		) {
+		// Ignore border/divider lines
+		if (borderRegex.test(line)) {
+			continue;
+		}
+
+		// Check if it has pipe characters (table columns)
+		if (line.includes("│") || line.includes("┃")) {
+			const parts = line
+				.split(/[│┃]/)
+				.map((p) => p.trim())
+				.filter((p) => p.length > 0);
+
+			if (parts.length >= 1) {
+				const firstWord = parts[0];
+				if (
+					firstWord &&
+					/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord) &&
+					!isIgnoredWord(firstWord)
+				) {
+					if (!skills.includes(firstWord)) {
+						skills.push(firstWord);
+					}
+				}
+			}
 			continue;
 		}
 
@@ -312,25 +345,26 @@ export function parseRemoteSkillsList(stdout: string): {
 		const bulletMatch = line.match(/^[-*•]\s+([a-zA-Z][a-zA-Z0-9_-]*)/);
 		if (bulletMatch) {
 			const skillName = bulletMatch[1];
-			if (skillName && !skills.includes(skillName)) {
+			if (
+				skillName &&
+				!isIgnoredWord(skillName) &&
+				!skills.includes(skillName)
+			) {
 				skills.push(skillName);
 			}
 			continue;
 		}
 
-		// Check if tabular format (e.g. "web-search   hub   enabled")
+		// Check if standard space-separated tabular format (e.g. "web-search   hub   enabled")
 		const parts = line.split(/\s+/);
 		if (parts.length >= 2) {
 			const firstWord = parts[0];
-			if (firstWord && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord)) {
-				const lowerWord = firstWord.toLowerCase();
-				if (
-					lowerWord !== "name" &&
-					lowerWord !== "source" &&
-					lowerWord !== "status" &&
-					lowerWord !== "enabled" &&
-					lowerWord !== "disabled"
-				) {
+			if (
+				firstWord &&
+				/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord) &&
+				!isIgnoredWord(firstWord)
+			) {
+				if (!skills.includes(firstWord)) {
 					skills.push(firstWord);
 				}
 			}

@@ -510,6 +510,48 @@ file-reader  hub      true
 			);
 		});
 
+		it("parses real-world box-drawing table output from hermes CLI", async () => {
+			const mockExec = vi.fn().mockResolvedValue({
+				code: 0,
+				stdout: `
+Installed Skills                                
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓
+┃ Name                 ┃ Category             ┃ Source   ┃ Trust    ┃ Status   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩
+│ dogfood              │                      │ builtin  │ builtin  │ enabled  │
+│ yuanbao              │                      │ builtin  │ builtin  │ disabled │
+│ claude-code          │ autonomous-ai-agents │ builtin  │ builtin  │ enabled  │
+│ kanban-codex-lane    │ autonomous-ai-agents │ local    │ local    │ enabled  │
+└──────────────────────┴──────────────────────┴──────────┴──────────┴──────────┘
+1 hub-installed, 2 builtin, 1 local — 3 enabled, 1 disabled
+				`,
+			});
+
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { getRemoteSkillsList } = await import("./agent-skills");
+			const response = await getRemoteSkillsList(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+			const payload = await response.json();
+			expect(payload.count).toBe(4);
+			expect(payload.skills).toEqual([
+				"dogfood",
+				"yuanbao",
+				"claude-code",
+				"kanban-codex-lane",
+			]);
+		});
+
 		it("returns raw output but zero parsed count if output format is unknown", async () => {
 			const mockExec = vi.fn().mockResolvedValue({
 				code: 0,
