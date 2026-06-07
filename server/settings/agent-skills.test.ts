@@ -397,7 +397,7 @@ describe("agent skills settings", () => {
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
 			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --yes",
+				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
 			);
 			// The custom skill write is now a file write (via tee), not in compound command
 			// The manifest write is also a file write, not in compound command

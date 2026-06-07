@@ -312,8 +312,11 @@ export function buildDeployCommands(
 	for (const skill of enabledSkills) {
 		if (skill.sourceType === "hub" || skill.sourceType === "url") {
 			const installRef = skill.installRef || "";
+			// `--yes` skips the confirm prompt (no TTY under `docker exec`); `--force`
+			// lets community-trust skills (e.g. browse-sh) flagged `caution` by the
+			// security scanner install. A `dangerous` verdict still hard-blocks.
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes --force`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(
