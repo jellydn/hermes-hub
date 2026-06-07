@@ -373,12 +373,22 @@ describe("AgentSkills UI Component", () => {
 	});
 
 	it("deploys skills and shows success message", async () => {
+		let remoteFetchCount = 0;
 		fetchMock.mockImplementation((url) => {
 			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				remoteFetchCount++;
 				return Promise.resolve(
-					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
-						status: 200,
-					}),
+					new Response(
+						JSON.stringify({
+							raw:
+								remoteFetchCount === 1
+									? ""
+									: "Name  Source  Enabled\nweb-search  hub  true",
+							skills: remoteFetchCount === 1 ? [] : ["web-search"],
+							count: remoteFetchCount === 1 ? 0 : 1,
+						}),
+						{ status: 200 },
+					),
 				);
 			}
 			return Promise.resolve(
@@ -402,6 +412,11 @@ describe("AgentSkills UI Component", () => {
 			/>,
 		);
 
+		// Wait for initial remote inventory fetch
+		await waitFor(() => {
+			expect(screen.getByText("0 remote skills")).toBeTruthy();
+		});
+
 		const deployButton = screen.getByText("Deploy Agent Skills");
 		await act(async () => {
 			fireEvent.click(deployButton);
@@ -410,6 +425,12 @@ describe("AgentSkills UI Component", () => {
 		await waitFor(() => {
 			expect(screen.getByText(/deployed 1 skill to 1\.2\.3\.4/i)).toBeTruthy();
 		});
+
+		// After deploy success, remote inventory should refresh
+		await waitFor(() => {
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
+		});
+		expect(remoteFetchCount).toBeGreaterThanOrEqual(2);
 	});
 
 	it("fetches remote inventory for the selected target and displays count/raw output", async () => {
@@ -510,5 +531,125 @@ describe("AgentSkills UI Component", () => {
 			"Raw CLI Output",
 		) as HTMLTextAreaElement;
 		expect(updatedTextarea.value).toContain("Skills on server_2");
+	});
+
+	it("shows managed skill status summary with expected, present, and missing skills", async () => {
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							raw: "Name         Source   Enabled\nweb-search   hub      true",
+							skills: ["web-search"],
+							count: 1,
+						}),
+						{ status: 200 },
+					),
+				);
+			}
+			return Promise.resolve(new Response(JSON.stringify({})));
+		});
+
+		const hubSkill = {
+			id: "skill_hub",
+			name: "My Search",
+			sourceType: "hub" as const,
+			installRef: "nous/web-search",
+			content: null,
+			enabled: true,
+			createdAt: "2026-06-06T12:00:00.000Z",
+			updatedAt: "2026-06-06T12:00:00.000Z",
+		};
+		const customSkill = {
+			id: "skill_custom",
+			name: "file-reader",
+			sourceType: "custom" as const,
+			installRef: null,
+			content: "Read files.",
+			enabled: true,
+			createdAt: "2026-06-06T12:00:00.000Z",
+			updatedAt: "2026-06-06T12:00:00.000Z",
+		};
+
+		render(
+			<AgentSkills
+				initialSkills={[hubSkill, customSkill]}
+				deploymentTargets={[primaryTarget]}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
+		});
+
+		// Managed skill summary: 1 of 2 present
+		expect(screen.getByText("Managed Skill Status")).toBeTruthy();
+		expect(
+			screen.getByText(/1 of 2 enabled skills present on remote/),
+		).toBeTruthy();
+
+		// Missing skills warning for file-reader (not in remote inventory)
+		expect(screen.getByText(/Missing: file-reader/)).toBeTruthy();
+
+		// Raw CLI output is still available
+		const textarea = screen.getByLabelText(
+			"Raw CLI Output",
+		) as HTMLTextAreaElement;
+		expect(textarea.value).toContain("web-search   hub      true");
+	});
+
+	it("shows no missing managed skills when all enabled skills are present", async () => {
+		fetchMock.mockImplementation((url) => {
+			if (url.includes("/api/settings/agent-skills/remote-list")) {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							raw: "Name         Source   Enabled\nweb-search   hub      true\nfile-reader  hub      true",
+							skills: ["web-search", "file-reader"],
+							count: 2,
+						}),
+						{ status: 200 },
+					),
+				);
+			}
+			return Promise.resolve(new Response(JSON.stringify({})));
+		});
+
+		const hubSkill = {
+			id: "skill_hub",
+			name: "My Search",
+			sourceType: "hub" as const,
+			installRef: "nous/web-search",
+			content: null,
+			enabled: true,
+			createdAt: "2026-06-06T12:00:00.000Z",
+			updatedAt: "2026-06-06T12:00:00.000Z",
+		};
+		const customSkill = {
+			id: "skill_custom",
+			name: "file-reader",
+			sourceType: "custom" as const,
+			installRef: null,
+			content: "Read files.",
+			enabled: true,
+			createdAt: "2026-06-06T12:00:00.000Z",
+			updatedAt: "2026-06-06T12:00:00.000Z",
+		};
+
+		render(
+			<AgentSkills
+				initialSkills={[hubSkill, customSkill]}
+				deploymentTargets={[primaryTarget]}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
+		});
+
+		expect(
+			screen.getByText(/2 of 2 enabled skills present on remote/),
+		).toBeTruthy();
+		expect(screen.queryByText(/Missing:/)).toBeNull();
 	});
 });

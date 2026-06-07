@@ -397,7 +397,7 @@ describe("agent skills settings", () => {
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
 			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
+				"sudo docker exec hermes hermes skills install 'ref-1' --name 'ref-1' --yes --force",
 			);
 			// The custom skill write is now a file write (via tee), not in compound command
 			// The manifest write is also a file write, not in compound command
@@ -462,6 +462,84 @@ describe("agent skills settings", () => {
 			// should remove old custom skill directory
 			expect(compoundCommand).toContain("rm -rf");
 			expect(compoundCommand).toContain("skill-old-custom");
+		});
+
+		it("uses resolved manifest name with --name on url skills", async () => {
+			const urlRecord = {
+				...baseRecord,
+				id: "s_url",
+				name: "remote-skill",
+				sourceType: "url",
+				installRef: "https://example.com/SKILL.md",
+				enabled: true,
+			};
+
+			selectOrderBy.mockResolvedValueOnce([urlRecord]);
+
+			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { deploySkillsToHermes } = await import("./agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+
+			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
+			expect(compoundCommand).toContain(
+				"sudo docker exec hermes hermes skills install 'https://example.com/SKILL.md' --name 'remote-skill' --yes --force",
+			);
+		});
+
+		it.each([
+			{ name: "../etc/passwd", sourceType: "hub" },
+			{ name: "foo/bar", sourceType: "custom" },
+		])("throws when manifest contains unsafe name '$name'", async ({
+			name,
+			sourceType,
+		}) => {
+			selectOrderBy.mockResolvedValueOnce([]);
+
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (
+					cmd.includes("cat") &&
+					cmd.includes("hermeshub-agent-skills.json")
+				) {
+					return Promise.resolve({
+						code: 0,
+						stdout: JSON.stringify([{ name, sourceType }]),
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
+
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { deploySkillsToHermes } = await import("./agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(502);
+			const payload = await response.json();
+			expect(payload.error).toContain("Unsafe manifest name");
+			expect(payload.error).toContain(name);
 		});
 
 		it("aborts deploy and logs failure if any installation fails", async () => {
