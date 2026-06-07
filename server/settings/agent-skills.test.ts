@@ -170,6 +170,27 @@ describe("agent skills settings", () => {
 			);
 		});
 
+		it("creates a hub skill from a registry hub ID with dots", async () => {
+			selectLimit.mockResolvedValueOnce([]);
+
+			const { createAgentSkill } = await import("./agent-skills");
+			const response = await createAgentSkill(
+				createContext({
+					name: "geo-weather-fetch",
+					sourceType: "hub",
+					installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(insertValues).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sourceType: "hub",
+					installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+				}),
+			);
+		});
+
 		it("returns 400 when name is invalid", async () => {
 			const { createAgentSkill } = await import("./agent-skills");
 			const response = await createAgentSkill(
@@ -371,15 +392,15 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(200);
 
-			// check that uninstall was NOT run since manifest was empty
-			// check that install commands were called for skill-one (hub) and skill-two (custom write)
+			// In the new architecture, file writes are done via separate mkdir+tee commands
+			// and shell commands are a separate compound command at the end.
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			const compoundCommand = calledCommands[1] || "";
+			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
 			expect(compoundCommand).toContain(
 				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes",
 			);
-			expect(compoundCommand).toContain("skill-two/SKILL.md");
-			expect(compoundCommand).toContain("hermeshub-agent-skills.json");
+			// The custom skill write is now a file write (via tee), not in compound command
+			// The manifest write is also a file write, not in compound command
 
 			expect(insertAuditValues).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -432,7 +453,7 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(200);
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			const compoundCommand = calledCommands[1] || "";
+			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
 
 			// should uninstall old hub skill
 			expect(compoundCommand).toContain(

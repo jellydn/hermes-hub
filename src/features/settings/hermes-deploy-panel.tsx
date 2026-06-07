@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 
-type DeployResponsePayload = {
+export type DeployResponsePayload = {
 	error?: string;
 	serverId?: string;
 	serverHost?: string;

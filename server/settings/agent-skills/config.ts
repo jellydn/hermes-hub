@@ -1,68 +1,24 @@
-import * as z from "zod";
+import {
+	agentSkillCreateSchema,
+	agentSkillUpdateSchema,
+	HUB_REF_PATTERN,
+} from "../../../shared/contracts/agent-skills";
 
-export const SkillSourceTypeSchema = z.enum(["hub", "url", "custom"]);
-export type SkillSourceType = z.infer<typeof SkillSourceTypeSchema>;
-
-export type AgentSkillSummary = {
-	id: string;
-	name: string;
-	sourceType: SkillSourceType;
-	installRef: string | null;
-	content: string | null;
-	enabled: boolean;
-	createdAt: string;
-	updatedAt: string;
-};
-
-export type AgentSkillRequest = {
-	name?: string;
-	sourceType?: SkillSourceType;
-	installRef?: string | null;
-	content?: string | null;
-	enabled?: boolean;
-};
-
-/**
- * For hub sources, the actual installed name is derived from the installRef.
- * The name is the part after the last slash, or the whole thing if no slash.
- * Version specifiers (@version) are stripped.
- */
-export function getHubInstalledName(installRef: string): string {
-	if (!installRef) return "";
-
-	// Take the part after the last slash
-	const withoutPath = installRef.includes("/")
-		? (installRef.split("/").pop() ?? installRef)
-		: installRef;
-
-	// Strip version specifier
-	const withoutVersion = withoutPath.split("@")[0];
-
-	return withoutVersion;
-}
-
-/**
- * Resolve the manifest name for a skill.
- * Hub skills use the upstream bundle name (from installRef), not the UI name.
- */
-export function resolveManifestName(skill: {
-	sourceType: string;
-	name: string;
-	installRef?: string | null;
-}): string {
-	if (skill.sourceType === "hub") {
-		return getHubInstalledName(skill.installRef ?? "");
-	}
-	return skill.name;
-}
-
-const AGENT_SKILL_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-
-export function isValidAgentSkillName(name: string): boolean {
-	return AGENT_SKILL_NAME_PATTERN.test(name);
-}
-
-const HUB_REF_PATTERN = /^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/;
+export type {
+	AgentSkillRequest,
+	AgentSkillSummary,
+	SkillSourceType,
+} from "../../../shared/contracts/agent-skills";
+export {
+	AGENT_SKILL_NAME_PATTERN,
+	agentSkillCreateSchema,
+	agentSkillUpdateSchema,
+	getHubInstalledName,
+	HUB_REF_PATTERN,
+	isValidAgentSkillName,
+	resolveManifestName,
+	SkillSourceTypeSchema,
+} from "../../../shared/contracts/agent-skills";
 
 function validateHubInstallRef(ref: string): string | null {
 	if (!ref.trim()) return "installRef is required for hub skills.";
@@ -95,73 +51,38 @@ function validateCustomContent(
 	return null;
 }
 
-export const agentSkillCreateSchema = z
-	.object({
-		name: z
-			.string()
-			.trim()
-			.min(1, "Skill name is required.")
-			.regex(
-				AGENT_SKILL_NAME_PATTERN,
-				"Skill name must start with a letter and contain only letters, numbers, underscores, or hyphens.",
-			),
-		sourceType: SkillSourceTypeSchema,
-		enabled: z.boolean().default(true),
-		installRef: z.string().trim().nullable().optional(),
-		content: z.string().trim().nullable().optional(),
-	})
-	.superRefine((data, ctx) => {
-		if (data.sourceType === "hub") {
-			const error = validateHubInstallRef(data.installRef ?? "");
-			if (error) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					path: ["installRef"],
-					message: error,
-				});
-			}
-		} else if (data.sourceType === "url") {
-			const error = validateUrlInstallRef(data.installRef ?? "");
-			if (error) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					path: ["installRef"],
-					message: error,
-				});
-			}
-		} else if (data.sourceType === "custom") {
-			const error = validateCustomContent(data.content);
-			if (error) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					path: ["content"],
-					message: error,
-				});
-			}
-		}
-	});
-
-export const agentSkillUpdateSchema = z.object({
-	name: z
-		.string()
-		.trim()
-		.min(1, "Skill name cannot be empty.")
-		.regex(
-			AGENT_SKILL_NAME_PATTERN,
-			"Skill name must start with a letter and contain only letters, numbers, underscores, or hyphens.",
-		)
-		.optional(),
-	enabled: z.boolean().optional(),
-	installRef: z.string().trim().nullable().optional(),
-	content: z.string().trim().nullable().optional(),
-});
+export function toAgentSkillSummary(record: {
+	id: string;
+	name: string;
+	sourceType: string;
+	installRef: string | null;
+	content: string | null;
+	enabled: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}): import("../../../shared/contracts/agent-skills").AgentSkillSummary {
+	return {
+		id: record.id,
+		name: record.name,
+		sourceType:
+			record.sourceType as import("../../../shared/contracts/agent-skills").SkillSourceType,
+		installRef: record.installRef,
+		content: record.content,
+		enabled: record.enabled,
+		createdAt: record.createdAt.toISOString(),
+		updatedAt: record.updatedAt.toISOString(),
+	};
+}
 
 export function parseAgentSkillCreateBody(payload: unknown):
 	| {
 			ok: true;
-			data: Omit<AgentSkillRequest, "id"> & {
+			data: Omit<
+				import("../../../shared/contracts/agent-skills").AgentSkillRequest,
+				"id"
+			> & {
 				name: string;
-				sourceType: SkillSourceType;
+				sourceType: import("../../../shared/contracts/agent-skills").SkillSourceType;
 			};
 	  }
 	| { ok: false; error: string } {
@@ -198,9 +119,16 @@ export function parseAgentSkillCreateBody(payload: unknown):
 }
 
 export function parseAgentSkillUpdateBody(
-	existing: { sourceType: SkillSourceType },
+	existing: {
+		sourceType: import("../../../shared/contracts/agent-skills").SkillSourceType;
+	},
 	payload: unknown,
-): { ok: true; data: AgentSkillRequest } | { ok: false; error: string } {
+):
+	| {
+			ok: true;
+			data: import("../../../shared/contracts/agent-skills").AgentSkillRequest;
+	  }
+	| { ok: false; error: string } {
 	if (!payload || typeof payload !== "object") {
 		return { ok: false, error: "Request body must be a JSON object." };
 	}
@@ -211,14 +139,11 @@ export function parseAgentSkillUpdateBody(
 	}
 
 	const data = parsed.data;
-	const updates: AgentSkillRequest = {};
+	const updates: import("../../../shared/contracts/agent-skills").AgentSkillRequest =
+		{};
 
-	if (data.name !== undefined) {
-		updates.name = data.name;
-	}
-	if (data.enabled !== undefined) {
-		updates.enabled = data.enabled;
-	}
+	if (data.name !== undefined) updates.name = data.name;
+	if (data.enabled !== undefined) updates.enabled = data.enabled;
 
 	if (existing.sourceType === "hub") {
 		if (data.installRef !== undefined) {
@@ -240,50 +165,43 @@ export function parseAgentSkillUpdateBody(
 		}
 	}
 
-	return {
-		ok: true,
-		data: updates,
-	};
-}
-
-export function toAgentSkillSummary(record: {
-	id: string;
-	name: string;
-	sourceType: string;
-	installRef: string | null;
-	content: string | null;
-	enabled: boolean;
-	createdAt: Date;
-	updatedAt: Date;
-}): AgentSkillSummary {
-	return {
-		id: record.id,
-		name: record.name,
-		sourceType: record.sourceType as SkillSourceType,
-		installRef: record.installRef,
-		content: record.content,
-		enabled: record.enabled,
-		createdAt: record.createdAt.toISOString(),
-		updatedAt: record.updatedAt.toISOString(),
-	};
+	return { ok: true, data: updates };
 }
 
 export function parseRemoteSkillsList(stdout: string): {
 	skills: string[];
 	count: number;
 } {
+	const skills: string[] = [];
+
+	// Strip header/footer lines (box-drawing borders, title lines, summary lines)
 	const lines = stdout
 		.split(/\r?\n/)
 		.map((line) => line.trim())
 		.filter((line) => line.length > 0);
 
-	const skills: string[] = [];
-	if (lines.length === 0) {
-		return { skills: [], count: 0 };
+	if (lines.length === 0) return { skills: [], count: 0 };
+
+	// Check if this is a table with box-drawing characters
+	const hasBoxDrawing = lines.some((line) => /[━─═]/u.test(line));
+
+	if (hasBoxDrawing) {
+		// Parse box-drawing table: extract first column from data rows
+		for (const line of lines) {
+			// Skip border/separator lines and header divider lines
+			if (/[━─═┏┳┓┗┻┛┡┧└┘]/u.test(line) || line.startsWith("┃ Name")) {
+				continue;
+			}
+			// Data row: "│ name │ category │ ..."  or "┃ name ┃ category ┃ ..."
+			const match = line.match(/^[│┃]\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*[│┃]/);
+			if (match?.[1] && !skills.includes(match[1])) {
+				skills.push(match[1]);
+			}
+		}
+		return { skills, count: skills.length };
 	}
 
-	// Detect format type
-	const hasListMarker = lines.some((line) => /^[-*•]\s+/.test(line));
+	// Try table header format (space-separated columns with "Name Source Status" style header)
 	const hasHeader = lines.some((line) => {
 		const lower = line.toLowerCase();
 		return (
@@ -295,88 +213,53 @@ export function parseRemoteSkillsList(stdout: string): {
 		);
 	});
 
-	// If it doesn't look like a list or a table, treat as unknown format
-	if (!hasListMarker && !hasHeader) {
+	// Try bullet-list format
+	const hasListMarker = lines.some((line) => /^[-*•]\s+/.test(line));
+
+	if (!hasHeader && !hasListMarker) {
 		return { skills: [], count: 0 };
 	}
 
-	const isIgnoredWord = (word: string) => {
-		const lower = word.toLowerCase();
-		return (
-			lower === "name" ||
-			lower === "source" ||
-			lower === "status" ||
-			lower === "enabled" ||
-			lower === "disabled" ||
-			lower === "installed" ||
-			lower === "skills" ||
-			lower === "category" ||
-			lower === "trust"
-		);
-	};
+	const ignoredLower = new Set([
+		"name",
+		"source",
+		"status",
+		"enabled",
+		"disabled",
+		"installed",
+		"skills",
+		"category",
+		"trust",
+	]);
 
-	const borderRegex = /[━─═┏┳┓┗┻┛┡┧└┘]/;
+	const namePattern = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
 	for (const line of lines) {
-		// Ignore border/divider lines
-		if (borderRegex.test(line)) {
-			continue;
-		}
-
-		// Check if it has pipe characters (table columns)
-		if (line.includes("│") || line.includes("┃")) {
-			const parts = line
-				.split(/[│┃]/)
-				.map((p) => p.trim())
-				.filter((p) => p.length > 0);
-
-			if (parts.length >= 1) {
-				const firstWord = parts[0];
-				if (
-					firstWord &&
-					/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord) &&
-					!isIgnoredWord(firstWord)
-				) {
-					if (!skills.includes(firstWord)) {
-						skills.push(firstWord);
-					}
-				}
-			}
-			continue;
-		}
-
-		// Check if bullet point list
+		// Bullet-list item: "- skillname"
 		const bulletMatch = line.match(/^[-*•]\s+([a-zA-Z][a-zA-Z0-9_-]*)/);
 		if (bulletMatch) {
-			const skillName = bulletMatch[1];
-			if (
-				skillName &&
-				!isIgnoredWord(skillName) &&
-				!skills.includes(skillName)
-			) {
-				skills.push(skillName);
+			const name = bulletMatch[1];
+			if (!ignoredLower.has(name.toLowerCase()) && !skills.includes(name)) {
+				skills.push(name);
 			}
 			continue;
 		}
 
-		// Check if standard space-separated tabular format (e.g. "web-search   hub   enabled")
-		const parts = line.split(/\s+/);
-		if (parts.length >= 2) {
-			const firstWord = parts[0];
-			if (
-				firstWord &&
-				/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstWord) &&
-				!isIgnoredWord(firstWord)
-			) {
-				if (!skills.includes(firstWord)) {
-					skills.push(firstWord);
+		// Space-separated table: first column is the skill name
+		if (hasHeader) {
+			const parts = line.split(/\s+/);
+			if (parts.length >= 2) {
+				const first = parts[0];
+				if (
+					namePattern.test(first) &&
+					!ignoredLower.has(first.toLowerCase()) &&
+					!skills.includes(first)
+				) {
+					skills.push(first);
 				}
 			}
 		}
 	}
 
-	return {
-		skills,
-		count: skills.length,
-	};
+	return { skills, count: skills.length };
 }

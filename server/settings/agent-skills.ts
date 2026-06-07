@@ -246,29 +246,34 @@ export async function readRemoteManifest(
 	}
 }
 
-export function buildManifestWriteCommand(manifest: ManifestEntry[]): string {
-	const content = JSON.stringify(manifest, null, 2);
-	const encoded = Buffer.from(content, "utf8").toString("base64");
-	const hermesDir = shellQuote(`${managedComposeVolumeHome}/.hermes`);
-	const manifestPath = shellQuote(MANIFEST_PATH);
-	return [
-		`sudo mkdir -p ${hermesDir}`,
-		`printf '%s' '${encoded}' | base64 -d | sudo tee ${manifestPath} > /dev/null`,
-	].join(" && ");
+export type FileWrite = {
+	content: string;
+	path: string;
+};
+
+export function buildManifestWriteCommand(
+	manifest: ManifestEntry[],
+): FileWrite {
+	return {
+		content: JSON.stringify(manifest, null, 2),
+		path: MANIFEST_PATH,
+	};
 }
 
-export function buildCustomSkillWriteCommand(
+export function buildCustomSkillFileWrite(
 	name: string,
 	content: string,
-): string {
-	const skillDir = `${managedComposeVolumeHome}/.hermes/skills/hermeshub/${name}`;
-	const skillPath = `${skillDir}/SKILL.md`;
-	const encoded = Buffer.from(content, "utf8").toString("base64");
-	return [
-		`sudo mkdir -p ${shellQuote(skillDir)}`,
-		`printf '%s' '${encoded}' | base64 -d | sudo tee ${shellQuote(skillPath)} > /dev/null`,
-	].join(" && ");
+): FileWrite {
+	return {
+		content,
+		path: `${managedComposeVolumeHome}/.hermes/skills/hermeshub/${name}/SKILL.md`,
+	};
 }
+
+type DeployPlan = {
+	fileWrites: FileWrite[];
+	shellCommands: string[];
+};
 
 export function buildDeployCommands(
 	previousManifest: ManifestEntry[],
@@ -278,8 +283,9 @@ export function buildDeployCommands(
 		installRef?: string | null;
 		content?: string | null;
 	}>,
-): string[] {
-	const commands: string[] = [];
+): DeployPlan {
+	const fileWrites: FileWrite[] = [];
+	const shellCommands: string[] = [];
 
 	// Remove previously managed skills missing from enabledSkills
 	for (const prev of previousManifest) {
@@ -291,11 +297,11 @@ export function buildDeployCommands(
 		);
 		if (!isStillEnabled) {
 			if (prev.sourceType === "hub" || prev.sourceType === "url") {
-				commands.push(
+				shellCommands.push(
 					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)}`,
 				);
 			} else if (prev.sourceType === "custom") {
-				commands.push(
+				shellCommands.push(
 					`sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`,
 				);
 			}
@@ -306,24 +312,24 @@ export function buildDeployCommands(
 	for (const skill of enabledSkills) {
 		if (skill.sourceType === "hub" || skill.sourceType === "url") {
 			const installRef = skill.installRef || "";
-			commands.push(
+			shellCommands.push(
 				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(skill.name)} --yes`,
 			);
 		} else if (skill.sourceType === "custom") {
-			commands.push(
-				buildCustomSkillWriteCommand(skill.name, skill.content || ""),
+			fileWrites.push(
+				buildCustomSkillFileWrite(skill.name, skill.content || ""),
 			);
 		}
 	}
 
-	// Write new manifest
+	// Write new manifest as a file write (not a shell command)
 	const newManifest = enabledSkills.map((s) => ({
 		name: resolveManifestName(s),
 		sourceType: s.sourceType,
 	}));
-	commands.push(buildManifestWriteCommand(newManifest));
+	fileWrites.push(buildManifestWriteCommand(newManifest));
 
-	return commands;
+	return { fileWrites, shellCommands };
 }
 
 export async function deploySkillsToHermes(context: Context) {
@@ -349,13 +355,25 @@ export async function deploySkillsToHermes(context: Context) {
 
 	return deployToHermesAgent(context, session, parsed.serverId, {
 		deploy: async (ssh) => {
-			// 1. Read previous manifest
 			const previousManifest = await readRemoteManifest(ssh);
+			const plan = buildDeployCommands(previousManifest, enabledSkills);
 
-			// 2. Build and execute deployment commands
-			const commands = buildDeployCommands(previousManifest, enabledSkills);
-			if (commands.length > 0) {
-				const compoundCommand = commands.join(" && ");
+			// Write files via SSH stdin (cleaner than base64 piping)
+			for (const fw of plan.fileWrites) {
+				const dir = fw.path.substring(0, fw.path.lastIndexOf("/"));
+				await ssh.execCommand(`sudo mkdir -p ${shellQuote(dir)}`);
+				const writeResult = await ssh.execCommand(
+					`sudo tee ${shellQuote(fw.path)} > /dev/null`,
+					{ stdin: fw.content },
+				);
+				if (writeResult.code !== 0) {
+					throw new Error(writeResult.stderr || `Failed to write ${fw.path}`);
+				}
+			}
+
+			// Run shell commands sequentially (&& chain for install/uninstall)
+			if (plan.shellCommands.length > 0) {
+				const compoundCommand = plan.shellCommands.join(" && ");
 				const result = await ssh.execCommand(compoundCommand);
 				if (result.code !== 0) {
 					throw new Error(
