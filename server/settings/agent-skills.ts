@@ -249,9 +249,11 @@ export async function readRemoteManifest(
 export function buildManifestWriteCommand(manifest: ManifestEntry[]): string {
 	const content = JSON.stringify(manifest, null, 2);
 	const encoded = Buffer.from(content, "utf8").toString("base64");
+	const hermesDir = shellQuote(`${managedComposeVolumeHome}/.hermes`);
+	const manifestPath = shellQuote(MANIFEST_PATH);
 	return [
-		`sudo mkdir -p ${managedComposeVolumeHome}/.hermes`,
-		`printf '%s' '${encoded}' | base64 -d | sudo tee ${MANIFEST_PATH} > /dev/null`,
+		`sudo mkdir -p ${hermesDir}`,
+		`printf '%s' '${encoded}' | base64 -d | sudo tee ${manifestPath} > /dev/null`,
 	].join(" && ");
 }
 

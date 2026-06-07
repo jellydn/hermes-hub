@@ -356,8 +356,11 @@ describe("agent skills settings", () => {
 
 			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
 			withSshConnection.mockImplementation(
-				async (_config: unknown, callback: (ssh: unknown) => Promise<void>) => {
-					await callback({ execCommand: mockExec });
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
 				},
 			);
 
@@ -414,8 +417,11 @@ describe("agent skills settings", () => {
 			});
 
 			withSshConnection.mockImplementation(
-				async (_config: unknown, callback: (ssh: unknown) => Promise<void>) => {
-					await callback({ execCommand: mockExec });
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
 				},
 			);
 
@@ -456,8 +462,11 @@ describe("agent skills settings", () => {
 			});
 
 			withSshConnection.mockImplementation(
-				async (_config: unknown, callback: (ssh: unknown) => Promise<void>) => {
-					await callback({ execCommand: mockExec });
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
 				},
 			);
 

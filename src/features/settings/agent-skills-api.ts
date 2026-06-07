@@ -97,6 +97,18 @@ export async function fetchRemoteSkills(
 			};
 		}
 
+		// Validate response shape before trusting it
+		if (
+			typeof payload.raw !== "string" ||
+			!Array.isArray(payload.skills) ||
+			typeof payload.count !== "number"
+		) {
+			return {
+				ok: false,
+				error: "Unexpected response from remote skills endpoint.",
+			};
+		}
+
 		return {
 			ok: true,
 			data: {

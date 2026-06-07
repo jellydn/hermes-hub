@@ -6,7 +6,7 @@ import {
 	Save,
 	Trash2,
 } from "lucide-react";
-import { useReducer } from "react";
+import { useReducer, useRef } from "react";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
@@ -674,12 +674,20 @@ function useAgentSkills(
 	} = state;
 	const enabledCount = skills.filter((s) => s.enabled).length;
 
+	const generationRef = useRef(0);
+
 	async function loadRemoteInventory(serverId: string) {
 		if (!serverId) {
 			return;
 		}
+		const currentGeneration = ++generationRef.current;
 		dispatch({ type: "FETCH_REMOTE_START" });
+		// react-doctor-disable-next-line react-doctor/async-defer-await
 		const result = await fetchRemoteSkills(serverId);
+		// Ignore stale responses when server selection changes mid-flight
+		if (generationRef.current !== currentGeneration) {
+			return;
+		}
 		if (result.ok) {
 			dispatch({ type: "FETCH_REMOTE_SUCCESS", inventory: result.data });
 		} else {
