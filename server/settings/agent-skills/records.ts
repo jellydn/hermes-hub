@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
-import { getDb } from "../../db";
-import { agentSkills } from "../../db/schema";
+import { getDb } from "#server/db";
+import { agentSkills } from "#server/db/schema";
 import type {
 	AgentSkillRequest,
 	AgentSkillSummary,

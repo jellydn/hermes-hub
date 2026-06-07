@@ -1,4 +1,4 @@
-import type { AgentSkillSummary } from "../../../shared/contracts/agent-skills";
+import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
 
 type AgentSkillResponsePayload = {
 	error?: string;

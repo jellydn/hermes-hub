@@ -24,6 +24,7 @@ type HermesDeployPanelProps = {
 	formatSuccess: (payload: DeployResponsePayload, serverHost: string) => string;
 	selectedServerId?: string;
 	onServerIdChange?: (serverId: string) => void;
+	onDeploySuccess?: () => void;
 };
 
 export function HermesDeployPanel({
@@ -37,6 +38,7 @@ export function HermesDeployPanel({
 	formatSuccess,
 	selectedServerId: controlledSelectedServerId,
 	onServerIdChange,
+	onDeploySuccess,
 }: HermesDeployPanelProps) {
 	const [internalSelectedServerId, setInternalSelectedServerId] = useState(
 		() => deploymentTargets[0]?.serverId ?? "",
@@ -82,6 +84,7 @@ export function HermesDeployPanel({
 
 			const serverHost = payload?.serverHost ?? selectedTarget.host;
 			setDeployResult(formatSuccess(payload ?? {}, serverHost));
+			onDeploySuccess?.();
 		} catch {
 			setDeployError(
 				"Network error. Please check your connection and try again.",

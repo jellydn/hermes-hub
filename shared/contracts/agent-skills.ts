@@ -30,7 +30,7 @@ export function isValidAgentSkillName(name: string): boolean {
 
 export const HUB_REF_PATTERN = /^[a-zA-Z0-9_./-]+(?:@[a-zA-Z0-9_.-]+)?$/;
 
-function validateHubInstallRef(ref: string): string | null {
+export function validateHubInstallRef(ref: string): string | null {
 	if (!ref.trim()) return "installRef is required for hub skills.";
 	if (!HUB_REF_PATTERN.test(ref)) {
 		return "installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).";
@@ -38,7 +38,7 @@ function validateHubInstallRef(ref: string): string | null {
 	return null;
 }
 
-function validateUrlInstallRef(ref: string): string | null {
+export function validateUrlInstallRef(ref: string): string | null {
 	if (!ref.trim()) return "installRef is required for url skills.";
 	try {
 		const url = new URL(ref);
@@ -51,7 +51,7 @@ function validateUrlInstallRef(ref: string): string | null {
 	return null;
 }
 
-function validateCustomContent(
+export function validateCustomContent(
 	content: string | null | undefined,
 ): string | null {
 	if (!content?.trim()) return "content is required for custom skills.";

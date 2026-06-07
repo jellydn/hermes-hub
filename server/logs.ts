@@ -1,11 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Context } from "hono";
 
-import type {
-	ActionLogEntry,
-	InstallLogEntry,
-	LogsSnapshot,
-} from "../src/lib/logs";
+import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "#/lib/logs";
 import { LOG_ACTION_NAMES } from "./audit-log-actions";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";

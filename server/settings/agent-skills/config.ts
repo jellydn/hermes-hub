@@ -1,55 +1,25 @@
 import {
 	agentSkillCreateSchema,
 	agentSkillUpdateSchema,
-	HUB_REF_PATTERN,
-} from "../../../shared/contracts/agent-skills";
+	validateCustomContent,
+	validateHubInstallRef,
+	validateUrlInstallRef,
+} from "#shared/contracts/agent-skills";
 
 export type {
 	AgentSkillRequest,
 	AgentSkillSummary,
 	SkillSourceType,
-} from "../../../shared/contracts/agent-skills";
+} from "#shared/contracts/agent-skills";
 export {
 	AGENT_SKILL_NAME_PATTERN,
 	agentSkillCreateSchema,
 	agentSkillUpdateSchema,
 	getHubInstalledName,
-	HUB_REF_PATTERN,
 	isValidAgentSkillName,
 	resolveManifestName,
 	SkillSourceTypeSchema,
-} from "../../../shared/contracts/agent-skills";
-
-function validateHubInstallRef(ref: string): string | null {
-	if (!ref.trim()) return "installRef is required for hub skills.";
-	if (!HUB_REF_PATTERN.test(ref)) {
-		return "installRef for hub skills must be a valid repository or package reference (e.g., owner/repo or owner/repo@version).";
-	}
-	return null;
-}
-
-function validateUrlInstallRef(ref: string): string | null {
-	if (!ref.trim()) return "installRef is required for url skills.";
-	try {
-		const url = new URL(ref);
-		if (url.protocol !== "http:" && url.protocol !== "https:") {
-			throw new Error();
-		}
-	} catch {
-		return "installRef for url skills must be a valid http or https URL.";
-	}
-	return null;
-}
-
-function validateCustomContent(
-	content: string | null | undefined,
-): string | null {
-	if (!content?.trim()) return "content is required for custom skills.";
-	if (content.trim().length > 50000) {
-		return "Custom skill content cannot exceed 50,000 characters.";
-	}
-	return null;
-}
+} from "#shared/contracts/agent-skills";
 
 export function toAgentSkillSummary(record: {
 	id: string;
@@ -60,12 +30,12 @@ export function toAgentSkillSummary(record: {
 	enabled: boolean;
 	createdAt: Date;
 	updatedAt: Date;
-}): import("../../../shared/contracts/agent-skills").AgentSkillSummary {
+}): import("#shared/contracts/agent-skills").AgentSkillSummary {
 	return {
 		id: record.id,
 		name: record.name,
 		sourceType:
-			record.sourceType as import("../../../shared/contracts/agent-skills").SkillSourceType,
+			record.sourceType as import("#shared/contracts/agent-skills").SkillSourceType,
 		installRef: record.installRef,
 		content: record.content,
 		enabled: record.enabled,
@@ -78,11 +48,11 @@ export function parseAgentSkillCreateBody(payload: unknown):
 	| {
 			ok: true;
 			data: Omit<
-				import("../../../shared/contracts/agent-skills").AgentSkillRequest,
+				import("#shared/contracts/agent-skills").AgentSkillRequest,
 				"id"
 			> & {
 				name: string;
-				sourceType: import("../../../shared/contracts/agent-skills").SkillSourceType;
+				sourceType: import("#shared/contracts/agent-skills").SkillSourceType;
 			};
 	  }
 	| { ok: false; error: string } {
@@ -120,13 +90,13 @@ export function parseAgentSkillCreateBody(payload: unknown):
 
 export function parseAgentSkillUpdateBody(
 	existing: {
-		sourceType: import("../../../shared/contracts/agent-skills").SkillSourceType;
+		sourceType: import("#shared/contracts/agent-skills").SkillSourceType;
 	},
 	payload: unknown,
 ):
 	| {
 			ok: true;
-			data: import("../../../shared/contracts/agent-skills").AgentSkillRequest;
+			data: import("#shared/contracts/agent-skills").AgentSkillRequest;
 	  }
 	| { ok: false; error: string } {
 	if (!payload || typeof payload !== "object") {
@@ -139,7 +109,7 @@ export function parseAgentSkillUpdateBody(
 	}
 
 	const data = parsed.data;
-	const updates: import("../../../shared/contracts/agent-skills").AgentSkillRequest =
+	const updates: import("#shared/contracts/agent-skills").AgentSkillRequest =
 		{};
 
 	if (data.name !== undefined) updates.name = data.name;

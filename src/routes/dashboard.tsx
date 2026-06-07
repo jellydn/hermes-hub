@@ -7,15 +7,13 @@ import { requireSession } from "@/lib/session";
 
 const loadDashboardStatus = createServerFn({ method: "GET" }).handler(
 	async () => {
-		const { getAuthSession } = await import("../../server/auth");
+		const { getAuthSession } = await import("#server/auth");
 		const session = await getAuthSession(getRequestHeaders());
 		if (!session) {
 			return null;
 		}
 
-		const { getDashboardStatusSnapshot } = await import(
-			"../../server/dashboard"
-		);
+		const { getDashboardStatusSnapshot } = await import("#server/dashboard");
 
 		return getDashboardStatusSnapshot({
 			userId: session.user.id,

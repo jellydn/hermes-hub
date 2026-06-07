@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
+import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
+import { agentSkillCreateSchema } from "#shared/contracts/agent-skills";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
 import { useMountEffect } from "@/lib/use-mount-effect";
-import type { AgentSkillSummary } from "../../../../shared/contracts/agent-skills";
-import { agentSkillCreateSchema } from "../../../../shared/contracts/agent-skills";
 import {
 	deleteAgentSkill,
 	fetchRemoteSkills,
@@ -23,6 +23,22 @@ type RemoteInventoryState = {
 	skills: string[];
 	count: number;
 } | null;
+
+function buildSkillRequestBody(form: SkillFormState): Record<string, unknown> {
+	const body: Record<string, unknown> = {
+		name: form.name.trim(),
+		sourceType: form.sourceType,
+		enabled: form.enabled,
+	};
+
+	if (form.sourceType === "hub" || form.sourceType === "url") {
+		body.installRef = form.installRef.trim();
+	} else {
+		body.content = form.content;
+	}
+
+	return body;
+}
 
 export function useAgentSkills(
 	initialSkills: AgentSkillSummary[],
@@ -162,18 +178,7 @@ export function useAgentSkills(
 			: "/api/settings/agent-skills";
 		const method = editingSkill ? "PUT" : "POST";
 
-		const body: Record<string, unknown> = {
-			name: form.name.trim(),
-			sourceType: form.sourceType,
-			enabled: form.enabled,
-		};
-
-		if (form.sourceType === "hub" || form.sourceType === "url") {
-			body.installRef = form.installRef.trim();
-		} else {
-			body.content = form.content;
-		}
-
+		const body = buildSkillRequestBody(form);
 		const result = await persistAgentSkill({ method, url, body });
 
 		if (result.ok) {
@@ -241,5 +246,8 @@ export function useAgentSkills(
 		handleSave,
 		handleDelete,
 		handleServerIdChange,
+		onDeploySuccess: () => {
+			if (selectedServerId) void loadRemoteInventory(selectedServerId);
+		},
 	};
 }

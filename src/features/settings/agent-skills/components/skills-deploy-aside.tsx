@@ -1,14 +1,30 @@
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
+import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
+import { HermesDeployPanel } from "#/features/settings/hermes-deploy-panel";
+import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
+import { resolveManifestName } from "#shared/contracts/agent-skills";
 import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { AgentSkillSummary } from "../../../../../shared/contracts/agent-skills";
-import type { DeployResponsePayload } from "../../hermes-deploy-panel";
-import { HermesDeployPanel } from "../../hermes-deploy-panel";
 
 type RemoteInventoryState = {
 	raw: string;
 	skills: string[];
 	count: number;
 } | null;
+
+function formatDeploySuccess(
+	payload: DeployResponsePayload,
+	serverHost: string,
+	enabledCount: number,
+): string {
+	const deployedAt = payload.deployedAt
+		? new Date(payload.deployedAt).toLocaleString()
+		: null;
+	const count = payload.skillCount ?? enabledCount;
+
+	return deployedAt
+		? `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
+		: `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost}. Hermes is restarting...`;
+}
 
 type SkillsDeployAsideProps = {
 	skills: AgentSkillSummary[];
@@ -19,7 +35,43 @@ type SkillsDeployAsideProps = {
 	remoteInventory: RemoteInventoryState;
 	remoteLoading: boolean;
 	remoteError: string | null;
+	onDeploySuccess: () => void;
 };
+
+function ManagedSkillSummary({
+	expectedNames,
+	presentNames,
+}: {
+	expectedNames: string[];
+	presentNames: string[];
+}) {
+	const missingNames = expectedNames.filter((n) => !presentNames.includes(n));
+	const matchedCount = expectedNames.length - missingNames.length;
+
+	return (
+		<div
+			className="space-y-2 rounded-[1rem] border border-[var(--line)] bg-[var(--surface)] p-3"
+			id="managed-skill-summary"
+		>
+			<span className="text-xs font-semibold text-[var(--sea-ink-soft)] uppercase tracking-wider">
+				Managed Skill Status
+			</span>
+			<p className="m-0 text-sm text-[var(--sea-ink)]">
+				{matchedCount} of {expectedNames.length} enabled skill
+				{expectedNames.length === 1 ? "" : "s"} present on remote
+			</p>
+			{missingNames.length > 0 && (
+				<div
+					className="flex items-start gap-1.5 text-sm text-amber-600"
+					id="missing-managed-skills"
+				>
+					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+					<span>Missing:{missingNames.map((n) => ` ${n}`)}</span>
+				</div>
+			)}
+		</div>
+	);
+}
 
 export function SkillsDeployAside({
 	skills,
@@ -30,6 +82,7 @@ export function SkillsDeployAside({
 	remoteInventory,
 	remoteLoading,
 	remoteError,
+	onDeploySuccess,
 }: SkillsDeployAsideProps) {
 	return (
 		<aside className="space-y-4">
@@ -51,7 +104,6 @@ export function SkillsDeployAside({
 					</p>
 				)}
 			</section>
-
 			<HermesDeployPanel
 				deploymentTargets={deploymentTargets}
 				description="Deploy your saved skills to the selected Hermes server."
@@ -61,18 +113,11 @@ export function SkillsDeployAside({
 				noDeploymentMessage="Install Hermes on a server first to enable agent skills deployment."
 				selectedServerId={selectedServerId}
 				onServerIdChange={onServerIdChange}
-				formatSuccess={(payload: DeployResponsePayload, serverHost: string) => {
-					const deployedAt = payload.deployedAt
-						? new Date(payload.deployedAt).toLocaleString()
-						: null;
-					const count = payload.skillCount ?? enabledCount;
-
-					return deployedAt
-						? `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
-						: `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost}. Hermes is restarting...`;
-				}}
+				onDeploySuccess={onDeploySuccess}
+				formatSuccess={(payload, host) =>
+					formatDeploySuccess(payload, host, enabledCount)
+				}
 			/>
-
 			{selectedServerId && (
 				<section
 					className="island-shell rounded-[2rem] p-6 space-y-4"
@@ -98,6 +143,16 @@ export function SkillsDeployAside({
 								{remoteInventory.count} remote skill
 								{remoteInventory.count === 1 ? "" : "s"}
 							</h4>
+
+							{skills.length > 0 && (
+								<ManagedSkillSummary
+									expectedNames={skills
+										.filter((s) => s.enabled)
+										.map(resolveManifestName)}
+									presentNames={remoteInventory.skills}
+								/>
+							)}
+
 							<div className="space-y-1">
 								<label
 									htmlFor="remote-raw-output"

@@ -10,6 +10,7 @@ import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireAuthSession } from "../request-guards";
 import { shellQuote, withSshConnection } from "../ssh";
 import {
+	isValidAgentSkillName,
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
 	parseRemoteSkillsList,
@@ -238,12 +239,28 @@ export async function readRemoteManifest(
 	if (!content) {
 		return [];
 	}
+	let parsed: unknown;
 	try {
-		const parsed = JSON.parse(content);
-		return Array.isArray(parsed) ? parsed : [];
+		parsed = JSON.parse(content);
 	} catch {
 		return [];
 	}
+	if (!Array.isArray(parsed)) {
+		return [];
+	}
+	return parsed.flatMap((entry): ManifestEntry[] => {
+		if (!entry || typeof entry !== "object") {
+			return [];
+		}
+		const { name, sourceType } = entry as Record<string, unknown>;
+		if (typeof name !== "string" || typeof sourceType !== "string") {
+			return [];
+		}
+		if (!isValidAgentSkillName(name)) {
+			throw new Error(`Unsafe manifest name '${name}' in ${MANIFEST_PATH}.`);
+		}
+		return [{ name, sourceType }];
+	});
 }
 
 export type FileWrite = {
@@ -314,9 +331,6 @@ export function buildDeployCommands(
 
 	// Remove previously managed skills missing from enabledSkills
 	for (const prev of previousManifest) {
-		if (!prev || typeof prev !== "object" || !prev.name) {
-			continue;
-		}
 		const isStillEnabled = enabledSkills.some(
 			(curr) => resolveManifestName(curr) === prev.name,
 		);
@@ -337,11 +351,14 @@ export function buildDeployCommands(
 	for (const skill of enabledSkills) {
 		if (skill.sourceType === "hub" || skill.sourceType === "url") {
 			const installRef = skill.installRef || "";
+			const resolvedName = resolveManifestName(skill);
 			// `--yes` skips the confirm prompt (no TTY under `docker exec`); `--force`
 			// lets community-trust skills (e.g. browse-sh) flagged `caution` by the
 			// security scanner install. A `dangerous` verdict still hard-blocks.
+			// `--name` ensures the installed skill matches the manifest entry so
+			// stale-skill comparisons and future uninstalls use the same identifier.
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes --force`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolvedName)} --yes --force`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(
