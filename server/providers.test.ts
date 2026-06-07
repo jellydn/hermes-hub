@@ -478,6 +478,60 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("builds Hermes deploy env for custom providers with an empty stored key", async () => {
+		decryptSecret.mockImplementation((value: string) => {
+			if (value === "encrypted-empty-key") {
+				return "";
+			}
+
+			return "stored-api-key";
+		});
+		selectLimit.mockResolvedValue([
+			{
+				provider: "custom",
+				model: "deepseek-chat",
+				encryptedApiKey: "encrypted-empty-key",
+				baseUrl: "https://api.deepseek.com/v1",
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "deepseek-chat",
+			envVars: {
+				CUSTOM_BASE_URL: "https://api.deepseek.com/v1",
+				HERMES_INFERENCE_PROVIDER: "custom",
+				OPENAI_BASE_URL: "https://api.deepseek.com/v1",
+			},
+		});
+	});
+
+	it("rejects deploy config when stored API-key ciphertext is unreadable", async () => {
+		decryptSecret.mockImplementation((value: string) => {
+			if (value === "corrupt-ciphertext") {
+				throw new Error("decrypt failed");
+			}
+
+			return "stored-api-key";
+		});
+		selectLimit.mockResolvedValue([
+			{
+				provider: "openai",
+				model: "gpt-4o",
+				encryptedApiKey: "corrupt-ciphertext",
+				baseUrl: null,
+			},
+		]);
+
+		const { getProviderDeployConfig } = await import("./providers");
+
+		await expect(getProviderDeployConfig("user_123")).rejects.toThrow(
+			"Stored API key could not be read. Paste a new key.",
+		);
+	});
+
 	describe("deployProviderToHermes", () => {
 		const providerRecord = {
 			provider: "openai",
@@ -628,7 +682,45 @@ describe("provider settings", () => {
 			});
 		});
 
+		it("returns 400 when stored API-key ciphertext cannot be decrypted", async () => {
+			decryptSecret.mockImplementation((value: string) => {
+				if (value === "corrupt-ciphertext") {
+					throw new Error("decrypt failed");
+				}
+
+				return "stored-api-key";
+			});
+
+			selectLimit
+				.mockResolvedValueOnce([
+					{
+						...providerRecord,
+						encryptedApiKey: "corrupt-ciphertext",
+					},
+				])
+				.mockResolvedValueOnce([telegramRecord]);
+
+			const { deployProviderToHermes } = await import("./deploy");
+			const response = await deployProviderToHermes(
+				createContext("http://localhost/api/providers/deploy", {}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error: "Stored API key could not be read. Paste a new key.",
+			});
+			expect(deployManagedCompose).not.toHaveBeenCalled();
+		});
+
 		it("returns 400 when Codex deploy is attempted without remote auth", async () => {
+			decryptSecret.mockImplementation((value: string) => {
+				if (value === "encrypted-empty-key") {
+					return "";
+				}
+
+				return "stored-api-key";
+			});
+
 			const codexProviderRecord = {
 				provider: "openai-codex",
 				model: "gpt-5.5",
@@ -659,9 +751,17 @@ describe("provider settings", () => {
 		});
 
 		it("deploys Codex when remote auth is present", async () => {
+			decryptSecret.mockImplementation((value: string) => {
+				if (value === "encrypted-empty-key") {
+					return "";
+				}
+
+				return "stored-api-key";
+			});
+
 			const codexProviderRecord = {
 				provider: "openai-codex",
-				model: "gpt-5.5",
+				model: "gpt-5.4-mini",
 				encryptedApiKey: "encrypted-empty-key",
 				baseUrl: null,
 			};
@@ -684,7 +784,7 @@ describe("provider settings", () => {
 			expect(response.status).toBe(200);
 			expect(deployManagedCompose).toHaveBeenCalledWith(
 				expect.objectContaining({
-					providerModel: "gpt-5.5",
+					providerModel: "gpt-5.4-mini",
 					providerHermesId: "openai-codex",
 				}),
 			);

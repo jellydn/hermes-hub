@@ -4,24 +4,41 @@ import { getDb } from "../db";
 import { aiProviders, telegramConfigs } from "../db/schema";
 import { getLast4 } from "../lib/get-last-4";
 
-export function decryptApiKey(encryptedStr: string): string {
-	try {
-		const decrypted = decryptSecret(encryptedStr);
-		// Keys saved before the explicit baseUrl column may have been stored as JSON {apiKey, baseUrl}. Unwrap if so.
-		if (decrypted.startsWith("{")) {
-			try {
-				const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-				if (typeof parsed.apiKey === "string") {
-					return parsed.apiKey;
-				}
-			} catch {
-				// Not valid JSON — treat as a raw key starting with '{'
-			}
-		}
+export type StoredApiKeyDecryptResult =
+	| { ok: true; apiKey: string }
+	| { ok: false };
+
+function unwrapLegacyApiKeyPayload(decrypted: string) {
+	if (!decrypted.startsWith("{")) {
 		return decrypted;
-	} catch {
-		return "";
 	}
+
+	try {
+		const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+		if (typeof parsed.apiKey === "string") {
+			return parsed.apiKey;
+		}
+	} catch {
+		// Not valid JSON — treat as a raw key starting with '{'
+	}
+
+	return decrypted;
+}
+
+export function decryptStoredApiKey(
+	encryptedStr: string,
+): StoredApiKeyDecryptResult {
+	try {
+		const decrypted = unwrapLegacyApiKeyPayload(decryptSecret(encryptedStr));
+		return { ok: true, apiKey: decrypted };
+	} catch {
+		return { ok: false };
+	}
+}
+
+export function decryptApiKey(encryptedStr: string): string {
+	const result = decryptStoredApiKey(encryptedStr);
+	return result.ok ? result.apiKey : "";
 }
 
 export function getApiKeyLast4(apiKey: string) {

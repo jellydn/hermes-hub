@@ -11,7 +11,10 @@ import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
 import { PROVIDER_ENV_CONFIGS } from "./providers/config";
-import { decryptApiKey, getLatestProviderRecord } from "./providers/records";
+import {
+	decryptStoredApiKey,
+	getLatestProviderRecord,
+} from "./providers/records";
 import { requireAuthSession } from "./request-guards";
 
 export async function deployProviderToHermes(context: Context) {
@@ -44,12 +47,21 @@ export async function deployProviderToHermes(context: Context) {
 		return context.json({ error: "Failed to decrypt bot token." }, 500);
 	}
 
-	const decryptedApiKey = decryptApiKey(providerRecord.encryptedApiKey);
-	if (providerRecord.encryptedApiKey && !decryptedApiKey) {
-		return context.json({ error: "Failed to decrypt API key." }, 500);
+	const credentialPolicy = getProviderCredentialPolicy(providerRecord.provider);
+	let decryptedApiKey = "";
+
+	if (providerRecord.encryptedApiKey) {
+		const decryptResult = decryptStoredApiKey(providerRecord.encryptedApiKey);
+		if (!decryptResult.ok) {
+			return context.json(
+				{ error: "Stored API key could not be read. Paste a new key." },
+				400,
+			);
+		}
+
+		decryptedApiKey = decryptResult.apiKey;
 	}
 
-	const credentialPolicy = getProviderCredentialPolicy(providerRecord.provider);
 	if (credentialPolicy.requiresApiKey && !decryptedApiKey) {
 		return context.json({ error: "API key is required." }, 400);
 	}

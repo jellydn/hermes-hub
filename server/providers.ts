@@ -29,6 +29,7 @@ import {
 } from "./providers/connection";
 import {
 	decryptApiKey,
+	decryptStoredApiKey,
 	getApiKeyLast4,
 	getLatestProviderRecord,
 } from "./providers/records";
@@ -211,13 +212,15 @@ function resolveProviderApiKey(
 	let resolvedBaseUrl = parsed.baseUrl;
 
 	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
-		resolvedApiKey = decryptApiKey(existingRecord.encryptedApiKey);
-		if (
-			!resolvedApiKey &&
-			PROVIDER_ENV_CONFIGS[parsed.provider]?.apiKeyEnvVar
-		) {
-			return { error: "Stored API key could not be read. Paste a new key." };
+		if (existingRecord.encryptedApiKey) {
+			const decryptResult = decryptStoredApiKey(existingRecord.encryptedApiKey);
+			if (!decryptResult.ok) {
+				return { error: "Stored API key could not be read. Paste a new key." };
+			}
+
+			resolvedApiKey = decryptResult.apiKey;
 		}
+
 		if (!resolvedBaseUrl) {
 			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
 		}
@@ -251,20 +254,18 @@ export async function getProviderDeployConfig(
 	let decryptedApiKey = "";
 
 	if (config?.apiKeyEnvVar) {
-		const isKeyRequired = getProviderCredentialPolicy(
-			record.provider,
-		).requiresApiKey;
+		const credentialPolicy = getProviderCredentialPolicy(record.provider);
 
 		if (record.encryptedApiKey) {
-			decryptedApiKey = decryptApiKey(record.encryptedApiKey);
-			if (!decryptedApiKey) {
-				throw new Error(
-					"Stored API key could not be decrypted. Paste a new key.",
-				);
+			const decryptResult = decryptStoredApiKey(record.encryptedApiKey);
+			if (!decryptResult.ok) {
+				throw new Error("Stored API key could not be read. Paste a new key.");
 			}
+
+			decryptedApiKey = decryptResult.apiKey;
 		}
 
-		if (isKeyRequired && !decryptedApiKey) {
+		if (credentialPolicy.requiresApiKey && !decryptedApiKey) {
 			throw new Error(`API key is required for provider ${record.provider}.`);
 		}
 	}
