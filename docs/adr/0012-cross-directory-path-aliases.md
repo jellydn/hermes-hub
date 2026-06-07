@@ -39,16 +39,26 @@ import type { McpServerSummary } from "#server/settings/mcp/config";
 
 The replacement was automated across ~72 files using a regex pattern, then manually verified. All imports from inside `server/` and `shared/` that previously used relative paths to reach across directories were updated.
 
-The existing `@/*` alias (109 files) was left in place to avoid scope creep — consolidating `@/*` into `#/*` is deferred to a follow-up.
+### Alias consolidation
 
-### Final alias configuration
+The existing `@/*` alias (173 files as of June 2026) was left in place to avoid scope creep in this PR. Both `@/*` and `#/*` resolve to `./src/*`. The `#/` alias has only 2 uses (added in this PR for agent-skills components), while `@/` has 173 uses across all `src/` files.
+
+Consolidating `@/*` into `#/*` is a mechanical `sed` replacement — no behavioral change, no architectural trade-off. It should happen in a dedicated cleanup PR after this one lands to keep the diff reviewable. The final alias table will be 3 entries instead of 4:
+
+| Alias | Target | Files (after consolidation) |
+|-------|--------|-------|
+| `#/*` | `./src/*` | 175 |
+| `#server/*` | `./server/*` | 40 |
+| `#shared/*` | `./shared/*` | 35 |
+
+### Current alias configuration (pre-consolidation)
 
 | Alias | Target | Files |
 |-------|--------|-------|
-| `@/*` | `./src/*` | 109 (legacy) |
-| `#/*` | `./src/*` | existing |
-| `#server/*` | `./server/*` | 25 (new) |
-| `#shared/*` | `./shared/*` | 30 (new) |
+| `@/*` | `./src/*` | 173 (legacy) |
+| `#/*` | `./src/*` | 2 |
+| `#server/*` | `./server/*` | 40 |
+| `#shared/*` | `./shared/*` | 35 |
 
 Both `tsconfig.json` `paths` and `package.json` `imports` were updated so that both TypeScript (`tsc`) and the bundler (Vite, which reads `package.json` `imports` via `resolve.tsconfigPaths: true`) resolve the new aliases.
 
@@ -58,13 +68,13 @@ Both `tsconfig.json` `paths` and `package.json` `imports` were updated so that b
 
 - Cross-directory imports are now location-independent — moving a file within `src/` no longer requires updating its `../../server/` imports
 - Imports are self-documenting: `#server/auth` immediately tells the reader this is a backend module, without counting `../` levels
-- The `#` prefix convention visually distinguishes project-internal cross-directory imports from npm packages and from `src/`-scoped `@/` imports
+- The `#` prefix convention visually distinguishes project-internal cross-directory imports from npm packages and from intra-src imports
 - The alias configuration in `package.json` `imports` ensures Vite resolves them correctly in development and production builds
 - `server/` modules never use the aliases (they still use `../` for internal server imports), keeping the convention: aliases are only for cross-directory imports
 
 ### Negative
 
-- Four aliases total (`@/*`, `#/*`, `#server/*`, `#shared/*`) with `@/*` and `#/*` both resolving to the same target — this is duplicate configuration that should be consolidated in a follow-up
+- Four aliases total with `@/*` and `#/*` both resolving to `./src/*` — duplicate configuration; consolidate `@/*` → `#/*` in a follow-up cleanup PR
 - The regex-based migration may have missed edge cases in dynamically constructed import paths
 - New contributors must learn the alias conventions before understanding the import graph
 - The `package.json` `imports` field must stay in sync with `tsconfig.json` `paths` for Vite resolution to work correctly
