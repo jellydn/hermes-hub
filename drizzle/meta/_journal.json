@@ -106,6 +106,13 @@
       "when": 1780753600000,
       "tag": "0014_mcp_servers_user_name_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780760000000,
+      "tag": "0015_ai_user_subscriptions",
+      "breakpoints": true
     }
   ]
 }
