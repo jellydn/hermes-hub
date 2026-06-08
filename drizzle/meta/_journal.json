@@ -120,6 +120,13 @@
       "when": 1780807394636,
       "tag": "0016_previous_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780844400000,
+      "tag": "0017_add_agent_skills_check_constraint",
+      "breakpoints": true
     }
   ]
 }
