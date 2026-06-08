@@ -392,15 +392,20 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(200);
 
-			// In the new architecture, file writes are done via separate mkdir+tee commands
-			// and shell commands are a separate compound command at the end.
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
+			const compoundCommand =
+				calledCommands.find((c: string) =>
+					c.includes("hermes skills install"),
+				) || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --name 'ref-1' --yes --force",
+				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
 			);
-			// The custom skill write is now a file write (via tee), not in compound command
-			// The manifest write is also a file write, not in compound command
+
+			const manifestWriteCall = calledCommands.find(
+				(c: string) =>
+					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
+			);
+			expect(manifestWriteCall).toBeTruthy();
 
 			expect(insertAuditValues).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -453,15 +458,21 @@ describe("agent skills settings", () => {
 
 			expect(response.status).toBe(200);
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
+			const compoundCommand =
+				calledCommands.find(
+					(c: string) =>
+						c.includes("hermes skills uninstall") ||
+						c.includes("hermes skills install"),
+				) || "";
 
-			// should uninstall old hub skill
 			expect(compoundCommand).toContain(
 				"echo y | sudo docker exec -i hermes hermes skills uninstall 'skill-old-hub'",
 			);
-			// should remove old custom skill directory
 			expect(compoundCommand).toContain("rm -rf");
 			expect(compoundCommand).toContain("skill-old-custom");
+			expect(compoundCommand).toContain(
+				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
+			);
 		});
 
 		it("uses resolved manifest name with --name on url skills", async () => {
@@ -494,10 +505,58 @@ describe("agent skills settings", () => {
 			expect(response.status).toBe(200);
 
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
-			const compoundCommand = calledCommands[calledCommands.length - 1] || "";
+			const compoundCommand =
+				calledCommands.find((c: string) =>
+					c.includes("hermes skills install"),
+				) || "";
 			expect(compoundCommand).toContain(
 				"sudo docker exec hermes hermes skills install 'https://example.com/SKILL.md' --name 'remote-skill' --yes --force",
 			);
+		});
+
+		it("deploys browse.sh hub skill without --name (hub-derived names) and writes manifest", async () => {
+			const geoRecord = {
+				...baseRecord,
+				id: "s_geo",
+				name: "geo-weather-fetch",
+				sourceType: "hub",
+				installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+				enabled: true,
+			};
+
+			selectOrderBy.mockResolvedValueOnce([geoRecord]);
+
+			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { deploySkillsToHermes } = await import("./agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+
+			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const compoundCommand =
+				calledCommands.find((c: string) =>
+					c.includes("hermes skills install"),
+				) || "";
+			expect(compoundCommand).toContain(
+				"sudo docker exec hermes hermes skills install 'browse-sh/windy.com/geo-weather-fetch-w3o49h' --yes --force",
+			);
+
+			const manifestCall = calledCommands.find(
+				(c: string) =>
+					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
+			);
+			expect(manifestCall).toBeTruthy();
 		});
 
 		it.each([
@@ -575,6 +634,12 @@ describe("agent skills settings", () => {
 			);
 
 			expect(response.status).toBe(502);
+			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const manifestTeeCall = calledCommands.find(
+				(c: string) =>
+					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
+			);
+			expect(manifestTeeCall).toBeFalsy();
 			expect(insertAuditValues).toHaveBeenCalledWith(
 				expect.objectContaining({
 					action: "agent_skills.deploy.failed",
@@ -773,10 +838,7 @@ function createContext(body: unknown, method = "POST", id?: string) {
 		req: {
 			raw: new Request(url, { method }),
 			json: () => Promise.resolve(body),
-			param: (name?: string) => {
-				if (name === "id") return id ?? "";
-				return id ?? "";
-			},
+			param: () => id ?? "",
 			header: () => null,
 		},
 		json: (payload: unknown, status = 200) =>

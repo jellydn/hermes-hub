@@ -287,18 +287,32 @@ export function buildCustomSkillFileWrite(
 	};
 }
 
+async function writeRemoteFile(
+	ssh: NodeSSH,
+	path: string,
+	content: string,
+): Promise<void> {
+	const dir = path.substring(0, path.lastIndexOf("/"));
+	await ssh.execCommand(`sudo mkdir -p ${shellQuote(dir)}`);
+	const result = await ssh.execCommand(
+		`sudo tee ${shellQuote(path)} > /dev/null`,
+		{ stdin: content },
+	);
+	if (result.code !== 0) {
+		throw new Error(result.stderr || `Failed to write ${path}`);
+	}
+}
+
 type DeployPlan = {
 	fileWrites: FileWrite[];
+	manifestWrite: FileWrite;
 	shellCommands: string[];
 };
 
 /**
- * `hermes skills install` always exits 0, even on failure: a scanner block
- * ("Installation blocked: ...") or an unreachable/unknown source
- * ("Error: Could not fetch '<id>' from any source."). Scan the combined
- * command output for those markers so a silent failure becomes a real error.
- *
- * Returns a human-readable failure message, or null when no failure is found.
+ * `hermes skills install` exits 0 even on failure (scanner block or
+ * unfetchable source). Scan the output for those markers so a silent
+ * failure surfaces as a real error.
  */
 export function detectSkillInstallFailure(output: string): string | null {
 	const failures: string[] = [];
@@ -329,12 +343,16 @@ export function buildDeployCommands(
 	const fileWrites: FileWrite[] = [];
 	const shellCommands: string[] = [];
 
-	// Remove previously managed skills missing from enabledSkills
+	// Remove previously managed skills missing from enabledSkills.
+	// Also remove when source type changes (e.g. custom → hub with same name)
+	// to avoid stale remote artifacts.
 	for (const prev of previousManifest) {
-		const isStillEnabled = enabledSkills.some(
-			(curr) => resolveManifestName(curr) === prev.name,
+		const shouldKeep = enabledSkills.some(
+			(curr) =>
+				resolveManifestName(curr) === prev.name &&
+				curr.sourceType === prev.sourceType,
 		);
-		if (!isStillEnabled) {
+		if (!shouldKeep) {
 			if (prev.sourceType === "hub" || prev.sourceType === "url") {
 				shellCommands.push(
 					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)}`,
@@ -349,16 +367,14 @@ export function buildDeployCommands(
 
 	// Install/write enabled skills
 	for (const skill of enabledSkills) {
-		if (skill.sourceType === "hub" || skill.sourceType === "url") {
-			const installRef = skill.installRef || "";
-			const resolvedName = resolveManifestName(skill);
-			// `--yes` skips the confirm prompt (no TTY under `docker exec`); `--force`
-			// lets community-trust skills (e.g. browse-sh) flagged `caution` by the
-			// security scanner install. A `dangerous` verdict still hard-blocks.
-			// `--name` ensures the installed skill matches the manifest entry so
-			// stale-skill comparisons and future uninstalls use the same identifier.
+		const installRef = skill.installRef || "";
+		if (skill.sourceType === "hub") {
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolvedName)} --yes --force`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes --force`,
+			);
+		} else if (skill.sourceType === "url") {
+			shellCommands.push(
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(
@@ -367,14 +383,14 @@ export function buildDeployCommands(
 		}
 	}
 
-	// Write new manifest as a file write (not a shell command)
+	// Build new manifest (written after shell commands succeed)
 	const newManifest = enabledSkills.map((s) => ({
 		name: resolveManifestName(s),
 		sourceType: s.sourceType,
 	}));
-	fileWrites.push(buildManifestWriteCommand(newManifest));
+	const manifestWrite = buildManifestWriteCommand(newManifest);
 
-	return { fileWrites, shellCommands };
+	return { fileWrites, manifestWrite, shellCommands };
 }
 
 export async function deploySkillsToHermes(context: Context) {
@@ -403,20 +419,9 @@ export async function deploySkillsToHermes(context: Context) {
 			const previousManifest = await readRemoteManifest(ssh);
 			const plan = buildDeployCommands(previousManifest, enabledSkills);
 
-			// Write files via SSH stdin (cleaner than base64 piping)
-			for (const fw of plan.fileWrites) {
-				const dir = fw.path.substring(0, fw.path.lastIndexOf("/"));
-				await ssh.execCommand(`sudo mkdir -p ${shellQuote(dir)}`);
-				const writeResult = await ssh.execCommand(
-					`sudo tee ${shellQuote(fw.path)} > /dev/null`,
-					{ stdin: fw.content },
-				);
-				if (writeResult.code !== 0) {
-					throw new Error(writeResult.stderr || `Failed to write ${fw.path}`);
-				}
-			}
-
-			// Run shell commands sequentially (&& chain for install/uninstall)
+			// Run shell commands first (install/uninstall).
+			// Custom files and manifest are written after so a failed hub/url
+			// install never leaves stale state on the remote host.
 			if (plan.shellCommands.length > 0) {
 				const compoundCommand = plan.shellCommands.join(" && ");
 				const result = await ssh.execCommand(compoundCommand);
@@ -435,6 +440,20 @@ export async function deploySkillsToHermes(context: Context) {
 					throw new Error(installFailure);
 				}
 			}
+
+			// Write custom skill files via SSH stdin.
+			for (const fw of plan.fileWrites) {
+				await writeRemoteFile(ssh, fw.path, fw.content);
+			}
+
+			// Write the managed manifest ONLY after all shell commands succeed.
+			// If install/uninstall fails, the manifest is not updated, so a failed
+			// hub install never leaves the remote manifest claiming success.
+			await writeRemoteFile(
+				ssh,
+				plan.manifestWrite.path,
+				plan.manifestWrite.content,
+			);
 		},
 		failureAuditAction: "agent_skills.deploy.failed",
 		successAuditAction: "agent_skills.deployed",

@@ -86,6 +86,15 @@ export const agentSkillCreateSchema = z
 					message: error,
 				});
 			}
+			// Ensure the derived Hub installed name is a valid manifest name
+			const derivedName = getHubInstalledName(data.installRef ?? "");
+			if (derivedName && !isValidAgentSkillName(derivedName)) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["installRef"],
+					message: `Hub install ref produces an invalid skill name '${derivedName}'. The last path segment must start with a letter and contain only letters, numbers, underscores, or hyphens.`,
+				});
+			}
 		} else if (data.sourceType === "url") {
 			const error = validateUrlInstallRef(data.installRef ?? "");
 			if (error) {
@@ -123,25 +132,24 @@ export const agentSkillUpdateSchema = z.object({
 });
 
 /**
- * For hub sources, the actual installed name is derived from the installRef.
- * The name is the part after the last slash, or the whole thing if no slash.
- * Version specifiers (@version) are stripped.
+ * Derive the Hermes skill name from a hub installRef: the segment after
+ * the last slash (or the whole string if there's no slash), minus any
+ * @version suffix.
  */
 export function getHubInstalledName(installRef: string): string {
 	if (!installRef) return "";
-
-	const withoutPath = installRef.includes("/")
-		? (installRef.split("/").pop() ?? installRef)
-		: installRef;
-
-	const withoutVersion = withoutPath.split("@")[0];
-
-	return withoutVersion;
+	return (installRef.split("/").pop() ?? installRef).split("@")[0];
 }
 
-/**
- * Resolve the manifest name for a skill.
- * Hub skills use the upstream bundle name (from installRef), not the UI name.
+/** Resolve the manifest name for a skill.
+ *
+ * Hub skills are installed without `--name`, so Hermes derives the installed
+ * name from the installRef. We must use that derived name in the manifest,
+ * remote-inventory comparison, and uninstall commands so they match what is
+ * actually installed.
+ *
+ * URL and custom skills use the saved `name` because we pass `--name` or
+ * write the file directly.
  */
 export function resolveManifestName(skill: {
 	sourceType: string;

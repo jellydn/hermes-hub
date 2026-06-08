@@ -552,7 +552,7 @@ describe("AgentSkills UI Component", () => {
 
 		const hubSkill = {
 			id: "skill_hub",
-			name: "My Search",
+			name: "web-search",
 			sourceType: "hub" as const,
 			installRef: "nous/web-search",
 			content: null,
@@ -582,7 +582,7 @@ describe("AgentSkills UI Component", () => {
 			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 
-		// Managed skill summary: 1 of 2 present
+		// Managed skill summary: 1 of 2 present (web-search matches, file-reader doesn't)
 		expect(screen.getByText("Managed Skill Status")).toBeTruthy();
 		expect(
 			screen.getByText(/1 of 2 enabled skills present on remote/),
@@ -617,7 +617,7 @@ describe("AgentSkills UI Component", () => {
 
 		const hubSkill = {
 			id: "skill_hub",
-			name: "My Search",
+			name: "web-search",
 			sourceType: "hub" as const,
 			installRef: "nous/web-search",
 			content: null,
@@ -647,6 +647,7 @@ describe("AgentSkills UI Component", () => {
 			expect(screen.getByText("2 remote skills")).toBeTruthy();
 		});
 
+		// Both enabled skills match: web-search and file-reader
 		expect(
 			screen.getByText(/2 of 2 enabled skills present on remote/),
 		).toBeTruthy();
