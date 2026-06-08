@@ -39,13 +39,13 @@ describe("getHubInstalledName", () => {
 });
 
 describe("resolveManifestName", () => {
-	it("returns name for custom skills", () => {
+	it("returns saved name for custom skills", () => {
 		expect(
 			resolveManifestName({ sourceType: "custom", name: "my-skill" }),
 		).toBe("my-skill");
 	});
 
-	it("returns name for url skills", () => {
+	it("returns saved name for url skills", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "url",
@@ -55,43 +55,43 @@ describe("resolveManifestName", () => {
 		).toBe("remote-skill");
 	});
 
-	it("derives manifest name from installRef for hub skills", () => {
+	it("returns saved name for hub skills (passed via --name)", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "hub",
 				name: "geo-weather-fetch",
 				installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
 			}),
-		).toBe("geo-weather-fetch-w3o49h");
+		).toBe("geo-weather-fetch");
 	});
 
-	it("derives manifest name for simple path hub ref", () => {
+	it("returns saved name for simple path hub ref", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "hub",
 				name: "web-search",
 				installRef: "tobi/hermes-web-search",
 			}),
-		).toBe("hermes-web-search");
+		).toBe("web-search");
 	});
 
-	it("returns empty string for hub skills with null installRef", () => {
+	it("returns saved name even when installRef is null", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "hub",
 				name: "my-skill",
 				installRef: null,
 			}),
-		).toBe("");
+		).toBe("my-skill");
 	});
 
-	it("derives manifest name from versioned hub ref", () => {
+	it("returns saved name for versioned hub ref", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "hub",
 				name: "my-skill",
 				installRef: "org/repo@v1.0.0",
 			}),
-		).toBe("repo");
+		).toBe("my-skill");
 	});
 });

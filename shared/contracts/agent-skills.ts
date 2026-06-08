@@ -143,21 +143,15 @@ export function getHubInstalledName(installRef: string): string {
 
 /** Resolve the manifest name for a skill.
  *
- * Hub skills are installed without `--name`, so Hermes derives the installed
- * name from the installRef. We must use that derived name in the manifest,
- * remote-inventory comparison, and uninstall commands so they match what is
- * actually installed.
- *
- * URL and custom skills use the saved `name` because we pass `--name` or
- * write the file directly.
+ * We pass `--name` on hub and URL installs, so the installed skill always
+ * uses the saved `name`. Custom skills are written with the saved `name`
+ * as the directory name. The manifest, remote-inventory comparison, and
+ * uninstall commands all use this same saved name.
  */
 export function resolveManifestName(skill: {
 	sourceType: string;
 	name: string;
 	installRef?: string | null;
 }): string {
-	if (skill.sourceType === "hub") {
-		return getHubInstalledName(skill.installRef ?? "");
-	}
 	return skill.name;
 }

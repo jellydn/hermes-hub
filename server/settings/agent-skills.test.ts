@@ -398,7 +398,7 @@ describe("agent skills settings", () => {
 					c.includes("hermes skills install"),
 				) || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
+				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes --force",
 			);
 
 			const manifestWriteCall = calledCommands.find(
@@ -471,7 +471,7 @@ describe("agent skills settings", () => {
 			expect(compoundCommand).toContain("rm -rf");
 			expect(compoundCommand).toContain("skill-old-custom");
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
+				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes --force",
 			);
 		});
 
@@ -549,7 +549,7 @@ describe("agent skills settings", () => {
 					c.includes("hermes skills install"),
 				) || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'browse-sh/windy.com/geo-weather-fetch-w3o49h' --yes --force",
+				"sudo docker exec hermes hermes skills install 'browse-sh/windy.com/geo-weather-fetch-w3o49h' --name 'geo-weather-fetch' --yes --force",
 			);
 
 			const manifestCall = calledCommands.find(

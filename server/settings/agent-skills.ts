@@ -354,8 +354,11 @@ export function buildDeployCommands(
 		);
 		if (!shouldKeep) {
 			if (prev.sourceType === "hub" || prev.sourceType === "url") {
+				// Uninstall failures are non-blocking: a skill may have been removed
+				// manually, or the Hermes CLI may return non-zero for an absent skill.
+				// Tolerate cleanup failures so they can't block the primary install intent.
 				shellCommands.push(
-					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)}`,
+					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)} || true`,
 				);
 			} else if (prev.sourceType === "custom") {
 				shellCommands.push(
@@ -370,7 +373,7 @@ export function buildDeployCommands(
 		const installRef = skill.installRef || "";
 		if (skill.sourceType === "hub") {
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --yes --force`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
 			);
 		} else if (skill.sourceType === "url") {
 			shellCommands.push(
