@@ -125,13 +125,13 @@ export function SkillForm({
 							placeholder={
 								form.sourceType === "hub"
 									? "e.g. browse-sh/windy.com/geo-weather-fetch-w3o49h"
-									: "e.g. https://raw.githubusercontent.com/user/repo/main/SKILL.md"
+									: "e.g. https://github.com/user/repo/tree/main/skills/my-skill"
 							}
 						/>
 						<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
 							{form.sourceType === "hub"
 								? "A single-line installer reference string."
-								: "Must be a valid http or https URL pointing directly to a SKILL.md file."}
+								: "A GitHub folder URL (installs the whole skill folder, including scripts) or a direct URL to a single SKILL.md file."}
 						</p>
 					</div>
 				)}
