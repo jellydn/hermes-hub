@@ -176,9 +176,9 @@ describe("agent skills settings", () => {
 			const { createAgentSkill } = await import("./agent-skills");
 			const response = await createAgentSkill(
 				createContext({
-					name: "geo-weather-fetch",
+					name: "get-forecast",
 					sourceType: "hub",
-					installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+					installRef: "browse-sh/weather.gov/get-forecast-1uezib",
 				}),
 			);
 
@@ -186,7 +186,7 @@ describe("agent skills settings", () => {
 			expect(insertValues).toHaveBeenCalledWith(
 				expect.objectContaining({
 					sourceType: "hub",
-					installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+					installRef: "browse-sh/weather.gov/get-forecast-1uezib",
 				}),
 			);
 		});
@@ -398,7 +398,7 @@ describe("agent skills settings", () => {
 					c.includes("hermes skills install"),
 				) || "";
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes --force",
+				"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
 			);
 
 			const manifestWriteCall = calledCommands.find(
@@ -420,7 +420,7 @@ describe("agent skills settings", () => {
 				id: "s1",
 				name: "skill-one",
 				sourceType: "hub",
-				installRef: "ref-1",
+				installRef: "owner/skill-one",
 				enabled: true,
 			};
 			selectOrderBy.mockResolvedValueOnce([record1]);
@@ -471,7 +471,7 @@ describe("agent skills settings", () => {
 			expect(compoundCommand).toContain("rm -rf");
 			expect(compoundCommand).toContain("skill-old-custom");
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'ref-1' --name 'skill-one' --yes --force",
+				"sudo docker exec hermes hermes skills install 'owner/skill-one' --yes --force",
 			);
 		});
 
@@ -555,16 +555,16 @@ describe("agent skills settings", () => {
 		});
 
 		it("deploys browse.sh hub skill without --name (hub-derived names) and writes manifest", async () => {
-			const geoRecord = {
+			const forecastRecord = {
 				...baseRecord,
-				id: "s_geo",
-				name: "geo-weather-fetch",
+				id: "s_forecast",
+				name: "US Weather Forecast",
 				sourceType: "hub",
-				installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+				installRef: "browse-sh/weather.gov/get-forecast-1uezib",
 				enabled: true,
 			};
 
-			selectOrderBy.mockResolvedValueOnce([geoRecord]);
+			selectOrderBy.mockResolvedValueOnce([forecastRecord]);
 
 			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
 			withSshConnection.mockImplementation(
@@ -588,9 +588,11 @@ describe("agent skills settings", () => {
 				calledCommands.find((c: string) =>
 					c.includes("hermes skills install"),
 				) || "";
+			// No --name for hub installs — Hermes CLI derives the name from the ref
 			expect(compoundCommand).toContain(
-				"sudo docker exec hermes hermes skills install 'browse-sh/windy.com/geo-weather-fetch-w3o49h' --name 'geo-weather-fetch' --yes --force",
+				"sudo docker exec hermes hermes skills install 'browse-sh/weather.gov/get-forecast-1uezib' --yes --force",
 			);
+			expect(compoundCommand).not.toContain("--name");
 
 			const manifestCall = calledCommands.find(
 				(c: string) =>
@@ -846,9 +848,9 @@ Installed Skills
 		it("detects an unfetchable source", async () => {
 			const { detectSkillInstallFailure } = await import("./agent-skills");
 			const output =
-				"Error: Could not fetch 'browse-sh/windy.com/geo-weather-fetch-w3o49h' from any source.";
+				"Error: Could not fetch 'browse-sh/weather.gov/get-forecast-1uezib' from any source.";
 			expect(detectSkillInstallFailure(output)).toBe(
-				"Error: Could not fetch 'browse-sh/windy.com/geo-weather-fetch-w3o49h' from any source.",
+				"Error: Could not fetch 'browse-sh/weather.gov/get-forecast-1uezib' from any source.",
 			);
 		});
 

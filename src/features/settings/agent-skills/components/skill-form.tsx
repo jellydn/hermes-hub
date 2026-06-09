@@ -124,7 +124,7 @@ export function SkillForm({
 							className="w-full rounded-[1rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--sea-ink)] outline-none focus:border-[var(--sea-ink-soft)]"
 							placeholder={
 								form.sourceType === "hub"
-									? "e.g. browse-sh/windy.com/geo-weather-fetch-w3o49h"
+									? "e.g. browse-sh/weather.gov/get-forecast-1uezib"
 									: "e.g. https://github.com/user/repo/tree/main/skills/my-skill"
 							}
 						/>

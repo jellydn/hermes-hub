@@ -359,11 +359,15 @@ export function buildDeployCommands(
 				// manually, or the Hermes CLI may return non-zero for an absent skill.
 				// Tolerate cleanup failures so they can't block the primary install intent.
 				shellCommands.push(
-					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(prev.name)} || true`,
+					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(
+						prev.name,
+					)} || true`,
 				);
 			} else if (prev.sourceType === "custom") {
 				shellCommands.push(
-					`sudo rm -rf ${shellQuote(`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`)}`,
+					`sudo rm -rf ${shellQuote(
+						`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${prev.name}`,
+					)}`,
 				);
 			}
 		}
@@ -376,12 +380,17 @@ export function buildDeployCommands(
 		// and other files) is installed instead of only a single raw SKILL.md.
 		const installRef = normalizeSkillInstallRef(skill.installRef || "");
 		if (skill.sourceType === "hub") {
+			// No --name: Hermes CLI derives the installed name from the ref itself.
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(
+					installRef,
+				)} --yes --force`,
 			);
 		} else if (skill.sourceType === "url") {
 			shellCommands.push(
-				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
+				`sudo docker exec hermes hermes skills install ${shellQuote(
+					installRef,
+				)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(

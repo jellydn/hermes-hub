@@ -1288,7 +1288,9 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 
 ## Agent Skills
 
-HermesHub stores custom and community agent skills in `agent_skills` and can push them to a selected Hermes VPS. Skills can be imported from the Nous Hub (via a Hub ID), from a custom URL (either a GitHub folder URL such as `https://github.com/owner/repo/tree/main/skills/my-skill`, which installs the whole skill folder including scripts, or a direct URL to a single `SKILL.md` file), or authored directly in the UI as markdown. GitHub folder/file URLs are rewritten to the `owner/repo/path` slug the Hermes CLI resolves against the repository's default branch. Deploying skills synchronizes the list to the remote Hermes target, writes custom skill files, and runs `hermes skills install/uninstall` commands inside the Hermes container before restarting the gateway.
+HermesHub stores custom and community agent skills in `agent_skills` and can push them to a selected Hermes VPS. Skills can be imported from the Hermes Skills Hub (via a Hub install ref such as `browse-sh/weather.gov/get-forecast-1uezib`), from a custom URL (either a GitHub folder URL such as `https://github.com/owner/repo/tree/main/skills/my-skill`, which installs the whole skill folder including scripts, or a direct URL to a single `SKILL.md` file), or authored directly in the UI as markdown. GitHub folder/file URLs are rewritten to the `owner/repo/path` slug the Hermes CLI resolves against the repository's default branch. Deploying skills synchronizes the list to the remote Hermes target, writes custom skill files, and runs `hermes skills install/uninstall` commands inside the Hermes container before restarting the gateway.
+
+Hub skills are installed exactly as published — the installed name is derived from the ref itself (the last path segment), not from the saved display name. URL and custom skills use the saved name as the installed name.
 
 The Settings page (`/settings`) exposes an **Agent Skills** tab. Save persists locally; deploy writes over SSH and restarts the gateway.
 
