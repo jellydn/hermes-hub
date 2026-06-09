@@ -31,10 +31,22 @@ describe("getHubInstalledName", () => {
 		expect(getHubInstalledName("org/repo/skills/my-skill")).toBe("my-skill");
 	});
 
-	it("returns last segment of browse.sh ref", () => {
+	it("derives name from browse.sh ref, stripping random-id suffix", () => {
 		expect(
 			getHubInstalledName("browse-sh/weather.gov/get-forecast-1uezib"),
-		).toBe("get-forecast-1uezib");
+		).toBe("get-forecast");
+	});
+
+	it("derives name from browse.sh ref with different suffix", () => {
+		expect(
+			getHubInstalledName("browse-sh/windy.com/geo-weather-fetch-w3o49h"),
+		).toBe("geo-weather-fetch");
+	});
+
+	it("leaves last segment unchanged when it does not match browse.sh pattern", () => {
+		expect(getHubInstalledName("browse-sh/example.com/a-normal-name")).toBe(
+			"a-normal-name",
+		);
 	});
 });
 
@@ -55,14 +67,14 @@ describe("resolveManifestName", () => {
 		).toBe("remote-skill");
 	});
 
-	it("returns Hermes-derived name from installRef for hub skills (no --name)", () => {
+	it("returns Hermes-derived name from browse.sh ref (strips -<id>)", () => {
 		expect(
 			resolveManifestName({
 				sourceType: "hub",
 				name: "Weather Gov Forecast",
 				installRef: "browse-sh/weather.gov/get-forecast-1uezib",
 			}),
-		).toBe("get-forecast-1uezib");
+		).toBe("get-forecast");
 	});
 
 	it("derives manifest name from simple path hub ref", () => {

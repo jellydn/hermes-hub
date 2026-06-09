@@ -186,13 +186,47 @@ export const agentSkillUpdateSchema = z.object({
 });
 
 /**
- * Derive the Hermes skill name from a hub installRef: the segment after
- * the last slash (or the whole string if there's no slash), minus any
- * @version suffix.
+ * The trailing random-id suffix on browse.sh refs is always exactly 6
+ * lowercase alphanumeric chars: `-[a-z0-9]{6}$`.  Hermes strips it from
+ * the installed skill name.
+ *
+ * Examples:
+ *   `browse-sh/weather.gov/get-forecast-1uezib`  →  `get-forecast`
+ *   `browse-sh/windy.com/geo-weather-fetch-w3o49h`  →  `geo-weather-fetch`
+ *
+ * We only apply this stripping when the ref starts with `browse-sh/` so
+ * that non-browse refs like `web-search` or `hermes-web-search` are not
+ * accidentally truncated.
+ */
+const BROWSE_SH_ID_SUFFIX = /-[a-z0-9]{6}$/;
+
+/**
+ * Derive the Hermes skill name that will actually be installed on the
+ * remote host.
+ *
+ * For browse.sh refs (`browse-sh/<host>/<slug>-<id>`) Hermes strips the
+ * random-id suffix, so we strip it too.
+ *
+ * For all other hub refs we return the last path segment, minus any
+ * `@version` suffix — the same rule Hermes applies.
+ *
+ * Returns `""` for an empty ref.
  */
 export function getHubInstalledName(installRef: string): string {
 	if (!installRef) return "";
-	return (installRef.split("/").pop() ?? installRef).split("@")[0];
+	const last = (installRef.split("/").pop() ?? installRef).split("@")[0];
+	if (
+		installRef.startsWith("browse-sh/") ||
+		installRef.startsWith("skills-sh/") ||
+		installRef.startsWith("well-known:") ||
+		installRef.startsWith("official/") ||
+		installRef.startsWith("clawhub/") ||
+		installRef.startsWith("lobehub/") ||
+		installRef.startsWith("claude-marketplace/")
+	) {
+		return last.replace(BROWSE_SH_ID_SUFFIX, "");
+	}
+	return last;
 }
 
 /** Resolve the manifest name for a skill.

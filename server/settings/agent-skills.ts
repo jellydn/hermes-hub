@@ -462,7 +462,35 @@ export async function deploySkillsToHermes(context: Context) {
 				await writeRemoteFile(ssh, fw.path, fw.content);
 			}
 
-			// Write the managed manifest ONLY after all shell commands succeed.
+			// Post-install verification: query the remote inventory and check
+			// that every enabled hub/url skill actually landed.  Hermes CLI
+			// reports "Exit 0" even when install was silently skipped or the
+			// output scanner missed a failure, so this is our last chance to
+			// catch a missing skill before we write the manifest.
+			// Custom skills are written as files and are not tracked by hermes
+			// skills list, so we skip them here.
+			const verifiableSkills = enabledSkills.filter(
+				(s) => s.sourceType === "hub" || s.sourceType === "url",
+			);
+			if (verifiableSkills.length > 0) {
+				const verifyResult = await ssh.execCommand(
+					"sudo docker exec hermes hermes skills list",
+				);
+				const verifiedNames = new Set(
+					parseRemoteSkillsList(verifyResult.stdout ?? "").skills,
+				);
+				const missing = verifiableSkills
+					.map((s) => resolveManifestName(s))
+					.filter((n) => n && !verifiedNames.has(n));
+				if (missing.length > 0) {
+					throw new Error(
+						`Post-install verification failed: Hermes did not install these skills: ${missing.join(", ")}`,
+					);
+				}
+			}
+
+			// Write the managed manifest ONLY after all shell commands succeed
+			// AND post-install verification passes.
 			// If install/uninstall fails, the manifest is not updated, so a failed
 			// hub install never leaves the remote manifest claiming success.
 			await writeRemoteFile(

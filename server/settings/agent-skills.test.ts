@@ -375,7 +375,15 @@ describe("agent skills settings", () => {
 
 			selectOrderBy.mockResolvedValueOnce([record1, record2, record3]);
 
-			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (cmd.includes("hermes skills list")) {
+					return Promise.resolve({
+						code: 0,
+						stdout: "Name       Source   Enabled\nref-1      hub      true",
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
 			withSshConnection.mockImplementation(
 				async (
 					_config: unknown,
@@ -439,6 +447,12 @@ describe("agent skills settings", () => {
 						]),
 					});
 				}
+				if (cmd.includes("hermes skills list")) {
+					return Promise.resolve({
+						code: 0,
+						stdout: "Name       Source   Enabled\nskill-one  hub      true",
+					});
+				}
 				return Promise.resolve({ code: 0, stdout: "" });
 			});
 
@@ -487,7 +501,15 @@ describe("agent skills settings", () => {
 
 			selectOrderBy.mockResolvedValueOnce([urlRecord]);
 
-			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (cmd.includes("hermes skills list")) {
+					return Promise.resolve({
+						code: 0,
+						stdout: "Name         Source   Enabled\nremote-skill url      true",
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
 			withSshConnection.mockImplementation(
 				async (
 					_config: unknown,
@@ -527,7 +549,15 @@ describe("agent skills settings", () => {
 
 			selectOrderBy.mockResolvedValueOnce([urlRecord]);
 
-			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (cmd.includes("hermes skills list")) {
+					return Promise.resolve({
+						code: 0,
+						stdout: "Name    Source   Enabled\nteach   url      true",
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
 			withSshConnection.mockImplementation(
 				async (
 					_config: unknown,
@@ -566,7 +596,16 @@ describe("agent skills settings", () => {
 
 			selectOrderBy.mockResolvedValueOnce([forecastRecord]);
 
-			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (cmd.includes("hermes skills list")) {
+					return Promise.resolve({
+						code: 0,
+						stdout:
+							"Name          Source   Enabled\nget-forecast  hub      true",
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
 			withSshConnection.mockImplementation(
 				async (
 					_config: unknown,
