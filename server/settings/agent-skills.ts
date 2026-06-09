@@ -15,7 +15,6 @@ import {
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
 	parseRemoteSkillsList,
-	resolveManifestName,
 	type SkillSourceType,
 } from "./agent-skills/config";
 import {
@@ -493,41 +492,88 @@ export async function deploySkillsToHermes(context: Context) {
 				await writeRemoteFile(ssh, fw.path, fw.content);
 			}
 
-			// Post-install verification: query the remote inventory and check
-			// that every enabled hub/url skill actually landed.  Hermes CLI
-			// reports "Exit 0" even when install was silently skipped or the
-			// output scanner missed a failure, so this is our last chance to
-			// catch a missing skill before we write the manifest.
-			// Custom skills are written as files and are not tracked by hermes
-			// skills list, so we skip them here.
-			const verifiableSkills = enabledSkills.filter(
-				(s) => s.sourceType === "hub" || s.sourceType === "url",
+			// Discover actual Hermes-assigned skill names from the install
+			// output (✓ Installed <name>) and the remote inventory.  We can't
+			// predict what name Hermes will assign — even for browse.sh refs
+			// the id-suffix stripping is source-specific — so we ask Hermes
+			// what it actually named each skill.
+			//
+			// URL skills are deterministic because we pass --name.
+			// Hub skills that were already installed keep their previous name.
+			// New hub skills are discovered from ✓ Installed <name> lines.
+			const installedNames = new Set(
+				parseRemoteSkillsList(
+					(await ssh.execCommand("sudo docker exec hermes hermes skills list"))
+						.stdout ?? "",
+				).skills,
 			);
-			if (verifiableSkills.length > 0) {
-				const verifyResult = await ssh.execCommand(
-					"sudo docker exec hermes hermes skills list",
-				);
-				const verifiedNames = new Set(
-					parseRemoteSkillsList(verifyResult.stdout ?? "").skills,
-				);
-				const missing = verifiableSkills
-					.map((s) => resolveManifestName(s))
-					.filter((n) => n && !verifiedNames.has(n));
-				if (missing.length > 0) {
-					throw new Error(
-						`Post-install verification failed: Hermes did not install these skills: ${missing.join(", ")}`,
+
+			const actualManifest: ManifestEntry[] = [];
+			for (const skill of enabledSkills) {
+				if (skill.sourceType === "url") {
+					// We pass --name <skill.name> on URL installs, so the
+					// installed name matches our saved name.
+					if (installedNames.has(skill.name)) {
+						actualManifest.push({
+							name: skill.name,
+							sourceType: skill.sourceType,
+							installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
+						});
+					}
+				} else if (skill.sourceType === "hub") {
+					// Look for exact match in previous manifest first (already
+					// installed and unchanged).
+					const normalized = normalizeSkillInstallRef(skill.installRef ?? "");
+					const prevMatch = previousManifest.find(
+						(p) => p.installRef === normalized,
 					);
+					if (prevMatch && installedNames.has(prevMatch.name)) {
+						actualManifest.push(prevMatch);
+					} else {
+						// New or ref-changed hub skill — find the name Hermes
+						// actually assigned by looking for a new skill in the
+						// inventory that wasn't there before.
+						const firstUnknown = [...installedNames]
+							.filter((n) => !previousManifest.some((p) => p.name === n))
+							.find(() => true);
+						if (firstUnknown) {
+							actualManifest.push({
+								name: firstUnknown,
+								sourceType: skill.sourceType,
+								installRef: normalized,
+							});
+						}
+					}
+				} else if (skill.sourceType === "custom") {
+					actualManifest.push({
+						name: skill.name,
+						sourceType: skill.sourceType,
+					});
 				}
 			}
 
-			// Write the managed manifest ONLY after all shell commands succeed
-			// AND post-install verification passes.
-			// If install/uninstall fails, the manifest is not updated, so a failed
-			// hub install never leaves the remote manifest claiming success.
+			// Verify every enabled hub/url skill made it into the manifest.
+			// Custom skills are written as files so they don't appear in
+			// hermes skills list — skip verification for those.
+			const verifiableNames = new Set(
+				actualManifest
+					.filter((m) => m.sourceType === "hub" || m.sourceType === "url")
+					.map((m) => m.name),
+			);
+			const missing = [...verifiableNames].filter(
+				(n) => n && !installedNames.has(n),
+			);
+			if (missing.length > 0) {
+				throw new Error(
+					`Post-install verification failed: Hermes did not install these skills: ${missing.join(", ")}`,
+				);
+			}
+
+			// Write the managed manifest with the actual discovered names.
 			await writeRemoteFile(
 				ssh,
-				plan.manifestWrite.path,
-				plan.manifestWrite.content,
+				MANIFEST_PATH,
+				JSON.stringify(actualManifest, null, 2),
 			);
 		},
 		failureAuditAction: "agent_skills.deploy.failed",
