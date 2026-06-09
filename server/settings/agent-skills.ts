@@ -228,7 +228,11 @@ export async function deleteAgentSkill(context: Context) {
 
 export const MANIFEST_PATH = `${managedComposeVolumeHome}/.hermes/hermeshub-agent-skills.json`;
 
-export type ManifestEntry = { name: string; sourceType: string };
+export type ManifestEntry = {
+	name: string;
+	sourceType: string;
+	installRef?: string;
+};
 
 export async function readRemoteManifest(
 	ssh: NodeSSH,
@@ -253,14 +257,20 @@ export async function readRemoteManifest(
 		if (!entry || typeof entry !== "object") {
 			return [];
 		}
-		const { name, sourceType } = entry as Record<string, unknown>;
+		const { name, sourceType, installRef } = entry as Record<string, unknown>;
 		if (typeof name !== "string" || typeof sourceType !== "string") {
 			return [];
 		}
 		if (!isValidAgentSkillName(name)) {
 			throw new Error(`Unsafe manifest name '${name}' in ${MANIFEST_PATH}.`);
 		}
-		return [{ name, sourceType }];
+		return [
+			{
+				name,
+				sourceType,
+				installRef: typeof installRef === "string" ? installRef : undefined,
+			},
+		];
 	});
 }
 
@@ -332,6 +342,25 @@ export function detectSkillInstallFailure(output: string): string | null {
 	return failures.length > 0 ? failures.join("\n") : null;
 }
 
+/**
+ * Extract the actual installed skill names from Hermes CLI output.
+ *
+ * Hermes prints `✓ Installed <name>` when a skill installs successfully.
+ * Each `✓ Installed <name>` on its own line gives us the real name the
+ * CLI assigned — no guessing required.
+ */
+export function parseInstalledSkillNames(output: string): string[] {
+	const names: string[] = [];
+	const INSTALLED_LINE = /✓\s*Installed\s+(.+)/;
+	for (const rawLine of output.split(/\r?\n/)) {
+		const match = rawLine.trim().match(INSTALLED_LINE);
+		if (match?.[1]?.trim()) {
+			names.push(match[1].trim());
+		}
+	}
+	return names;
+}
+
 export function buildDeployCommands(
 	previousManifest: ManifestEntry[],
 	enabledSkills: Array<{
@@ -344,20 +373,29 @@ export function buildDeployCommands(
 	const fileWrites: FileWrite[] = [];
 	const shellCommands: string[] = [];
 
-	// Remove previously managed skills missing from enabledSkills.
-	// Also remove when source type changes (e.g. custom → hub with same name)
-	// to avoid stale remote artifacts.
+	// Build a lookup from the previous manifest by installRef (hub/url) or name (custom).
+	// For hub skills the previous manifest name is what Hermes actually named it,
+	// so we store it keyed by installRef for matching across deploys.
+	const prevByName = new Map<string, ManifestEntry>();
+	const prevByInstallRef = new Map<string, ManifestEntry>();
 	for (const prev of previousManifest) {
-		const shouldKeep = enabledSkills.some(
-			(curr) =>
-				resolveManifestName(curr) === prev.name &&
-				curr.sourceType === prev.sourceType,
-		);
-		if (!shouldKeep) {
+		prevByName.set(prev.name, prev);
+		prevByInstallRef.set(prev.installRef ?? "", prev);
+	}
+
+	// Remove previously managed skills no longer in the enabled list.
+	for (const prev of previousManifest) {
+		const stillEnabled = enabledSkills.some((curr) => {
+			if (curr.sourceType !== prev.sourceType) return false;
 			if (prev.sourceType === "hub" || prev.sourceType === "url") {
-				// Uninstall failures are non-blocking: a skill may have been removed
-				// manually, or the Hermes CLI may return non-zero for an absent skill.
-				// Tolerate cleanup failures so they can't block the primary install intent.
+				// Match by installRef first, then by name
+				const normalized = normalizeSkillInstallRef(curr.installRef ?? "");
+				return normalized === prev.installRef || prev.name === curr.name;
+			}
+			return curr.name === prev.name;
+		});
+		if (!stillEnabled) {
+			if (prev.sourceType === "hub" || prev.sourceType === "url") {
 				shellCommands.push(
 					`echo y | sudo docker exec -i hermes hermes skills uninstall ${shellQuote(
 						prev.name,
@@ -375,12 +413,8 @@ export function buildDeployCommands(
 
 	// Install/write enabled skills
 	for (const skill of enabledSkills) {
-		// Rewrite GitHub folder/file URLs to the `owner/repo/path` slug the
-		// Hermes CLI understands, so a whole skill folder (SKILL.md plus scripts
-		// and other files) is installed instead of only a single raw SKILL.md.
 		const installRef = normalizeSkillInstallRef(skill.installRef || "");
 		if (skill.sourceType === "hub") {
-			// No --name: Hermes CLI derives the installed name from the ref itself.
 			shellCommands.push(
 				`sudo docker exec hermes hermes skills install ${shellQuote(
 					installRef,
@@ -390,7 +424,7 @@ export function buildDeployCommands(
 			shellCommands.push(
 				`sudo docker exec hermes hermes skills install ${shellQuote(
 					installRef,
-				)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,
+				)} --name ${shellQuote(skill.name)} --yes --force`,
 			);
 		} else if (skill.sourceType === "custom") {
 			fileWrites.push(
@@ -399,14 +433,11 @@ export function buildDeployCommands(
 		}
 	}
 
-	// Build new manifest (written after shell commands succeed)
-	const newManifest = enabledSkills.map((s) => ({
-		name: resolveManifestName(s),
-		sourceType: s.sourceType,
-	}));
-	const manifestWrite = buildManifestWriteCommand(newManifest);
-
-	return { fileWrites, manifestWrite, shellCommands };
+	return {
+		fileWrites,
+		manifestWrite: buildManifestWriteCommand([]),
+		shellCommands,
+	};
 }
 
 export async function deploySkillsToHermes(context: Context) {
