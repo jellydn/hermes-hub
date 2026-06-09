@@ -51,6 +51,60 @@ export function validateUrlInstallRef(ref: string): string | null {
 	return null;
 }
 
+/**
+ * Rewrite a skill install reference into the form the Hermes CLI understands.
+ *
+ * `hermes skills install` installs a *single* `SKILL.md` when given a raw
+ * `*.md` URL (e.g. `raw.githubusercontent.com/.../SKILL.md`), but installs the
+ * *whole skill folder* (SKILL.md plus scripts and any other files) when given
+ * an `owner/repo/path` slug routed through its GitHub source.
+ *
+ * GitHub's own folder/file URLs are not understood by the CLI directly, so we
+ * rewrite them to the slug form here:
+ *   - `github.com/owner/repo/tree/<ref>/<path>`            → `owner/repo/<path>`
+ *   - `github.com/owner/repo/blob/<ref>/<path>/SKILL.md`   → `owner/repo/<path>`
+ *   - `github.com/owner/repo/blob/<ref>/<path>`            → `owner/repo/<path>`
+ *   - `github.com/owner/repo`                              → `owner/repo`
+ *
+ * A trailing `/SKILL.md` is stripped so the parent folder is installed. The
+ * branch/ref in the URL is dropped because the slug form always resolves the
+ * repository's default branch.
+ *
+ * Raw `*.md` URLs (and refs that are already slugs) are returned unchanged so
+ * single-file installs keep working.
+ */
+export function normalizeSkillInstallRef(ref: string): string {
+	const trimmed = ref.trim();
+	if (!trimmed) return trimmed;
+
+	let url: URL;
+	try {
+		url = new URL(trimmed);
+	} catch {
+		return trimmed; // already a slug or non-URL ref
+	}
+
+	const host = url.hostname.replace(/^www\./, "");
+	if (host !== "github.com") {
+		return trimmed; // raw.githubusercontent.com and other hosts: leave as-is
+	}
+
+	const segments = url.pathname.split("/").filter(Boolean);
+	if (segments.length < 2) return trimmed;
+
+	const [owner, repo, marker, , ...rest] = segments;
+	if (marker !== "tree" && marker !== "blob") {
+		// e.g. github.com/owner/repo[/extra] → owner/repo[/extra]
+		return [owner, repo, ...segments.slice(2)].join("/");
+	}
+
+	const pathParts = [...rest];
+	if (pathParts.at(-1) === "SKILL.md") {
+		pathParts.pop();
+	}
+	return [owner, repo, ...pathParts].join("/");
+}
+
 export function validateCustomContent(
 	content: string | null | undefined,
 ): string | null {

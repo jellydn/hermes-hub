@@ -11,6 +11,7 @@ import { requireAuthSession } from "../request-guards";
 import { shellQuote, withSshConnection } from "../ssh";
 import {
 	isValidAgentSkillName,
+	normalizeSkillInstallRef,
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
 	parseRemoteSkillsList,
@@ -370,7 +371,10 @@ export function buildDeployCommands(
 
 	// Install/write enabled skills
 	for (const skill of enabledSkills) {
-		const installRef = skill.installRef || "";
+		// Rewrite GitHub folder/file URLs to the `owner/repo/path` slug the
+		// Hermes CLI understands, so a whole skill folder (SKILL.md plus scripts
+		// and other files) is installed instead of only a single raw SKILL.md.
+		const installRef = normalizeSkillInstallRef(skill.installRef || "");
 		if (skill.sourceType === "hub") {
 			shellCommands.push(
 				`sudo docker exec hermes hermes skills install ${shellQuote(installRef)} --name ${shellQuote(resolveManifestName(skill))} --yes --force`,

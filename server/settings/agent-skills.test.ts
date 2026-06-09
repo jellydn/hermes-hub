@@ -514,6 +514,46 @@ describe("agent skills settings", () => {
 			);
 		});
 
+		it("rewrites a GitHub folder URL to a slug so the whole folder installs", async () => {
+			const urlRecord = {
+				...baseRecord,
+				id: "s_folder",
+				name: "teach",
+				sourceType: "url",
+				installRef:
+					"https://github.com/mattpocock/skills/tree/main/skills/productivity/teach",
+				enabled: true,
+			};
+
+			selectOrderBy.mockResolvedValueOnce([urlRecord]);
+
+			const mockExec = vi.fn().mockResolvedValue({ code: 0, stdout: "" });
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { deploySkillsToHermes } = await import("./agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(200);
+
+			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const compoundCommand =
+				calledCommands.find((c: string) =>
+					c.includes("hermes skills install"),
+				) || "";
+			expect(compoundCommand).toContain(
+				"sudo docker exec hermes hermes skills install 'mattpocock/skills/skills/productivity/teach' --name 'teach' --yes --force",
+			);
+		});
+
 		it("deploys browse.sh hub skill without --name (hub-derived names) and writes manifest", async () => {
 			const geoRecord = {
 				...baseRecord,
@@ -824,6 +864,68 @@ Installed Skills
 					"Installation blocked: Blocked (community source + caution verdict, 1 findings). Use --force to override.",
 					"Error: Could not fetch 'browse-sh/foo/bar' from any source.",
 				].join("\n"),
+			);
+		});
+	});
+
+	describe("normalizeSkillInstallRef", () => {
+		it("rewrites a GitHub tree (folder) URL to an owner/repo/path slug", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			expect(
+				normalizeSkillInstallRef(
+					"https://github.com/mattpocock/skills/tree/main/skills/productivity/teach",
+				),
+			).toBe("mattpocock/skills/skills/productivity/teach");
+		});
+
+		it("rewrites a GitHub blob URL pointing at SKILL.md to the parent folder slug", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			expect(
+				normalizeSkillInstallRef(
+					"https://github.com/mattpocock/skills/blob/main/skills/productivity/teach/SKILL.md",
+				),
+			).toBe("mattpocock/skills/skills/productivity/teach");
+		});
+
+		it("rewrites a GitHub blob URL pointing at a folder to a slug", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			expect(
+				normalizeSkillInstallRef(
+					"https://github.com/owner/repo/blob/develop/path/to/skill",
+				),
+			).toBe("owner/repo/path/to/skill");
+		});
+
+		it("rewrites a bare github.com repo URL to owner/repo", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			expect(normalizeSkillInstallRef("https://github.com/owner/repo")).toBe(
+				"owner/repo",
+			);
+		});
+
+		it("leaves a raw SKILL.md URL unchanged (single-file install)", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			const raw =
+				"https://raw.githubusercontent.com/user/repo/main/skills/foo/SKILL.md";
+			expect(normalizeSkillInstallRef(raw)).toBe(raw);
+		});
+
+		it("leaves an existing owner/repo/path slug unchanged", async () => {
+			const { normalizeSkillInstallRef } = await import(
+				"#shared/contracts/agent-skills"
+			);
+			expect(normalizeSkillInstallRef("owner/repo/path")).toBe(
+				"owner/repo/path",
 			);
 		});
 	});

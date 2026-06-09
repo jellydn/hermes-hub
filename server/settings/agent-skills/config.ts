@@ -17,6 +17,7 @@ export {
 	agentSkillUpdateSchema,
 	getHubInstalledName,
 	isValidAgentSkillName,
+	normalizeSkillInstallRef,
 	resolveManifestName,
 	SkillSourceTypeSchema,
 } from "#shared/contracts/agent-skills";
