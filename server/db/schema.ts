@@ -345,6 +345,7 @@ export const agentSkills = pgTable(
 		installRef: text("install_ref"),
 		content: text("content"),
 		enabled: boolean("enabled").default(true).notNull(),
+		acceptScannerRisk: boolean("accept_scanner_risk").default(false).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

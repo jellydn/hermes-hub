@@ -510,6 +510,46 @@ describe("deploySkillsToHermes", () => {
 		expect(payload.error).toContain(name);
 	});
 
+	it("uses direct SKILL.md write when acceptScannerRisk is enabled for a URL skill", async () => {
+		const record = {
+			...baseRecord,
+			id: "s_url",
+			name: "remote-skill",
+			sourceType: "url",
+			installRef: "https://example.com/SKILL.md",
+			enabled: true,
+			acceptScannerRisk: true,
+		};
+
+		selectOrderBy.mockResolvedValueOnce([record]);
+
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [
+				"/root/.hermes/skills/hermeshub/remote-skill/SKILL.md",
+			],
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({ execCommand: mockExec });
+			},
+		);
+
+		const { deploySkillsToHermes } = await import("../agent-skills");
+		const response = await deploySkillsToHermes(
+			createContext({ serverId: "srv_123" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+		const compoundCommand =
+			calledCommands.find((c: string) => c.includes("curl -fsSL")) || "";
+		expect(compoundCommand).toContain("https://example.com/SKILL.md");
+		expect(compoundCommand).not.toContain("hermes skills install");
+	});
+
 	it("treats skills.sh hyphen aliases as installed (last-30-days vs last30days)", async () => {
 		const record = {
 			...baseRecord,

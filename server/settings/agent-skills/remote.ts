@@ -114,6 +114,18 @@ export function buildCustomSkillFileWrite(
 	};
 }
 
+export function buildDirectSkillInstallCommand(
+	skillName: string,
+	fetchUrl: string,
+): string {
+	const skillDir = `${managedComposeVolumeHome}/.hermes/skills/hermeshub/${skillName}`;
+	const skillMdPath = `${skillDir}/SKILL.md`;
+	return [
+		`sudo mkdir -p ${shellQuote(skillDir)}`,
+		`curl -fsSL ${shellQuote(fetchUrl)} | sudo tee ${shellQuote(skillMdPath)} > /dev/null`,
+	].join(" && ");
+}
+
 export function parseInstalledSkillNamesFromFind(stdout: string): string[] {
 	const names = new Set<string>();
 

@@ -2,12 +2,14 @@ import { HERMES_HUB_SKILL_CATEGORY } from "#shared/contracts/agent-skills";
 import { managedComposeVolumeHome } from "../../constants";
 import { shellQuote } from "../../ssh";
 import {
+	deriveSkillMdFetchUrl,
 	normalizeSkillInstallRef,
 	resolveManifestName,
 	type SkillSourceType,
 } from "./config";
 import {
 	buildCustomSkillFileWrite,
+	buildDirectSkillInstallCommand,
 	type FileWrite,
 	type ManifestEntry,
 } from "./remote";
@@ -17,6 +19,7 @@ export type EnabledSkill = {
 	sourceType: string;
 	installRef?: string | null;
 	content?: string | null;
+	acceptScannerRisk?: boolean;
 };
 
 type SkillDeployPolicy = {
@@ -45,6 +48,38 @@ function removeLegacyFlatSkillDir(skillName: string): string {
 	)}`;
 }
 
+function removeHermeshubSkillDir(skillName: string): string {
+	return `sudo rm -rf ${shellQuote(
+		`${managedComposeVolumeHome}/.hermes/skills/hermeshub/${skillName}`,
+	)}`;
+}
+
+function buildScannerBypassInstallCommand(skill: EnabledSkill): string | null {
+	if (!skill.acceptScannerRisk) {
+		return null;
+	}
+
+	const installRef = skill.installRef ?? "";
+	const fetchUrl = deriveSkillMdFetchUrl(
+		installRef,
+		skill.sourceType as SkillSourceType,
+	);
+	if (!fetchUrl) {
+		return null;
+	}
+
+	const resolvedName = resolveManifestName(skill);
+	if (!resolvedName) {
+		return null;
+	}
+
+	return [
+		removeLegacyFlatSkillDir(resolvedName),
+		removeHermeshubSkillDir(resolvedName),
+		buildDirectSkillInstallCommand(resolvedName, fetchUrl),
+	].join(" && ");
+}
+
 const hubPolicy: SkillDeployPolicy = {
 	matchesEnabled(prev, curr) {
 		return (
@@ -59,6 +94,11 @@ const hubPolicy: SkillDeployPolicy = {
 		)} || true`;
 	},
 	installCommand(skill) {
+		const bypassInstall = buildScannerBypassInstallCommand(skill);
+		if (bypassInstall) {
+			return bypassInstall;
+		}
+
 		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
 		const resolvedName = resolveManifestName(skill);
 		const legacyCleanup = resolvedName
@@ -96,6 +136,11 @@ const urlPolicy: SkillDeployPolicy = {
 		)} || true`;
 	},
 	installCommand(skill) {
+		const bypassInstall = buildScannerBypassInstallCommand(skill);
+		if (bypassInstall) {
+			return bypassInstall;
+		}
+
 		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
 		return `${removeLegacyFlatSkillDir(skill.name)} && sudo docker exec hermes hermes skills install ${shellQuote(
 			installRef,

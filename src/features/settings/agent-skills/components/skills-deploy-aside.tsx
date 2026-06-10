@@ -50,7 +50,7 @@ function formatDeploySuccess(
 	if (blocked && blocked.length > 0) {
 		return `${base} ${blocked.length} skill${
 			blocked.length === 1 ? " was" : "s were"
-		} blocked by the Hermes scanner: ${blocked.join(", ")}. Redeploy will not override a dangerous scanner verdict — disable the skill in Hub or install it manually on the server if you accept the risk.`;
+		} blocked by the Hermes scanner: ${blocked.join(", ")}. Hermes does not allow dangerous verdicts through \`--force\`. Edit the skill, enable "Accept scanner risk" to deploy SKILL.md directly, or install manually on the server.`;
 	}
 
 	return base;
@@ -104,8 +104,9 @@ function ManagedSkillSummary({
 					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
 					<span>
 						Blocked by Hermes scanner on last deploy:
-						{blocked.map((n) => ` ${n}`)}. Redeploy will not install these until
-						the scanner allows them.
+						{blocked.map((n) => ` ${n}`)}. Enable "Accept scanner risk" on the
+						skill to bypass via direct file write, or install manually on the
+						server.
 					</span>
 				</div>
 			)}

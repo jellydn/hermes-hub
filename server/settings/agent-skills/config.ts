@@ -15,7 +15,9 @@ export {
 	AGENT_SKILL_NAME_PATTERN,
 	agentSkillCreateSchema,
 	agentSkillUpdateSchema,
+	deriveSkillMdFetchUrl,
 	getHubInstalledName,
+	isSkillsShInstallRef,
 	isValidAgentSkillName,
 	normalizeSkillInstallRef,
 	resolveManifestName,
@@ -30,6 +32,7 @@ export function toAgentSkillSummary(record: {
 	installRef: string | null;
 	content: string | null;
 	enabled: boolean;
+	acceptScannerRisk: boolean;
 	createdAt: Date;
 	updatedAt: Date;
 }): AgentSkillSummary {
@@ -40,6 +43,7 @@ export function toAgentSkillSummary(record: {
 		installRef: record.installRef,
 		content: record.content,
 		enabled: record.enabled,
+		acceptScannerRisk: record.acceptScannerRisk,
 		createdAt: record.createdAt.toISOString(),
 		updatedAt: record.updatedAt.toISOString(),
 	};
@@ -70,6 +74,7 @@ export function parseAgentSkillCreateBody(payload: unknown):
 			name: data.name,
 			sourceType: data.sourceType,
 			enabled: data.enabled,
+			acceptScannerRisk: data.acceptScannerRisk,
 			installRef:
 				data.sourceType === "custom"
 					? null
@@ -104,6 +109,9 @@ export function parseAgentSkillUpdateBody(
 
 	if (data.name !== undefined) updates.name = data.name;
 	if (data.enabled !== undefined) updates.enabled = data.enabled;
+	if (data.acceptScannerRisk !== undefined) {
+		updates.acceptScannerRisk = data.acceptScannerRisk;
+	}
 
 	if (existing.sourceType === "hub") {
 		if (data.installRef !== undefined) {

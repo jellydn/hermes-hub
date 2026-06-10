@@ -72,6 +72,7 @@ type CreateAgentSkillInput = {
 	installRef: string | null;
 	content: string | null;
 	enabled: boolean;
+	acceptScannerRisk: boolean;
 };
 
 export async function createAgentSkillRecord(
@@ -87,6 +88,7 @@ export async function createAgentSkillRecord(
 			installRef: input.installRef,
 			content: input.content,
 			enabled: input.enabled,
+			acceptScannerRisk: input.acceptScannerRisk,
 		})
 		.returning();
 
@@ -115,6 +117,9 @@ export async function updateAgentSkillRecord(
 	}
 	if (input.updates.enabled !== undefined) {
 		updateFields.enabled = input.updates.enabled;
+	}
+	if (input.updates.acceptScannerRisk !== undefined) {
+		updateFields.acceptScannerRisk = input.updates.acceptScannerRisk;
 	}
 	if (input.updates.installRef !== undefined) {
 		updateFields.installRef = input.updates.installRef;

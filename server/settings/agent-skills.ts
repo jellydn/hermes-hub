@@ -71,6 +71,7 @@ export async function createAgentSkill(context: Context) {
 				installRef: parsed.data.installRef ?? null,
 				content: parsed.data.content ?? null,
 				enabled: parsed.data.enabled ?? true,
+				acceptScannerRisk: parsed.data.acceptScannerRisk ?? false,
 			});
 
 			await insertAuditLog(tx, {
@@ -228,7 +229,15 @@ export async function deploySkillsToHermes(context: Context) {
 	}
 
 	const records = await listAgentSkillRecords(session.user.id);
-	const enabledSkills = records.filter((skill) => skill.enabled);
+	const enabledSkills = records
+		.filter((skill) => skill.enabled)
+		.map((skill) => ({
+			name: skill.name,
+			sourceType: skill.sourceType,
+			installRef: skill.installRef,
+			content: skill.content,
+			acceptScannerRisk: skill.acceptScannerRisk,
+		}));
 
 	let payload: unknown;
 	try {

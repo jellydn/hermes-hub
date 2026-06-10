@@ -63,6 +63,7 @@ const mockSkills = [
 		installRef: "nous/web-search",
 		content: null,
 		enabled: true,
+		acceptScannerRisk: false,
 		createdAt: "2026-06-06T12:00:00.000Z",
 		updatedAt: "2026-06-06T12:00:00.000Z",
 	},
@@ -73,6 +74,7 @@ const mockSkills = [
 		installRef: null,
 		content: "Execute code.",
 		enabled: false,
+		acceptScannerRisk: false,
 		createdAt: "2026-06-06T12:00:00.000Z",
 		updatedAt: "2026-06-06T12:00:00.000Z",
 	},
@@ -205,6 +207,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: "ref-new",
 			content: null,
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-07T12:00:00.000Z",
 			updatedAt: "2026-06-07T12:00:00.000Z",
 		};
@@ -264,6 +267,7 @@ describe("AgentSkills UI Component", () => {
 					sourceType: "hub",
 					enabled: true,
 					installRef: "ref-new",
+					acceptScannerRisk: false,
 				}),
 			}),
 		);
@@ -279,6 +283,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: null,
 			content: "Custom Markdown",
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-07T12:00:00.000Z",
 			updatedAt: "2026-06-07T12:00:00.000Z",
 		};
@@ -593,6 +598,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: "nous/web-search",
 			content: null,
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-06T12:00:00.000Z",
 			updatedAt: "2026-06-06T12:00:00.000Z",
 		};
@@ -603,6 +609,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: null,
 			content: "Read files.",
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-06T12:00:00.000Z",
 			updatedAt: "2026-06-06T12:00:00.000Z",
 		};
@@ -671,6 +678,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: "nous/web-search",
 			content: null,
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-06T12:00:00.000Z",
 			updatedAt: "2026-06-06T12:00:00.000Z",
 		};
@@ -681,6 +689,7 @@ describe("AgentSkills UI Component", () => {
 			installRef: null,
 			content: "Read files.",
 			enabled: true,
+			acceptScannerRisk: false,
 			createdAt: "2026-06-06T12:00:00.000Z",
 			updatedAt: "2026-06-06T12:00:00.000Z",
 		};

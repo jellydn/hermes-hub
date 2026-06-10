@@ -9,6 +9,7 @@ export type SkillFormState = {
 	installRef: string;
 	content: string;
 	enabled: boolean;
+	acceptScannerRisk: boolean;
 };
 
 type SkillFormProps = {
@@ -167,6 +168,31 @@ export function SkillForm({
 					/>
 					<span>Enabled</span>
 				</label>
+
+				{(form.sourceType === "hub" || form.sourceType === "url") && (
+					<div className="space-y-2 rounded-[1rem] border border-amber-500/30 bg-amber-500/5 p-4">
+						<label className="flex items-start gap-2 text-sm font-medium text-[var(--sea-ink)] cursor-pointer">
+							<input
+								type="checkbox"
+								checked={form.acceptScannerRisk}
+								onChange={(e) =>
+									onChangeField("acceptScannerRisk", e.target.checked)
+								}
+								className="mt-0.5 h-4 w-4 rounded border-[var(--line)] text-[var(--sea-ink)] focus:ring-0"
+							/>
+							<span>Accept scanner risk and bypass Hermes install guard</span>
+						</label>
+						<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
+							Hermes blocks skills rated dangerous even with{" "}
+							<code className="text-[11px]">--force</code>. When enabled, Hub
+							writes SKILL.md directly to the server instead of using{" "}
+							<code className="text-[11px]">hermes skills install</code>. This
+							skips the scanner but only installs a single SKILL.md file —
+							scripts and reference folders are not copied. Use only when you
+							trust the source.
+						</p>
+					</div>
+				)}
 			</div>
 
 			<div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">

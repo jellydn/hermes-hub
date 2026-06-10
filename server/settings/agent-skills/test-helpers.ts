@@ -10,6 +10,7 @@ export const baseRecord = {
 	installRef: "nousresearch/test-skill",
 	content: null,
 	enabled: true,
+	acceptScannerRisk: false,
 	createdAt: new Date("2026-06-06T12:00:00.000Z"),
 	updatedAt: new Date("2026-06-06T12:00:00.000Z"),
 };

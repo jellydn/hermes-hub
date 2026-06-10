@@ -23,6 +23,7 @@ const initialFormState: SkillFormState = {
 	installRef: "",
 	content: "",
 	enabled: true,
+	acceptScannerRisk: false,
 };
 
 type RemoteInventoryState = {
@@ -41,6 +42,7 @@ function buildSkillRequestBody(form: SkillFormState): Record<string, unknown> {
 
 	if (form.sourceType === "hub" || form.sourceType === "url") {
 		body.installRef = form.installRef.trim();
+		body.acceptScannerRisk = form.acceptScannerRisk;
 	} else {
 		body.content = form.content;
 	}
@@ -103,6 +105,7 @@ export function useAgentSkills(
 			installRef: skill.installRef || "",
 			content: skill.content || "",
 			enabled: skill.enabled,
+			acceptScannerRisk: skill.acceptScannerRisk,
 		});
 		clearMessage();
 	}

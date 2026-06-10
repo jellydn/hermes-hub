@@ -10,6 +10,7 @@ export type AgentSkillSummary = {
 	installRef: string | null;
 	content: string | null;
 	enabled: boolean;
+	acceptScannerRisk: boolean;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -20,6 +21,7 @@ export type AgentSkillRequest = {
 	installRef?: string | null;
 	content?: string | null;
 	enabled?: boolean;
+	acceptScannerRisk?: boolean;
 };
 
 export const AGENT_SKILL_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
@@ -127,6 +129,7 @@ export const agentSkillCreateSchema = z
 			),
 		sourceType: SkillSourceTypeSchema,
 		enabled: z.boolean().default(true),
+		acceptScannerRisk: z.boolean().default(false),
 		installRef: z.string().trim().nullable().optional(),
 		content: z.string().trim().nullable().optional(),
 	})
@@ -181,6 +184,7 @@ export const agentSkillUpdateSchema = z.object({
 		)
 		.optional(),
 	enabled: z.boolean().optional(),
+	acceptScannerRisk: z.boolean().optional(),
 	installRef: z.string().trim().nullable().optional(),
 	content: z.string().trim().nullable().optional(),
 });
@@ -249,6 +253,58 @@ export function isSkillInstalledOnRemote(
 		}
 	}
 	return false;
+}
+
+/**
+ * Best-effort URL for fetching a single SKILL.md when bypassing the Hermes
+ * scanner via direct file write. Returns null when no safe URL can be derived.
+ */
+export function deriveSkillMdFetchUrl(
+	installRef: string,
+	sourceType: SkillSourceType,
+): string | null {
+	const trimmed = normalizeSkillInstallRef(installRef.trim());
+	if (!trimmed) {
+		return null;
+	}
+
+	if (
+		sourceType === "url" ||
+		trimmed.startsWith("http://") ||
+		trimmed.startsWith("https://")
+	) {
+		try {
+			const url = new URL(trimmed);
+			if (url.protocol !== "http:" && url.protocol !== "https:") {
+				return null;
+			}
+			return trimmed;
+		} catch {
+			return null;
+		}
+	}
+
+	if (sourceType !== "hub") {
+		return null;
+	}
+
+	const segments = trimmed.split("/").filter(Boolean);
+	if (segments.length < 2) {
+		return null;
+	}
+
+	const [owner, repo, ...rest] = segments;
+	if (!owner || !repo) {
+		return null;
+	}
+
+	const pathParts = [...rest];
+	if (pathParts.at(-1) === "SKILL.md") {
+		pathParts.pop();
+	}
+	const skillPath = pathParts.join("/");
+	const suffix = skillPath ? `/${skillPath}/SKILL.md` : "/SKILL.md";
+	return `https://raw.githubusercontent.com/${owner}/${repo}/HEAD${suffix}`;
 }
 
 /** Resolve the manifest name for a skill.
