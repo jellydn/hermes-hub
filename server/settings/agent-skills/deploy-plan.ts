@@ -59,7 +59,7 @@ export function buildDeployCommands(
 
 export function buildActualManifest(
 	enabledSkills: EnabledSkill[],
-	remoteSkills: Set<string>,
+	installedSkillNames: Set<string>,
 ): ManifestEntry[] {
 	const manifest: ManifestEntry[] = [];
 
@@ -69,10 +69,19 @@ export function buildActualManifest(
 			continue;
 		}
 
-		const entry = policy.manifestEntry(skill, remoteSkills);
-		if (entry) {
-			manifest.push(entry);
+		const entry = policy.manifestEntry(skill);
+		if (!entry) {
+			continue;
 		}
+
+		if (
+			skillExpectsRemoteInventory(skill) &&
+			!installedSkillNames.has(entry.name)
+		) {
+			continue;
+		}
+
+		manifest.push(entry);
 	}
 
 	return manifest;
@@ -80,7 +89,7 @@ export function buildActualManifest(
 
 export function findBlockedSkills(
 	enabledSkills: EnabledSkill[],
-	remoteSkills: Set<string>,
+	installedSkillNames: Set<string>,
 ): string[] {
 	const blocked: string[] = [];
 
@@ -90,7 +99,7 @@ export function findBlockedSkills(
 		}
 
 		const expectedName = resolveManifestName(skill);
-		if (expectedName && !remoteSkills.has(expectedName)) {
+		if (expectedName && !installedSkillNames.has(expectedName)) {
 			blocked.push(expectedName);
 		}
 	}

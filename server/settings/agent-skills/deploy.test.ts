@@ -103,6 +103,37 @@ setupAgentSkillsTestState({
 	resolveHermesDeployContext,
 });
 
+function installedSkillFindStdout(paths: string[]): string {
+	return paths.join("\n");
+}
+
+function createDeployExecMock(options: {
+	installedSkillPaths: string[];
+	previousManifest?: unknown;
+	installFails?: boolean;
+}) {
+	return vi.fn().mockImplementation((cmd: string) => {
+		if (options.installFails && cmd.includes("install")) {
+			return Promise.resolve({ code: 1, stderr: "Install failed!" });
+		}
+		if (cmd.includes("cat") && cmd.includes("hermeshub-agent-skills.json")) {
+			return Promise.resolve({
+				code: 0,
+				stdout: options.previousManifest
+					? JSON.stringify(options.previousManifest)
+					: "",
+			});
+		}
+		if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+			return Promise.resolve({
+				code: 0,
+				stdout: installedSkillFindStdout(options.installedSkillPaths),
+			});
+		}
+		return Promise.resolve({ code: 0, stdout: "" });
+	});
+}
+
 describe("deploySkillsToHermes", () => {
 	it("successfully deploys skills and updates remote manifest", async () => {
 		const record1 = {
@@ -132,14 +163,11 @@ describe("deploySkillsToHermes", () => {
 
 		selectOrderBy.mockResolvedValueOnce([record1, record2, record3]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("hermes skills list")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name       Source   Enabled\nref-1      hub      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [
+				"/root/.hermes/skills/ref-1/SKILL.md",
+				"/root/.hermes/skills/hermeshub/skill-two/SKILL.md",
+			],
 		});
 		withSshConnection.mockImplementation(
 			async (
@@ -189,24 +217,13 @@ describe("deploySkillsToHermes", () => {
 		};
 		selectOrderBy.mockResolvedValueOnce([record1]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("cat") && cmd.includes("hermeshub-agent-skills.json")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: JSON.stringify([
-						{ name: "skill-one", sourceType: "hub" },
-						{ name: "skill-old-hub", sourceType: "hub" },
-						{ name: "skill-old-custom", sourceType: "custom" },
-					]),
-				});
-			}
-			if (cmd.includes("hermes skills list")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name       Source   Enabled\nskill-one  hub      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: ["/root/.hermes/skills/skill-one/SKILL.md"],
+			previousManifest: [
+				{ name: "skill-one", sourceType: "hub" },
+				{ name: "skill-old-hub", sourceType: "hub" },
+				{ name: "skill-old-custom", sourceType: "custom" },
+			],
 		});
 
 		withSshConnection.mockImplementation(
@@ -254,14 +271,8 @@ describe("deploySkillsToHermes", () => {
 
 		selectOrderBy.mockResolvedValueOnce([urlRecord]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("hermes skills list")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name         Source   Enabled\nremote-skill url      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: ["/root/.hermes/skills/remote-skill/SKILL.md"],
 		});
 		withSshConnection.mockImplementation(
 			async (
@@ -301,14 +312,8 @@ describe("deploySkillsToHermes", () => {
 
 		selectOrderBy.mockResolvedValueOnce([urlRecord]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("hermes skills list")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name    Source   Enabled\nteach   url      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: ["/root/.hermes/skills/teach/SKILL.md"],
 		});
 		withSshConnection.mockImplementation(
 			async (
@@ -347,14 +352,8 @@ describe("deploySkillsToHermes", () => {
 
 		selectOrderBy.mockResolvedValueOnce([forecastRecord]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("hermes skills list")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name          Source   Enabled\nget-forecast  hub      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: ["/root/.hermes/skills/get-forecast/SKILL.md"],
 		});
 		withSshConnection.mockImplementation(
 			async (
@@ -424,15 +423,8 @@ describe("deploySkillsToHermes", () => {
 
 		selectOrderBy.mockResolvedValueOnce([weatherRecord]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("hermes skills list")) {
-				// Remote has unrelated skill but NOT geo-weather-fetch
-				return Promise.resolve({
-					code: 0,
-					stdout: "Name       Source   Enabled\nget-forecast  hub      true",
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: ["/root/.hermes/skills/get-forecast/SKILL.md"],
 		});
 		withSshConnection.mockImplementation(
 			async (
@@ -520,11 +512,9 @@ describe("deploySkillsToHermes", () => {
 		};
 		selectOrderBy.mockResolvedValueOnce([record1]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("install")) {
-				return Promise.resolve({ code: 1, stderr: "Install failed!" });
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [],
+			installFails: true,
 		});
 
 		withSshConnection.mockImplementation(

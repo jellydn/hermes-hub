@@ -23,10 +23,7 @@ type SkillDeployPolicy = {
 	uninstallCommand: (prev: ManifestEntry) => string | null;
 	installCommand: (skill: EnabledSkill) => string | null;
 	fileWrite: (skill: EnabledSkill) => FileWrite | null;
-	manifestEntry: (
-		skill: EnabledSkill,
-		remoteSkills: Set<string>,
-	) => ManifestEntry | null;
+	manifestEntry: (skill: EnabledSkill) => ManifestEntry | null;
 };
 
 const hubPolicy: SkillDeployPolicy = {
@@ -49,9 +46,9 @@ const hubPolicy: SkillDeployPolicy = {
 		)} --yes --force`;
 	},
 	fileWrite: () => null,
-	manifestEntry(skill, remoteSkills) {
+	manifestEntry(skill) {
 		const resolvedName = resolveManifestName(skill);
-		if (!remoteSkills.has(resolvedName)) {
+		if (!resolvedName) {
 			return null;
 		}
 		return {
@@ -82,10 +79,7 @@ const urlPolicy: SkillDeployPolicy = {
 		)} --name ${shellQuote(skill.name)} --yes --force`;
 	},
 	fileWrite: () => null,
-	manifestEntry(skill, remoteSkills) {
-		if (!remoteSkills.has(skill.name)) {
-			return null;
-		}
+	manifestEntry(skill) {
 		return {
 			name: skill.name,
 			sourceType: skill.sourceType,

@@ -8,7 +8,7 @@ import {
 } from "./deploy-plan";
 import type { EnabledSkill } from "./policy";
 import {
-	listRemoteHermesSkills,
+	listRemoteInstalledSkillNames,
 	MANIFEST_PATH,
 	readRemoteManifest,
 	writeRemoteFile,
@@ -38,10 +38,12 @@ export async function runAgentSkillsDeploy(
 		await writeRemoteFile(ssh, fileWrite.path, fileWrite.content);
 	}
 
-	const { skills: remoteSkillNames } = await listRemoteHermesSkills(ssh);
-	const remoteSkills = new Set(remoteSkillNames);
-	const blockedSkills = findBlockedSkills(enabledSkills, remoteSkills);
-	const actualManifest = buildActualManifest(enabledSkills, remoteSkills);
+	const installedSkillNames = await listRemoteInstalledSkillNames(ssh);
+	const blockedSkills = findBlockedSkills(enabledSkills, installedSkillNames);
+	const actualManifest = buildActualManifest(
+		enabledSkills,
+		installedSkillNames,
+	);
 
 	await writeRemoteFile(
 		ssh,

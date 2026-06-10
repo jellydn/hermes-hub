@@ -1,5 +1,6 @@
 import type { NodeSSH } from "node-ssh";
 
+import type { ManagedManifestEntry } from "../../../shared/contracts/agent-skills";
 import { managedComposeVolumeHome } from "../../constants";
 import { parseRemoteSkillsList } from "../../hermes/skills-list";
 import { shellQuote } from "../../ssh";
@@ -10,11 +11,13 @@ export const MANIFEST_PATH = `${managedComposeVolumeHome}/.hermes/hermeshub-agen
 export const HERMES_SKILLS_LIST_COMMAND =
 	"sudo docker exec hermes hermes skills list";
 
-export type ManifestEntry = {
-	name: string;
-	sourceType: string;
-	installRef?: string;
-};
+export const REMOTE_SKILLS_DIR = `${managedComposeVolumeHome}/.hermes/skills`;
+
+export const REMOTE_SKILLS_FIND_COMMAND = `sudo find ${shellQuote(
+	REMOTE_SKILLS_DIR,
+)} -name SKILL.md -type f 2>/dev/null`;
+
+export type ManifestEntry = ManagedManifestEntry;
 
 export type FileWrite = {
 	content: string;
@@ -87,16 +90,52 @@ export function buildCustomSkillFileWrite(
 	};
 }
 
+export function parseInstalledSkillNamesFromFind(stdout: string): string[] {
+	const names = new Set<string>();
+
+	for (const line of stdout.split(/\r?\n/)) {
+		const trimmed = line.trim();
+		if (!trimmed) {
+			continue;
+		}
+
+		const match = trimmed.match(
+			/\/skills\/(?:hermeshub\/)?([^/]+)\/SKILL\.md$/,
+		);
+		const name = match?.[1];
+		if (name && isValidAgentSkillName(name)) {
+			names.add(name);
+		}
+	}
+
+	return [...names];
+}
+
+export async function listRemoteInstalledSkillNames(
+	ssh: NodeSSH,
+): Promise<Set<string>> {
+	const result = await ssh.execCommand(REMOTE_SKILLS_FIND_COMMAND);
+	if (result.code !== 0) {
+		throw new Error(result.stderr || "Failed to list remote installed skills");
+	}
+
+	return new Set(parseInstalledSkillNamesFromFind(result.stdout || ""));
+}
+
 export async function listRemoteHermesSkills(ssh: NodeSSH): Promise<{
 	raw: string;
 	skills: string[];
 	count: number;
+	managedManifest: ManifestEntry[];
 }> {
-	const cmdResult = await ssh.execCommand(HERMES_SKILLS_LIST_COMMAND);
+	const [cmdResult, managedManifest] = await Promise.all([
+		ssh.execCommand(HERMES_SKILLS_LIST_COMMAND),
+		readRemoteManifest(ssh),
+	]);
 	if (cmdResult.code !== 0) {
 		throw new Error(cmdResult.stderr || "Hermes skills list command failed");
 	}
 	const raw = cmdResult.stdout || "";
 	const parsed = parseRemoteSkillsList(raw);
-	return { raw, ...parsed };
+	return { raw, managedManifest, ...parsed };
 }
