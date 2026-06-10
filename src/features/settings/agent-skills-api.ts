@@ -1,6 +1,6 @@
 import type {
 	AgentSkillSummary,
-	ManagedManifestEntry,
+	RemoteSkillsInventory,
 } from "#shared/contracts/agent-skills";
 
 type AgentSkillResponsePayload = {
@@ -12,11 +12,9 @@ type AgentSkillMutationResult =
 	| { ok: true; skill: AgentSkillSummary }
 	| { ok: false; error: string };
 
-type RemoteSkillsResponse = {
-	raw: string;
+type RemoteSkillsResponse = RemoteSkillsInventory & {
 	skills: string[];
 	count: number;
-	managedManifest: ManagedManifestEntry[];
 };
 
 type RemoteSkillsResult =
@@ -106,7 +104,8 @@ export async function fetchRemoteSkills(
 			typeof payload.raw !== "string" ||
 			!Array.isArray(payload.skills) ||
 			typeof payload.count !== "number" ||
-			!Array.isArray(payload.managedManifest)
+			!Array.isArray(payload.managedManifest) ||
+			!Array.isArray(payload.installedSkillNames)
 		) {
 			return {
 				ok: false,
@@ -121,6 +120,7 @@ export async function fetchRemoteSkills(
 				skills: payload.skills,
 				count: payload.count,
 				managedManifest: payload.managedManifest,
+				installedSkillNames: payload.installedSkillNames,
 			},
 		};
 	} catch {

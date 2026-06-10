@@ -4,19 +4,16 @@ import { HermesDeployPanel } from "#/features/settings/hermes-deploy-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import type {
 	AgentSkillSummary,
-	ManagedManifestEntry,
+	ManagedSkillStatus,
+	RemoteSkillsInventory,
 } from "#shared/contracts/agent-skills";
 import {
 	classifyManagedSkillStatus,
+	countInstalledManagedSkills,
 	resolveManifestName,
 } from "#shared/contracts/agent-skills";
 
-type RemoteInventoryState = {
-	raw: string;
-	skills: string[];
-	count: number;
-	managedManifest: ManagedManifestEntry[];
-} | null;
+type RemoteInventoryState = RemoteSkillsInventory | null;
 
 function getEnabledManifestNames(skills: AgentSkillSummary[]): string[] {
 	const names: string[] = [];
@@ -69,20 +66,60 @@ type SkillsDeployAsideProps = {
 	onDeploySuccess: (payload: DeployResponsePayload) => void;
 };
 
+type ManagedSkillAlert = {
+	id: string;
+	names: keyof Pick<
+		ManagedSkillStatus,
+		"drifted" | "stale" | "blocked" | "missing"
+	>;
+	message: (names: string[]) => string;
+};
+
+const MANAGED_SKILL_ALERTS: ManagedSkillAlert[] = [
+	{
+		id: "drifted-managed-skills",
+		names: "drifted",
+		message: (names) =>
+			`Installed on remote but not tracked in Hub manifest:${names.map((n) => ` ${n}`)}. Deploy again to sync the manifest.`,
+	},
+	{
+		id: "stale-managed-skills",
+		names: "stale",
+		message: (names) =>
+			`Tracked in Hub manifest but missing on remote:${names.map((n) => ` ${n}`)}. Deploy again to reinstall.`,
+	},
+	{
+		id: "blocked-managed-skills",
+		names: "blocked",
+		message: (names) =>
+			`Blocked by Hermes scanner on last deploy:${names.map((n) => ` ${n}`)}. Redeploy will not install these until the scanner allows them.`,
+	},
+	{
+		id: "missing-managed-skills",
+		names: "missing",
+		message: (names) =>
+			`Not installed on remote:${names.map((n) => ` ${n}`)}. Deploy again to install.`,
+	},
+];
+
 function ManagedSkillSummary({
 	expectedNames,
 	managedManifestNames,
+	installedSkillNames,
 	lastBlockedSkills,
 }: {
 	expectedNames: string[];
 	managedManifestNames: string[];
+	installedSkillNames: string[];
 	lastBlockedSkills: string[];
 }) {
-	const { present, blocked, missing } = classifyManagedSkillStatus(
+	const status = classifyManagedSkillStatus(
 		expectedNames,
 		managedManifestNames,
 		lastBlockedSkills,
+		installedSkillNames,
 	);
+	const installedCount = countInstalledManagedSkills(status);
 
 	return (
 		<div
@@ -93,35 +130,26 @@ function ManagedSkillSummary({
 				Managed Skill Status
 			</span>
 			<p className="m-0 text-sm text-[var(--sea-ink)]">
-				{present.length} of {expectedNames.length} enabled skill
-				{expectedNames.length === 1 ? "" : "s"} present on remote
+				{installedCount} of {expectedNames.length} enabled skill
+				{expectedNames.length === 1 ? "" : "s"} installed on remote
 			</p>
-			{blocked.length > 0 && (
-				<div
-					className="flex items-start gap-1.5 text-sm text-amber-600"
-					id="blocked-managed-skills"
-				>
-					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>
-						Blocked by Hermes scanner on last deploy:
-						{blocked.map((n) => ` ${n}`)}. Redeploy will not install these until
-						the scanner allows them.
-					</span>
-				</div>
-			)}
-			{missing.length > 0 && (
-				<div
-					className="flex items-start gap-1.5 text-sm text-amber-600"
-					id="missing-managed-skills"
-				>
-					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>
-						Not in Hub manifest on remote:
-						{missing.map((n) => ` ${n}`)}. Deploy again to sync, or check the
-						raw CLI output for the full remote inventory.
-					</span>
-				</div>
-			)}
+			{MANAGED_SKILL_ALERTS.map((alert) => {
+				const names = status[alert.names];
+				if (names.length === 0) {
+					return null;
+				}
+
+				return (
+					<div
+						key={alert.id}
+						className="flex items-start gap-1.5 text-sm text-amber-600"
+						id={alert.id}
+					>
+						<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+						<span>{alert.message(names)}</span>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
@@ -194,8 +222,9 @@ export function SkillsDeployAside({
 					) : remoteInventory ? (
 						<div className="space-y-3" id="remote-inventory-details">
 							<h4 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
-								{remoteInventory.count} remote skill
-								{remoteInventory.count === 1 ? "" : "s"}
+								{remoteInventory.installedSkillNames.length} managed skill
+								{remoteInventory.installedSkillNames.length === 1 ? "" : "s"} on
+								disk
 							</h4>
 
 							{skills.length > 0 && (
@@ -204,6 +233,7 @@ export function SkillsDeployAside({
 									managedManifestNames={remoteInventory.managedManifest.map(
 										(entry) => entry.name,
 									)}
+									installedSkillNames={remoteInventory.installedSkillNames}
 									lastBlockedSkills={lastBlockedSkills}
 								/>
 							)}
