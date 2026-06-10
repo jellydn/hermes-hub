@@ -118,6 +118,15 @@ describe("getRemoteSkillsList", () => {
 			if (cmd.includes("hermeshub-agent-skills.json")) {
 				return Promise.resolve({ code: 0, stdout: "[]" });
 			}
+			if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+				return Promise.resolve({
+					code: 0,
+					stdout: [
+						"/root/.hermes/skills/web-search/SKILL.md",
+						"/root/.hermes/skills/file-reader/SKILL.md",
+					].join("\n"),
+				});
+			}
 			return Promise.resolve({
 				code: 0,
 				stdout: `
@@ -147,6 +156,7 @@ file-reader  hub      true
 		expect(payload.count).toBe(2);
 		expect(payload.skills).toEqual(["web-search", "file-reader"]);
 		expect(payload.managedManifest).toEqual([]);
+		expect(payload.installedSkillNames).toEqual(["web-search", "file-reader"]);
 		expect(payload.raw).toContain("web-search   hub      true");
 		expect(mockExec).toHaveBeenCalledWith(
 			"sudo docker exec hermes hermes skills list",
@@ -157,6 +167,17 @@ file-reader  hub      true
 		const mockExec = vi.fn().mockImplementation((cmd: string) => {
 			if (cmd.includes("hermeshub-agent-skills.json")) {
 				return Promise.resolve({ code: 0, stdout: "[]" });
+			}
+			if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+				return Promise.resolve({
+					code: 0,
+					stdout: [
+						"/root/.hermes/skills/dogfood/SKILL.md",
+						"/root/.hermes/skills/yuanbao/SKILL.md",
+						"/root/.hermes/skills/claude-code/SKILL.md",
+						"/root/.hermes/skills/kanban-codex-lane/SKILL.md",
+					].join("\n"),
+				});
 			}
 			return Promise.resolve({
 				code: 0,
@@ -193,6 +214,12 @@ Installed Skills
 		const payload = await response.json();
 		expect(payload.count).toBe(4);
 		expect(payload.managedManifest).toEqual([]);
+		expect(payload.installedSkillNames).toEqual([
+			"dogfood",
+			"yuanbao",
+			"claude-code",
+			"kanban-codex-lane",
+		]);
 		expect(payload.skills).toEqual([
 			"dogfood",
 			"yuanbao",
@@ -201,10 +228,73 @@ Installed Skills
 		]);
 	});
 
+	it("returns full filesystem skill names for manifest drift detection", async () => {
+		const mockExec = vi.fn().mockImplementation((cmd: string) => {
+			if (cmd.includes("hermeshub-agent-skills.json")) {
+				return Promise.resolve({
+					code: 0,
+					stdout: JSON.stringify([
+						{
+							name: "commit-atomic",
+							sourceType: "url",
+							installRef: "https://example.com/commit-atomic",
+						},
+					]),
+				});
+			}
+			if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+				return Promise.resolve({
+					code: 0,
+					stdout: [
+						"/root/.hermes/skills/commit-atomic/SKILL.md",
+						"/root/.hermes/skills/thermo-nuclear-code-quality-review/SKILL.md",
+					].join("\n"),
+				});
+			}
+			return Promise.resolve({
+				code: 0,
+				stdout: `
+Installed Skills
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┓
+┃ Name                ┃ Source    ┃ Status   ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━┩
+│ thermo-nuclear-cod… │ url       │ enabled  │
+│ commit-atomic       │ url       │ enabled  │
+└─────────────────────┴───────────┴──────────┘
+`,
+			});
+		});
+
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({ execCommand: mockExec });
+			},
+		);
+
+		const { getRemoteSkillsList } = await import("../agent-skills");
+		const response = await getRemoteSkillsList(
+			createContext({ serverId: "srv_123" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		const payload = await response.json();
+		expect(payload.skills).toEqual(["thermo-nuclear-cod", "commit-atomic"]);
+		expect(payload.installedSkillNames).toEqual([
+			"commit-atomic",
+			"thermo-nuclear-code-quality-review",
+		]);
+	});
+
 	it("returns raw output but zero parsed count if output format is unknown", async () => {
 		const mockExec = vi.fn().mockImplementation((cmd: string) => {
 			if (cmd.includes("hermeshub-agent-skills.json")) {
 				return Promise.resolve({ code: 0, stdout: "[]" });
+			}
+			if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+				return Promise.resolve({ code: 0, stdout: "" });
 			}
 			return Promise.resolve({
 				code: 0,
@@ -230,6 +320,7 @@ Installed Skills
 		const payload = await response.json();
 		expect(payload.count).toBe(0);
 		expect(payload.skills).toEqual([]);
+		expect(payload.installedSkillNames).toEqual([]);
 		expect(payload.raw).toBe(
 			"Random text output without list structure or headers",
 		);
@@ -239,6 +330,9 @@ Installed Skills
 		const mockExec = vi.fn().mockImplementation((cmd: string) => {
 			if (cmd.includes("hermeshub-agent-skills.json")) {
 				return Promise.resolve({ code: 0, stdout: "[]" });
+			}
+			if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+				return Promise.resolve({ code: 0, stdout: "" });
 			}
 			return Promise.resolve({
 				code: 1,

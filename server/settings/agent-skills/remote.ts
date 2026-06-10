@@ -1,6 +1,9 @@
 import type { NodeSSH } from "node-ssh";
 
-import type { ManagedManifestEntry } from "../../../shared/contracts/agent-skills";
+import type {
+	ManagedManifestEntry,
+	RemoteSkillsInventory,
+} from "../../../shared/contracts/agent-skills";
 import { managedComposeVolumeHome } from "../../constants";
 import { parseRemoteSkillsList } from "../../hermes/skills-list";
 import { shellQuote } from "../../ssh";
@@ -114,28 +117,32 @@ export function parseInstalledSkillNamesFromFind(stdout: string): string[] {
 export async function listRemoteInstalledSkillNames(
 	ssh: NodeSSH,
 ): Promise<Set<string>> {
+	return new Set(await listRemoteInstalledSkillNameList(ssh));
+}
+
+export async function listRemoteInstalledSkillNameList(
+	ssh: NodeSSH,
+): Promise<string[]> {
 	const result = await ssh.execCommand(REMOTE_SKILLS_FIND_COMMAND);
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to list remote installed skills");
 	}
 
-	return new Set(parseInstalledSkillNamesFromFind(result.stdout || ""));
+	return parseInstalledSkillNamesFromFind(result.stdout || "");
 }
 
-export async function listRemoteHermesSkills(ssh: NodeSSH): Promise<{
-	raw: string;
-	skills: string[];
-	count: number;
-	managedManifest: ManifestEntry[];
-}> {
-	const [cmdResult, managedManifest] = await Promise.all([
+export async function listRemoteHermesSkills(
+	ssh: NodeSSH,
+): Promise<RemoteSkillsInventory & { skills: string[]; count: number }> {
+	const [cmdResult, managedManifest, installedSkillNames] = await Promise.all([
 		ssh.execCommand(HERMES_SKILLS_LIST_COMMAND),
 		readRemoteManifest(ssh),
+		listRemoteInstalledSkillNameList(ssh),
 	]);
 	if (cmdResult.code !== 0) {
 		throw new Error(cmdResult.stderr || "Hermes skills list command failed");
 	}
 	const raw = cmdResult.stdout || "";
 	const parsed = parseRemoteSkillsList(raw);
-	return { raw, managedManifest, ...parsed };
+	return { raw, managedManifest, installedSkillNames, ...parsed };
 }
