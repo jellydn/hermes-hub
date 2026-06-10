@@ -2,7 +2,10 @@ import { useRef, useState } from "react";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import { useMountEffect } from "#/lib/use-mount-effect";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
-import { agentSkillCreateSchema } from "#shared/contracts/agent-skills";
+import {
+	agentSkillCreateSchema,
+	agentSkillUpdateSchema,
+} from "#shared/contracts/agent-skills";
 import {
 	deleteAgentSkill,
 	fetchRemoteSkills,
@@ -154,21 +157,40 @@ export function useAgentSkills(
 	async function handleSave() {
 		clearMessage();
 
-		// Client-side validation using shared Zod schema
-		const parsed = agentSkillCreateSchema.safeParse({
-			name: form.name,
-			sourceType: form.sourceType,
-			enabled: form.enabled,
-			installRef: form.installRef || undefined,
-			content: form.content || undefined,
-		});
-
-		if (!parsed.success) {
-			setMessage({
-				type: "error",
-				text: parsed.error.issues[0].message,
+		if (editingSkill) {
+			const parsed = agentSkillUpdateSchema.safeParse({
+				name: form.name,
+				enabled: form.enabled,
+				installRef:
+					form.sourceType === "hub" || form.sourceType === "url"
+						? form.installRef
+						: undefined,
+				content: form.sourceType === "custom" ? form.content : undefined,
 			});
-			return;
+
+			if (!parsed.success) {
+				setMessage({
+					type: "error",
+					text: parsed.error.issues[0].message,
+				});
+				return;
+			}
+		} else {
+			const parsed = agentSkillCreateSchema.safeParse({
+				name: form.name,
+				sourceType: form.sourceType,
+				enabled: form.enabled,
+				installRef: form.installRef || undefined,
+				content: form.content || undefined,
+			});
+
+			if (!parsed.success) {
+				setMessage({
+					type: "error",
+					text: parsed.error.issues[0].message,
+				});
+				return;
+			}
 		}
 
 		setIsSaving(true);
