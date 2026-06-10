@@ -1,8 +1,9 @@
 import type { NodeSSH } from "node-ssh";
 
-import type {
-	ManagedManifestEntry,
-	RemoteSkillsInventory,
+import {
+	HERMES_HUB_SKILL_CATEGORY,
+	type ManagedManifestEntry,
+	type RemoteSkillsInventory,
 } from "../../../shared/contracts/agent-skills";
 import { managedComposeVolumeHome } from "../../constants";
 import { parseRemoteSkillsList } from "../../hermes/skills-list";
@@ -16,9 +17,29 @@ export const HERMES_SKILLS_LIST_COMMAND =
 
 export const REMOTE_SKILLS_DIR = `${managedComposeVolumeHome}/.hermes/skills`;
 
+export const REMOTE_HERMESHUB_SKILLS_DIR = `${REMOTE_SKILLS_DIR}/${HERMES_HUB_SKILL_CATEGORY}`;
+
+/** Skills root inside the Hermes gateway container (`/root/.hermes` → `/opt/data`). */
+export const HERMES_SKILLS_CONTAINER_DIR = "/opt/data/skills";
+
 export const REMOTE_SKILLS_FIND_COMMAND = `sudo find ${shellQuote(
 	REMOTE_SKILLS_DIR,
 )} -name SKILL.md -type f 2>/dev/null`;
+
+export function buildEnsureHermesSkillsWritableCommand(): string {
+	return [
+		`sudo mkdir -p ${shellQuote(REMOTE_HERMESHUB_SKILLS_DIR)}`,
+		`sudo docker exec hermes chown -R hermes:hermes ${shellQuote(
+			HERMES_SKILLS_CONTAINER_DIR,
+		)} 2>/dev/null || true`,
+	].join(" && ");
+}
+
+export function buildChownHermeshubSkillsCommand(): string {
+	return `sudo docker exec hermes chown -R hermes:hermes ${shellQuote(
+		`${HERMES_SKILLS_CONTAINER_DIR}/${HERMES_HUB_SKILL_CATEGORY}`,
+	)} 2>/dev/null || true`;
+}
 
 export type ManifestEntry = ManagedManifestEntry;
 

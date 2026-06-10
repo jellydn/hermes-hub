@@ -186,12 +186,21 @@ describe("deploySkillsToHermes", () => {
 		expect(response.status).toBe(200);
 
 		const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+		const prepCommand = calledCommands.find((c: string) =>
+			c.includes("sudo mkdir -p '/root/.hermes/skills/hermeshub'"),
+		);
+		expect(prepCommand).toContain("chown -R hermes:hermes '/opt/data/skills'");
 		const compoundCommand =
 			calledCommands.find((c: string) => c.includes("hermes skills install")) ||
 			"";
 		expect(compoundCommand).toContain(
 			"sudo docker exec hermes hermes skills install 'ref-1' --category 'hermeshub' --yes --force",
 		);
+		expect(
+			calledCommands.find((c: string) =>
+				c.includes("chown -R hermes:hermes '/opt/data/skills/hermeshub'"),
+			),
+		).toBeTruthy();
 
 		const manifestWriteCall = calledCommands.find(
 			(c: string) =>

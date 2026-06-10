@@ -8,6 +8,8 @@ import {
 } from "./deploy-plan";
 import type { EnabledSkill } from "./policy";
 import {
+	buildChownHermeshubSkillsCommand,
+	buildEnsureHermesSkillsWritableCommand,
 	listRemoteInstalledSkillNames,
 	MANIFEST_PATH,
 	readRemoteManifest,
@@ -26,6 +28,17 @@ export async function runAgentSkillsDeploy(
 	const previousManifest = await readRemoteManifest(ssh);
 	const plan = buildDeployCommands(previousManifest, enabledSkills);
 
+	if (plan.shellCommands.length > 0 || plan.fileWrites.length > 0) {
+		const prepResult = await ssh.execCommand(
+			buildEnsureHermesSkillsWritableCommand(),
+		);
+		if (prepResult.code !== 0) {
+			throw new Error(
+				prepResult.stderr || "Failed to prepare remote skills directory",
+			);
+		}
+	}
+
 	if (plan.shellCommands.length > 0) {
 		const compoundCommand = plan.shellCommands.join(" && ");
 		const result = await ssh.execCommand(compoundCommand);
@@ -36,6 +49,17 @@ export async function runAgentSkillsDeploy(
 
 	for (const fileWrite of plan.fileWrites) {
 		await writeRemoteFile(ssh, fileWrite.path, fileWrite.content);
+	}
+
+	if (plan.fileWrites.length > 0) {
+		const chownResult = await ssh.execCommand(
+			buildChownHermeshubSkillsCommand(),
+		);
+		if (chownResult.code !== 0) {
+			throw new Error(
+				chownResult.stderr || "Failed to set remote custom skill ownership",
+			);
+		}
 	}
 
 	const installedSkillNames = await listRemoteInstalledSkillNames(ssh);
