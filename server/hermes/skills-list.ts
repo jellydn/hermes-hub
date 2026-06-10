@@ -21,7 +21,10 @@ export function parseRemoteSkillsList(stdout: string): {
 			if (/[━─═┏┳┓┗┻┛┡┧└┘]/u.test(line) || line.startsWith("┃ Name")) {
 				continue;
 			}
-			const match = line.match(/^[│┃]\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*[│┃]/);
+			// Hermes truncates long names with "…" when the column is narrow.
+			const match = line.match(
+				/^[│┃]\s*([a-zA-Z][a-zA-Z0-9_-]*)(?:…|\.\.\.)?\s*[│┃]/u,
+			);
 			if (match?.[1] && !skills.includes(match[1])) {
 				skills.push(match[1]);
 			}
@@ -73,7 +76,7 @@ export function parseRemoteSkillsList(stdout: string): {
 		if (hasHeader) {
 			const parts = line.split(/\s+/);
 			if (parts.length >= 2) {
-				const first = parts[0];
+				const first = parts[0].replace(/(?:…|\.\.\.)$/u, "");
 				if (
 					namePattern.test(first) &&
 					!ignoredLower.has(first.toLowerCase()) &&
