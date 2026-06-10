@@ -9,10 +9,12 @@
  */
 export class PartialDeployError extends Error {
 	readonly blockedSkills: string[];
+	readonly deployedCount: number;
 
-	constructor(blockedSkills: string[]) {
+	constructor(blockedSkills: string[], deployedCount: number) {
 		super(`Some skills were not installed: ${blockedSkills.join(", ")}`);
 		this.name = "PartialDeployError";
 		this.blockedSkills = blockedSkills;
+		this.deployedCount = deployedCount;
 	}
 }

@@ -69,12 +69,17 @@ export async function deployToHermesAgent(
 		if (error instanceof PartialDeployError) {
 			// Core deploy succeeded but some optional items were blocked.
 			// Write success audit + forward blocked skill names in the response.
+			const partialSuccessDetails = {
+				...options.buildSuccessAuditDetails(sshCtx),
+				skillCount: error.deployedCount,
+				blockedSkills: error.blockedSkills,
+			};
 			try {
 				await insertAuditLog(db, {
 					userId: session.user.id,
 					action: options.successAuditAction,
 					serverId: sshCtx.serverId,
-					details: options.buildSuccessAuditDetails(sshCtx),
+					details: partialSuccessDetails,
 					ipAddress,
 				});
 			} catch {
@@ -83,10 +88,12 @@ export async function deployToHermesAgent(
 
 			clearDashboardCache();
 
+			const successResponse = options.buildSuccessResponse(sshCtx, deployedAt);
 			return context.json({
 				status: "deployed",
 				serverId: sshCtx.serverId,
-				...options.buildSuccessResponse(sshCtx, deployedAt),
+				...successResponse,
+				skillCount: error.deployedCount,
 				blockedSkills: error.blockedSkills,
 			});
 		}
