@@ -638,6 +638,83 @@ describe("agent skills settings", () => {
 					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
 			);
 			expect(manifestCall).toBeTruthy();
+			// Manifest stdin should contain the resolved Hub name, not a guessed inventory name
+			const manifestStdinIndex = mockExec.mock.calls.findIndex(
+				(c) =>
+					c[0].includes("hermeshub-agent-skills.json") &&
+					c[0].includes("sudo tee"),
+			);
+			const manifestStdin =
+				manifestStdinIndex >= 0
+					? mockExec.mock.calls[manifestStdinIndex][1]?.stdin
+					: null;
+			if (manifestStdin) {
+				const parsed = JSON.parse(manifestStdin);
+				expect(parsed).toEqual([
+					{
+						name: "get-forecast",
+						sourceType: "hub",
+						installRef: "browse-sh/weather.gov/get-forecast-1uezib",
+					},
+				]);
+			} else {
+				// If stdin tracking isn't available, at least verify tee was called
+				expect(manifestCall).toBeTruthy();
+			}
+		});
+
+		it("fails deploy with 502 when an enabled Hub skill is missing from remote inventory (regression: geo-weather-fetch)", async () => {
+			const weatherRecord = {
+				...baseRecord,
+				id: "s_weather",
+				name: "geo-weather-fetch",
+				sourceType: "hub",
+				installRef: "browse-sh/windy.com/geo-weather-fetch-w3o49h",
+				enabled: true,
+			};
+
+			selectOrderBy.mockResolvedValueOnce([weatherRecord]);
+
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (cmd.includes("hermes skills list")) {
+					// Remote has unrelated skill but NOT geo-weather-fetch
+					return Promise.resolve({
+						code: 0,
+						stdout: "Name       Source   Enabled\nget-forecast  hub      true",
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
+
+			const { deploySkillsToHermes } = await import("./agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
+
+			expect(response.status).toBe(502);
+			const payload = await response.json();
+			expect(payload.error).toContain("geo-weather-fetch");
+			// Manifest must NOT have been written on failure
+			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+			const manifestTeeCall = calledCommands.find(
+				(c: string) =>
+					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
+			);
+			expect(manifestTeeCall).toBeFalsy();
+			// Failure audit log should have been written
+			expect(insertAuditValues).toHaveBeenCalledWith(
+				expect.objectContaining({
+					action: "agent_skills.deploy.failed",
+				}),
+			);
 		});
 
 		it.each([

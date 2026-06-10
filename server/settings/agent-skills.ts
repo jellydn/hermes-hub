@@ -15,6 +15,7 @@ import {
 	parseAgentSkillCreateBody,
 	parseAgentSkillUpdateBody,
 	parseRemoteSkillsList,
+	resolveManifestName,
 	type SkillSourceType,
 } from "./agent-skills/config";
 import {
@@ -341,25 +342,6 @@ export function detectSkillInstallFailure(output: string): string | null {
 	return failures.length > 0 ? failures.join("\n") : null;
 }
 
-/**
- * Extract the actual installed skill names from Hermes CLI output.
- *
- * Hermes prints `✓ Installed <name>` when a skill installs successfully.
- * Each `✓ Installed <name>` on its own line gives us the real name the
- * CLI assigned — no guessing required.
- */
-export function parseInstalledSkillNames(output: string): string[] {
-	const names: string[] = [];
-	const INSTALLED_LINE = /✓\s*Installed\s+(.+)/;
-	for (const rawLine of output.split(/\r?\n/)) {
-		const match = rawLine.trim().match(INSTALLED_LINE);
-		if (match?.[1]?.trim()) {
-			names.push(match[1].trim());
-		}
-	}
-	return names;
-}
-
 export function buildDeployCommands(
 	previousManifest: ManifestEntry[],
 	enabledSkills: Array<{
@@ -372,24 +354,23 @@ export function buildDeployCommands(
 	const fileWrites: FileWrite[] = [];
 	const shellCommands: string[] = [];
 
-	// Build a lookup from the previous manifest by installRef (hub/url) or name (custom).
-	// For hub skills the previous manifest name is what Hermes actually named it,
-	// so we store it keyed by installRef for matching across deploys.
-	const prevByName = new Map<string, ManifestEntry>();
-	const prevByInstallRef = new Map<string, ManifestEntry>();
-	for (const prev of previousManifest) {
-		prevByName.set(prev.name, prev);
-		prevByInstallRef.set(prev.installRef ?? "", prev);
-	}
-
 	// Remove previously managed skills no longer in the enabled list.
+	//
+	// For hub/url entries: a previous entry is "still enabled" only when its
+	// installRef matches the resolver for the current skill's installRef.
+	// This prevents a polluted manifest from uninstalling unrelated remote
+	// skills — if the previous manifest name doesn't match the resolver for
+	// the current skill's installRef, we don't uninstall it, even if the
+	// current skill was removed from the enabled list.
 	for (const prev of previousManifest) {
 		const stillEnabled = enabledSkills.some((curr) => {
 			if (curr.sourceType !== prev.sourceType) return false;
 			if (prev.sourceType === "hub" || prev.sourceType === "url") {
-				// Match by installRef first, then by name
 				const normalized = normalizeSkillInstallRef(curr.installRef ?? "");
-				return normalized === prev.installRef || prev.name === curr.name;
+				return (
+					normalized === prev.installRef ||
+					resolveManifestName(curr) === prev.name
+				);
 			}
 			return curr.name === prev.name;
 		});
@@ -492,81 +473,51 @@ export async function deploySkillsToHermes(context: Context) {
 				await writeRemoteFile(ssh, fw.path, fw.content);
 			}
 
-			// Discover actual Hermes-assigned skill names from the install
-			// output (✓ Installed <name>) and the remote inventory.  We can't
-			// predict what name Hermes will assign — even for browse.sh refs
-			// the id-suffix stripping is source-specific — so we ask Hermes
-			// what it actually named each skill.
-			//
-			// URL skills are deterministic because we pass --name.
-			// Hub skills that were already installed keep their previous name.
-			// New hub skills are discovered from ✓ Installed <name> lines.
-			const installedNames = new Set(
+			// Build expected manifest names deterministically.
+			// Hub: resolveManifestName() from normalized installRef.
+			// URL: saved name (deploy passes --name).
+			// Custom: saved name (written as directory).
+			const expectedNames = new Set(
+				enabledSkills
+					.filter((s) => s.sourceType !== "custom")
+					.map((s) => resolveManifestName(s)),
+			);
+
+			// Verify all enabled hub/url skills are present on remote.
+			const remoteSkills = new Set(
 				parseRemoteSkillsList(
 					(await ssh.execCommand("sudo docker exec hermes hermes skills list"))
 						.stdout ?? "",
 				).skills,
 			);
+			const missing = [...expectedNames].filter((n) => !remoteSkills.has(n));
+			if (missing.length > 0) {
+				throw new Error(
+					`Hermes did not install these skills: ${missing.join(", ")}`,
+				);
+			}
 
+			// Build deterministic manifest from enabled skills.
 			const actualManifest: ManifestEntry[] = [];
 			for (const skill of enabledSkills) {
-				if (skill.sourceType === "url") {
-					// We pass --name <skill.name> on URL installs, so the
-					// installed name matches our saved name.
-					if (installedNames.has(skill.name)) {
-						actualManifest.push({
-							name: skill.name,
-							sourceType: skill.sourceType,
-							installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
-						});
-					}
-				} else if (skill.sourceType === "hub") {
-					// Look for exact match in previous manifest first (already
-					// installed and unchanged).
-					const normalized = normalizeSkillInstallRef(skill.installRef ?? "");
-					const prevMatch = previousManifest.find(
-						(p) => p.installRef === normalized,
-					);
-					if (prevMatch && installedNames.has(prevMatch.name)) {
-						actualManifest.push(prevMatch);
-					} else {
-						// New or ref-changed hub skill — find the name Hermes
-						// actually assigned by looking for a new skill in the
-						// inventory that wasn't there before.
-						const firstUnknown = [...installedNames]
-							.filter((n) => !previousManifest.some((p) => p.name === n))
-							.find(() => true);
-						if (firstUnknown) {
-							actualManifest.push({
-								name: firstUnknown,
-								sourceType: skill.sourceType,
-								installRef: normalized,
-							});
-						}
-					}
+				if (skill.sourceType === "hub") {
+					actualManifest.push({
+						name: resolveManifestName(skill),
+						sourceType: skill.sourceType,
+						installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
+					});
+				} else if (skill.sourceType === "url") {
+					actualManifest.push({
+						name: skill.name,
+						sourceType: skill.sourceType,
+						installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
+					});
 				} else if (skill.sourceType === "custom") {
 					actualManifest.push({
 						name: skill.name,
 						sourceType: skill.sourceType,
 					});
 				}
-			}
-
-			// Verify every enabled hub/url skill made it into the manifest.
-			// Custom skills are written as files so they don't appear in
-			// hermes skills list — skip verification for those.
-			const verifiableNames = new Set(
-				actualManifest
-					.filter((m) => m.sourceType === "hub" || m.sourceType === "url")
-					.map((m) => m.name),
-			);
-			const missing = [...verifiableNames].filter(
-				(n) => n && !installedNames.has(n),
-			);
-			if (missing.length > 0) {
-				throw new Error(
-					`Post-install verification failed: Hermes did not install these skills: ${missing.join(", ")}`,
-				);
 			}
 
 			// Write the managed manifest with the actual discovered names.
