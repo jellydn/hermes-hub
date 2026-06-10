@@ -1,4 +1,7 @@
-import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
+import type {
+	AgentSkillSummary,
+	ManagedManifestEntry,
+} from "#shared/contracts/agent-skills";
 
 type AgentSkillResponsePayload = {
 	error?: string;
@@ -13,6 +16,7 @@ type RemoteSkillsResponse = {
 	raw: string;
 	skills: string[];
 	count: number;
+	managedManifest: ManagedManifestEntry[];
 };
 
 type RemoteSkillsResult =
@@ -101,7 +105,8 @@ export async function fetchRemoteSkills(
 		if (
 			typeof payload.raw !== "string" ||
 			!Array.isArray(payload.skills) ||
-			typeof payload.count !== "number"
+			typeof payload.count !== "number" ||
+			!Array.isArray(payload.managedManifest)
 		) {
 			return {
 				ok: false,
@@ -115,6 +120,7 @@ export async function fetchRemoteSkills(
 				raw: payload.raw,
 				skills: payload.skills,
 				count: payload.count,
+				managedManifest: payload.managedManifest,
 			},
 		};
 	} catch {

@@ -2,14 +2,31 @@ import { LoaderCircle, TriangleAlert } from "lucide-react";
 import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
 import { HermesDeployPanel } from "#/features/settings/hermes-deploy-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
-import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
-import { resolveManifestName } from "#shared/contracts/agent-skills";
+import type {
+	AgentSkillSummary,
+	ManagedManifestEntry,
+} from "#shared/contracts/agent-skills";
+import {
+	classifyManagedSkillStatus,
+	resolveManifestName,
+} from "#shared/contracts/agent-skills";
 
 type RemoteInventoryState = {
 	raw: string;
 	skills: string[];
 	count: number;
+	managedManifest: ManagedManifestEntry[];
 } | null;
+
+function getEnabledManifestNames(skills: AgentSkillSummary[]): string[] {
+	const names: string[] = [];
+	for (const skill of skills) {
+		if (skill.enabled) {
+			names.push(resolveManifestName(skill));
+		}
+	}
+	return names;
+}
 
 function formatDeploySuccess(
 	payload: DeployResponsePayload,
@@ -33,7 +50,7 @@ function formatDeploySuccess(
 	if (blocked && blocked.length > 0) {
 		return `${base} ${blocked.length} skill${
 			blocked.length === 1 ? " was" : "s were"
-		} blocked by the Hermes scanner: ${blocked.join(", ")}.`;
+		} blocked by the Hermes scanner: ${blocked.join(", ")}. Redeploy will not override a dangerous scanner verdict — disable the skill in Hub or install it manually on the server if you accept the risk.`;
 	}
 
 	return base;
@@ -48,18 +65,24 @@ type SkillsDeployAsideProps = {
 	remoteInventory: RemoteInventoryState;
 	remoteLoading: boolean;
 	remoteError: string | null;
-	onDeploySuccess: () => void;
+	lastBlockedSkills: string[];
+	onDeploySuccess: (payload: DeployResponsePayload) => void;
 };
 
 function ManagedSkillSummary({
 	expectedNames,
-	presentNames,
+	managedManifestNames,
+	lastBlockedSkills,
 }: {
 	expectedNames: string[];
-	presentNames: string[];
+	managedManifestNames: string[];
+	lastBlockedSkills: string[];
 }) {
-	const missingNames = expectedNames.filter((n) => !presentNames.includes(n));
-	const matchedCount = expectedNames.length - missingNames.length;
+	const { present, blocked, missing } = classifyManagedSkillStatus(
+		expectedNames,
+		managedManifestNames,
+		lastBlockedSkills,
+	);
 
 	return (
 		<div
@@ -70,16 +93,33 @@ function ManagedSkillSummary({
 				Managed Skill Status
 			</span>
 			<p className="m-0 text-sm text-[var(--sea-ink)]">
-				{matchedCount} of {expectedNames.length} enabled skill
+				{present.length} of {expectedNames.length} enabled skill
 				{expectedNames.length === 1 ? "" : "s"} present on remote
 			</p>
-			{missingNames.length > 0 && (
+			{blocked.length > 0 && (
+				<div
+					className="flex items-start gap-1.5 text-sm text-amber-600"
+					id="blocked-managed-skills"
+				>
+					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+					<span>
+						Blocked by Hermes scanner on last deploy:
+						{blocked.map((n) => ` ${n}`)}. Redeploy will not install these until
+						the scanner allows them.
+					</span>
+				</div>
+			)}
+			{missing.length > 0 && (
 				<div
 					className="flex items-start gap-1.5 text-sm text-amber-600"
 					id="missing-managed-skills"
 				>
 					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>Missing:{missingNames.map((n) => ` ${n}`)}</span>
+					<span>
+						Not in Hub manifest on remote:
+						{missing.map((n) => ` ${n}`)}. Deploy again to sync, or check the
+						raw CLI output for the full remote inventory.
+					</span>
 				</div>
 			)}
 		</div>
@@ -95,6 +135,7 @@ export function SkillsDeployAside({
 	remoteInventory,
 	remoteLoading,
 	remoteError,
+	lastBlockedSkills,
 	onDeploySuccess,
 }: SkillsDeployAsideProps) {
 	return (
@@ -159,10 +200,11 @@ export function SkillsDeployAside({
 
 							{skills.length > 0 && (
 								<ManagedSkillSummary
-									expectedNames={skills
-										.filter((s) => s.enabled)
-										.map(resolveManifestName)}
-									presentNames={remoteInventory.skills}
+									expectedNames={getEnabledManifestNames(skills)}
+									managedManifestNames={remoteInventory.managedManifest.map(
+										(entry) => entry.name,
+									)}
+									lastBlockedSkills={lastBlockedSkills}
 								/>
 							)}
 

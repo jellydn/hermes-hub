@@ -1,7 +1,11 @@
 import { useRef, useState } from "react";
+import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import { useMountEffect } from "#/lib/use-mount-effect";
-import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
+import type {
+	AgentSkillSummary,
+	ManagedManifestEntry,
+} from "#shared/contracts/agent-skills";
 import {
 	agentSkillCreateSchema,
 	agentSkillUpdateSchema,
@@ -25,6 +29,7 @@ type RemoteInventoryState = {
 	raw: string;
 	skills: string[];
 	count: number;
+	managedManifest: ManagedManifestEntry[];
 } | null;
 
 function buildSkillRequestBody(form: SkillFormState): Record<string, unknown> {
@@ -66,6 +71,7 @@ export function useAgentSkills(
 		useState<RemoteInventoryState>(null);
 	const [remoteLoading, setRemoteLoading] = useState(false);
 	const [remoteError, setRemoteError] = useState<string | null>(null);
+	const [lastBlockedSkills, setLastBlockedSkills] = useState<string[]>([]);
 
 	const enabledCount = skills.filter((s) => s.enabled).length;
 	const generationRef = useRef(0);
@@ -260,6 +266,7 @@ export function useAgentSkills(
 		remoteInventory,
 		remoteLoading,
 		remoteError,
+		lastBlockedSkills,
 		onChangeField,
 		handleAddClick,
 		handleEditClick,
@@ -268,7 +275,8 @@ export function useAgentSkills(
 		handleSave,
 		handleDelete,
 		handleServerIdChange,
-		onDeploySuccess: () => {
+		onDeploySuccess: (payload: DeployResponsePayload) => {
+			setLastBlockedSkills(payload.blockedSkills ?? []);
 			if (selectedServerId) void loadRemoteInventory(selectedServerId);
 		},
 	};

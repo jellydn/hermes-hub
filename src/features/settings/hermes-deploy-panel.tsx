@@ -25,7 +25,7 @@ type HermesDeployPanelProps = {
 	formatSuccess: (payload: DeployResponsePayload, serverHost: string) => string;
 	selectedServerId?: string;
 	onServerIdChange?: (serverId: string) => void;
-	onDeploySuccess?: () => void;
+	onDeploySuccess?: (payload: DeployResponsePayload) => void;
 };
 
 export function HermesDeployPanel({
@@ -84,8 +84,9 @@ export function HermesDeployPanel({
 			}
 
 			const serverHost = payload?.serverHost ?? selectedTarget.host;
-			setDeployResult(formatSuccess(payload ?? {}, serverHost));
-			onDeploySuccess?.();
+			const resolvedPayload = payload ?? {};
+			setDeployResult(formatSuccess(resolvedPayload, serverHost));
+			onDeploySuccess?.(resolvedPayload);
 		} catch {
 			setDeployError(
 				"Network error. Please check your connection and try again.",

@@ -28,6 +28,7 @@ export function AgentSkills({
 		remoteInventory,
 		remoteLoading,
 		remoteError,
+		lastBlockedSkills,
 		onChangeField,
 		handleAddClick,
 		handleEditClick,
@@ -80,6 +81,7 @@ export function AgentSkills({
 				remoteInventory={remoteInventory}
 				remoteLoading={remoteLoading}
 				remoteError={remoteError}
+				lastBlockedSkills={lastBlockedSkills}
 				onDeploySuccess={onDeploySuccess}
 			/>
 		</div>

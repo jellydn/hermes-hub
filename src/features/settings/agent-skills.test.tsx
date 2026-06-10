@@ -92,6 +92,7 @@ beforeEach(() => {
 						raw: "Name         Source   Enabled\nweb-search   hub      true",
 						skills: ["web-search"],
 						count: 1,
+						managedManifest: [],
 					}),
 					{
 						status: 200,
@@ -159,6 +160,7 @@ describe("AgentSkills UI Component", () => {
 							raw: "Name         Source   Enabled\nweb-search   hub      true",
 							skills: ["web-search"],
 							count: 1,
+							managedManifest: [],
 						}),
 						{ status: 200 },
 					),
@@ -210,9 +212,17 @@ describe("AgentSkills UI Component", () => {
 		fetchMock.mockImplementation((url) => {
 			if (url.includes("/api/settings/agent-skills/remote-list")) {
 				return Promise.resolve(
-					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
-						status: 200,
-					}),
+					new Response(
+						JSON.stringify({
+							raw: "",
+							skills: [],
+							count: 0,
+							managedManifest: [],
+						}),
+						{
+							status: 200,
+						},
+					),
 				);
 			}
 			return Promise.resolve(
@@ -276,9 +286,17 @@ describe("AgentSkills UI Component", () => {
 		fetchMock.mockImplementation((url) => {
 			if (url.includes("/api/settings/agent-skills/remote-list")) {
 				return Promise.resolve(
-					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
-						status: 200,
-					}),
+					new Response(
+						JSON.stringify({
+							raw: "",
+							skills: [],
+							count: 0,
+							managedManifest: [],
+						}),
+						{
+							status: 200,
+						},
+					),
 				);
 			}
 			return Promise.resolve(
@@ -335,9 +353,17 @@ describe("AgentSkills UI Component", () => {
 		fetchMock.mockImplementation((url) => {
 			if (url.includes("/api/settings/agent-skills/remote-list")) {
 				return Promise.resolve(
-					new Response(JSON.stringify({ raw: "", skills: [], count: 0 }), {
-						status: 200,
-					}),
+					new Response(
+						JSON.stringify({
+							raw: "",
+							skills: [],
+							count: 0,
+							managedManifest: [],
+						}),
+						{
+							status: 200,
+						},
+					),
 				);
 			}
 			return Promise.resolve(
@@ -386,6 +412,7 @@ describe("AgentSkills UI Component", () => {
 									: "Name  Source  Enabled\nweb-search  hub  true",
 							skills: remoteFetchCount === 1 ? [] : ["web-search"],
 							count: remoteFetchCount === 1 ? 0 : 1,
+							managedManifest: [],
 						}),
 						{ status: 200 },
 					),
@@ -442,6 +469,7 @@ describe("AgentSkills UI Component", () => {
 							raw: "Name         Source   Enabled\nweb-search   hub      true\nfile-reader  hub      true",
 							skills: ["web-search", "file-reader"],
 							count: 2,
+							managedManifest: [],
 						}),
 						{ status: 200 },
 					),
@@ -495,6 +523,7 @@ describe("AgentSkills UI Component", () => {
 							raw: `Skills on ${body.serverId}:\n${skills.join("\n")}`,
 							skills,
 							count: skills.length,
+							managedManifest: [],
 						}),
 						{ status: 200 },
 					),
@@ -542,6 +571,13 @@ describe("AgentSkills UI Component", () => {
 							raw: "Name         Source   Enabled\nweb-search   hub      true",
 							skills: ["web-search"],
 							count: 1,
+							managedManifest: [
+								{
+									name: "web-search",
+									sourceType: "hub",
+									installRef: "nous/web-search",
+								},
+							],
 						}),
 						{ status: 200 },
 					),
@@ -582,14 +618,16 @@ describe("AgentSkills UI Component", () => {
 			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 
-		// Managed skill summary: 1 of 2 present (web-search matches, file-reader doesn't)
+		// Managed skill summary: 1 of 2 present (web-search in manifest, file-reader missing)
 		expect(screen.getByText("Managed Skill Status")).toBeTruthy();
 		expect(
 			screen.getByText(/1 of 2 enabled skills present on remote/),
 		).toBeTruthy();
 
-		// Missing skills warning for file-reader (not in remote inventory)
-		expect(screen.getByText(/Missing: file-reader/)).toBeTruthy();
+		// Missing skills warning for file-reader (not in Hub manifest)
+		expect(
+			screen.getByText(/Not in Hub manifest on remote: file-reader/),
+		).toBeTruthy();
 
 		// Raw CLI output is still available
 		const textarea = screen.getByLabelText(
@@ -607,6 +645,17 @@ describe("AgentSkills UI Component", () => {
 							raw: "Name         Source   Enabled\nweb-search   hub      true\nfile-reader  hub      true",
 							skills: ["web-search", "file-reader"],
 							count: 2,
+							managedManifest: [
+								{
+									name: "web-search",
+									sourceType: "hub",
+									installRef: "nous/web-search",
+								},
+								{
+									name: "file-reader",
+									sourceType: "custom",
+								},
+							],
 						}),
 						{ status: 200 },
 					),
@@ -651,6 +700,6 @@ describe("AgentSkills UI Component", () => {
 		expect(
 			screen.getByText(/2 of 2 enabled skills present on remote/),
 		).toBeTruthy();
-		expect(screen.queryByText(/Missing:/)).toBeNull();
+		expect(screen.queryByText(/Not in Hub manifest on remote:/)).toBeNull();
 	});
 });
