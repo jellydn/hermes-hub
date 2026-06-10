@@ -96,7 +96,9 @@ export function SubscriptionSelectionPanel({
 				<ProviderSettingsField
 					label="Model"
 					name="model"
-					hint={`Pre-selected default for ${formatUserSubscriptionLabel(form.subscriptionProvider)}.`}
+					hint={`Pre-selected default for ${formatUserSubscriptionLabel(
+						form.subscriptionProvider,
+					)}.`}
 				>
 					<select
 						id="subscription-model"

@@ -200,6 +200,8 @@ function flattenInstallLogLines(installLogs: InstallLogEntry[]) {
 function flattenActionLogLines(actionLogs: ActionLogEntry[]) {
 	return actionLogs.map(
 		(entry) =>
-			`${entry.createdAt} [${entry.serverLabel}] ${formatActionLabel(entry.action)} ${entry.result}: ${entry.message}`,
+			`${entry.createdAt} [${entry.serverLabel}] ${formatActionLabel(
+				entry.action,
+			)} ${entry.result}: ${entry.message}`,
 	);
 }

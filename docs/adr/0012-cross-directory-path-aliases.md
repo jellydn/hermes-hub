@@ -45,11 +45,11 @@ The existing `@/*` alias (173 files as of June 2026) was consolidated into `#/*`
 
 ### Current alias configuration
 
-| Alias | Target | Files |
-|-------|--------|-------|
-| `#/*` | `./src/*` | 175 |
-| `#server/*` | `./server/*` | 40 |
-| `#shared/*` | `./shared/*` | 35 |
+| Alias       | Target       | Files |
+| ----------- | ------------ | ----- |
+| `#/*`       | `./src/*`    | 175   |
+| `#server/*` | `./server/*` | 40    |
+| `#shared/*` | `./shared/*` | 35    |
 
 Both `tsconfig.json` `paths` and `package.json` `imports` were updated so that both TypeScript (`tsc`) and the bundler (Vite, which reads `package.json` `imports` via `resolve.tsconfigPaths: true`) resolve the new aliases.
 

@@ -22,8 +22,12 @@ function formatDeploySuccess(
 	const count = payload.skillCount ?? enabledCount;
 
 	return deployedAt
-		? `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
-		: `Deployed ${count} skill${count === 1 ? "" : "s"} to ${serverHost}. Hermes is restarting...`;
+		? `Deployed ${count} skill${
+				count === 1 ? "" : "s"
+			} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
+		: `Deployed ${count} skill${
+				count === 1 ? "" : "s"
+			} to ${serverHost}. Hermes is restarting...`;
 }
 
 type SkillsDeployAsideProps = {

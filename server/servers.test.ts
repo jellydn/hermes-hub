@@ -2,8 +2,17 @@ import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auditLogs, servers } from "./db/schema";
 
-const observedHostKeyFingerprint = `SHA256:${createHash("sha256").update(Buffer.from("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "hex")).digest("base64")}`;
-const acceptedHostKeyFingerprint = `SHA256:${createHash("sha256").update("rotated-host-key").digest("base64")}`;
+const observedHostKeyFingerprint = `SHA256:${createHash("sha256")
+	.update(
+		Buffer.from(
+			"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+			"hex",
+		),
+	)
+	.digest("base64")}`;
+const acceptedHostKeyFingerprint = `SHA256:${createHash("sha256")
+	.update("rotated-host-key")
+	.digest("base64")}`;
 
 import { INVALID_FINGERPRINT_MESSAGE } from "./ssh/host-key-fingerprint";
 

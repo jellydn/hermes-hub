@@ -48,7 +48,9 @@ export function TelegramDeploySection({
 				deployedServerHost: serverHost,
 			});
 			setSuccessMessage(
-				`Bot token deployed to ${serverHost ?? "server"}. Hermes is restarting...`,
+				`Bot token deployed to ${
+					serverHost ?? "server"
+				}. Hermes is restarting...`,
 			);
 		} finally {
 			setIsDeploying(false);

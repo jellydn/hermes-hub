@@ -113,7 +113,9 @@ export function toProviderSummary(
 				? activeBackend.subscriptionProvider
 				: activeBackend.provider,
 		model: activeBackend.model,
-		detail: `${formatActiveBackendLabel(activeBackend)} is ready to power Hermes responses.`,
+		detail: `${formatActiveBackendLabel(
+			activeBackend,
+		)} is ready to power Hermes responses.`,
 	};
 }
 

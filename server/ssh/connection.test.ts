@@ -22,7 +22,10 @@ vi.mock("node-ssh", () => {
 });
 
 const hostKeyBuffer = buildEd25519WireKey();
-const expected = `SHA256:${createHash("sha256").update(hostKeyBuffer).digest("base64").replace(/=+$/, "")}`;
+const expected = `SHA256:${createHash("sha256")
+	.update(hostKeyBuffer)
+	.digest("base64")
+	.replace(/=+$/, "")}`;
 
 describe("withSshConnection host key fingerprint", () => {
 	beforeEach(() => {
