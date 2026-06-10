@@ -699,20 +699,23 @@ describe("agent skills settings", () => {
 				createContext({ serverId: "srv_123" }, "POST"),
 			);
 
-			expect(response.status).toBe(502);
+			// Partial success: deploy completed but skill was blocked
+			expect(response.status).toBe(200);
 			const payload = await response.json();
-			expect(payload.error).toContain("geo-weather-fetch");
-			// Manifest must NOT have been written on failure
+			expect(payload.blockedSkills).toEqual(["geo-weather-fetch"]);
+			expect(payload.status).toBe("deployed");
+			// Manifest must NOT include geo-weather-fetch (only installed skills)
 			const calledCommands = mockExec.mock.calls.map((c) => c[0]);
 			const manifestTeeCall = calledCommands.find(
 				(c: string) =>
 					c.includes("hermeshub-agent-skills.json") && c.includes("sudo tee"),
 			);
-			expect(manifestTeeCall).toBeFalsy();
-			// Failure audit log should have been written
+			// Manifest was written (with only installed skills)
+			expect(manifestTeeCall).toBeTruthy();
+			// Success audit log should have been written (not failure)
 			expect(insertAuditValues).toHaveBeenCalledWith(
 				expect.objectContaining({
-					action: "agent_skills.deploy.failed",
+					action: "agent_skills.deployed",
 				}),
 			);
 		});

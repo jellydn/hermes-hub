@@ -11,6 +11,7 @@ export type DeployResponsePayload = {
 	deployedAt?: string;
 	serverCount?: number;
 	skillCount?: number;
+	blockedSkills?: string[];
 };
 
 type HermesDeployPanelProps = {

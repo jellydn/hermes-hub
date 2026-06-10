@@ -20,14 +20,23 @@ function formatDeploySuccess(
 		? new Date(payload.deployedAt).toLocaleString()
 		: null;
 	const count = payload.skillCount ?? enabledCount;
+	const blocked = payload.blockedSkills;
 
-	return deployedAt
+	const base = deployedAt
 		? `Deployed ${count} skill${
 				count === 1 ? "" : "s"
 			} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
 		: `Deployed ${count} skill${
 				count === 1 ? "" : "s"
 			} to ${serverHost}. Hermes is restarting...`;
+
+	if (blocked && blocked.length > 0) {
+		return `${base} ${blocked.length} skill${
+			blocked.length === 1 ? " was" : "s were"
+		} blocked by the Hermes scanner: ${blocked.join(", ")}.`;
+	}
+
+	return base;
 }
 
 type SkillsDeployAsideProps = {

@@ -5,6 +5,7 @@ import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
 import { deployToHermesAgent } from "../hermes/deploy";
 import { resolveHermesDeployContext } from "../hermes/deploy-context";
+import { PartialDeployError } from "../hermes/partial-deploy-error";
 import { getClientIp } from "../lib/get-client-ip";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import { requireAuthSession } from "../request-guards";
@@ -483,35 +484,39 @@ export async function deploySkillsToHermes(context: Context) {
 					.map((s) => resolveManifestName(s)),
 			);
 
-			// Verify all enabled hub/url skills are present on remote.
+			// Collect blocked/missing skills instead of throwing.
+			// The Hermes scanner may block some skills (dangerous verdict)
+			// while others install fine — partial deploy is still useful.
 			const remoteSkills = new Set(
 				parseRemoteSkillsList(
 					(await ssh.execCommand("sudo docker exec hermes hermes skills list"))
 						.stdout ?? "",
 				).skills,
 			);
-			const missing = [...expectedNames].filter((n) => !remoteSkills.has(n));
-			if (missing.length > 0) {
-				throw new Error(
-					`Hermes did not install these skills: ${missing.join(", ")}`,
-				);
-			}
+			const blockedSkills = [...expectedNames].filter(
+				(n) => !remoteSkills.has(n),
+			);
 
-			// Build deterministic manifest from enabled skills.
+			// Build deterministic manifest from only the skills that installed.
 			const actualManifest: ManifestEntry[] = [];
 			for (const skill of enabledSkills) {
 				if (skill.sourceType === "hub") {
-					actualManifest.push({
-						name: resolveManifestName(skill),
-						sourceType: skill.sourceType,
-						installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
-					});
+					const resolvedName = resolveManifestName(skill);
+					if (remoteSkills.has(resolvedName)) {
+						actualManifest.push({
+							name: resolvedName,
+							sourceType: skill.sourceType,
+							installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
+						});
+					}
 				} else if (skill.sourceType === "url") {
-					actualManifest.push({
-						name: skill.name,
-						sourceType: skill.sourceType,
-						installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
-					});
+					if (remoteSkills.has(skill.name)) {
+						actualManifest.push({
+							name: skill.name,
+							sourceType: skill.sourceType,
+							installRef: normalizeSkillInstallRef(skill.installRef ?? ""),
+						});
+					}
 				} else if (skill.sourceType === "custom") {
 					actualManifest.push({
 						name: skill.name,
@@ -520,12 +525,17 @@ export async function deploySkillsToHermes(context: Context) {
 				}
 			}
 
-			// Write the managed manifest with the actual discovered names.
+			// Write the managed manifest with the installed skills.
 			await writeRemoteFile(
 				ssh,
 				MANIFEST_PATH,
 				JSON.stringify(actualManifest, null, 2),
 			);
+
+			// Attach blocked skill names so the UI can surface them.
+			if (blockedSkills.length > 0) {
+				throw new PartialDeployError(blockedSkills);
+			}
 		},
 		failureAuditAction: "agent_skills.deploy.failed",
 		successAuditAction: "agent_skills.deployed",
