@@ -215,15 +215,7 @@ const BROWSE_SH_ID_SUFFIX = /-[a-z0-9]{6}$/;
 export function getHubInstalledName(installRef: string): string {
 	if (!installRef) return "";
 	const last = (installRef.split("/").pop() ?? installRef).split("@")[0];
-	if (
-		installRef.startsWith("browse-sh/") ||
-		installRef.startsWith("skills-sh/") ||
-		installRef.startsWith("well-known:") ||
-		installRef.startsWith("official/") ||
-		installRef.startsWith("clawhub/") ||
-		installRef.startsWith("lobehub/") ||
-		installRef.startsWith("claude-marketplace/")
-	) {
+	if (installRef.startsWith("browse-sh/")) {
 		return last.replace(BROWSE_SH_ID_SUFFIX, "");
 	}
 	return last;

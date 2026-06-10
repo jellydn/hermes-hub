@@ -48,6 +48,12 @@ describe("getHubInstalledName", () => {
 			"a-normal-name",
 		);
 	});
+
+	it("does not strip random-id suffix from non-browse.sh hub refs", () => {
+		expect(getHubInstalledName("skills-sh/example.com/my-skill-1uezib")).toBe(
+			"my-skill-1uezib",
+		);
+	});
 });
 
 describe("resolveManifestName", () => {
