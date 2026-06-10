@@ -1,3 +1,4 @@
+import { HERMES_HUB_SKILL_CATEGORY } from "#shared/contracts/agent-skills";
 import { managedComposeVolumeHome } from "../../constants";
 import { shellQuote } from "../../ssh";
 import {
@@ -26,6 +27,24 @@ type SkillDeployPolicy = {
 	manifestEntry: (skill: EnabledSkill) => ManifestEntry | null;
 };
 
+function buildHermesHubInstallSuffix(skillName?: string): string {
+	const flags = [
+		`--category ${shellQuote(HERMES_HUB_SKILL_CATEGORY)}`,
+		"--yes",
+		"--force",
+	];
+	if (skillName) {
+		flags.unshift(`--name ${shellQuote(skillName)}`);
+	}
+	return flags.join(" ");
+}
+
+function removeLegacyFlatSkillDir(skillName: string): string {
+	return `sudo rm -rf ${shellQuote(
+		`${managedComposeVolumeHome}/.hermes/skills/${skillName}`,
+	)}`;
+}
+
 const hubPolicy: SkillDeployPolicy = {
 	matchesEnabled(prev, curr) {
 		return (
@@ -41,9 +60,13 @@ const hubPolicy: SkillDeployPolicy = {
 	},
 	installCommand(skill) {
 		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
-		return `sudo docker exec hermes hermes skills install ${shellQuote(
+		const resolvedName = resolveManifestName(skill);
+		const legacyCleanup = resolvedName
+			? `${removeLegacyFlatSkillDir(resolvedName)} && `
+			: "";
+		return `${legacyCleanup}sudo docker exec hermes hermes skills install ${shellQuote(
 			installRef,
-		)} --yes --force`;
+		)} ${buildHermesHubInstallSuffix()}`;
 	},
 	fileWrite: () => null,
 	manifestEntry(skill) {
@@ -74,9 +97,9 @@ const urlPolicy: SkillDeployPolicy = {
 	},
 	installCommand(skill) {
 		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
-		return `sudo docker exec hermes hermes skills install ${shellQuote(
+		return `${removeLegacyFlatSkillDir(skill.name)} && sudo docker exec hermes hermes skills install ${shellQuote(
 			installRef,
-		)} --name ${shellQuote(skill.name)} --yes --force`;
+		)} ${buildHermesHubInstallSuffix(skill.name)}`;
 	},
 	fileWrite: () => null,
 	manifestEntry(skill) {

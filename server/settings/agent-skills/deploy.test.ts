@@ -190,7 +190,7 @@ describe("deploySkillsToHermes", () => {
 			calledCommands.find((c: string) => c.includes("hermes skills install")) ||
 			"";
 		expect(compoundCommand).toContain(
-			"sudo docker exec hermes hermes skills install 'ref-1' --yes --force",
+			"sudo docker exec hermes hermes skills install 'ref-1' --category 'hermeshub' --yes --force",
 		);
 
 		const manifestWriteCall = calledCommands.find(
@@ -255,7 +255,7 @@ describe("deploySkillsToHermes", () => {
 		expect(compoundCommand).toContain("rm -rf");
 		expect(compoundCommand).toContain("skill-old-custom");
 		expect(compoundCommand).toContain(
-			"sudo docker exec hermes hermes skills install 'owner/skill-one' --yes --force",
+			"sudo docker exec hermes hermes skills install 'owner/skill-one' --category 'hermeshub' --yes --force",
 		);
 	});
 
@@ -295,7 +295,7 @@ describe("deploySkillsToHermes", () => {
 			calledCommands.find((c: string) => c.includes("hermes skills install")) ||
 			"";
 		expect(compoundCommand).toContain(
-			"sudo docker exec hermes hermes skills install 'https://example.com/SKILL.md' --name 'remote-skill' --yes --force",
+			"sudo docker exec hermes hermes skills install 'https://example.com/SKILL.md' --name 'remote-skill' --category 'hermeshub' --yes --force",
 		);
 	});
 
@@ -336,7 +336,7 @@ describe("deploySkillsToHermes", () => {
 			calledCommands.find((c: string) => c.includes("hermes skills install")) ||
 			"";
 		expect(compoundCommand).toContain(
-			"sudo docker exec hermes hermes skills install 'mattpocock/skills/skills/productivity/teach' --name 'teach' --yes --force",
+			"sudo docker exec hermes hermes skills install 'mattpocock/skills/skills/productivity/teach' --name 'teach' --category 'hermeshub' --yes --force",
 		);
 	});
 
@@ -377,7 +377,7 @@ describe("deploySkillsToHermes", () => {
 			"";
 		// No --name for hub installs — Hermes CLI derives the name from the ref
 		expect(compoundCommand).toContain(
-			"sudo docker exec hermes hermes skills install 'browse-sh/weather.gov/get-forecast-1uezib' --yes --force",
+			"sudo docker exec hermes hermes skills install 'browse-sh/weather.gov/get-forecast-1uezib' --category 'hermeshub' --yes --force",
 		);
 		expect(compoundCommand).not.toContain("--name");
 
