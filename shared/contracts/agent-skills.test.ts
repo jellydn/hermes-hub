@@ -1,6 +1,44 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSkillInstallRef } from "#shared/contracts/agent-skills";
+import {
+	classifyManagedSkillStatus,
+	isManagedSkillInManifest,
+	normalizeSkillInstallRef,
+} from "#shared/contracts/agent-skills";
+
+describe("isManagedSkillInManifest", () => {
+	it("matches managed skills by exact manifest name", () => {
+		expect(
+			isManagedSkillInManifest("thermo-nuclear-code-quality-review", [
+				"thermo-nuclear-code-quality-review",
+			]),
+		).toBe(true);
+	});
+
+	it("does not match truncated CLI prefixes", () => {
+		expect(
+			isManagedSkillInManifest("thermo-nuclear-code-quality-review", [
+				"thermo-nuclear-cod",
+			]),
+		).toBe(false);
+	});
+});
+
+describe("classifyManagedSkillStatus", () => {
+	it("separates present, blocked, and missing managed skills", () => {
+		expect(
+			classifyManagedSkillStatus(
+				["present-skill", "blocked-skill", "missing-skill"],
+				["present-skill"],
+				["blocked-skill"],
+			),
+		).toEqual({
+			present: ["present-skill"],
+			blocked: ["blocked-skill"],
+			missing: ["missing-skill"],
+		});
+	});
+});
 
 describe("normalizeSkillInstallRef", () => {
 	it("rewrites a GitHub tree (folder) URL to an owner/repo/path slug", () => {

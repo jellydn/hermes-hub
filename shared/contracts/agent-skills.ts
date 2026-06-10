@@ -244,3 +244,52 @@ export function resolveManifestName(skill: {
 	}
 	return skill.name;
 }
+
+export type ManagedManifestEntry = {
+	name: string;
+	sourceType: string;
+	installRef?: string;
+};
+
+/** HermesHub-managed skill presence is determined by the remote manifest only. */
+export function isManagedSkillInManifest(
+	expectedName: string,
+	managedManifestNames: Iterable<string>,
+): boolean {
+	for (const manifestName of managedManifestNames) {
+		if (manifestName === expectedName) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export type ManagedSkillStatus = {
+	present: string[];
+	blocked: string[];
+	missing: string[];
+};
+
+export function classifyManagedSkillStatus(
+	expectedNames: string[],
+	managedManifestNames: Iterable<string>,
+	lastBlockedSkills: Iterable<string>,
+): ManagedSkillStatus {
+	const manifestSet = new Set(managedManifestNames);
+	const blockedSet = new Set(lastBlockedSkills);
+	const present: string[] = [];
+	const blocked: string[] = [];
+	const missing: string[] = [];
+
+	for (const name of expectedNames) {
+		if (manifestSet.has(name)) {
+			present.push(name);
+		} else if (blockedSet.has(name)) {
+			blocked.push(name);
+		} else {
+			missing.push(name);
+		}
+	}
+
+	return { present, blocked, missing };
+}
