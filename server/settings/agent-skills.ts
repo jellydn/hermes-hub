@@ -460,13 +460,8 @@ export async function deploySkillsToHermes(context: Context) {
 				}
 				// `hermes skills install` exits 0 even when the security scanner blocks
 				// a skill or the source cannot be fetched, so the &&-chain never aborts.
-				// Detect those failures from the command output and surface them.
-				const installFailure = detectSkillInstallFailure(
-					`${result.stdout ?? ""}\n${result.stderr ?? ""}`,
-				);
-				if (installFailure) {
-					throw new Error(installFailure);
-				}
+				// We let those skills be caught by the manifest verification below
+				// so they surface as PartialDeployError (200 + blockedSkills) not a 502.
 			}
 
 			// Write custom skill files via SSH stdin.
