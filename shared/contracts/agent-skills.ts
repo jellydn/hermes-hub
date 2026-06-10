@@ -251,21 +251,19 @@ export type ManagedManifestEntry = {
 	installRef?: string;
 };
 
-/** HermesHub-managed skill presence is determined by the remote manifest only. */
-export function isManagedSkillInManifest(
-	expectedName: string,
-	managedManifestNames: Iterable<string>,
-): boolean {
-	for (const manifestName of managedManifestNames) {
-		if (manifestName === expectedName) {
-			return true;
-		}
-	}
-	return false;
-}
+/** Hermes CLI category folder for skills deployed from HermesHub settings. */
+export const HERMES_HUB_SKILL_CATEGORY = "hermeshub";
+
+export type RemoteSkillsInventory = {
+	raw: string;
+	managedManifest: ManagedManifestEntry[];
+	installedSkillNames: string[];
+};
 
 export type ManagedSkillStatus = {
 	present: string[];
+	drifted: string[];
+	stale: string[];
 	blocked: string[];
 	missing: string[];
 };
@@ -274,16 +272,27 @@ export function classifyManagedSkillStatus(
 	expectedNames: string[],
 	managedManifestNames: Iterable<string>,
 	lastBlockedSkills: Iterable<string>,
+	installedSkillNames: Iterable<string> = [],
 ): ManagedSkillStatus {
 	const manifestSet = new Set(managedManifestNames);
 	const blockedSet = new Set(lastBlockedSkills);
+	const installedSet = new Set(installedSkillNames);
 	const present: string[] = [];
+	const drifted: string[] = [];
+	const stale: string[] = [];
 	const blocked: string[] = [];
 	const missing: string[] = [];
 
 	for (const name of expectedNames) {
-		if (manifestSet.has(name)) {
+		const inManifest = manifestSet.has(name);
+		const installed = installedSet.has(name);
+
+		if (installed && inManifest) {
 			present.push(name);
+		} else if (installed) {
+			drifted.push(name);
+		} else if (inManifest) {
+			stale.push(name);
 		} else if (blockedSet.has(name)) {
 			blocked.push(name);
 		} else {
@@ -291,5 +300,11 @@ export function classifyManagedSkillStatus(
 		}
 	}
 
-	return { present, blocked, missing };
+	return { present, drifted, stale, blocked, missing };
+}
+
+export function countInstalledManagedSkills(
+	status: ManagedSkillStatus,
+): number {
+	return status.present.length + status.drifted.length;
 }
