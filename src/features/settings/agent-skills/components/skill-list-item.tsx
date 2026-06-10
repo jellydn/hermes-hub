@@ -27,23 +27,33 @@ export function SkillListItem({
 				isEditing && "border-[var(--sea-ink-soft)] bg-[var(--surface)]",
 			)}
 		>
-			<div className="flex flex-wrap items-start justify-between gap-4">
-				<div className="flex items-start gap-3">
-					<div className="mt-1 rounded-lg bg-[var(--sea-ink)]/5 p-2 text-[var(--sea-ink)]">
+			<div className="flex items-start justify-between gap-4">
+				<div className="flex min-w-0 flex-1 items-start gap-3">
+					<div className="mt-1 shrink-0 rounded-lg bg-[var(--sea-ink)]/5 p-2 text-[var(--sea-ink)]">
 						<BookOpen className="h-4 w-4" />
 					</div>
-					<div>
-						<p className="m-0 font-semibold text-[var(--sea-ink)]">
+					<div className="min-w-0">
+						<p
+							className="m-0 truncate font-semibold text-[var(--sea-ink)]"
+							title={skill.name}
+						>
 							{skill.name}
 						</p>
-						<p className="m-0 mt-1 text-xs text-[var(--sea-ink-soft)]">
+						<p
+							className="m-0 mt-1 truncate text-xs text-[var(--sea-ink-soft)]"
+							title={
+								skill.installRef
+									? `Type: ${skill.sourceType} · Ref: ${skill.installRef}`
+									: `Type: ${skill.sourceType}`
+							}
+						>
 							Type: <span className="capitalize">{skill.sourceType}</span>
 							{skill.installRef && ` · Ref: ${skill.installRef}`}
 						</p>
 					</div>
 				</div>
 
-				<div className="flex flex-wrap items-center gap-3">
+				<div className="flex shrink-0 items-center gap-3">
 					<label className="flex items-center gap-2 text-xs font-medium text-[var(--sea-ink-soft)] cursor-pointer">
 						<input
 							type="checkbox"
