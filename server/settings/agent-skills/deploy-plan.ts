@@ -1,3 +1,4 @@
+import { isSkillInstalledOnRemote } from "#shared/contracts/agent-skills";
 import { resolveManifestName } from "./config";
 import {
 	type EnabledSkill,
@@ -76,7 +77,7 @@ export function buildActualManifest(
 
 		if (
 			skillExpectsRemoteInventory(skill) &&
-			!installedSkillNames.has(entry.name)
+			!isSkillInstalledOnRemote(entry.name, installedSkillNames)
 		) {
 			continue;
 		}
@@ -99,7 +100,10 @@ export function findBlockedSkills(
 		}
 
 		const expectedName = resolveManifestName(skill);
-		if (expectedName && !installedSkillNames.has(expectedName)) {
+		if (
+			expectedName &&
+			!isSkillInstalledOnRemote(expectedName, installedSkillNames)
+		) {
 			blocked.push(expectedName);
 		}
 	}

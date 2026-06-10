@@ -510,6 +510,43 @@ describe("deploySkillsToHermes", () => {
 		expect(payload.error).toContain(name);
 	});
 
+	it("treats skills.sh hyphen aliases as installed (last-30-days vs last30days)", async () => {
+		const record = {
+			...baseRecord,
+			id: "s_last30",
+			name: "last-30-days",
+			sourceType: "hub",
+			installRef: "skills-sh/example.com/last-30-days",
+			enabled: true,
+		};
+
+		selectOrderBy.mockResolvedValueOnce([record]);
+
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [
+				"/root/.hermes/skills/hermeshub/last30days/SKILL.md",
+			],
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({ execCommand: mockExec });
+			},
+		);
+
+		const { deploySkillsToHermes } = await import("../agent-skills");
+		const response = await deploySkillsToHermes(
+			createContext({ serverId: "srv_123" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		const payload = await response.json();
+		expect(payload.skillCount).toBe(1);
+		expect(payload.status).toBe("deployed");
+	});
+
 	it("aborts deploy and logs failure if any installation fails", async () => {
 		const record1 = {
 			...baseRecord,

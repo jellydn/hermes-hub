@@ -200,6 +200,10 @@ export const agentSkillUpdateSchema = z.object({
  */
 const BROWSE_SH_ID_SUFFIX = /-[a-z0-9]{6}$/;
 
+export function isSkillsShInstallRef(installRef: string): boolean {
+	return installRef.startsWith("skills-sh/");
+}
+
 /**
  * Derive the Hermes skill name that will actually be installed on the
  * remote host.
@@ -218,7 +222,33 @@ export function getHubInstalledName(installRef: string): string {
 	if (installRef.startsWith("browse-sh/")) {
 		return last.replace(BROWSE_SH_ID_SUFFIX, "");
 	}
+	if (isSkillsShInstallRef(installRef)) {
+		// skills.sh registry IDs omit hyphens (e.g. last-30-days -> last30days).
+		return last.replace(/-/g, "");
+	}
 	return last;
+}
+
+/** Alternate on-disk names Hermes may use for the same hub ref. */
+export function getInstalledNameAliases(manifestName: string): string[] {
+	const aliases = new Set<string>([manifestName]);
+	if (manifestName.includes("-")) {
+		aliases.add(manifestName.replace(/-/g, ""));
+	}
+	return [...aliases];
+}
+
+export function isSkillInstalledOnRemote(
+	manifestName: string,
+	installedSkillNames: Iterable<string>,
+): boolean {
+	const installed = new Set(installedSkillNames);
+	for (const alias of getInstalledNameAliases(manifestName)) {
+		if (installed.has(alias)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /** Resolve the manifest name for a skill.

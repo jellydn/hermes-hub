@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
 	classifyManagedSkillStatus,
+	getHubInstalledName,
 	isManagedSkillInManifest,
+	isSkillInstalledOnRemote,
 	normalizeSkillInstallRef,
 } from "#shared/contracts/agent-skills";
 
@@ -37,6 +39,20 @@ describe("classifyManagedSkillStatus", () => {
 			blocked: ["blocked-skill"],
 			missing: ["missing-skill"],
 		});
+	});
+});
+
+describe("getHubInstalledName", () => {
+	it("maps skills.sh hyphenated slugs to Hermes directory names", () => {
+		expect(getHubInstalledName("skills-sh/example.com/last-30-days")).toBe(
+			"last30days",
+		);
+	});
+});
+
+describe("isSkillInstalledOnRemote", () => {
+	it("matches hyphen-stripped installed directory aliases", () => {
+		expect(isSkillInstalledOnRemote("last-30-days", ["last30days"])).toBe(true);
 	});
 });
 
