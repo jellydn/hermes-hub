@@ -4,7 +4,7 @@ import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-target
 import { useMountEffect } from "#/lib/use-mount-effect";
 import type {
 	AgentSkillSummary,
-	RemoteSkillsInventory,
+	ManagedManifestEntry,
 } from "#shared/contracts/agent-skills";
 import {
 	agentSkillCreateSchema,
@@ -25,7 +25,12 @@ const initialFormState: SkillFormState = {
 	enabled: true,
 };
 
-type RemoteInventoryState = RemoteSkillsInventory | null;
+type RemoteInventoryState = {
+	raw: string;
+	skills: string[];
+	count: number;
+	managedManifest: ManagedManifestEntry[];
+} | null;
 
 function buildSkillRequestBody(form: SkillFormState): Record<string, unknown> {
 	const body: Record<string, unknown> = {

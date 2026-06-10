@@ -2,49 +2,41 @@ import { describe, expect, it } from "vitest";
 
 import {
 	classifyManagedSkillStatus,
-	countInstalledManagedSkills,
+	isManagedSkillInManifest,
 	normalizeSkillInstallRef,
 } from "#shared/contracts/agent-skills";
 
+describe("isManagedSkillInManifest", () => {
+	it("matches managed skills by exact manifest name", () => {
+		expect(
+			isManagedSkillInManifest("thermo-nuclear-code-quality-review", [
+				"thermo-nuclear-code-quality-review",
+			]),
+		).toBe(true);
+	});
+
+	it("does not match truncated CLI prefixes", () => {
+		expect(
+			isManagedSkillInManifest("thermo-nuclear-code-quality-review", [
+				"thermo-nuclear-cod",
+			]),
+		).toBe(false);
+	});
+});
+
 describe("classifyManagedSkillStatus", () => {
-	it("separates tracked, drifted, stale, blocked, and missing managed skills", () => {
+	it("separates present, blocked, and missing managed skills", () => {
 		expect(
 			classifyManagedSkillStatus(
-				[
-					"tracked-skill",
-					"drifted-skill",
-					"stale-skill",
-					"blocked-skill",
-					"missing-skill",
-				],
-				["tracked-skill", "stale-skill"],
+				["present-skill", "blocked-skill", "missing-skill"],
+				["present-skill"],
 				["blocked-skill"],
-				["tracked-skill", "drifted-skill"],
 			),
 		).toEqual({
-			present: ["tracked-skill"],
-			drifted: ["drifted-skill"],
-			stale: ["stale-skill"],
+			present: ["present-skill"],
 			blocked: ["blocked-skill"],
 			missing: ["missing-skill"],
 		});
-	});
-
-	it("treats filesystem-installed skills as drifted when manifest is stale", () => {
-		const status = classifyManagedSkillStatus(
-			["thermo-nuclear-code-quality-review"],
-			[],
-			[],
-			["thermo-nuclear-code-quality-review"],
-		);
-		expect(status).toEqual({
-			present: [],
-			drifted: ["thermo-nuclear-code-quality-review"],
-			stale: [],
-			blocked: [],
-			missing: [],
-		});
-		expect(countInstalledManagedSkills(status)).toBe(1);
 	});
 });
 

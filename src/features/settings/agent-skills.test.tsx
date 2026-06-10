@@ -93,7 +93,6 @@ beforeEach(() => {
 						skills: ["web-search"],
 						count: 1,
 						managedManifest: [],
-						installedSkillNames: [],
 					}),
 					{
 						status: 200,
@@ -147,7 +146,7 @@ describe("AgentSkills UI Component", () => {
 
 		// Wait for initial remote inventory fetch
 		await waitFor(() => {
-			expect(screen.getByText("0 managed skills on disk")).toBeTruthy();
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 	});
 
@@ -162,7 +161,6 @@ describe("AgentSkills UI Component", () => {
 							skills: ["web-search"],
 							count: 1,
 							managedManifest: [],
-							installedSkillNames: [],
 						}),
 						{ status: 200 },
 					),
@@ -220,7 +218,6 @@ describe("AgentSkills UI Component", () => {
 							skills: [],
 							count: 0,
 							managedManifest: [],
-							installedSkillNames: [],
 						}),
 						{
 							status: 200,
@@ -295,7 +292,6 @@ describe("AgentSkills UI Component", () => {
 							skills: [],
 							count: 0,
 							managedManifest: [],
-							installedSkillNames: [],
 						}),
 						{
 							status: 200,
@@ -363,7 +359,6 @@ describe("AgentSkills UI Component", () => {
 							skills: [],
 							count: 0,
 							managedManifest: [],
-							installedSkillNames: [],
 						}),
 						{
 							status: 200,
@@ -418,7 +413,6 @@ describe("AgentSkills UI Component", () => {
 							skills: remoteFetchCount === 1 ? [] : ["web-search"],
 							count: remoteFetchCount === 1 ? 0 : 1,
 							managedManifest: [],
-							installedSkillNames: remoteFetchCount === 1 ? [] : ["web-search"],
 						}),
 						{ status: 200 },
 					),
@@ -447,7 +441,7 @@ describe("AgentSkills UI Component", () => {
 
 		// Wait for initial remote inventory fetch
 		await waitFor(() => {
-			expect(screen.getByText("0 managed skills on disk")).toBeTruthy();
+			expect(screen.getByText("0 remote skills")).toBeTruthy();
 		});
 
 		const deployButton = screen.getByText("Deploy Agent Skills");
@@ -461,7 +455,7 @@ describe("AgentSkills UI Component", () => {
 
 		// After deploy success, remote inventory should refresh
 		await waitFor(() => {
-			expect(screen.getByText("1 managed skill on disk")).toBeTruthy();
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 		expect(remoteFetchCount).toBeGreaterThanOrEqual(2);
 	});
@@ -476,7 +470,6 @@ describe("AgentSkills UI Component", () => {
 							skills: ["web-search", "file-reader"],
 							count: 2,
 							managedManifest: [],
-							installedSkillNames: ["web-search", "file-reader"],
 						}),
 						{ status: 200 },
 					),
@@ -494,7 +487,7 @@ describe("AgentSkills UI Component", () => {
 
 		// Wait for remote inventory loading
 		await waitFor(() => {
-			expect(screen.getByText("2 managed skills on disk")).toBeTruthy();
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
 		});
 
 		const textarea = screen.getByLabelText(
@@ -531,7 +524,6 @@ describe("AgentSkills UI Component", () => {
 							skills,
 							count: skills.length,
 							managedManifest: [],
-							installedSkillNames: skills,
 						}),
 						{ status: 200 },
 					),
@@ -548,7 +540,7 @@ describe("AgentSkills UI Component", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("1 managed skill on disk")).toBeTruthy();
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 
 		const textarea = screen.getByLabelText(
@@ -562,7 +554,7 @@ describe("AgentSkills UI Component", () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText("2 managed skills on disk")).toBeTruthy();
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
 		});
 		const updatedTextarea = screen.getByLabelText(
 			"Raw CLI Output",
@@ -586,7 +578,6 @@ describe("AgentSkills UI Component", () => {
 									installRef: "nous/web-search",
 								},
 							],
-							installedSkillNames: ["web-search"],
 						}),
 						{ status: 200 },
 					),
@@ -624,17 +615,18 @@ describe("AgentSkills UI Component", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("1 managed skill on disk")).toBeTruthy();
+			expect(screen.getByText("1 remote skill")).toBeTruthy();
 		});
 
-		// Managed skill summary: 1 of 2 installed (web-search tracked, file-reader missing)
+		// Managed skill summary: 1 of 2 present (web-search in manifest, file-reader missing)
 		expect(screen.getByText("Managed Skill Status")).toBeTruthy();
 		expect(
-			screen.getByText(/1 of 2 enabled skills installed on remote/),
+			screen.getByText(/1 of 2 enabled skills present on remote/),
 		).toBeTruthy();
 
+		// Missing skills warning for file-reader (not in Hub manifest)
 		expect(
-			screen.getByText(/Not installed on remote: file-reader/),
+			screen.getByText(/Not in Hub manifest on remote: file-reader/),
 		).toBeTruthy();
 
 		// Raw CLI output is still available
@@ -664,7 +656,6 @@ describe("AgentSkills UI Component", () => {
 									sourceType: "custom",
 								},
 							],
-							installedSkillNames: ["web-search", "file-reader"],
 						}),
 						{ status: 200 },
 					),
@@ -702,84 +693,13 @@ describe("AgentSkills UI Component", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("2 managed skills on disk")).toBeTruthy();
+			expect(screen.getByText("2 remote skills")).toBeTruthy();
 		});
 
-		// Both enabled skills are installed and tracked
+		// Both enabled skills match: web-search and file-reader
 		expect(
-			screen.getByText(/2 of 2 enabled skills installed on remote/),
+			screen.getByText(/2 of 2 enabled skills present on remote/),
 		).toBeTruthy();
-		expect(screen.queryByText(/Not installed on remote:/)).toBeNull();
-	});
-
-	it("shows drifted status when a skill is installed but missing from manifest", async () => {
-		fetchMock.mockImplementation((url) => {
-			if (url.includes("/api/settings/agent-skills/remote-list")) {
-				return Promise.resolve(
-					new Response(
-						JSON.stringify({
-							raw: "Name         Source   Enabled\nthermo-nuclear-code-quality-review   url      true",
-							skills: ["thermo-nuclear-cod"],
-							count: 1,
-							managedManifest: [
-								{
-									name: "commit-atomic",
-									sourceType: "url",
-									installRef: "https://example.com/commit-atomic",
-								},
-							],
-							installedSkillNames: [
-								"commit-atomic",
-								"thermo-nuclear-code-quality-review",
-							],
-						}),
-						{ status: 200 },
-					),
-				);
-			}
-			return Promise.resolve(new Response(JSON.stringify({})));
-		});
-
-		const trackedSkill = {
-			id: "skill_tracked",
-			name: "commit-atomic",
-			sourceType: "url" as const,
-			installRef: "https://example.com/commit-atomic",
-			content: null,
-			enabled: true,
-			createdAt: "2026-06-06T12:00:00.000Z",
-			updatedAt: "2026-06-06T12:00:00.000Z",
-		};
-		const driftedSkill = {
-			id: "skill_drifted",
-			name: "thermo-nuclear-code-quality-review",
-			sourceType: "url" as const,
-			installRef: "https://example.com/thermo-nuclear-code-quality-review",
-			content: null,
-			enabled: true,
-			createdAt: "2026-06-06T12:00:00.000Z",
-			updatedAt: "2026-06-06T12:00:00.000Z",
-		};
-
-		render(
-			<AgentSkills
-				initialSkills={[trackedSkill, driftedSkill]}
-				deploymentTargets={[primaryTarget]}
-			/>,
-		);
-
-		await waitFor(() => {
-			expect(screen.getByText("2 managed skills on disk")).toBeTruthy();
-		});
-
-		expect(
-			screen.getByText(/2 of 2 enabled skills installed on remote/),
-		).toBeTruthy();
-		expect(
-			screen.getByText(
-				/Installed on remote but not tracked in Hub manifest: thermo-nuclear-code-quality-review/,
-			),
-		).toBeTruthy();
-		expect(screen.queryByText(/Not installed on remote:/)).toBeNull();
+		expect(screen.queryByText(/Not in Hub manifest on remote:/)).toBeNull();
 	});
 });
