@@ -23,6 +23,7 @@ export default defineConfig(async () => {
 			include: [
 				"src/**/*.{test,spec}.{js,ts,jsx,tsx}",
 				"server/**/*.{test,spec}.{js,ts,jsx,tsx}",
+				"shared/**/*.{test,spec}.{js,ts,jsx,tsx}",
 			],
 		},
 	};

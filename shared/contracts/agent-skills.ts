@@ -53,6 +53,88 @@ export function validateUrlInstallRef(ref: string): string | null {
 	return null;
 }
 
+type GithubSkillPath = {
+	owner: string;
+	repo: string;
+	/** null uses the repository default branch (HEAD) for raw fetches. */
+	gitRef: string | null;
+	pathParts: string[];
+};
+
+function stripSkillMdFileName(pathParts: string[]): string[] {
+	const parts = [...pathParts];
+	if (parts.at(-1) === "SKILL.md") {
+		parts.pop();
+	}
+	return parts;
+}
+
+function parseGithubWebUrl(url: URL): GithubSkillPath | null {
+	const segments = url.pathname.split("/").filter(Boolean);
+	if (segments.length < 2) {
+		return null;
+	}
+
+	const [owner, repo, marker, gitRef, ...rest] = segments;
+	if (!owner || !repo) {
+		return null;
+	}
+
+	if (marker !== "tree" && marker !== "blob") {
+		return {
+			owner,
+			repo,
+			gitRef: null,
+			pathParts: stripSkillMdFileName(segments.slice(2)),
+		};
+	}
+
+	if (!gitRef) {
+		return null;
+	}
+
+	return {
+		owner,
+		repo,
+		gitRef,
+		pathParts: stripSkillMdFileName([...rest]),
+	};
+}
+
+function parseGithubSlug(slug: string): GithubSkillPath | null {
+	const segments = slug.split("/").filter(Boolean);
+	if (segments.length < 2) {
+		return null;
+	}
+
+	const [owner, repo, ...rest] = segments;
+	if (!owner || !repo) {
+		return null;
+	}
+
+	return {
+		owner,
+		repo,
+		gitRef: null,
+		pathParts: stripSkillMdFileName([...rest]),
+	};
+}
+
+function githubSkillPathToSlug(path: GithubSkillPath): string {
+	return [path.owner, path.repo, ...path.pathParts].join("/");
+}
+
+function githubSkillPathToRawSkillMdUrl(path: GithubSkillPath): string {
+	const ref = path.gitRef ?? "HEAD";
+	const skillPath = path.pathParts.join("/");
+	const suffix = skillPath ? `/${skillPath}/SKILL.md` : "/SKILL.md";
+	return `https://raw.githubusercontent.com/${path.owner}/${path.repo}/${ref}${suffix}`;
+}
+
+function isOpaqueHubRegistryRef(ref: string): boolean {
+	return ref.startsWith("skills-sh/") || ref.startsWith("browse-sh/");
+}
+
 /**
  * Rewrite a skill install reference into the form the Hermes CLI understands.
  *
@@ -91,20 +173,12 @@ export function normalizeSkillInstallRef(ref: string): string {
 		return trimmed; // raw.githubusercontent.com and other hosts: leave as-is
 	}
 
-	const segments = url.pathname.split("/").filter(Boolean);
-	if (segments.length < 2) return trimmed;
-
-	const [owner, repo, marker, , ...rest] = segments;
-	if (marker !== "tree" && marker !== "blob") {
-		// e.g. github.com/owner/repo[/extra] → owner/repo[/extra]
-		return [owner, repo, ...segments.slice(2)].join("/");
+	const parsed = parseGithubWebUrl(url);
+	if (!parsed) {
+		return trimmed;
 	}
 
-	const pathParts = [...rest];
-	if (pathParts.at(-1) === "SKILL.md") {
-		pathParts.pop();
-	}
-	return [owner, repo, ...pathParts].join("/");
+	return githubSkillPathToSlug(parsed);
 }
 
 export function validateCustomContent(
@@ -263,22 +337,23 @@ export function deriveSkillMdFetchUrl(
 	installRef: string,
 	sourceType: SkillSourceType,
 ): string | null {
-	const trimmed = normalizeSkillInstallRef(installRef.trim());
-	if (!trimmed) {
+	const raw = installRef.trim();
+	if (!raw) {
 		return null;
 	}
 
-	if (
-		sourceType === "url" ||
-		trimmed.startsWith("http://") ||
-		trimmed.startsWith("https://")
-	) {
+	if (raw.startsWith("http://") || raw.startsWith("https://")) {
 		try {
-			const url = new URL(trimmed);
+			const url = new URL(raw);
 			if (url.protocol !== "http:" && url.protocol !== "https:") {
 				return null;
 			}
-			return trimmed;
+			const host = url.hostname.replace(/^www\./, "");
+			if (host === "github.com") {
+				const parsed = parseGithubWebUrl(url);
+				return parsed ? githubSkillPathToRawSkillMdUrl(parsed) : null;
+			}
+			return raw;
 		} catch {
 			return null;
 		}
@@ -288,23 +363,47 @@ export function deriveSkillMdFetchUrl(
 		return null;
 	}
 
-	const segments = trimmed.split("/").filter(Boolean);
-	if (segments.length < 2) {
+	const trimmed = normalizeSkillInstallRef(raw);
+	if (isOpaqueHubRegistryRef(trimmed)) {
 		return null;
 	}
 
-	const [owner, repo, ...rest] = segments;
-	if (!owner || !repo) {
+	const parsed = parseGithubSlug(trimmed);
+	return parsed ? githubSkillPathToRawSkillMdUrl(parsed) : null;
+}
+
+export function canDeriveScannerBypassUrl(
+	installRef: string,
+	sourceType: SkillSourceType,
+): boolean {
+	return deriveSkillMdFetchUrl(installRef, sourceType) !== null;
+}
+
+export function getScannerBypassUnavailableReason(
+	installRef: string,
+	sourceType: SkillSourceType,
+): string | null {
+	if (sourceType === "custom") {
 		return null;
 	}
 
-	const pathParts = [...rest];
-	if (pathParts.at(-1) === "SKILL.md") {
-		pathParts.pop();
+	if (!installRef.trim()) {
+		return "Install reference is required for scanner bypass.";
 	}
-	const skillPath = pathParts.join("/");
-	const suffix = skillPath ? `/${skillPath}/SKILL.md` : "/SKILL.md";
-	return `https://raw.githubusercontent.com/${owner}/${repo}/HEAD${suffix}`;
+
+	if (canDeriveScannerBypassUrl(installRef, sourceType)) {
+		return null;
+	}
+
+	const trimmed = installRef.trim();
+	if (
+		isOpaqueHubRegistryRef(trimmed) ||
+		isOpaqueHubRegistryRef(normalizeSkillInstallRef(trimmed))
+	) {
+		return "Scanner bypass is not available for skills.sh or browse.sh registry refs. Use a GitHub URL or direct raw SKILL.md link.";
+	}
+
+	return "Scanner bypass needs a fetchable SKILL.md URL (GitHub folder/file URL or direct raw link).";
 }
 
 /** Resolve the manifest name for a skill.

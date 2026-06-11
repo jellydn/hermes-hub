@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	canDeriveScannerBypassUrl,
 	classifyManagedSkillStatus,
+	deriveSkillMdFetchUrl,
 	getHubInstalledName,
+	getScannerBypassUnavailableReason,
 	isManagedSkillInManifest,
 	isSkillInstalledOnRemote,
 	normalizeSkillInstallRef,
@@ -53,6 +56,43 @@ describe("getHubInstalledName", () => {
 describe("isSkillInstalledOnRemote", () => {
 	it("matches hyphen-stripped installed directory aliases", () => {
 		expect(isSkillInstalledOnRemote("last-30-days", ["last30days"])).toBe(true);
+	});
+});
+
+describe("deriveSkillMdFetchUrl", () => {
+	it("rewrites GitHub folder URLs for url skills into raw SKILL.md links", () => {
+		expect(
+			deriveSkillMdFetchUrl(
+				"https://github.com/owner/repo/tree/main/skills/pr-review",
+				"url",
+			),
+		).toBe(
+			"https://raw.githubusercontent.com/owner/repo/main/skills/pr-review/SKILL.md",
+		);
+	});
+
+	it("returns direct raw SKILL.md URLs unchanged", () => {
+		const raw =
+			"https://raw.githubusercontent.com/owner/repo/main/skills/pr-review/SKILL.md";
+		expect(deriveSkillMdFetchUrl(raw, "url")).toBe(raw);
+	});
+
+	it("returns null for opaque skills.sh hub refs", () => {
+		expect(
+			deriveSkillMdFetchUrl("skills-sh/example.com/pr-review", "hub"),
+		).toBeNull();
+	});
+
+	it("reports when scanner bypass cannot be derived", () => {
+		expect(
+			canDeriveScannerBypassUrl("skills-sh/example.com/pr-review", "hub"),
+		).toBe(false);
+		expect(
+			getScannerBypassUnavailableReason(
+				"skills-sh/example.com/pr-review",
+				"hub",
+			),
+		).toContain("skills.sh");
 	});
 });
 
