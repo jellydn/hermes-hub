@@ -48,7 +48,9 @@ describe("formatHermesCliImportFailure", () => {
 describe("formatWebUiContainerFailureDetails", () => {
 	it("preserves the final failure line when startup logs are long", () => {
 		const fatal = "!! ERROR: HERMES_WEBUI_STATE_DIR not set";
-		const logs = `UNIQUE_START_MARKER\n${"EARLY_INIT_NOISE\n".repeat(200)}${fatal}`;
+		const logs = `UNIQUE_START_MARKER\n${"EARLY_INIT_NOISE\n".repeat(
+			200,
+		)}${fatal}`;
 		const message = formatWebUiContainerFailureDetails(
 			"restarting exit=1 error=",
 			logs,

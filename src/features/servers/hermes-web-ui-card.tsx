@@ -8,13 +8,13 @@ import {
 	Rocket,
 } from "lucide-react";
 
-import { Banner } from "@/components/ui/banner";
-import { Button } from "@/components/ui/button";
-import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
+import { Banner } from "#/components/ui/banner";
+import { Button } from "#/components/ui/button";
+import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 import { useHermesWebUi } from "./use-hermes-web-ui";
 

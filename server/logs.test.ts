@@ -152,6 +152,146 @@ describe("logs handlers", () => {
 		});
 	});
 
+	it("includes settings deployment audit rows with concise summaries", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		selectFrom.mockImplementation((table) => {
+			if (table === tableInstalls) {
+				return {
+					innerJoin: () => ({
+						where: () => ({
+							orderBy: () => ({
+								limit: () => Promise.resolve([]),
+							}),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableInstallEvents) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () => Promise.resolve([]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableAuditLogs) {
+				return {
+					where: () => ({
+						orderBy: () => ({
+							limit: () =>
+								Promise.resolve([
+									{
+										id: "audit_mcp_ok",
+										action: "mcp.deployed",
+										details: { serverId: "server_123", serverCount: 3 },
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:00:00.000Z"),
+									},
+									{
+										id: "audit_mcp_fail",
+										action: "mcp.deploy.failed",
+										details: {
+											serverId: "server_123",
+											serverCount: 3,
+											error: "SSH connection refused",
+										},
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:01:00.000Z"),
+									},
+									{
+										id: "audit_skills_ok",
+										action: "agent_skills.deployed",
+										details: { serverId: "server_123", skillCount: 1 },
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:02:00.000Z"),
+									},
+									{
+										id: "audit_skills_fail",
+										action: "agent_skills.deploy.failed",
+										details: { serverId: "server_123", skillCount: 2 },
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:03:00.000Z"),
+									},
+									{
+										id: "audit_persona_ok",
+										action: "persona.deployed",
+										details: { serverId: "server_123" },
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:04:00.000Z"),
+									},
+									{
+										id: "audit_persona_fail",
+										action: "persona.deploy.failed",
+										details: {
+											serverId: "server_123",
+											error: "soul.md write failed",
+										},
+										serverId: "server_123",
+										createdAt: new Date("2026-05-26T05:05:00.000Z"),
+									},
+								]),
+						}),
+					}),
+				};
+			}
+
+			if (table === tableServers) {
+				return {
+					where: () =>
+						Promise.resolve([{ id: "server_123", label: "Production VPS" }]),
+				};
+			}
+
+			throw new Error(`Unexpected table in selectFrom mock: ${String(table)}`);
+		});
+
+		const response = await getLogs(createContext());
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		const byId = new Map<string, (typeof payload.logs.actionLogs)[number]>(
+			payload.logs.actionLogs.map(
+				(entry: { id: string }) => [entry.id, entry] as const,
+			),
+		);
+
+		expect(byId.get("audit_mcp_ok")).toMatchObject({
+			action: "mcp",
+			result: "succeeded",
+			serverLabel: "Production VPS",
+			message: "MCP servers: Deployed to Production VPS (3 MCP servers).",
+		});
+		expect(byId.get("audit_mcp_fail")).toMatchObject({
+			action: "mcp",
+			result: "failed",
+			message: "SSH connection refused",
+		});
+		expect(byId.get("audit_skills_ok")).toMatchObject({
+			action: "agent_skills",
+			result: "succeeded",
+			message: "Agent skills: Deployed to Production VPS (1 enabled skill).",
+		});
+		expect(byId.get("audit_skills_fail")).toMatchObject({
+			action: "agent_skills",
+			result: "failed",
+			message:
+				"Agent skills: Deploy failed to Production VPS (2 enabled skills).",
+		});
+		expect(byId.get("audit_persona_ok")).toMatchObject({
+			action: "persona",
+			result: "succeeded",
+			message: "Persona: Deployed to Production VPS.",
+		});
+		expect(byId.get("audit_persona_fail")).toMatchObject({
+			action: "persona",
+			result: "failed",
+			message: "soul.md write failed",
+		});
+	});
+
 	it("omits installs with no persisted events", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
 		selectFrom.mockImplementation((table) => {

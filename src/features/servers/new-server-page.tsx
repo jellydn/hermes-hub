@@ -2,9 +2,9 @@ import { getRouteApi } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useReducer } from "react";
 
-import { Button } from "@/components/ui/button";
-import { AppShell } from "@/features/dashboard/app-shell";
-import { ConnectionWizard } from "@/features/servers/connection-wizard";
+import { Button } from "#/components/ui/button";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { ConnectionWizard } from "#/features/servers/connection-wizard";
 
 import {
 	type ConnectedServer,

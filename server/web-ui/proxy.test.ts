@@ -7,7 +7,7 @@ import {
 	resolveProxyRequestTarget,
 	rewriteLocationHeader,
 	rewriteSetCookieHeader,
-} from "./proxy-http";
+} from "./proxy";
 
 const proxyBasePath = "/api/servers/server_123/web-ui/proxy/";
 

@@ -3,8 +3,8 @@ import {
 	brandMarkLetterPath,
 	brandMarkShell,
 	brandMarkViewBox,
-} from "@/lib/brand-mark-graphic";
-import { cn } from "@/lib/utils";
+} from "#/lib/brand-mark-graphic";
+import { cn } from "#/lib/utils";
 
 const sizeMap = {
 	sm: 20,

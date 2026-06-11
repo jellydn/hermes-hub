@@ -1,10 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import {
-	type ApiProviderId,
-	formatAiProviderLabel,
-} from "../../src/lib/ai-providers";
-import type { UserSubscriptionId } from "../../src/lib/user-subscriptions";
+import { type ApiProviderId, formatAiProviderLabel } from "#/lib/ai-providers";
+import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 import { encryptSecret } from "../crypto";
 import type { getDb } from "../db";
 import { aiProviders } from "../db/schema";

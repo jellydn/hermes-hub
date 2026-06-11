@@ -1,4 +1,4 @@
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
+import type { McpServerSummary } from "#server/settings/mcp/config";
 
 import type { buildRequestBody } from "./mcp-form-state";
 

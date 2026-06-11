@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import {
 	isUserSubscriptionId,
 	type UserSubscriptionId,
-} from "../../src/lib/user-subscriptions";
+} from "#/lib/user-subscriptions";
 import { getDb } from "../db";
 import { aiUserSubscriptions } from "../db/schema";
 

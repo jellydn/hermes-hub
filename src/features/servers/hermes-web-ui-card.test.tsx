@@ -10,8 +10,8 @@ import {
 } from "@testing-library/react";
 import { type ComponentPropsWithoutRef, isValidElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hermesCommunitySiteUrl } from "@/lib/hermes-community";
-import type { ServerDetailSnapshot } from "@/lib/server-detail";
+import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
+import type { ServerDetailSnapshot } from "#/lib/server-detail";
 
 const fetchMock = vi.fn();
 
@@ -33,7 +33,7 @@ vi.mock("lucide-react", () => {
 	};
 });
 
-vi.mock("@/components/ui/button", () => ({
+vi.mock("#/components/ui/button", () => ({
 	Button: ({
 		children,
 		asChild,

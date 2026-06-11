@@ -8,12 +8,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Banner } from "@/components/ui/banner";
-import { Button } from "@/components/ui/button";
+import { Banner } from "#/components/ui/banner";
+import { Button } from "#/components/ui/button";
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 import { DeleteServerDialog } from "./delete-server-dialog";
 import { InstallLogCard } from "./install-log-card";

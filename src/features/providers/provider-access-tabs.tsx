@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
-import type { ModelAccessSnapshot } from "../../../shared/contracts/model-access";
+import { cn } from "#/lib/utils";
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import type { ProviderAccessTab } from "./provider-access-tab";
 
 type ProviderAccessTabsProps = {

@@ -7,7 +7,10 @@ import {
 } from "./host-key-fingerprint";
 
 const wireKey = buildEd25519WireKey();
-const validFingerprint = `SHA256:${createHash("sha256").update(wireKey).digest("base64").replace(/=+$/, "")}`;
+const validFingerprint = `SHA256:${createHash("sha256")
+	.update(wireKey)
+	.digest("base64")
+	.replace(/=+$/, "")}`;
 
 describe("host key fingerprint helpers", () => {
 	it("accepts OpenSSH SHA256 fingerprints", () => {

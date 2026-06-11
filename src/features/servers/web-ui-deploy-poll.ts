@@ -1,4 +1,4 @@
-import type { ServerWebUiSnapshot } from "@/lib/server-detail";
+import type { ServerWebUiSnapshot } from "#/lib/server-detail";
 
 type WebUiDeployPollHandler = (webUi: ServerWebUiSnapshot) => void;
 

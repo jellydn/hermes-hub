@@ -15,6 +15,7 @@ Better Auth is mounted at `/api/auth/*`. The following routes proxy to Better Au
 Sends a magic-link email to the given address. Requires `DATABASE_URL` to be configured.
 
 **Request body:**
+
 ```json
 {
   "email": "user@example.com"
@@ -22,6 +23,7 @@ Sends a magic-link email to the given address. Requires `DATABASE_URL` to be con
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": true
@@ -29,6 +31,7 @@ Sends a magic-link email to the given address. Requires `DATABASE_URL` to be con
 ```
 
 **Response (503 — DATABASE_URL not configured):**
+
 ```json
 {
   "error": "DATABASE_URL is required"
@@ -40,6 +43,7 @@ Sends a magic-link email to the given address. Requires `DATABASE_URL` to be con
 Verifies a magic-link token. Delegates to Better Auth's `/api/auth/magic-link/verify`.
 
 **Query parameters:**
+
 - `token` — the magic link token
 - `email` — the user's email
 
@@ -52,6 +56,7 @@ Callback handler for magic-link verification. Also delegates to Better Auth's `/
 Catch-all proxy for any other Better Auth routes (session, user management, etc.).
 
 **Response (503 — DATABASE_URL not configured):**
+
 ```json
 {
   "error": "DATABASE_URL is required"
@@ -67,6 +72,7 @@ Catch-all proxy for any other Better Auth routes (session, user management, etc.
 Returns the health status of the server and database connection. No auth required.
 
 **Response (200 — database connected):**
+
 ```json
 {
   "status": "ok",
@@ -76,6 +82,7 @@ Returns the health status of the server and database connection. No auth require
 ```
 
 **Response (200 — database disconnected):**
+
 ```json
 {
   "status": "degraded",
@@ -96,6 +103,7 @@ Connects to a VPS, verifies SSH access and OS compatibility, and creates a serve
 **Auth required:** Yes
 
 **Request body:**
+
 ```json
 {
   "label": "My VPS",
@@ -110,18 +118,19 @@ Connects to a VPS, verifies SSH access and OS compatibility, and creates a serve
 
 **Fields:**
 
-| Field            | Type    | Description                                                |
-| ---------------- | ------- | ---------------------------------------------------------- |
-| `label`          | string  | Friendly name for the server                               |
-| `host`           | string  | IP address or domain name                                  |
-| `port`           | integer | SSH port (1–65535)                                         |
-| `username`       | string  | SSH username                                               |
-| `authMethod`     | string  | `"password"` or `"ssh-key"`                                |
-| `password`       | string  | Required if `authMethod` is `"password"`                   |
-| `privateKey`     | string  | Required if `authMethod` is `"ssh-key"` (PEM-encoded key)  |
-| `storeCredential`| boolean | If true, encrypts credential in DB; if false, in-memory only |
+| Field             | Type    | Description                                                  |
+| ----------------- | ------- | ------------------------------------------------------------ |
+| `label`           | string  | Friendly name for the server                                 |
+| `host`            | string  | IP address or domain name                                    |
+| `port`            | integer | SSH port (1–65535)                                           |
+| `username`        | string  | SSH username                                                 |
+| `authMethod`      | string  | `"password"` or `"ssh-key"`                                  |
+| `password`        | string  | Required if `authMethod` is `"password"`                     |
+| `privateKey`      | string  | Required if `authMethod` is `"ssh-key"` (PEM-encoded key)    |
+| `storeCredential` | boolean | If true, encrypts credential in DB; if false, in-memory only |
 
 **Response (201):**
+
 ```json
 {
   "server": {
@@ -149,16 +158,16 @@ Connects to a VPS, verifies SSH access and OS compatibility, and creates a serve
 
 **Error responses:**
 
-| Status | Condition                        |
-| ------ | -------------------------------- |
-| 400    | Invalid JSON body                |
-| 400    | Missing required fields          |
-| 400    | Invalid port range               |
-| 400    | Unsupported auth method          |
+| Status | Condition                                                      |
+| ------ | -------------------------------------------------------------- |
+| 400    | Invalid JSON body                                              |
+| 400    | Missing required fields                                        |
+| 400    | Invalid port range                                             |
+| 400    | Unsupported auth method                                        |
 | 400    | SSH connection failed / host unreachable / invalid credentials |
-| 400    | Unsupported OS (requires Ubuntu 22.04+ or Debian 12+) |
-| 401    | Unauthorized                     |
-| 500    | Failed to save server connection |
+| 400    | Unsupported OS (requires Ubuntu 22.04+ or Debian 12+)          |
+| 401    | Unauthorized                                                   |
+| 500    | Failed to save server connection                               |
 
 ---
 
@@ -169,6 +178,7 @@ Returns a detailed snapshot of a server, including its install status and action
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "serverDetail": {
@@ -217,11 +227,11 @@ Returns a detailed snapshot of a server, including its install status and action
 
 **Error responses:**
 
-| Status | Condition        |
-| ------ | ---------------- |
+| Status | Condition         |
+| ------ | ----------------- |
 | 400    | Server ID missing |
-| 401    | Unauthorized     |
-| 404    | Server not found |
+| 401    | Unauthorized      |
+| 404    | Server not found  |
 
 ---
 
@@ -241,6 +251,7 @@ Returns immediately with status `202`; progress is streamed via SSE (see below).
 **Auth required:** Yes
 
 **Response (202 — accepted):**
+
 ```json
 {
   "install": {
@@ -254,13 +265,13 @@ Returns immediately with status `202`; progress is streamed via SSE (see below).
 
 **Error responses:**
 
-| Status | Condition                                    |
-| ------ | -------------------------------------------- |
+| Status | Condition                                   |
+| ------ | ------------------------------------------- |
 | 400    | Server ID missing / unsupported auth method |
-| 400    | Install credential unavailable / expired     |
-| 401    | Unauthorized                                 |
-| 404    | Server not found                             |
-| 409    | Install already in progress                  |
+| 400    | Install credential unavailable / expired    |
+| 401    | Unauthorized                                |
+| 404    | Server not found                            |
+| 409    | Install already in progress                 |
 
 ---
 
@@ -289,14 +300,14 @@ data: {
 
 **Install steps and progress:**
 
-| Step                    | Progress | Description                |
-| ----------------------- | -------- | -------------------------- |
-| `install-docker`        | 15%      | Installing Docker          |
-| `install-compose`       | 30%      | Installing Docker Compose  |
-| `create-hermes-directory`| 45%     | Creating Hermes workspace  |
-| `write-compose-file`    | 60%      | Writing docker-compose.yml |
-| `pull-image`            | 80%      | Pulling Hermes image       |
-| `start-containers`      | 100%     | Starting Hermes containers |
+| Step                      | Progress | Description                |
+| ------------------------- | -------- | -------------------------- |
+| `install-docker`          | 15%      | Installing Docker          |
+| `install-compose`         | 30%      | Installing Docker Compose  |
+| `create-hermes-directory` | 45%      | Creating Hermes workspace  |
+| `write-compose-file`      | 60%      | Writing docker-compose.yml |
+| `pull-image`              | 80%      | Pulling Hermes image       |
+| `start-containers`        | 100%     | Starting Hermes containers |
 
 **Terminal events:**
 
@@ -321,11 +332,11 @@ data: {
 
 **Error responses:**
 
-| Status | Condition        |
-| ------ | ---------------- |
+| Status | Condition         |
+| ------ | ----------------- |
 | 400    | Server ID missing |
-| 401    | Unauthorized     |
-| 404    | Server not found |
+| 401    | Unauthorized      |
+| 404    | Server not found  |
 
 ---
 
@@ -336,6 +347,7 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 **Auth required:** Yes
 
 **Request body:**
+
 ```json
 {
   "action": "restart",
@@ -345,20 +357,21 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 
 **Fields:**
 
-| Field           | Type   | Description                                                  |
-| --------------- | ------ | ------------------------------------------------------------ |
-| `action`        | string | `"restart"`, `"update"`, or `"rollback"`                     |
+| Field           | Type   | Description                                                                 |
+| --------------- | ------ | --------------------------------------------------------------------------- |
+| `action`        | string | `"restart"`, `"update"`, or `"rollback"`                                    |
 | `targetVersion` | string | Required for rollback; defaults to previous install version then `"latest"` |
 
 **Commands executed:**
 
-| Action    | SSH Command                                                  |
-| --------- | ------------------------------------------------------------ |
-| restart   | `cd ~/hermes && sudo docker compose restart hermes`          |
-| update    | `cd ~/hermes && sudo docker compose pull && sudo docker compose up -d` |
-| rollback  | Pulls `ghcr.io/hermes-agent/hermes:<tag>`, updates compose file, runs `docker compose up -d` |
+| Action   | SSH Command                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------- |
+| restart  | `cd ~/hermes && sudo docker compose restart hermes`                                          |
+| update   | `cd ~/hermes && sudo docker compose pull && sudo docker compose up -d`                       |
+| rollback | Pulls `ghcr.io/hermes-agent/hermes:<tag>`, updates compose file, runs `docker compose up -d` |
 
 **Response (200 — succeeded):**
+
 ```json
 {
   "status": "succeeded",
@@ -369,6 +382,7 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 ```
 
 **Response (400 — failed):**
+
 ```json
 {
   "error": "Action failed: <error message>"
@@ -377,15 +391,15 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 
 **Error responses:**
 
-| Status | Condition                                |
-| ------ | ---------------------------------------- |
-| 400    | Invalid JSON body                        |
-| 400    | Invalid action type                      |
-| 400    | Unsupported auth method                  |
-| 400    | Credential expired / missing             |
-| 400    | SSH action failed                        |
-| 401    | Unauthorized                             |
-| 404    | Server not found                         |
+| Status | Condition                    |
+| ------ | ---------------------------- |
+| 400    | Invalid JSON body            |
+| 400    | Invalid action type          |
+| 400    | Unsupported auth method      |
+| 400    | Credential expired / missing |
+| 400    | SSH action failed            |
+| 401    | Unauthorized                 |
+| 404    | Server not found             |
 
 ---
 
@@ -400,6 +414,7 @@ Use this from the server detail page (**Check setup**) when you need to confirm 
 **Request body:** None
 
 **Response (200):**
+
 ```json
 {
   "healthCheck": {
@@ -482,27 +497,28 @@ Use this from the server detail page (**Check setup**) when you need to confirm 
 
 **Hermes setup checks:**
 
-| Item                     | What it verifies                                      |
-| ------------------------ | ----------------------------------------------------- |
-| Docker installed         | `docker` CLI is available                           |
-| Docker running           | `sudo docker info` succeeds                           |
-| Docker Compose ready     | `sudo docker compose version` succeeds                |
-| Hermes folder            | `~/hermes` directory exists                           |
-| Hermes configuration     | `~/hermes/docker-compose.yml` exists                  |
-| Hermes agent running     | Hermes container is running                           |
-| Hermes agent responding  | Gateway responds on localhost (only when container is running) |
+| Item                    | What it verifies                                               |
+| ----------------------- | -------------------------------------------------------------- |
+| Docker installed        | `docker` CLI is available                                      |
+| Docker running          | `sudo docker info` succeeds                                    |
+| Docker Compose ready    | `sudo docker compose version` succeeds                         |
+| Hermes folder           | `~/hermes` directory exists                                    |
+| Hermes configuration    | `~/hermes/docker-compose.yml` exists                           |
+| Hermes agent running    | Hermes container is running                                    |
+| Hermes agent responding | Gateway responds on localhost (only when container is running) |
 
 **Audit log events:** `server.health_check.started`, `server.health_check.succeeded`, `server.health_check.failed`
 
 **Error responses:**
 
-| Status | Condition                                |
-| ------ | ---------------------------------------- |
+| Status | Condition                                               |
+| ------ | ------------------------------------------------------- |
 | 400    | Server ID missing / credential unavailable / SSH failed |
-| 401    | Unauthorized                             |
-| 404    | Server not found                         |
+| 401    | Unauthorized                                            |
+| 404    | Server not found                                        |
 
 **Response (400 — SSH or remote check failed):**
+
 ```json
 {
   "error": "Setup check failed: Host key mismatch"
@@ -520,6 +536,7 @@ Returns an aggregated status snapshot of the user's Hermes setup, including serv
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "dashboard": {
@@ -576,7 +593,21 @@ Returns aggregated install logs and action history for the authenticated user.
 
 **Auth required:** Yes
 
+**Action field values:**
+
+| Value          | Description                    |
+| -------------- | ------------------------------ |
+| `restart`      | Hermes agent restart           |
+| `update`       | Hermes version update          |
+| `rollback`     | Hermes version rollback        |
+| `mcp`          | MCP server deployment          |
+| `agent_skills` | Agent skills deployment        |
+| `persona`      | Persona (`SOUL.md`) deployment |
+
+Settings deploy actions (`mcp`, `agent_skills`, `persona`) produce concise messages that include the target server name and resource count, e.g. `"MCP servers: Deployed to Production VPS (3 MCP servers)."`.
+
 **Response (200):**
+
 ```json
 {
   "logs": {
@@ -602,6 +633,14 @@ Returns aggregated install logs and action history for the authenticated user.
         "result": "succeeded",
         "createdAt": "2026-05-26T12:00:00.000Z",
         "message": "Restarted Hermes successfully."
+      },
+      {
+        "id": "uuid",
+        "serverLabel": "My VPS",
+        "action": "mcp",
+        "result": "succeeded",
+        "createdAt": "2026-05-26T13:00:00.000Z",
+        "message": "MCP servers: Deployed to My VPS (3 MCP servers)."
       }
     ]
   }
@@ -615,6 +654,7 @@ Deletes the user's persisted `install_events` rows and finished action audit ent
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "status": "cleared"
@@ -632,6 +672,7 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 **Auth required:** Yes
 
 **Request body:**
+
 ```json
 {
   "provider": "openai",
@@ -642,25 +683,26 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 **Fields:**
 
-| Field     | Type   | Description                                    |
-| --------- | ------ | ---------------------------------------------- |
-| `provider`| string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"custom"`, or `"openai-codex"` |
-| `model`   | string | Model ID (defaults to provider's default if omitted) |
-| `apiKey`  | string | API key. Optional if re-saving the same provider (uses stored key). Not used for `openai-codex`. |
-| `baseUrl` | string | Required for `ollama` and `custom`. Optional for other API-key providers. |
+| Field      | Type   | Description                                                                                      |
+| ---------- | ------ | ------------------------------------------------------------------------------------------------ |
+| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"custom"`, or `"openai-codex"`           |
+| `model`    | string | Model ID (defaults to provider's default if omitted)                                             |
+| `apiKey`   | string | API key. Optional if re-saving the same provider (uses stored key). Not used for `openai-codex`. |
+| `baseUrl`  | string | Required for `ollama` and `custom`. Optional for other API-key providers.                        |
 
 **Supported models:**
 
-| Provider       | Models                                                      | Default              |
-| -------------- | ----------------------------------------------------------- | -------------------- |
-| openai         | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`                     | `gpt-4o-mini`        |
-| anthropic      | `claude-sonnet-4-20250514`, `claude-haiku-3-5`             | `claude-sonnet-4-20250514` |
-| openrouter     | Any model ID (custom text input)                             | `openai/gpt-4o-mini` |
-| ollama         | Any model ID (custom text input)                             | `llama3`             |
-| custom         | Any model ID (custom text input)                             | _(empty)_            |
-| openai-codex   | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5` |
+| Provider     | Models                                                                       | Default                    |
+| ------------ | ---------------------------------------------------------------------------- | -------------------------- |
+| openai       | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`                                       | `gpt-4o-mini`              |
+| anthropic    | `claude-sonnet-4-20250514`, `claude-haiku-3-5`                               | `claude-sonnet-4-20250514` |
+| openrouter   | Any model ID (custom text input)                                             | `openai/gpt-4o-mini`       |
+| ollama       | Any model ID (custom text input)                                             | `llama3`                   |
+| custom       | Any model ID (custom text input)                                             | _(empty)_                  |
+| openai-codex | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5`                  |
 
 **Response (200):**
+
 ```json
 {
   "provider": {
@@ -674,11 +716,11 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 **Error responses:**
 
-| Status | Condition                                    |
-| ------ | -------------------------------------------- |
+| Status | Condition                                                                           |
+| ------ | ----------------------------------------------------------------------------------- |
 | 400    | Invalid JSON body / invalid provider / invalid model / API key or base URL required |
-| 401    | Unauthorized                                 |
-| 500    | Failed to save provider settings             |
+| 401    | Unauthorized                                                                        |
+| 500    | Failed to save provider settings                                                    |
 
 For `openai-codex`, HermesHub stores an empty encrypted API key and never persists OAuth tokens. Credential status comes from remote Hermes auth checks.
 
@@ -693,6 +735,7 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 **Request body:** Same shape as POST `/api/providers`.
 
 **Response (200 — connected):**
+
 ```json
 {
   "status": "connected"
@@ -701,11 +744,11 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 
 **Error responses:**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
+| Status | Condition                                                                                 |
+| ------ | ----------------------------------------------------------------------------------------- |
 | 400    | Invalid JSON body / invalid provider / invalid model / API key required / invalid API key |
-| 401    | Unauthorized                            |
-| 502    | Connection failed (provider unreachable) |
+| 401    | Unauthorized                                                                              |
+| 502    | Connection failed (provider unreachable)                                                  |
 
 ---
 
@@ -720,6 +763,7 @@ For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVID
 **Request body:** None (uses the latest saved provider config)
 
 **Response (200):**
+
 ```json
 {
   "status": "deployed",
@@ -731,15 +775,15 @@ For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVID
 
 **Error responses:**
 
-| Status | Condition                                                    |
-| ------ | ------------------------------------------------------------ |
-| 400    | No provider config saved yet                                 |
-| 400    | No Hermes deployment found (deploy a Telegram bot first)     |
-| 400    | Codex not authenticated on deployed Hermes server            |
-| 400    | Credential unavailable / expired                             |
-| 401    | Unauthorized                                                 |
-| 404    | Deployed server not found                                    |
-| 502    | SSH connect or deploy command failed                         |
+| Status | Condition                                                |
+| ------ | -------------------------------------------------------- |
+| 400    | No provider config saved yet                             |
+| 400    | No Hermes deployment found (deploy a Telegram bot first) |
+| 400    | Codex not authenticated on deployed Hermes server        |
+| 400    | Credential unavailable / expired                         |
+| 401    | Unauthorized                                             |
+| 404    | Deployed server not found                                |
+| 502    | SSH connect or deploy command failed                     |
 
 ---
 
@@ -752,6 +796,7 @@ Starts ChatGPT device-code login for the active Telegram-backed Hermes deploymen
 **Request body:** None
 
 **Response (200):**
+
 ```json
 {
   "codexAuth": {
@@ -766,11 +811,11 @@ Starts ChatGPT device-code login for the active Telegram-backed Hermes deploymen
 
 **Error responses:**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
-| 400    | No Hermes deployment found              |
-| 401    | Unauthorized                            |
-| 502    | OpenAI device-code request failed       |
+| Status | Condition                         |
+| ------ | --------------------------------- |
+| 400    | No Hermes deployment found        |
+| 401    | Unauthorized                      |
+| 502    | OpenAI device-code request failed |
 
 ---
 
@@ -783,6 +828,7 @@ Polls OpenAI for device-code approval, exchanges the authorization code, and wri
 **Request body:** None
 
 **Response (200 — pending):**
+
 ```json
 {
   "status": "pending"
@@ -790,6 +836,7 @@ Polls OpenAI for device-code approval, exchanges the authorization code, and wri
 ```
 
 **Response (200 — authenticated):**
+
 ```json
 {
   "status": "authenticated",
@@ -801,11 +848,11 @@ Polls OpenAI for device-code approval, exchanges the authorization code, and wri
 
 **Error responses:**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
+| Status | Condition                                                 |
+| ------ | --------------------------------------------------------- |
 | 400    | No active device-code session / timeout / exchange failed |
-| 401    | Unauthorized                            |
-| 502    | SSH write or remote auth update failed  |
+| 401    | Unauthorized                                              |
+| 502    | SSH write or remote auth update failed                    |
 
 ---
 
@@ -816,6 +863,7 @@ Checks remote Hermes Codex auth status without exposing OAuth tokens.
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "codexAuth": {
@@ -829,11 +877,11 @@ Checks remote Hermes Codex auth status without exposing OAuth tokens.
 
 **Error responses:**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
-| 400    | No Hermes deployment found              |
-| 401    | Unauthorized                            |
-| 502    | SSH connect or remote auth read failed  |
+| Status | Condition                              |
+| ------ | -------------------------------------- |
+| 400    | No Hermes deployment found             |
+| 401    | Unauthorized                           |
+| 502    | SSH connect or remote auth read failed |
 
 ---
 
@@ -846,6 +894,7 @@ Verifies a Telegram bot token via the Telegram Bot API (`getMe`), then saves the
 **Auth required:** Yes
 
 **Request body:**
+
 ```json
 {
   "botToken": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
@@ -853,6 +902,7 @@ Verifies a Telegram bot token via the Telegram Bot API (`getMe`), then saves the
 ```
 
 **Response (200):**
+
 ```json
 {
   "telegram": {
@@ -865,11 +915,11 @@ Verifies a Telegram bot token via the Telegram Bot API (`getMe`), then saves the
 
 **Error responses:**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
+| Status | Condition                                                  |
+| ------ | ---------------------------------------------------------- |
 | 400    | Invalid JSON body / bot token required / invalid bot token |
-| 401    | Unauthorized                            |
-| 502    | Connection failed (Telegram API unreachable) |
+| 401    | Unauthorized                                               |
+| 502    | Connection failed (Telegram API unreachable)               |
 
 ---
 
@@ -880,6 +930,7 @@ Deactivates the currently active Telegram configuration.
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "status": "disconnected"
@@ -888,11 +939,11 @@ Deactivates the currently active Telegram configuration.
 
 **Error responses:**
 
-| Status | Condition                            |
-| ------ | ------------------------------------ |
-| 400    | Telegram bot is not connected        |
-| 401    | Unauthorized                         |
-| 500    | Unable to disconnect Telegram        |
+| Status | Condition                     |
+| ------ | ----------------------------- |
+| 400    | Telegram bot is not connected |
+| 401    | Unauthorized                  |
+| 500    | Unable to disconnect Telegram |
 
 ---
 
@@ -903,6 +954,7 @@ Lists pending and approved Telegram pairing records from the deployed Hermes con
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "pairings": {
@@ -927,12 +979,12 @@ Lists pending and approved Telegram pairing records from the deployed Hermes con
 
 **Error responses:**
 
-| Status | Condition                                      |
-| ------ | ---------------------------------------------- |
+| Status | Condition                                         |
+| ------ | ------------------------------------------------- |
 | 400    | Telegram is not deployed / credential unavailable |
-| 401    | Unauthorized                                   |
-| 404    | Deployed server not found                      |
-| 502    | SSH command or Hermes pairing command failed   |
+| 401    | Unauthorized                                      |
+| 404    | Deployed server not found                         |
+| 502    | SSH command or Hermes pairing command failed      |
 
 ---
 
@@ -943,6 +995,7 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 **Auth required:** Yes
 
 **Request body:**
+
 ```json
 {
   "code": "ABCD2345"
@@ -950,6 +1003,7 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 ```
 
 **Response (200):**
+
 ```json
 {
   "approved": {
@@ -961,12 +1015,12 @@ Approves a Telegram pairing code by running Hermes' pairing store approval insid
 
 **Error responses:**
 
-| Status | Condition                                      |
-| ------ | ---------------------------------------------- |
+| Status | Condition                                                                                       |
+| ------ | ----------------------------------------------------------------------------------------------- |
 | 400    | Invalid code / code expired / approval lockout / Telegram not deployed / credential unavailable |
-| 401    | Unauthorized                                   |
-| 404    | Deployed server not found                      |
-| 502    | SSH command or Hermes pairing command failed   |
+| 401    | Unauthorized                                                                                    |
+| 404    | Deployed server not found                                                                       |
+| 502    | SSH command or Hermes pairing command failed                                                    |
 
 ---
 
@@ -981,6 +1035,7 @@ Saves the authenticated user's Hermes agent persona. Content is trimmed, validat
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body:**
+
 ```json
 {
   "agentPersona": "You are Hermes, a thoughtful assistant..."
@@ -989,11 +1044,12 @@ Saves the authenticated user's Hermes agent persona. Content is trimmed, validat
 
 **Fields:**
 
-| Field          | Type   | Description                                              |
-| -------------- | ------ | -------------------------------------------------------- |
+| Field          | Type   | Description                                             |
+| -------------- | ------ | ------------------------------------------------------- |
 | `agentPersona` | string | Markdown persona content, 1–20,000 characters (trimmed) |
 
 **Response (200):**
+
 ```json
 {
   "settings": {
@@ -1005,11 +1061,11 @@ Saves the authenticated user's Hermes agent persona. Content is trimmed, validat
 
 **Error responses:**
 
-| Status | Condition                                              |
-| ------ | ------------------------------------------------------ |
+| Status | Condition                                                                        |
+| ------ | -------------------------------------------------------------------------------- |
 | 400    | Invalid JSON body / persona content required / empty / exceeds 20,000 characters |
-| 401    | Unauthorized                                           |
-| 500    | Failed to save persona settings                          |
+| 401    | Unauthorized                                                                     |
+| 500    | Failed to save persona settings                                                  |
 
 ---
 
@@ -1020,17 +1076,19 @@ Writes the saved persona to `SOUL.md` on a selected Hermes VPS over SSH, then re
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body (optional):**
+
 ```json
 {
   "serverId": "uuid"
 }
 ```
 
-| Field      | Type   | Description                                                                 |
-| ---------- | ------ | --------------------------------------------------------------------------- |
+| Field      | Type   | Description                                                                                                                           |
+| ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `serverId` | string | Optional. Owned server with a successful Hermes install. Defaults to the server with the most recent successful install when omitted. |
 
 **Response (200):**
+
 ```json
 {
   "status": "deployed",
@@ -1042,15 +1100,15 @@ Writes the saved persona to `SOUL.md` on a selected Hermes VPS over SSH, then re
 
 **Error responses:**
 
-| Status | Condition                                                    |
-| ------ | ------------------------------------------------------------ |
-| 400    | No persona saved yet                                         |
+| Status | Condition                                                         |
+| ------ | ----------------------------------------------------------------- |
+| 400    | No persona saved yet                                              |
 | 400    | No deployed Hermes agent found (install Hermes on a server first) |
-| 400    | Selected server does not have a successful Hermes install    |
-| 400    | Credential unavailable / expired                             |
-| 401    | Unauthorized                                                 |
-| 404    | Server not found                                             |
-| 502    | SSH connect, SOUL.md write, or gateway restart failed        |
+| 400    | Selected server does not have a successful Hermes install         |
+| 400    | Credential unavailable / expired                                  |
+| 401    | Unauthorized                                                      |
+| 404    | Server not found                                                  |
+| 502    | SSH connect, SOUL.md write, or gateway restart failed             |
 
 ---
 
@@ -1067,6 +1125,7 @@ Creates a new MCP server for the authenticated user.
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body (stdio example):**
+
 ```json
 {
   "name": "github",
@@ -1074,9 +1133,7 @@ Creates a new MCP server for the authenticated user.
   "enabled": true,
   "command": "npx",
   "args": ["-y", "@modelcontextprotocol/server-github"],
-  "env": [
-    { "key": "GITHUB_PERSONAL_ACCESS_TOKEN", "value": "ghp_..." }
-  ],
+  "env": [{ "key": "GITHUB_PERSONAL_ACCESS_TOKEN", "value": "ghp_..." }],
   "toolsInclude": ["create_issue"],
   "toolsResources": false,
   "timeout": 120,
@@ -1086,19 +1143,19 @@ Creates a new MCP server for the authenticated user.
 ```
 
 **Request body (HTTP example):**
+
 ```json
 {
   "name": "stripe",
   "transport": "http",
   "url": "https://mcp.stripe.com",
-  "headers": [
-    { "key": "Authorization", "value": "Bearer ..." }
-  ],
+  "headers": [{ "key": "Authorization", "value": "Bearer ..." }],
   "toolsExclude": ["delete_customer"]
 }
 ```
 
 **Response (200):**
+
 ```json
 {
   "server": {
@@ -1132,11 +1189,11 @@ Creates a new MCP server for the authenticated user.
 
 **Error responses:**
 
-| Status | Condition                                                         |
-| ------ | ----------------------------------------------------------------- |
-| 400    | Invalid JSON body / validation error / duplicate server name        |
-| 401    | Unauthorized                                                      |
-| 500    | Failed to create MCP server                                       |
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Invalid JSON body / validation error / duplicate server name |
+| 401    | Unauthorized                                                 |
+| 500    | Failed to create MCP server                                  |
 
 ---
 
@@ -1152,12 +1209,12 @@ Updates an owned MCP server. Blank secret values preserve existing encrypted env
 
 **Error responses:**
 
-| Status | Condition                                                         |
-| ------ | ----------------------------------------------------------------- |
-| 400    | Invalid JSON body / validation error / duplicate server name      |
-| 401    | Unauthorized                                                      |
-| 404    | MCP server not found                                              |
-| 500    | Failed to update MCP server                                       |
+| Status | Condition                                                    |
+| ------ | ------------------------------------------------------------ |
+| 400    | Invalid JSON body / validation error / duplicate server name |
+| 401    | Unauthorized                                                 |
+| 404    | MCP server not found                                         |
+| 500    | Failed to update MCP server                                  |
 
 ---
 
@@ -1168,6 +1225,7 @@ Deletes an owned MCP server from HermesHub. Remote Hermes config is unchanged un
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Response (200):**
+
 ```json
 {
   "status": "deleted",
@@ -1177,10 +1235,10 @@ Deletes an owned MCP server from HermesHub. Remote Hermes config is unchanged un
 
 **Error responses:**
 
-| Status | Condition              |
-| ------ | ---------------------- |
-| 401    | Unauthorized           |
-| 404    | MCP server not found   |
+| Status | Condition                   |
+| ------ | --------------------------- |
+| 401    | Unauthorized                |
+| 404    | MCP server not found        |
 | 500    | Failed to delete MCP server |
 
 ---
@@ -1192,17 +1250,19 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Request body (optional):**
+
 ```json
 {
   "serverId": "uuid"
 }
 ```
 
-| Field      | Type   | Description                                                                 |
-| ---------- | ------ | --------------------------------------------------------------------------- |
+| Field      | Type   | Description                                                                                                                           |
+| ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `serverId` | string | Optional. Owned server with a successful Hermes install. Defaults to the server with the most recent successful install when omitted. |
 
 **Response (200):**
+
 ```json
 {
   "status": "deployed",
@@ -1215,14 +1275,231 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 
 **Error responses:**
 
-| Status | Condition                                                    |
-| ------ | ------------------------------------------------------------ |
-| 400    | No deployed Hermes agent found (install Hermes on a server first) |
-| 400    | Selected server does not have a successful Hermes install    |
-| 400    | Credential unavailable / expired                             |
-| 401    | Unauthorized                                                 |
-| 404    | Server not found                                             |
+| Status | Condition                                                                                 |
+| ------ | ----------------------------------------------------------------------------------------- |
+| 400    | No deployed Hermes agent found (install Hermes on a server first)                         |
+| 400    | Selected server does not have a successful Hermes install                                 |
+| 400    | Credential unavailable / expired                                                          |
+| 401    | Unauthorized                                                                              |
+| 404    | Server not found                                                                          |
 | 502    | SSH connect, invalid existing `config.yaml`, config read/write, or gateway restart failed |
+
+---
+
+## Agent Skills
+
+HermesHub stores custom and community agent skills in `agent_skills` and can push them to a selected Hermes VPS. Skills can be imported from the Hermes Skills Hub (via a Hub install ref such as `browse-sh/weather.gov/get-forecast-1uezib`), from a custom URL (either a GitHub folder URL such as `https://github.com/owner/repo/tree/main/skills/my-skill`, which installs the whole skill folder including scripts, or a direct URL to a single `SKILL.md` file), or authored directly in the UI as markdown. GitHub folder/file URLs are rewritten to the `owner/repo/path` slug the Hermes CLI resolves against the repository's default branch. Deploying skills synchronizes the list to the remote Hermes target, writes custom skill files, and runs `hermes skills install/uninstall` commands inside the Hermes container before restarting the gateway.
+
+Hub skills are installed exactly as published — the installed name is derived from the ref itself (the last path segment), not from the saved display name. URL and custom skills use the saved name as the installed name.
+
+The Settings page (`/settings`) exposes an **Agent Skills** tab. Save persists locally; deploy writes over SSH and restarts the gateway.
+
+### POST `/api/settings/agent-skills`
+
+Creates a new agent skill. Content is validated (including size constraints <= 50,000 characters and valid URL/repository formats) and persisted in the database. Does not write to the VPS until deploy is called.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+
+```json
+{
+  "name": "my-skill",
+  "sourceType": "hub",
+  "installRef": "owner/repo",
+  "enabled": true
+}
+```
+
+| Field        | Type    | Description                                                                                                                                                                       |
+| ------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | string  | Required. Unique name for the skill. Must start with a letter and contain only letters, numbers, underscores, or hyphens.                                                         |
+| `sourceType` | string  | Required. Must be one of `"hub"`, `"url"`, or `"custom"`.                                                                                                                         |
+| `installRef` | string  | Required if `sourceType` is `"hub"` or `"url"`. Repository/package reference pattern `/^[a-zA-Z0-9_/-]+(?:@[a-zA-Z0-9_.-]+)?$/` for `"hub"`, or valid http/https URL for `"url"`. |
+| `content`    | string  | Required if `sourceType` is `"custom"`. Markdown content, up to 50,000 characters.                                                                                                |
+| `enabled`    | boolean | Optional. Defaults to `true`.                                                                                                                                                     |
+
+**Response (200):**
+
+```json
+{
+  "skill": {
+    "id": "uuid",
+    "name": "my-skill",
+    "sourceType": "hub",
+    "installRef": "owner/repo",
+    "content": null,
+    "enabled": true,
+    "createdAt": "2026-06-07T12:00:00.000Z",
+    "updatedAt": "2026-06-07T12:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                           |
+| ------ | ------------------------------------------------------------------- |
+| 400    | Invalid JSON payload, missing required fields, or validation failed |
+| 400    | An agent skill with this name already exists                        |
+| 401    | Unauthorized                                                        |
+| 500    | Database save failed                                                |
+
+---
+
+### PUT `/api/settings/agent-skills/:id`
+
+Updates an existing agent skill by ID. Only modifies fields sent in the request body.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+
+```json
+{
+  "enabled": false
+}
+```
+
+| Field        | Type    | Description                                                                    |
+| ------------ | ------- | ------------------------------------------------------------------------------ |
+| `name`       | string  | Optional. New name for the skill. Must follow the unique naming constraints.   |
+| `installRef` | string  | Optional. Must match format constraints of the skill's original `sourceType`.  |
+| `content`    | string  | Optional. Must match content constraints of the skill's original `sourceType`. |
+| `enabled`    | boolean | Optional. Updates activation status.                                           |
+
+**Response (200):**
+
+```json
+{
+  "skill": {
+    "id": "uuid",
+    "name": "my-skill",
+    "sourceType": "hub",
+    "installRef": "owner/repo",
+    "content": null,
+    "enabled": false,
+    "createdAt": "2026-06-07T12:00:00.000Z",
+    "updatedAt": "2026-06-07T13:00:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                        |
+| ------ | ---------------------------------------------------------------- |
+| 400    | Validation failed, or attempting to set invalid/empty references |
+| 400    | Rename conflict with an existing skill name                      |
+| 401    | Unauthorized                                                     |
+| 404    | Agent skill not found                                            |
+| 500    | Database update failed                                           |
+
+---
+
+### DELETE `/api/settings/agent-skills/:id`
+
+Deletes an agent skill by ID. Does not remove it from connected servers until the next deploy runs.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None
+
+**Response (200):**
+
+```json
+{
+  "success": true
+}
+```
+
+**Error responses:**
+
+| Status | Condition                |
+| ------ | ------------------------ |
+| 401    | Unauthorized             |
+| 404    | Agent skill not found    |
+| 500    | Database deletion failed |
+
+---
+
+### POST `/api/settings/agent-skills/deploy`
+
+Deploys the user's enabled agent skills list to a selected Hermes VPS, uninstalls disabled/removed skills, writes custom skill files, records the changes in a remote manifest file `/root/.hermes/hermeshub-agent-skills.json`, and restarts the Hermes gateway.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (optional):**
+
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                                                    |
+| ---------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Deploys to this server. Defaults to the server with the most recent successful install when omitted. |
+
+**Response (200):**
+
+```json
+{
+  "status": "deployed",
+  "serverId": "uuid",
+  "serverHost": "192.168.1.100",
+  "skillCount": 3,
+  "deployedAt": "2026-06-07T13:00:00.000Z"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                                  |
+| ------ | -------------------------------------------------------------------------- |
+| 400    | Selected server does not have a successful Hermes install                  |
+| 401    | Unauthorized                                                               |
+| 404    | Server not found                                                           |
+| 502    | SSH connection error, command execution failure, or gateway restart failed |
+
+---
+
+### POST `/api/settings/agent-skills/remote-list`
+
+Fetches the list of agent skills currently installed/configured on the remote Hermes container of a selected VPS. This is a read-only endpoint that SSHes into the server and runs `sudo docker exec hermes hermes skills list`.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (optional):**
+
+```json
+{
+  "serverId": "uuid"
+}
+```
+
+| Field      | Type   | Description                                                                                                                                  |
+| ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `serverId` | string | Optional. Server ID from which to fetch the remote skills list. Defaults to the server with the most recent successful install when omitted. |
+
+**Response (200):**
+
+```json
+{
+  "raw": "Installed Skills\n┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓\n┃ Name                 ┃ Category             ┃ Source   ┃ Trust    ┃ Status   ┃\n┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩\n│ dogfood              │                      │ builtin  │ builtin  │ enabled  │\n│ claude-code          │ autonomous-ai-agents │ builtin  │ builtin  │ enabled  │\n└──────────────────────┴──────────────────────┴──────────┴──────────┴──────────┘",
+  "skills": ["dogfood", "claude-code"],
+  "count": 2
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                 |
+| ------ | --------------------------------------------------------- |
+| 400    | Selected server does not have a successful Hermes install |
+| 401    | Unauthorized                                              |
+| 404    | Server not found                                          |
+| 502    | SSH connection error or remote command execution failure  |
 
 ---
 
@@ -1263,12 +1540,12 @@ On first deploy, generates and encrypts a Web UI password; redeploys reuse the s
 
 **Error responses:**
 
-| Status | Condition                                              |
-| ------ | ------------------------------------------------------ |
-| 400    | Hermes is not installed or the latest install failed   |
-| 401    | Unauthorized                                           |
-| 404    | Server not found                                       |
-| 500    | Password resolution failed before deploy               |
+| Status | Condition                                                 |
+| ------ | --------------------------------------------------------- |
+| 400    | Hermes is not installed or the latest install failed      |
+| 401    | Unauthorized                                              |
+| 404    | Server not found                                          |
+| 500    | Password resolution failed before deploy                  |
 | 502    | SSH connect, compose deploy, or reachability check failed |
 
 ---
@@ -1280,6 +1557,7 @@ Returns the current Hermes Web UI snapshot for a server. Use this lightweight en
 **Auth required:** Yes
 
 **Response (200):**
+
 ```json
 {
   "webUi": {
@@ -1298,9 +1576,9 @@ Returns `"webUi": null` when no Web UI record exists yet.
 
 **Error responses:**
 
-| Status | Condition      |
-| ------ | -------------- |
-| 401    | Unauthorized   |
+| Status | Condition        |
+| ------ | ---------------- |
+| 401    | Unauthorized     |
 | 404    | Server not found |
 
 ---
@@ -1312,6 +1590,7 @@ Returns the decrypted Hermes Web UI password for the authenticated server owner.
 **Auth required:** Yes (HTTPS enforced in production)
 
 **Response (200):**
+
 ```json
 {
   "password": "generated-web-ui-password"
@@ -1320,12 +1599,12 @@ Returns the decrypted Hermes Web UI password for the authenticated server owner.
 
 **Error responses:**
 
-| Status | Condition                                |
-| ------ | ---------------------------------------- |
+| Status | Condition                                   |
+| ------ | ------------------------------------------- |
 | 400    | Hermes Web UI is not enabled on this server |
-| 401    | Unauthorized                             |
-| 404    | Server not found                         |
-| 500    | Failed to decrypt stored password        |
+| 401    | Unauthorized                                |
+| 404    | Server not found                            |
+| 500    | Failed to decrypt stored password           |
 
 ---
 
@@ -1354,18 +1633,19 @@ A request to `/api/servers/:id/web-ui/proxy` (no trailing slash) returns `308` t
 
 The following tables are used by the API:
 
-| Table              | Description                                  |
-| ------------------ | -------------------------------------------- |
-| `servers`          | Connected VPS records with encrypted credentials |
-| `installs`         | Install workflow state and version tracking  |
-| `install_events`   | Persisted install progress events (log source) |
-| `server_web_ui`    | Hermes Web UI deploy state and encrypted password |
-| `ai_providers`     | AI provider configuration with encrypted API keys |
-| `telegram_configs` | Telegram bot connections                     |
-| `audit_logs`       | Action audit trail (connect, install, actions, health checks, provider, telegram, persona, MCP) |
-| `hermes_settings`  | Per-user Hermes agent persona (`SOUL.md` source) |
-| `mcp_servers`      | Per-user MCP server definitions with encrypted secrets |
-| `user`, `session`, `account`, `verification` | Better Auth user management tables |
+| Table                                        | Description                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `servers`                                    | Connected VPS records with encrypted credentials                                                              |
+| `installs`                                   | Install workflow state and version tracking                                                                   |
+| `install_events`                             | Persisted install progress events (log source)                                                                |
+| `server_web_ui`                              | Hermes Web UI deploy state and encrypted password                                                             |
+| `ai_providers`                               | AI provider configuration with encrypted API keys                                                             |
+| `telegram_configs`                           | Telegram bot connections                                                                                      |
+| `audit_logs`                                 | Action audit trail (connect, install, actions, health checks, provider, telegram, persona, MCP, agent_skills) |
+| `hermes_settings`                            | Per-user Hermes agent persona (`SOUL.md` source)                                                              |
+| `mcp_servers`                                | Per-user MCP server definitions with encrypted secrets                                                        |
+| `agent_skills`                               | Per-user Agent Skill configurations                                                                           |
+| `user`, `session`, `account`, `verification` | Better Auth user management tables                                                                            |
 
 ---
 
@@ -1381,6 +1661,7 @@ All endpoints return JSON with `Content-Type: application/json` (except SSE stre
 ## Error Response Format
 
 All errors return a consistent JSON shape:
+
 ```json
 {
   "error": "Human-readable error message"

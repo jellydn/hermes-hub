@@ -3,7 +3,7 @@ import type {
 	HealthCheckItem,
 	HealthCheckStatus,
 	ServerHealthCheckResult,
-} from "../../shared/contracts/server-health-check";
+} from "#shared/contracts/server-health-check";
 import { hermesGatewayPort } from "../constants";
 import {
 	getResourceHealthStatus,

@@ -1,15 +1,18 @@
 import { CloudUpload, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
+import { Button } from "#/components/ui/button";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 
-type DeployResponsePayload = {
+export type DeployResponsePayload = {
 	error?: string;
 	serverId?: string;
 	serverHost?: string;
 	deployedAt?: string;
 	serverCount?: number;
+	skillCount?: number;
+	blockedSkills?: string[];
+	bypassUnavailableSkills?: string[];
 };
 
 type HermesDeployPanelProps = {
@@ -21,6 +24,9 @@ type HermesDeployPanelProps = {
 	canDeploy?: boolean;
 	noDeploymentMessage: string;
 	formatSuccess: (payload: DeployResponsePayload, serverHost: string) => string;
+	selectedServerId?: string;
+	onServerIdChange?: (serverId: string) => void;
+	onDeploySuccess?: (payload: DeployResponsePayload) => void;
 };
 
 export function HermesDeployPanel({
@@ -32,13 +38,21 @@ export function HermesDeployPanel({
 	canDeploy = true,
 	noDeploymentMessage,
 	formatSuccess,
+	selectedServerId: controlledSelectedServerId,
+	onServerIdChange,
+	onDeploySuccess,
 }: HermesDeployPanelProps) {
-	const [selectedServerId, setSelectedServerId] = useState(
+	const [internalSelectedServerId, setInternalSelectedServerId] = useState(
 		() => deploymentTargets[0]?.serverId ?? "",
 	);
 	const [isDeploying, setIsDeploying] = useState(false);
 	const [deployError, setDeployError] = useState<string | null>(null);
 	const [deployResult, setDeployResult] = useState<string | null>(null);
+
+	const selectedServerId =
+		controlledSelectedServerId !== undefined
+			? controlledSelectedServerId
+			: internalSelectedServerId;
 
 	const selectedTarget =
 		deploymentTargets.find((target) => target.serverId === selectedServerId) ??
@@ -71,7 +85,9 @@ export function HermesDeployPanel({
 			}
 
 			const serverHost = payload?.serverHost ?? selectedTarget.host;
-			setDeployResult(formatSuccess(payload ?? {}, serverHost));
+			const resolvedPayload = payload ?? {};
+			setDeployResult(formatSuccess(resolvedPayload, serverHost));
+			onDeploySuccess?.(resolvedPayload);
 		} catch {
 			setDeployError(
 				"Network error. Please check your connection and try again.",
@@ -101,7 +117,14 @@ export function HermesDeployPanel({
 							id="hermes-deploy-target"
 							aria-label="Deploy target"
 							value={selectedTarget?.serverId ?? ""}
-							onChange={(event) => setSelectedServerId(event.target.value)}
+							onChange={(event) => {
+								const value = event.target.value;
+								if (onServerIdChange) {
+									onServerIdChange(value);
+								} else {
+									setInternalSelectedServerId(value);
+								}
+							}}
 							className="w-full rounded-[1.25rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--sea-ink)] outline-none transition focus:border-[var(--sea-ink-soft)]"
 						>
 							{deploymentTargets.map((target) => (

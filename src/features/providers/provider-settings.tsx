@@ -6,14 +6,14 @@ import {
 	type ApiProviderId,
 	getAiProviderOption,
 	getDefaultAiModel,
-} from "@/lib/ai-providers";
-import type { TelegramDeployInfo } from "@/lib/load-telegram-deploy";
-import { getDefaultSubscriptionModel } from "@/lib/user-subscriptions";
+} from "#/lib/ai-providers";
+import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
+import { getDefaultSubscriptionModel } from "#/lib/user-subscriptions";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
 	UserSubscriptionConfigSummary,
-} from "../../../shared/contracts/model-access";
+} from "#shared/contracts/model-access";
 
 export type { ApiProviderConfigSummary, UserSubscriptionConfigSummary };
 

@@ -5,16 +5,16 @@ import {
 	RotateCcw,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { StatusIcon } from "@/components/ui/status-icon";
+import { Button } from "#/components/ui/button";
+import { StatusIcon } from "#/components/ui/status-icon";
 import {
 	formatInstallTimestamp,
 	type InstallEvent,
 	type InstallStatus,
 	quantizeInstallProgress,
-} from "@/features/servers/install-snapshot";
-import { useInstallEventStream } from "@/features/servers/use-install-event-stream";
-import { cn } from "@/lib/utils";
+} from "#/features/servers/install-snapshot";
+import { useInstallEventStream } from "#/features/servers/use-install-event-stream";
+import { cn } from "#/lib/utils";
 
 type ServerInstallProgressProps = {
 	serverId: string;

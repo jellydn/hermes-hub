@@ -1,9 +1,8 @@
 import { Duplex } from "node:stream";
 
 import { describe, expect, it } from "vitest";
-
-import { proxyHttpOverStream, WebUiProxyError } from "./proxy-http";
-import type { TcpForwardStream } from "./tcp-stream";
+import type { TcpForwardStream } from "./proxy";
+import { proxyHttpOverStream, WebUiProxyError } from "./proxy";
 
 function createMockForwardStream(response: string) {
 	let responded = false;

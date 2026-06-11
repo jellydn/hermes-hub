@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { LandingPage } from "@/features/landing/landing-page";
-import { getCurrentSession } from "@/lib/session";
+import { LandingPage } from "#/features/landing/landing-page";
+import { getCurrentSession } from "#/lib/session";
 
 export const Route = createFileRoute("/")({
 	beforeLoad: async () => {

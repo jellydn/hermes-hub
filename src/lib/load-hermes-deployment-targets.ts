@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 
-import { getAuthSession } from "../../server/auth";
-import { listHermesDeploymentTargets } from "../../server/hermes/deploy-targets";
+import { getAuthSession } from "#server/auth";
+import { listHermesDeploymentTargets } from "#server/hermes/deploy-targets";
 
 export type HermesDeploymentTarget = {
 	serverId: string;

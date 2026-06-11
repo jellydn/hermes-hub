@@ -1,19 +1,15 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Context } from "hono";
 
-import type {
-	ActionLogEntry,
-	InstallLogEntry,
-	LogsSnapshot,
-} from "../src/lib/logs";
-import { USER_INITIATED_ACTION_NAMES } from "./audit-log-actions";
+import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "#/lib/logs";
+import { LOG_ACTION_NAMES } from "./audit-log-actions";
 import { getAuthSession } from "./auth";
 import { getDb } from "./db";
 import { auditLogs, installEvents, installs, servers } from "./db/schema";
 import { buildLogLinesFromEvents } from "./install/log-lines";
 import { formatActionLabel } from "./lib/action-labels";
 
-const finishedActionNames = USER_INITIATED_ACTION_NAMES;
+const finishedActionNames = LOG_ACTION_NAMES;
 
 type InstallLogRecord = {
 	id: string;
@@ -233,6 +229,7 @@ function toActionLogEntry(
 ): ActionLogEntry {
 	const details = isRecord(record.details) ? record.details : {};
 	const action = readActionType(record.action);
+	const failed = record.action.endsWith(".failed");
 	const serverLabel = record.serverId
 		? (serverLabels.get(record.serverId) ?? "Unknown server")
 		: "Unknown server";
@@ -241,16 +238,81 @@ function toActionLogEntry(
 		id: record.id,
 		serverLabel,
 		action,
-		result: record.action.endsWith(".failed") ? "failed" : "succeeded",
+		result: failed ? "failed" : "succeeded",
 		createdAt: record.createdAt.toISOString(),
-		message:
-			typeof details.message === "string"
-				? details.message
-				: `${formatActionLabel(action)} ${record.action.endsWith(".failed") ? "failed" : "succeeded"}.`,
+		message: buildActionMessage(action, failed, serverLabel, details),
 	};
 }
 
+function buildActionMessage(
+	action: ActionLogEntry["action"],
+	failed: boolean,
+	serverLabel: string,
+	details: Record<string, unknown>,
+): string {
+	if (failed) {
+		const storedError =
+			(typeof details.error === "string" && details.error) ||
+			(typeof details.message === "string" && details.message);
+		if (storedError) {
+			return storedError;
+		}
+	} else if (typeof details.message === "string") {
+		return details.message;
+	}
+
+	if (action === "mcp" || action === "agent_skills" || action === "persona") {
+		return buildSettingsDeployMessage(action, failed, serverLabel, details);
+	}
+
+	return `${formatActionLabel(action)} ${failed ? "failed" : "succeeded"}.`;
+}
+
+function buildSettingsDeployMessage(
+	action: "mcp" | "agent_skills" | "persona",
+	failed: boolean,
+	serverLabel: string,
+	details: Record<string, unknown>,
+): string {
+	const verb = failed ? "Deploy failed" : "Deployed";
+	const target = ` to ${serverLabel}`;
+
+	if (action === "mcp") {
+		const count = readCount(details.serverCount);
+		const suffix =
+			count !== null ? ` (${count} MCP server${count === 1 ? "" : "s"})` : "";
+		return `MCP servers: ${verb}${target}${suffix}.`;
+	}
+
+	if (action === "agent_skills") {
+		const count = readCount(details.skillCount);
+		const suffix =
+			count !== null
+				? ` (${count} enabled skill${count === 1 ? "" : "s"})`
+				: "";
+		return `Agent skills: ${verb}${target}${suffix}.`;
+	}
+
+	return `Persona: ${verb}${target}.`;
+}
+
+function readCount(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function readActionType(action: string): ActionLogEntry["action"] {
+	if (action.startsWith("mcp.")) {
+		return "mcp";
+	}
+
+	if (action.startsWith("agent_skills.")) {
+		return "agent_skills";
+	}
+
+	if (action.startsWith("persona.")) {
+		return "persona";
+	}
+
 	if (action.includes(".update.")) {
 		return "update";
 	}

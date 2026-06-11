@@ -3,7 +3,7 @@ import { useState } from "react";
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 import {
 	createServerBasicsDraft,

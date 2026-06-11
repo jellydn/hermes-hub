@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
-import { getDb } from "../../db";
-import { mcpServers } from "../../db/schema";
+import { getDb } from "#server/db";
+import { mcpServers } from "#server/db/schema";
 import type { McpServerSummary } from "./config";
 import { toMcpServerSummary } from "./config";
 import {

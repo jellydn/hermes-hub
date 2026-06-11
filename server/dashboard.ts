@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { DashboardStatusSnapshot } from "../src/lib/dashboard-status";
+import type { DashboardStatusSnapshot } from "#/lib/dashboard-status";
 import { getAuthSession } from "./auth";
 import { clearMetricsCache, getVpsSummary } from "./dashboard/metrics";
 import {

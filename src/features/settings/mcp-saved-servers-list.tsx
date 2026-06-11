@@ -1,8 +1,7 @@
 import { Trash2 } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
+import { Button } from "#/components/ui/button";
+import { cn } from "#/lib/utils";
+import type { McpServerSummary } from "#server/settings/mcp/config";
 
 type McpSavedServersListProps = {
 	servers: McpServerSummary[];

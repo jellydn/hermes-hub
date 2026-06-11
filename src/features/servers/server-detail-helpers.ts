@@ -4,7 +4,7 @@ import {
 	type ServerActionResult,
 	type ServerActionType,
 	type ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 export type ServerBasicsDraft = {
 	label: string;

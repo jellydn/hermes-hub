@@ -1,5 +1,5 @@
-import type { ModelAccessSnapshot } from "../../shared/contracts/model-access";
-import { isApiProviderId } from "../../src/lib/ai-providers";
+import { isApiProviderId } from "#/lib/ai-providers";
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import type { loadModelAccessRecords } from "./active-backend";
 import { decryptStoredApiKey, getApiKeyLast4 } from "./records";
 

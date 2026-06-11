@@ -35,17 +35,23 @@ vi.mock("../server-records", () => ({
 	resolveServerSshConfigOrError,
 }));
 
-vi.mock("./records", () => ({
-	getResolvedServerWebUiRecord,
-	getWebUiProxyPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/`,
-	decryptWebUiPassword: (value: string | null) =>
-		value ? decryptSecret(value) : null,
-}));
+vi.mock("./records", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./records")>();
+	return {
+		...actual,
+		getResolvedServerWebUiRecord,
+		decryptWebUiPassword: (value: string | null) =>
+			value ? decryptSecret(value) : null,
+	};
+});
 
-vi.mock("./ssh-forward", () => ({
-	proxyRequestOverSsh,
-}));
+vi.mock("./proxy", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./proxy")>();
+	return {
+		...actual,
+		proxyRequestOverSsh,
+	};
+});
 
 vi.mock("./deploy", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./deploy")>();

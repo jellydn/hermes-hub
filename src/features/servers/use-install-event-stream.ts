@@ -4,8 +4,8 @@ import {
 	type InstallEvent,
 	type InstallStatus,
 	mergeInstallSnapshot,
-} from "@/features/servers/install-snapshot";
-import { useMountEffect } from "@/lib/use-mount-effect";
+} from "#/features/servers/install-snapshot";
+import { useMountEffect } from "#/lib/use-mount-effect";
 
 type InstallSnapshot = {
 	events: InstallEvent[];

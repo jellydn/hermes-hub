@@ -10,7 +10,7 @@ import {
 import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { LogsSnapshot } from "@/lib/logs";
+import type { LogsSnapshot } from "#/lib/logs";
 
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
@@ -25,7 +25,7 @@ vi.mock("lucide-react", () => {
 	};
 });
 
-vi.mock("@/components/ui/button", () => ({
+vi.mock("#/components/ui/button", () => ({
 	Button: ({
 		asChild: _asChild,
 		children,

@@ -3,7 +3,7 @@ import type {
 	DashboardProviderSummary,
 	DashboardServerSummary,
 	DashboardTelegramSummary,
-} from "../../src/lib/dashboard-status";
+} from "#/lib/dashboard-status";
 import {
 	type ActiveModelBackend,
 	formatActiveBackendLabel,
@@ -113,7 +113,9 @@ export function toProviderSummary(
 				? activeBackend.subscriptionProvider
 				: activeBackend.provider,
 		model: activeBackend.model,
-		detail: `${formatActiveBackendLabel(activeBackend)} is ready to power Hermes responses.`,
+		detail: `${formatActiveBackendLabel(
+			activeBackend,
+		)} is ready to power Hermes responses.`,
 	};
 }
 

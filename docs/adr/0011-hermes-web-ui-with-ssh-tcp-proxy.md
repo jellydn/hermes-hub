@@ -30,7 +30,7 @@ On redeploy, the Web UI container is **force-recreated** (`--force-recreate`) to
 
 Deployment is dispatched through `server/managed-compose-deploy.ts` with the `web-ui` intent, which also handles the SSH workspace sync (copying Hermes agent source to the host) and reachability verification.
 
-### 2. SSH TCP Forward Tunnel (`server/web-ui/ssh-forward.ts`)
+### 2. SSH TCP Forward Tunnel and HTTP-over-Stream Proxy (`server/web-ui/proxy.ts`)
 
 Each proxy request opens a TCP forward stream through the existing SSH connection:
 
@@ -39,8 +39,6 @@ Browser → HermesHub (HTTPS) → SSH forwardOut → 127.0.0.1:<webUiPort> on VP
 ```
 
 SSH connections are pooled and reused across proxy requests (see ADR #9 for the SSH pool design). The TCP forward stream is scoped to a single HTTP request/response cycle and closed after use.
-
-### 3. HTTP-over-Stream Proxy (`server/web-ui/proxy-http.ts`)
 
 The raw TCP stream is presented to Node's `http.request()` as the connection, so HermesHub acts as an HTTP proxy without parsing the raw bytes. The proxy:
 
@@ -67,7 +65,7 @@ Only after both checks pass is the proxy request forwarded.
 
 ### 6. Async Deploy with Polling
 
-Deploying the Web UI is an async operation (SSH + Docker Compose can take 30+ seconds). `server/web-ui/deploy.ts` owns orchestration: install preconditions, deploy lock acquisition, `deploying` state persistence, and background `deployManagedCompose` execution. `server/web-ui/handlers.ts` is HTTP-only — it calls `startDeploy` and maps `DeployError` to status codes.
+Deploying the Web UI is an async operation (SSH + Docker Compose can take 30+ seconds). `server/web-ui/deploy.ts` owns orchestration: install preconditions, deploy lock acquisition (via `server/web-ui/deploy-lock.ts`), `deploying` state persistence, password generation and encryption (from `server/web-ui/records.ts`), and background `deployManagedCompose` execution. `server/web-ui/handlers.ts` is HTTP-only — it calls `startDeploy` and maps `DeployError` to status codes.
 
 The deploy endpoint returns HTTP 202 with the initial `deploying` status. The client polls `/api/servers/:id/web-ui` until the status transitions to `succeeded` or `failed`. A deploy lock (keyed by server ID) prevents concurrent deploys on the same server within a single HermesHub instance. Stale `deploying` records past `STALE_DEPLOY_THRESHOLD_MS` are resolved to `failed` on read via `resolveServerWebUiRecord` in `server/web-ui/records.ts`.
 
@@ -89,9 +87,9 @@ After `docker compose up`, HermesHub verifies the Web UI is healthy:
 
 If the container stops during startup, the last 80 lines of container logs and the container state are captured in the error message.
 
-### 9. Stale Deploy Detection
+### 9. Stale Deploy Detection (`server/web-ui/records.ts`)
 
-If a deploy is stuck in `deploying` status past the `STALE_DEPLOY_THRESHOLD_MS` threshold (configurable via env var, default 10 minutes), the status is automatically resolved to `failed` on next read.
+If a deploy is stuck in `deploying` status past the `STALE_DEPLOY_THRESHOLD_MS` threshold (configurable via env var, default 10 minutes), the status is automatically resolved to `failed` on next read via `resolveServerWebUiRecord`. The stale-deploy detection, deploy-status normalization, and snapshot construction all live in `server/web-ui/records.ts` as a single module, keeping the deploy orchestration in `deploy.ts` free of record-formatting concerns.
 
 ## Consequences
 
@@ -116,3 +114,16 @@ If a deploy is stuck in `deploying` status past the `STALE_DEPLOY_THRESHOLD_MS` 
 - The proxy is tightly coupled to `ssh2`'s `forwardOut` API — switching SSH libraries would require rewriting the tunnel layer
 - Container diagnostics capture up to 2000 characters of logs/state, which may truncate long multi-line error messages
 - `hermes_cli` import verification is tied to the specific virtualenv path (`/app/venv/bin/python`) inside the hermes-webui container image
+
+### Module Architecture
+
+The `server/web-ui/` directory is grouped by feature:
+
+| Module           | Responsibility                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `proxy.ts`       | SSH TCP forward tunnel, HTTP-over-stream proxy, header rewriting, URL resolution, enabled-context auth guard |
+| `deploy.ts`      | Deploy orchestration: preconditions, password generation, lock acquisition, background deploy execution      |
+| `deploy-lock.ts` | In-memory deploy lock (keyed by server ID), kept separate for testability                                    |
+| `records.ts`     | DB access (CRUD, resolve), stale-deploy detection, deploy-status normalization, snapshot construction        |
+| `handlers.ts`    | HTTP layer: route handlers that wire auth guards, deploy, proxy, and record queries into Hono responses      |
+| `ssh-pool.ts`    | SSH connection pool shared across proxy and deploy (see ADR #9)                                              |

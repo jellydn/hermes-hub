@@ -1,7 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router";
 
-import { AppShell } from "@/features/dashboard/app-shell";
-import { TelegramSettings } from "@/features/telegram/telegram-settings";
+import { AppShell } from "#/features/dashboard/app-shell";
+import { TelegramSettings } from "#/features/telegram/telegram-settings";
 
 const telegramRouteApi = getRouteApi("/telegram");
 

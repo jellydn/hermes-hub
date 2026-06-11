@@ -147,35 +147,35 @@ bun run build
 
 ## 📦 Scripts
 
-| Command               | Description                        |
-| --------------------- | ---------------------------------- |
-| `bun run dev`         | Start Vite dev server on port 3000 |
-| `bun run build`       | Build for production               |
-| `bun run test`        | Run Vitest test suite              |
-| `bun run typecheck`   | Run TypeScript type checking       |
-| `bun run db:generate` | Generate Drizzle migrations        |
-| `bun run db:migrate`  | Apply Drizzle migrations locally   |
-| `just dev`            | Thin wrapper: `bun run dev`        |
-| `just test`           | Thin wrapper: `bun run test`       |
-| `just typecheck`      | Thin wrapper: `bun run typecheck`  |
-| `just check`          | Runs typecheck + test in parallel  |
-| `just lint`           | Biome check (no auto-fix)          |
-| `just format`         | Biome auto-format (`--write`)      |
-| `just db-migrate`     | Thin wrapper: `bun run db:migrate` |
+| Command               | Description                                    |
+| --------------------- | ---------------------------------------------- |
+| `bun run dev`         | Start Vite dev server on port 3000             |
+| `bun run build`       | Build for production                           |
+| `bun run test`        | Run Vitest test suite                          |
+| `bun run typecheck`   | Run TypeScript type checking                   |
+| `bun run db:generate` | Generate Drizzle migrations                    |
+| `bun run db:migrate`  | Apply Drizzle migrations locally               |
+| `just dev`            | Thin wrapper: `bun run dev`                    |
+| `just test`           | Thin wrapper: `bun run test`                   |
+| `just typecheck`      | Thin wrapper: `bun run typecheck`              |
+| `just check`          | Runs typecheck + test in parallel              |
+| `just lint`           | Biome check (no auto-fix)                      |
+| `just format`         | Biome auto-format (`--write`)                  |
+| `just db-migrate`     | Thin wrapper: `bun run db:migrate`             |
 | `just ci`             | Full pipeline: lint → typecheck → test → build |
 
 ## 🔧 Environment Variables
 
-| Variable             | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `DATABASE_URL`       | PostgreSQL connection string                      |
-| `ENCRYPTION_KEY`     | 32-byte hex key for AES-256 credential encryption |
-| `BETTER_AUTH_SECRET` | Secret for Better Auth session signing            |
-| `BETTER_AUTH_URL`    | Public URL of the app for magic link emails       |
-| `API_SERVER_MODEL_NAME` | Model ID injected into Hermes Docker Compose on deploy |
-| `RESEND_API_KEY`     | Resend API key for sending magic-link emails (optional) |
-| `RESEND_FROM`        | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
-| `STALE_DEPLOY_THRESHOLD_MS` | Stale Web UI deploy timeout in milliseconds (default: 600000 = 10 minutes) |
+| Variable                    | Description                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | PostgreSQL connection string                                                      |
+| `ENCRYPTION_KEY`            | 32-byte hex key for AES-256 credential encryption                                 |
+| `BETTER_AUTH_SECRET`        | Secret for Better Auth session signing                                            |
+| `BETTER_AUTH_URL`           | Public URL of the app for magic link emails                                       |
+| `API_SERVER_MODEL_NAME`     | Model ID injected into Hermes Docker Compose on deploy                            |
+| `RESEND_API_KEY`            | Resend API key for sending magic-link emails (optional)                           |
+| `RESEND_FROM`               | Sender email address for magic-link emails (optional, e.g. `noreply@example.com`) |
+| `STALE_DEPLOY_THRESHOLD_MS` | Stale Web UI deploy timeout in milliseconds (default: 600000 = 10 minutes)        |
 
 ## Troubleshooting
 
@@ -202,10 +202,10 @@ docker logs hermes --tail=100
 
 If the raw provider API works but Hermes returns an authentication error, redeploy the AI provider from HermesHub. For custom OpenAI-compatible providers, the deployed container must receive both the generic base URL variables and the host-derived API key variable. For example:
 
-| Custom base URL | Required vendor key |
-| --------------- | ------------------- |
-| `https://crof.ai/v1` | `CROF_API_KEY` |
-| `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+| Custom base URL               | Required vendor key |
+| ----------------------------- | ------------------- |
+| `https://crof.ai/v1`          | `CROF_API_KEY`      |
+| `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY`  |
 
 HermesHub now derives that vendor key during provider deploy, alongside `OPENAI_API_KEY`, `CUSTOM_BASE_URL`, `OPENAI_BASE_URL`, and `HERMES_INFERENCE_PROVIDER=custom`.
 

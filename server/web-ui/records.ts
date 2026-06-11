@@ -1,11 +1,13 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import type {
+	ServerWebUiDeployStatus,
+	ServerWebUiSnapshot,
+} from "#shared/contracts/server-web-ui";
 import { defaultHermesWebUiPort } from "../constants";
 import { decryptSecret } from "../crypto";
 import { getDb } from "../db";
 import { serverWebUi } from "../db/schema";
-import { normalizeDeployStatus } from "./deploy-status";
-import { isStaleDeploy, STALE_DEPLOY_ERROR } from "./stale-deploy";
 
 type DbClient = Pick<ReturnType<typeof getDb>, "insert">;
 
@@ -29,6 +31,67 @@ export type ServerWebUiUpsertPatch = {
 	deployStartedAt?: Date | null;
 	updatedAt?: Date;
 };
+
+// ── Stale deploy detection ─────────────────────────────────────────────
+
+export const STALE_DEPLOY_ERROR =
+	"Web UI deploy timed out. The HermesHub process may have restarted during setup.";
+
+function readStaleDeployThreshold(): number {
+	const envValue = process.env.STALE_DEPLOY_THRESHOLD_MS;
+	if (envValue) {
+		const parsed = Number(envValue);
+		if (!Number.isNaN(parsed) && parsed > 0) {
+			return parsed;
+		}
+	}
+
+	return 10 * 60 * 1000;
+}
+
+const STALE_DEPLOY_THRESHOLD_MS = readStaleDeployThreshold();
+
+export function isStaleDeploy(deployStartedAt: Date | null): boolean {
+	if (!deployStartedAt) {
+		return true;
+	}
+
+	return Date.now() - deployStartedAt.getTime() > STALE_DEPLOY_THRESHOLD_MS;
+}
+
+// ── Deploy status normalization ────────────────────────────────────────
+
+const DEPLOY_STATUSES = new Set<string>([
+	"idle",
+	"deploying",
+	"succeeded",
+	"failed",
+]);
+
+function normalizeDeployStatus(value: string): ServerWebUiDeployStatus {
+	if (DEPLOY_STATUSES.has(value)) {
+		return value as ServerWebUiDeployStatus;
+	}
+
+	return "idle";
+}
+
+// ── Snapshot construction ──────────────────────────────────────────────
+
+export function buildWebUiSnapshot(
+	serverId: string,
+	record: ServerWebUiRecord,
+): ServerWebUiSnapshot {
+	return {
+		enabled: record.enabled,
+		port: record.port,
+		proxyPath: getWebUiProxyPath(serverId),
+		deployStatus: normalizeDeployStatus(record.deployStatus),
+		deployError: record.deployError,
+		deployStartedAt: record.deployStartedAt?.toISOString() ?? null,
+		updatedAt: record.updatedAt.toISOString(),
+	};
+}
 
 export function getWebUiProxyPath(serverId: string) {
 	return `/api/servers/${serverId}/web-ui/proxy/`;

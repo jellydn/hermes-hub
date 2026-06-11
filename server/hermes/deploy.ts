@@ -8,6 +8,7 @@ import { insertAuditLog } from "../lib/insert-audit-log";
 import type { AuthSession, OwnedServerSshContext } from "../request-guards";
 import { withSshConnection } from "../ssh";
 import { resolveHermesDeployContext } from "./deploy-context";
+import { PartialDeployError } from "./partial-deploy-error";
 import { restartGateway } from "./runtime";
 
 type DeployAuditDetails = Record<string, unknown>;
@@ -47,6 +48,7 @@ export async function deployToHermesAgent(
 	const { sshCtx } = deployCtx;
 	const db = getDb();
 	const ipAddress = getClientIp(context);
+	const deployedAt = new Date();
 
 	try {
 		await withSshConnection(
@@ -59,11 +61,52 @@ export async function deployToHermesAgent(
 				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
-				await options.deploy(ssh);
-				await restartGateway(ssh);
+				try {
+					await options.deploy(ssh);
+					await restartGateway(ssh);
+				} catch (error) {
+					if (error instanceof PartialDeployError && error.deployedCount > 0) {
+						await restartGateway(ssh);
+					}
+					throw error;
+				}
 			},
 		);
 	} catch (error) {
+		if (error instanceof PartialDeployError) {
+			// Core deploy succeeded but some optional items were blocked.
+			// Write success audit + forward blocked skill names in the response.
+			const partialSuccessDetails = {
+				...options.buildSuccessAuditDetails(sshCtx),
+				skillCount: error.deployedCount,
+				blockedSkills: error.blockedSkills,
+				bypassUnavailableSkills: error.bypassUnavailableSkills,
+			};
+			try {
+				await insertAuditLog(db, {
+					userId: session.user.id,
+					action: options.successAuditAction,
+					serverId: sshCtx.serverId,
+					details: partialSuccessDetails,
+					ipAddress,
+				});
+			} catch {
+				// Deploy already succeeded remotely; audit logging is historical only.
+			}
+
+			clearDashboardCache();
+
+			const successResponse = options.buildSuccessResponse(sshCtx, deployedAt);
+			return context.json({
+				status: "deployed",
+				serverId: sshCtx.serverId,
+				...successResponse,
+				skillCount: error.deployedCount,
+				blockedSkills: error.blockedSkills,
+				bypassUnavailableSkills: error.bypassUnavailableSkills,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
 		try {
@@ -80,8 +123,6 @@ export async function deployToHermesAgent(
 
 		return context.json({ error: `Deploy failed: ${message}` }, 502);
 	}
-
-	const deployedAt = new Date();
 
 	try {
 		await insertAuditLog(db, {

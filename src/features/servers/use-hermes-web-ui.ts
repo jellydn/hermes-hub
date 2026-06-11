@@ -3,7 +3,7 @@ import { useEffect, useReducer, useRef } from "react";
 import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
-} from "@/lib/server-detail";
+} from "#/lib/server-detail";
 
 import { subscribeWebUiDeployPolling } from "./web-ui-deploy-poll";
 

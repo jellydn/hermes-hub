@@ -1,6 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "#/lib/utils";
 
 import { wizardSteps } from "./connection-wizard-types";
 

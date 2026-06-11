@@ -1,7 +1,6 @@
 import { useReducer, useState } from "react";
-
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
+import type { McpServerSummary } from "#server/settings/mcp/config";
 import { McpAdvancedSetupSection } from "./mcp-advanced-setup-section";
 import { deleteMcpServer, persistMcpServer } from "./mcp-api";
 import { McpFormMessageBanner } from "./mcp-form-message";

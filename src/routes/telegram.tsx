@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-
-import { TelegramPage } from "@/features/telegram/telegram-page";
-import { requireSession } from "@/lib/session";
-import { getAuthSession } from "../../server/auth";
-import { getCurrentTelegramConfig } from "../../server/telegram";
+import { TelegramPage } from "#/features/telegram/telegram-page";
+import { requireSession } from "#/lib/session";
+import { getAuthSession } from "#server/auth";
+import { getCurrentTelegramConfig } from "#server/telegram";
 
 const loadCurrentTelegramConfig = createServerFn({ method: "GET" }).handler(
 	async () => {

@@ -1,7 +1,7 @@
 import type {
 	McpServerSummary,
 	McpTransport,
-} from "../../../server/settings/mcp/config";
+} from "#server/settings/mcp/config";
 
 import type { McpServerPreset } from "./mcp-server-presets";
 

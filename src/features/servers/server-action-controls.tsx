@@ -6,8 +6,8 @@ import {
 	Wrench,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import type { ServerActionType } from "@/lib/server-detail";
+import { Button } from "#/components/ui/button";
+import type { ServerActionType } from "#/lib/server-detail";
 
 import { confirmationMessage } from "./server-detail-helpers";
 

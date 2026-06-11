@@ -1,7 +1,11 @@
-export type { ServerActionType } from "../../server/lib/action-labels";
-export { formatActionLabel } from "../../server/lib/action-labels";
+export type {
+	LogActionType,
+	ServerActionType,
+	SettingsDeployActionType,
+} from "#server/lib/action-labels";
+export { formatActionLabel } from "#server/lib/action-labels";
 
-import type { ServerActionType } from "../../server/lib/action-labels";
+import type { ServerActionType } from "#server/lib/action-labels";
 
 export type ServerActionResult = "succeeded" | "failed";
 
@@ -17,7 +21,7 @@ export type ServerActionHistoryItem = {
 import type {
 	ServerWebUiDeployStatus,
 	ServerWebUiSnapshot,
-} from "../../shared/contracts/server-web-ui";
+} from "#shared/contracts/server-web-ui";
 
 export type { ServerWebUiDeployStatus, ServerWebUiSnapshot };
 

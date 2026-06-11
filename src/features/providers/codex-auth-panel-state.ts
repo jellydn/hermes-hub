@@ -1,4 +1,4 @@
-import type { CodexAuthStatus } from "../../../shared/contracts/codex-auth";
+import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 
 export type { CodexAuthStatus };
 

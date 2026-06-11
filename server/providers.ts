@@ -1,19 +1,18 @@
 import type { Context } from "hono";
-
-import type { ModelAccessSnapshot } from "../shared/contracts/model-access";
 import {
 	type ApiProviderId,
 	getDefaultAiModel,
 	getProviderCredentialPolicy,
 	isApiProviderId,
 	isValidAiModel,
-} from "../src/lib/ai-providers";
+} from "#/lib/ai-providers";
 import {
 	getDefaultSubscriptionModel,
 	getUserSubscriptionOption,
 	isUserSubscriptionId,
 	isValidSubscriptionModel,
-} from "../src/lib/user-subscriptions";
+} from "#/lib/user-subscriptions";
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";

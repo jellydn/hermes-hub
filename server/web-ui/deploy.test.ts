@@ -42,15 +42,17 @@ vi.mock("../lib/insert-audit-log", () => ({
 	insertAuditLog,
 }));
 
-vi.mock("./records", () => ({
-	getResolvedServerWebUiRecord,
-	getServerWebUiRecord: getResolvedServerWebUiRecord,
-	upsertServerWebUiRecord,
-	getWebUiProxyPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/`,
-	decryptWebUiPassword: (value: string | null) =>
-		value ? decryptSecret(value) : null,
-}));
+vi.mock("./records", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./records")>();
+	return {
+		...actual,
+		getResolvedServerWebUiRecord,
+		getServerWebUiRecord: getResolvedServerWebUiRecord,
+		upsertServerWebUiRecord,
+		decryptWebUiPassword: (value: string | null) =>
+			value ? decryptSecret(value) : null,
+	};
+});
 
 vi.mock("./deploy-lock", () => ({
 	tryAcquireWebUiDeployLock,

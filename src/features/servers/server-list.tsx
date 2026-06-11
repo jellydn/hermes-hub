@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Plus, Rocket, Server } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { StatusIcon } from "@/components/ui/status-icon";
-import type { ServerListSummary } from "@/lib/servers";
-import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
+import { Button } from "#/components/ui/button";
+import { StatusIcon } from "#/components/ui/status-icon";
+import type { ServerListSummary } from "#/lib/servers";
+import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
 
 import { formatInstallStatus, formatTimestamp } from "./server-detail-helpers";
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { NewServerPage } from "@/features/servers/new-server-page";
-import { requireSession } from "@/lib/session";
+import { NewServerPage } from "#/features/servers/new-server-page";
+import { requireSession } from "#/lib/session";
 
 export const Route = createFileRoute("/servers/new")({
 	beforeLoad: async ({ location }) => {

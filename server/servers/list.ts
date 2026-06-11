@@ -1,4 +1,4 @@
-import type { ServerListSummary } from "../../src/lib/servers";
+import type { ServerListSummary } from "#/lib/servers";
 import { readOsInfoValue } from "../server-records";
 import {
 	getLatestInstallRecords,

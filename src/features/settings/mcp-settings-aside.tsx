@@ -1,5 +1,5 @@
-import type { HermesDeploymentTarget } from "@/lib/load-hermes-deployment-targets";
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
+import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
+import type { McpServerSummary } from "#server/settings/mcp/config";
 import { HermesDeployPanel } from "./hermes-deploy-panel";
 
 type McpSettingsAsideProps = {
@@ -19,7 +19,9 @@ export function McpSettingsAside({
 				<p className="island-kicker mb-2">Saved state</p>
 				<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
 					{servers.length > 0
-						? `${servers.length} MCP server${servers.length === 1 ? "" : "s"} saved`
+						? `${servers.length} MCP server${
+								servers.length === 1 ? "" : "s"
+							} saved`
 						: "No MCP servers saved"}
 				</h3>
 				{servers.length > 0 ? (
@@ -48,8 +50,12 @@ export function McpSettingsAside({
 					const count = payload.serverCount ?? servers.length;
 
 					return deployedAt
-						? `Deployed ${count} MCP server${count === 1 ? "" : "s"} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
-						: `Deployed ${count} MCP server${count === 1 ? "" : "s"} to ${serverHost}. Hermes is restarting...`;
+						? `Deployed ${count} MCP server${
+								count === 1 ? "" : "s"
+							} to ${serverHost} at ${deployedAt}. Hermes is restarting...`
+						: `Deployed ${count} MCP server${
+								count === 1 ? "" : "s"
+							} to ${serverHost}. Hermes is restarting...`;
 				}}
 			/>
 		</aside>

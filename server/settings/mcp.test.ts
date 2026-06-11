@@ -258,6 +258,8 @@ describe("mcp settings", () => {
 	});
 
 	it("deletes an owned MCP server", async () => {
+		selectLimit.mockResolvedValueOnce([baseRecord]); // pre-check for getOwnedMcpServerRecord
+
 		const { deleteMcpServer } = await import("./mcp");
 		const response = await deleteMcpServer(
 			createContext(null, "DELETE", "mcp_1"),

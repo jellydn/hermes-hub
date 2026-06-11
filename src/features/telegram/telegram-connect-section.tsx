@@ -2,7 +2,7 @@ import { CheckCircle2, LoaderCircle, PlugZap, Unplug } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import { inputClassName } from "./telegram-input-class";
 import type { TelegramSettingsSummary } from "./telegram-settings";
 

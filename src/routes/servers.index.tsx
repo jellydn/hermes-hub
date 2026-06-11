@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-
-import { ServersIndexPage } from "@/features/servers/servers-index-page";
-import { requireSession } from "@/lib/session";
-import { getAuthSession } from "../../server/auth";
+import { ServersIndexPage } from "#/features/servers/servers-index-page";
+import { requireSession } from "#/lib/session";
+import { getAuthSession } from "#server/auth";
 
 const loadServers = createServerFn({ method: "GET" }).handler(async () => {
 	const session = await getAuthSession(getRequestHeaders());
@@ -12,7 +11,7 @@ const loadServers = createServerFn({ method: "GET" }).handler(async () => {
 		return [];
 	}
 
-	const { getServerListSnapshot } = await import("../../server/servers");
+	const { getServerListSnapshot } = await import("#server/servers");
 	return getServerListSnapshot(session.user.id);
 });
 

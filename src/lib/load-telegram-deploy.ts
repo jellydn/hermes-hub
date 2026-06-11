@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 
-import { getAuthSession } from "../../server/auth";
-import { getCurrentTelegramConfig } from "../../server/telegram";
+import { getAuthSession } from "#server/auth";
+import { getCurrentTelegramConfig } from "#server/telegram";
 
 export type TelegramDeployInfo = {
 	deployedServerHost: string;

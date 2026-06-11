@@ -1,5 +1,5 @@
-import type { ApiProviderId } from "../../src/lib/ai-providers";
-import type { UserSubscriptionId } from "../../src/lib/user-subscriptions";
+import type { ApiProviderId } from "#/lib/ai-providers";
+import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 
 export type ApiProviderConfigSummary = {
 	kind: "api-provider";

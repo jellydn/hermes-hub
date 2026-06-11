@@ -7,17 +7,17 @@ import {
 	parseCodexAuthStatus,
 	readHermesAuthStore,
 	writeHermesAuthJson,
-} from "../../hermes/auth-json";
+} from "#server/hermes/auth-json";
 import {
 	type DeployedHermesServerSsh,
 	withDeployedHermesServerSsh,
-} from "../../hermes/telegram-deploy-context";
+} from "#server/hermes/telegram-deploy-context";
 import {
 	type OwnedServerSshContext,
 	requireAuthSession,
 	requireOwnedServerSshById,
-} from "../../request-guards";
-import { withSshConnection } from "../../ssh";
+} from "#server/request-guards";
+import { withSshConnection } from "#server/ssh";
 import {
 	CodexDeviceFlowError,
 	exchangeCodexAuthorizationCode,

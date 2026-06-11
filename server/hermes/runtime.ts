@@ -152,7 +152,9 @@ async function probeWebUiStartup(
 
 	if (attempt === WEB_UI_STARTUP_ATTEMPTS) {
 		throw new Error(
-			`Hermes Web UI did not become reachable on 127.0.0.1:${port} within ${WEB_UI_STARTUP_ATTEMPTS * WEB_UI_STARTUP_DELAY_SECONDS} seconds.`,
+			`Hermes Web UI did not become reachable on 127.0.0.1:${port} within ${
+				WEB_UI_STARTUP_ATTEMPTS * WEB_UI_STARTUP_DELAY_SECONDS
+			} seconds.`,
 		);
 	}
 
@@ -255,7 +257,9 @@ export async function setProviderInferenceProvider(
 	provider: string,
 ): Promise<void> {
 	const result = await ssh.execCommand(
-		`sudo docker exec hermes hermes config set model.provider ${shellQuote(provider)}`,
+		`sudo docker exec hermes hermes config set model.provider ${shellQuote(
+			provider,
+		)}`,
 	);
 	if (result.code !== 0) {
 		throw new Error(

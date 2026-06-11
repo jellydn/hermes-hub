@@ -6,16 +6,14 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import {
 	type ApiProviderId,
 	apiProviderOptions,
 	formatAiProviderLabel,
 	getAiProviderOption,
-} from "@/lib/ai-providers";
-
-import type { ApiProviderConfigSummary } from "../../../shared/contracts/model-access";
+} from "#/lib/ai-providers";
+import type { ApiProviderConfigSummary } from "#shared/contracts/model-access";
 import {
 	ProviderSettingsField,
 	providerInputClassName,
@@ -151,7 +149,9 @@ export function ProviderSelectionPanel({
 					<ProviderSettingsField
 						label="Base URL"
 						name="baseUrl"
-						hint={`The base URL for the ${providerOption?.label ?? ""} endpoint.`}
+						hint={`The base URL for the ${
+							providerOption?.label ?? ""
+						} endpoint.`}
 					>
 						<input
 							id="baseUrl"
@@ -170,7 +170,9 @@ export function ProviderSelectionPanel({
 					<ProviderSettingsField
 						label="Custom model ID"
 						name="model"
-						hint={`Enter the model ID or name for ${providerOption?.label ?? ""}.`}
+						hint={`Enter the model ID or name for ${
+							providerOption?.label ?? ""
+						}.`}
 					>
 						<input
 							id="model"

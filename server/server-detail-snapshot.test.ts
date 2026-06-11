@@ -75,11 +75,13 @@ const { getResolvedServerWebUiRecord } = vi.hoisted(() => ({
 	getResolvedServerWebUiRecord: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("./web-ui/records", () => ({
-	getResolvedServerWebUiRecord,
-	getWebUiProxyPath: (serverId: string) =>
-		`/api/servers/${serverId}/web-ui/proxy/`,
-}));
+vi.mock("./web-ui/records", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./web-ui/records")>();
+	return {
+		...actual,
+		getResolvedServerWebUiRecord,
+	};
+});
 
 import {
 	getDisplayRollbackTarget,

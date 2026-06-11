@@ -1,4 +1,4 @@
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "#/components/brand-mark";
 import { LandingCard, LandingChip } from "./landing-card";
 import {
 	productFeatures,

@@ -1,6 +1,6 @@
 import type { NodeSSH } from "node-ssh";
 
-import type { CodexAuthStatus } from "../../shared/contracts/codex-auth";
+import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import { managedComposeVolumeHome } from "../constants";
 import {
 	CODEX_CREDENTIAL_BASE_URL,

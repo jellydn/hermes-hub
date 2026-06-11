@@ -1,3 +1,5 @@
+import type { LogActionType } from "./server-detail";
+
 export type InstallLogEntry = {
 	id: string;
 	serverLabel: string;
@@ -11,7 +13,7 @@ export type InstallLogEntry = {
 export type ActionLogEntry = {
 	id: string;
 	serverLabel: string;
-	action: "restart" | "update" | "rollback";
+	action: LogActionType;
 	result: "succeeded" | "failed";
 	createdAt: string;
 	message: string;

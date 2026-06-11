@@ -1,5 +1,5 @@
-import type { AiProviderId } from "../../src/lib/ai-providers";
-import { getAiProviderOption } from "../../src/lib/ai-providers";
+import type { AiProviderId } from "#/lib/ai-providers";
+import { getAiProviderOption } from "#/lib/ai-providers";
 
 export class ProviderConnectionError extends Error {
 	constructor(

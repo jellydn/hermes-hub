@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { type ComponentType, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { StatusIcon } from "@/components/ui/status-icon";
+import { Button } from "#/components/ui/button";
+import { StatusIcon } from "#/components/ui/status-icon";
 
 import type {
 	DashboardProviderSummary,
@@ -19,10 +19,10 @@ import type {
 	DashboardStatusSnapshot,
 	DashboardTelegramSummary,
 	DashboardVpsSummary,
-} from "@/lib/dashboard-status";
-import { getStatusPillClassName, getStatusPillType } from "@/lib/status-pill";
-import { useMountEffect } from "@/lib/use-mount-effect";
-import { formatModelAccessProviderLabel } from "../../../server/providers/active-backend";
+} from "#/lib/dashboard-status";
+import { formatModelAccessProviderLabel } from "#/lib/provider-labels";
+import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
+import { useMountEffect } from "#/lib/use-mount-effect";
 
 type DashboardStatusOverviewProps = {
 	initialStatus: DashboardStatusSnapshot | null;
@@ -182,7 +182,15 @@ export function DashboardStatusOverview({
 						</h3>
 						<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
 							{snapshot?.server
-								? `${snapshot.server.host}${snapshot.server.osName ? ` · ${snapshot.server.osName}${snapshot.server.osVersion ? ` ${snapshot.server.osVersion}` : ""}` : ""}`
+								? `${snapshot.server.host}${
+										snapshot.server.osName
+											? ` · ${snapshot.server.osName}${
+													snapshot.server.osVersion
+														? ` ${snapshot.server.osVersion}`
+														: ""
+												}`
+											: ""
+									}`
 								: "Connect your first VPS to get started."}
 						</p>
 						{snapshot?.server?.supportLevel === "untested" ? (
@@ -202,7 +210,9 @@ export function DashboardStatusOverview({
 						<Button asChild>
 							<a href="/servers">
 								{snapshot?.serverCount
-									? `View ${snapshot.serverCount} server${snapshot.serverCount === 1 ? "" : "s"}`
+									? `View ${snapshot.serverCount} server${
+											snapshot.serverCount === 1 ? "" : "s"
+										}`
 									: "Connect your first VPS"}
 							</a>
 						</Button>
@@ -297,7 +307,9 @@ export function DashboardStatusOverview({
 							detail={snapshot.agent.detail}
 							meta={
 								snapshot.agent.updatedAt
-									? `Updated ${formatRelativeTimestamp(snapshot.agent.updatedAt)}`
+									? `Updated ${formatRelativeTimestamp(
+											snapshot.agent.updatedAt,
+										)}`
 									: "Waiting for first install"
 							}
 						/>

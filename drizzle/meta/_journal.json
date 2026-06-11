@@ -113,6 +113,27 @@
       "when": 1780760000000,
       "tag": "0015_ai_user_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780807394636,
+      "tag": "0016_previous_lady_deathstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780844400000,
+      "tag": "0017_add_agent_skills_check_constraint",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781101200000,
+      "tag": "0018_agent_skills_accept_scanner_risk",
+      "breakpoints": true
     }
   ]
 }

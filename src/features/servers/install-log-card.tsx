@@ -7,7 +7,7 @@ import {
 	LoaderCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StatusIcon } from "@/components/ui/status-icon";
+import { StatusIcon } from "#/components/ui/status-icon";
 import { formatInstallStatus } from "./server-detail-helpers";
 
 type InstallLogCardProps = {

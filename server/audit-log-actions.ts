@@ -23,3 +23,17 @@ export const USER_INITIATED_ACTION_NAMES = [
 export const USER_INITIATED_ACTION_NAME_SET = new Set<string>(
 	USER_INITIATED_ACTION_NAMES,
 );
+
+export const SETTINGS_DEPLOY_ACTION_NAMES = [
+	"mcp.deployed",
+	"mcp.deploy.failed",
+	"agent_skills.deployed",
+	"agent_skills.deploy.failed",
+	"persona.deployed",
+	"persona.deploy.failed",
+] as const;
+
+export const LOG_ACTION_NAMES = [
+	...USER_INITIATED_ACTION_NAMES,
+	...SETTINGS_DEPLOY_ACTION_NAMES,
+] as const;

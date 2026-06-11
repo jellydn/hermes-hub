@@ -2,14 +2,14 @@ import {
 	type ApiProviderId,
 	formatAiProviderLabel,
 	isApiProviderId,
-} from "../../src/lib/ai-providers";
+} from "#/lib/ai-providers";
 import {
 	formatUserSubscriptionLabel,
 	getSubscriptionHermesProviderId,
 	isLegacyCodexProviderId,
 	isUserSubscriptionId,
 	type UserSubscriptionId,
-} from "../../src/lib/user-subscriptions";
+} from "#/lib/user-subscriptions";
 import { getLatestProviderRecord } from "./records";
 import type { UserSubscriptionRecord } from "./subscription-records";
 import { getLatestUserSubscriptionRecord } from "./subscription-records";

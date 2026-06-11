@@ -1,4 +1,4 @@
-import type { McpServerSummary } from "../../../server/settings/mcp/config";
+import type { McpServerSummary } from "#server/settings/mcp/config";
 
 import type { McpFormMessage } from "./mcp-form-message";
 import {
