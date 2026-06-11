@@ -61,8 +61,15 @@ export async function deployToHermesAgent(
 				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
-				await options.deploy(ssh);
-				await restartGateway(ssh);
+				try {
+					await options.deploy(ssh);
+					await restartGateway(ssh);
+				} catch (error) {
+					if (error instanceof PartialDeployError && error.deployedCount > 0) {
+						await restartGateway(ssh);
+					}
+					throw error;
+				}
 			},
 		);
 	} catch (error) {
@@ -73,6 +80,7 @@ export async function deployToHermesAgent(
 				...options.buildSuccessAuditDetails(sshCtx),
 				skillCount: error.deployedCount,
 				blockedSkills: error.blockedSkills,
+				bypassUnavailableSkills: error.bypassUnavailableSkills,
 			};
 			try {
 				await insertAuditLog(db, {
@@ -95,6 +103,7 @@ export async function deployToHermesAgent(
 				...successResponse,
 				skillCount: error.deployedCount,
 				blockedSkills: error.blockedSkills,
+				bypassUnavailableSkills: error.bypassUnavailableSkills,
 			});
 		}
 

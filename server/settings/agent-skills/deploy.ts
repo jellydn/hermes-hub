@@ -5,6 +5,7 @@ import {
 	buildActualManifest,
 	buildDeployCommands,
 	findBlockedSkills,
+	findBypassUnavailableSkills,
 } from "./deploy-plan";
 import type { EnabledSkill } from "./policy";
 import {
@@ -19,6 +20,7 @@ import {
 export type AgentSkillsDeployResult = {
 	skillCount: number;
 	blockedSkills: string[];
+	bypassUnavailableSkills: string[];
 };
 
 export async function runAgentSkillsDeploy(
@@ -63,7 +65,12 @@ export async function runAgentSkillsDeploy(
 	}
 
 	const installedSkillNames = await listRemoteInstalledSkillNames(ssh);
-	const blockedSkills = findBlockedSkills(enabledSkills, installedSkillNames);
+	const bypassUnavailableSkills = findBypassUnavailableSkills(enabledSkills);
+	const blockedSkills = findBlockedSkills(
+		enabledSkills,
+		installedSkillNames,
+		bypassUnavailableSkills,
+	);
 	const actualManifest = buildActualManifest(
 		enabledSkills,
 		installedSkillNames,
@@ -75,12 +82,17 @@ export async function runAgentSkillsDeploy(
 		JSON.stringify(actualManifest, null, 2),
 	);
 
-	if (blockedSkills.length > 0) {
-		throw new PartialDeployError(blockedSkills, actualManifest.length);
+	if (blockedSkills.length > 0 || bypassUnavailableSkills.length > 0) {
+		throw new PartialDeployError(
+			blockedSkills,
+			actualManifest.length,
+			bypassUnavailableSkills,
+		);
 	}
 
 	return {
 		skillCount: actualManifest.length,
 		blockedSkills,
+		bypassUnavailableSkills,
 	};
 }

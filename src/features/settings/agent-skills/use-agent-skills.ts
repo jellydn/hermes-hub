@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type * as z from "zod";
 import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import { useMountEffect } from "#/lib/use-mount-effect";
@@ -9,6 +10,7 @@ import type {
 import {
 	agentSkillCreateSchema,
 	agentSkillUpdateSchema,
+	type SkillSourceType,
 } from "#shared/contracts/agent-skills";
 import {
 	deleteAgentSkill,
@@ -33,18 +35,43 @@ type RemoteInventoryState = {
 	managedManifest: ManagedManifestEntry[];
 } | null;
 
-function buildSkillRequestBody(form: SkillFormState): Record<string, unknown> {
+function buildCreateRequestBody(
+	data: z.infer<typeof agentSkillCreateSchema>,
+): Record<string, unknown> {
 	const body: Record<string, unknown> = {
-		name: form.name.trim(),
-		sourceType: form.sourceType,
-		enabled: form.enabled,
+		name: data.name,
+		sourceType: data.sourceType,
+		enabled: data.enabled,
 	};
 
-	if (form.sourceType === "hub" || form.sourceType === "url") {
-		body.installRef = form.installRef.trim();
-		body.acceptScannerRisk = form.acceptScannerRisk;
+	if (data.sourceType === "hub" || data.sourceType === "url") {
+		body.installRef = data.installRef?.trim() ?? null;
+		body.acceptScannerRisk = data.acceptScannerRisk;
 	} else {
-		body.content = form.content;
+		body.content = data.content?.trim() ?? null;
+	}
+
+	return body;
+}
+
+function buildUpdateRequestBody(
+	form: SkillFormState,
+	data: z.infer<typeof agentSkillUpdateSchema>,
+): Record<string, unknown> {
+	const body: Record<string, unknown> = {};
+
+	if (data.name !== undefined) body.name = data.name;
+	if (data.enabled !== undefined) body.enabled = data.enabled;
+
+	if (form.sourceType === "hub" || form.sourceType === "url") {
+		if (data.installRef !== undefined) {
+			body.installRef = data.installRef?.trim() ?? null;
+		}
+		if (data.acceptScannerRisk !== undefined) {
+			body.acceptScannerRisk = data.acceptScannerRisk;
+		}
+	} else if (data.content !== undefined) {
+		body.content = data.content?.trim() ?? null;
 	}
 
 	return body;
@@ -74,6 +101,8 @@ export function useAgentSkills(
 	const [remoteLoading, setRemoteLoading] = useState(false);
 	const [remoteError, setRemoteError] = useState<string | null>(null);
 	const [lastBlockedSkills, setLastBlockedSkills] = useState<string[]>([]);
+	const [lastBypassUnavailableSkills, setLastBypassUnavailableSkills] =
+		useState<string[]>([]);
 
 	const enabledCount = skills.filter((s) => s.enabled).length;
 	const generationRef = useRef(0);
@@ -166,10 +195,16 @@ export function useAgentSkills(
 	async function handleSave() {
 		clearMessage();
 
+		let body: Record<string, unknown>;
+
 		if (editingSkill) {
 			const parsed = agentSkillUpdateSchema.safeParse({
 				name: form.name,
 				enabled: form.enabled,
+				acceptScannerRisk:
+					form.sourceType === "hub" || form.sourceType === "url"
+						? form.acceptScannerRisk
+						: undefined,
 				installRef:
 					form.sourceType === "hub" || form.sourceType === "url"
 						? form.installRef
@@ -184,11 +219,17 @@ export function useAgentSkills(
 				});
 				return;
 			}
+
+			body = buildUpdateRequestBody(form, parsed.data);
 		} else {
 			const parsed = agentSkillCreateSchema.safeParse({
 				name: form.name,
-				sourceType: form.sourceType,
+				sourceType: form.sourceType as SkillSourceType,
 				enabled: form.enabled,
+				acceptScannerRisk:
+					form.sourceType === "hub" || form.sourceType === "url"
+						? form.acceptScannerRisk
+						: undefined,
 				installRef: form.installRef || undefined,
 				content: form.content || undefined,
 			});
@@ -200,6 +241,8 @@ export function useAgentSkills(
 				});
 				return;
 			}
+
+			body = buildCreateRequestBody(parsed.data);
 		}
 
 		setIsSaving(true);
@@ -209,7 +252,6 @@ export function useAgentSkills(
 			: "/api/settings/agent-skills";
 		const method = editingSkill ? "PUT" : "POST";
 
-		const body = buildSkillRequestBody(form);
 		const result = await persistAgentSkill({ method, url, body });
 
 		if (result.ok) {
@@ -270,6 +312,7 @@ export function useAgentSkills(
 		remoteLoading,
 		remoteError,
 		lastBlockedSkills,
+		lastBypassUnavailableSkills,
 		onChangeField,
 		handleAddClick,
 		handleEditClick,
@@ -280,6 +323,7 @@ export function useAgentSkills(
 		handleServerIdChange,
 		onDeploySuccess: (payload: DeployResponsePayload) => {
 			setLastBlockedSkills(payload.blockedSkills ?? []);
+			setLastBypassUnavailableSkills(payload.bypassUnavailableSkills ?? []);
 			if (selectedServerId) void loadRemoteInventory(selectedServerId);
 		},
 	};

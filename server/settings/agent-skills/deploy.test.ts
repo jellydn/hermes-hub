@@ -550,6 +550,48 @@ describe("deploySkillsToHermes", () => {
 		expect(compoundCommand).not.toContain("hermes skills install");
 	});
 
+	it("uses raw GitHub SKILL.md curl for url skills with GitHub folder URLs", async () => {
+		const record = {
+			...baseRecord,
+			id: "s_pr_review",
+			name: "pr-review",
+			sourceType: "url",
+			installRef: "https://github.com/owner/repo/tree/main/skills/pr-review",
+			enabled: true,
+			acceptScannerRisk: true,
+		};
+
+		selectOrderBy.mockResolvedValueOnce([record]);
+
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [
+				"/root/.hermes/skills/hermeshub/pr-review/SKILL.md",
+			],
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({ execCommand: mockExec });
+			},
+		);
+
+		const { deploySkillsToHermes } = await import("../agent-skills");
+		const response = await deploySkillsToHermes(
+			createContext({ serverId: "srv_123" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+		const compoundCommand =
+			calledCommands.find((c: string) => c.includes("curl -fsSL")) || "";
+		expect(compoundCommand).toContain(
+			"https://raw.githubusercontent.com/owner/repo/main/skills/pr-review/SKILL.md",
+		);
+		expect(compoundCommand).not.toContain("hermes skills install");
+	});
+
 	it("treats skills.sh hyphen aliases as installed (last-30-days vs last30days)", async () => {
 		const record = {
 			...baseRecord,
@@ -585,6 +627,46 @@ describe("deploySkillsToHermes", () => {
 		const payload = await response.json();
 		expect(payload.skillCount).toBe(1);
 		expect(payload.status).toBe("deployed");
+	});
+
+	it("reports bypass-unavailable skills when scanner bypass cannot derive a fetch URL", async () => {
+		const record = {
+			...baseRecord,
+			id: "s_opaque",
+			name: "opaque-skill",
+			sourceType: "hub",
+			installRef: "skills-sh/example.com/opaque-skill",
+			enabled: true,
+			acceptScannerRisk: true,
+		};
+
+		selectOrderBy.mockResolvedValueOnce([record]);
+
+		const mockExec = createDeployExecMock({
+			installedSkillPaths: [],
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({ execCommand: mockExec });
+			},
+		);
+
+		const { deploySkillsToHermes } = await import("../agent-skills");
+		const response = await deploySkillsToHermes(
+			createContext({ serverId: "srv_123" }, "POST"),
+		);
+
+		expect(response.status).toBe(200);
+		const payload = await response.json();
+		expect(payload.bypassUnavailableSkills).toEqual(["opaqueskill"]);
+		expect(payload.blockedSkills).toEqual([]);
+		const calledCommands = mockExec.mock.calls.map((c) => c[0]);
+		expect(
+			calledCommands.some((c: string) => c.includes("hermes skills install")),
+		).toBe(false);
 	});
 
 	it("aborts deploy and logs failure if any installation fails", async () => {

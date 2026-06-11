@@ -9,12 +9,23 @@
  */
 export class PartialDeployError extends Error {
 	readonly blockedSkills: string[];
+	readonly bypassUnavailableSkills: string[];
 	readonly deployedCount: number;
 
-	constructor(blockedSkills: string[], deployedCount: number) {
-		super(`Some skills were not installed: ${blockedSkills.join(", ")}`);
+	constructor(
+		blockedSkills: string[],
+		deployedCount: number,
+		bypassUnavailableSkills: string[] = [],
+	) {
+		const issues = [...blockedSkills, ...bypassUnavailableSkills];
+		super(
+			issues.length > 0
+				? `Some skills were not installed: ${issues.join(", ")}`
+				: "Some skills were not installed.",
+		);
 		this.name = "PartialDeployError";
 		this.blockedSkills = blockedSkills;
+		this.bypassUnavailableSkills = bypassUnavailableSkills;
 		this.deployedCount = deployedCount;
 	}
 }

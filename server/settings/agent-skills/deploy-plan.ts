@@ -1,4 +1,8 @@
-import { isSkillInstalledOnRemote } from "#shared/contracts/agent-skills";
+import {
+	canDeriveScannerBypassUrl,
+	isSkillInstalledOnRemote,
+	type SkillSourceType,
+} from "#shared/contracts/agent-skills";
 import { resolveManifestName } from "./config";
 import {
 	type EnabledSkill,
@@ -88,10 +92,40 @@ export function buildActualManifest(
 	return manifest;
 }
 
+export function findBypassUnavailableSkills(
+	enabledSkills: EnabledSkill[],
+): string[] {
+	const unavailable: string[] = [];
+
+	for (const skill of enabledSkills) {
+		if (!skill.acceptScannerRisk || !skillExpectsRemoteInventory(skill)) {
+			continue;
+		}
+
+		const expectedName = resolveManifestName(skill);
+		if (!expectedName) {
+			continue;
+		}
+
+		if (
+			!canDeriveScannerBypassUrl(
+				skill.installRef ?? "",
+				skill.sourceType as SkillSourceType,
+			)
+		) {
+			unavailable.push(expectedName);
+		}
+	}
+
+	return unavailable;
+}
+
 export function findBlockedSkills(
 	enabledSkills: EnabledSkill[],
 	installedSkillNames: Set<string>,
+	bypassUnavailableSkills: Iterable<string> = [],
 ): string[] {
+	const unavailableSet = new Set(bypassUnavailableSkills);
 	const blocked: string[] = [];
 
 	for (const skill of enabledSkills) {
@@ -102,6 +136,7 @@ export function findBlockedSkills(
 		const expectedName = resolveManifestName(skill);
 		if (
 			expectedName &&
+			!unavailableSet.has(expectedName) &&
 			!isSkillInstalledOnRemote(expectedName, installedSkillNames)
 		) {
 			blocked.push(expectedName);

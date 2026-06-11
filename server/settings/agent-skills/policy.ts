@@ -19,7 +19,7 @@ export type EnabledSkill = {
 	sourceType: string;
 	installRef?: string | null;
 	content?: string | null;
-	acceptScannerRisk?: boolean;
+	acceptScannerRisk: boolean;
 };
 
 type SkillDeployPolicy = {
@@ -55,10 +55,6 @@ function removeHermeshubSkillDir(skillName: string): string {
 }
 
 function buildScannerBypassInstallCommand(skill: EnabledSkill): string | null {
-	if (!skill.acceptScannerRisk) {
-		return null;
-	}
-
 	const installRef = skill.installRef ?? "";
 	const fetchUrl = deriveSkillMdFetchUrl(
 		installRef,
@@ -80,6 +76,16 @@ function buildScannerBypassInstallCommand(skill: EnabledSkill): string | null {
 	].join(" && ");
 }
 
+function resolveRemoteInstallCommand(
+	skill: EnabledSkill,
+	buildCliInstall: () => string,
+): string | null {
+	if (skill.acceptScannerRisk) {
+		return buildScannerBypassInstallCommand(skill);
+	}
+	return buildCliInstall();
+}
+
 const hubPolicy: SkillDeployPolicy = {
 	matchesEnabled(prev, curr) {
 		return (
@@ -94,19 +100,16 @@ const hubPolicy: SkillDeployPolicy = {
 		)} || true`;
 	},
 	installCommand(skill) {
-		const bypassInstall = buildScannerBypassInstallCommand(skill);
-		if (bypassInstall) {
-			return bypassInstall;
-		}
-
-		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
-		const resolvedName = resolveManifestName(skill);
-		const legacyCleanup = resolvedName
-			? `${removeLegacyFlatSkillDir(resolvedName)} && `
-			: "";
-		return `${legacyCleanup}sudo docker exec hermes hermes skills install ${shellQuote(
-			installRef,
-		)} ${buildHermesHubInstallSuffix()}`;
+		return resolveRemoteInstallCommand(skill, () => {
+			const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
+			const resolvedName = resolveManifestName(skill);
+			const legacyCleanup = resolvedName
+				? `${removeLegacyFlatSkillDir(resolvedName)} && `
+				: "";
+			return `${legacyCleanup}sudo docker exec hermes hermes skills install ${shellQuote(
+				installRef,
+			)} ${buildHermesHubInstallSuffix()}`;
+		});
 	},
 	fileWrite: () => null,
 	manifestEntry(skill) {
@@ -136,15 +139,12 @@ const urlPolicy: SkillDeployPolicy = {
 		)} || true`;
 	},
 	installCommand(skill) {
-		const bypassInstall = buildScannerBypassInstallCommand(skill);
-		if (bypassInstall) {
-			return bypassInstall;
-		}
-
-		const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
-		return `${removeLegacyFlatSkillDir(skill.name)} && sudo docker exec hermes hermes skills install ${shellQuote(
-			installRef,
-		)} ${buildHermesHubInstallSuffix(skill.name)}`;
+		return resolveRemoteInstallCommand(skill, () => {
+			const installRef = normalizeSkillInstallRef(skill.installRef ?? "");
+			return `${removeLegacyFlatSkillDir(skill.name)} && sudo docker exec hermes hermes skills install ${shellQuote(
+				installRef,
+			)} ${buildHermesHubInstallSuffix(skill.name)}`;
+		});
 	},
 	fileWrite: () => null,
 	manifestEntry(skill) {

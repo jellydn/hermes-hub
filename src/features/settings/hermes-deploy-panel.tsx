@@ -12,6 +12,7 @@ export type DeployResponsePayload = {
 	serverCount?: number;
 	skillCount?: number;
 	blockedSkills?: string[];
+	bypassUnavailableSkills?: string[];
 };
 
 type HermesDeployPanelProps = {

@@ -251,7 +251,11 @@ export async function deploySkillsToHermes(context: Context) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
-	let deployResult = { skillCount: 0, blockedSkills: [] as string[] };
+	let deployResult = {
+		skillCount: 0,
+		blockedSkills: [] as string[],
+		bypassUnavailableSkills: [] as string[],
+	};
 
 	return deployToHermesAgent(context, session, parsed.serverId, {
 		deploy: async (ssh) => {
@@ -270,10 +274,12 @@ export async function deploySkillsToHermes(context: Context) {
 			serverHost: sshCtx.server.host,
 			skillCount: deployResult.skillCount,
 			blockedSkills: deployResult.blockedSkills,
+			bypassUnavailableSkills: deployResult.bypassUnavailableSkills,
 		}),
 		buildSuccessResponse: (sshCtx, deployedAt) => ({
 			serverHost: sshCtx.server.host,
 			skillCount: deployResult.skillCount,
+			bypassUnavailableSkills: deployResult.bypassUnavailableSkills,
 			deployedAt: deployedAt.toISOString(),
 		}),
 	});

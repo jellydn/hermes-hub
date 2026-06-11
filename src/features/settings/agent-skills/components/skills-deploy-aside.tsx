@@ -37,7 +37,8 @@ function formatDeploySuccess(
 		? new Date(payload.deployedAt).toLocaleString()
 		: null;
 	const count = payload.skillCount ?? enabledCount;
-	const blocked = payload.blockedSkills;
+	const blocked = payload.blockedSkills ?? [];
+	const bypassUnavailable = payload.bypassUnavailableSkills ?? [];
 
 	const base = deployedAt
 		? `Deployed ${count} skill${
@@ -47,7 +48,13 @@ function formatDeploySuccess(
 				count === 1 ? "" : "s"
 			} to ${serverHost}. Hermes is restarting...`;
 
-	if (blocked && blocked.length > 0) {
+	if (bypassUnavailable.length > 0) {
+		return `${base} ${bypassUnavailable.length} skill${
+			bypassUnavailable.length === 1 ? "" : "s"
+		} could not use scanner bypass: ${bypassUnavailable.join(", ")}. Use a GitHub folder URL or direct raw SKILL.md link, then save and deploy again.`;
+	}
+
+	if (blocked.length > 0) {
 		return `${base} ${blocked.length} skill${
 			blocked.length === 1 ? " was" : "s were"
 		} blocked by the Hermes scanner: ${blocked.join(", ")}. Hermes does not allow dangerous verdicts through \`--force\`. Edit the skill, enable "Accept scanner risk" to deploy SKILL.md directly, or install manually on the server.`;
@@ -66,6 +73,7 @@ type SkillsDeployAsideProps = {
 	remoteLoading: boolean;
 	remoteError: string | null;
 	lastBlockedSkills: string[];
+	lastBypassUnavailableSkills: string[];
 	onDeploySuccess: (payload: DeployResponsePayload) => void;
 };
 
@@ -73,15 +81,17 @@ function ManagedSkillSummary({
 	expectedNames,
 	managedManifestNames,
 	lastBlockedSkills,
+	lastBypassUnavailableSkills,
 }: {
 	expectedNames: string[];
 	managedManifestNames: string[];
 	lastBlockedSkills: string[];
+	lastBypassUnavailableSkills: string[];
 }) {
-	const { present, blocked, missing } = classifyManagedSkillStatus(
+	const { present, missing } = classifyManagedSkillStatus(
 		expectedNames,
 		managedManifestNames,
-		lastBlockedSkills,
+		[...lastBlockedSkills, ...lastBypassUnavailableSkills],
 	);
 
 	return (
@@ -96,7 +106,20 @@ function ManagedSkillSummary({
 				{present.length} of {expectedNames.length} enabled skill
 				{expectedNames.length === 1 ? "" : "s"} present on remote
 			</p>
-			{blocked.length > 0 && (
+			{lastBypassUnavailableSkills.length > 0 && (
+				<div
+					className="flex items-start gap-1.5 text-sm text-amber-600"
+					id="bypass-unavailable-managed-skills"
+				>
+					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+					<span>
+						Scanner bypass unavailable on last deploy:
+						{lastBypassUnavailableSkills.map((n) => ` ${n}`)}. Use a GitHub
+						folder URL or direct raw SKILL.md link.
+					</span>
+				</div>
+			)}
+			{lastBlockedSkills.length > 0 && (
 				<div
 					className="flex items-start gap-1.5 text-sm text-amber-600"
 					id="blocked-managed-skills"
@@ -104,9 +127,9 @@ function ManagedSkillSummary({
 					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
 					<span>
 						Blocked by Hermes scanner on last deploy:
-						{blocked.map((n) => ` ${n}`)}. Enable "Accept scanner risk" on the
-						skill to bypass via direct file write, or install manually on the
-						server.
+						{lastBlockedSkills.map((n) => ` ${n}`)}. Enable "Accept scanner
+						risk" on the skill to bypass via direct file write, or install
+						manually on the server.
 					</span>
 				</div>
 			)}
@@ -137,6 +160,7 @@ export function SkillsDeployAside({
 	remoteLoading,
 	remoteError,
 	lastBlockedSkills,
+	lastBypassUnavailableSkills,
 	onDeploySuccess,
 }: SkillsDeployAsideProps) {
 	return (
@@ -206,6 +230,7 @@ export function SkillsDeployAside({
 										(entry) => entry.name,
 									)}
 									lastBlockedSkills={lastBlockedSkills}
+									lastBypassUnavailableSkills={lastBypassUnavailableSkills}
 								/>
 							)}
 

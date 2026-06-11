@@ -1,7 +1,11 @@
 import { LoaderCircle, Save } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { cn } from "#/lib/utils";
-import type { SkillSourceType } from "#shared/contracts/agent-skills";
+import {
+	canDeriveScannerBypassUrl,
+	getScannerBypassUnavailableReason,
+	type SkillSourceType,
+} from "#shared/contracts/agent-skills";
 
 export type SkillFormState = {
 	name: string;
@@ -32,6 +36,15 @@ export function SkillForm({
 	onSave,
 	onCancel,
 }: SkillFormProps) {
+	const bypassAvailable =
+		form.sourceType === "hub" || form.sourceType === "url"
+			? canDeriveScannerBypassUrl(form.installRef, form.sourceType)
+			: false;
+	const bypassUnavailableReason =
+		form.sourceType === "hub" || form.sourceType === "url"
+			? getScannerBypassUnavailableReason(form.installRef, form.sourceType)
+			: null;
+
 	return (
 		<section
 			className="island-shell rounded-[2rem] p-6 sm:p-8"
@@ -171,10 +184,18 @@ export function SkillForm({
 
 				{(form.sourceType === "hub" || form.sourceType === "url") && (
 					<div className="space-y-2 rounded-[1rem] border border-amber-500/30 bg-amber-500/5 p-4">
-						<label className="flex items-start gap-2 text-sm font-medium text-[var(--sea-ink)] cursor-pointer">
+						<label
+							className={cn(
+								"flex items-start gap-2 text-sm font-medium text-[var(--sea-ink)]",
+								bypassAvailable
+									? "cursor-pointer"
+									: "cursor-not-allowed opacity-60",
+							)}
+						>
 							<input
 								type="checkbox"
 								checked={form.acceptScannerRisk}
+								disabled={!bypassAvailable && !form.acceptScannerRisk}
 								onChange={(e) =>
 									onChangeField("acceptScannerRisk", e.target.checked)
 								}
@@ -182,15 +203,21 @@ export function SkillForm({
 							/>
 							<span>Accept scanner risk and bypass Hermes install guard</span>
 						</label>
-						<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
-							Hermes blocks skills rated dangerous even with{" "}
-							<code className="text-[11px]">--force</code>. When enabled, Hub
-							writes SKILL.md directly to the server instead of using{" "}
-							<code className="text-[11px]">hermes skills install</code>. This
-							skips the scanner but only installs a single SKILL.md file —
-							scripts and reference folders are not copied. Use only when you
-							trust the source.
-						</p>
+						{bypassAvailable ? (
+							<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
+								Hermes blocks skills rated dangerous even with{" "}
+								<code className="text-[11px]">--force</code>. When enabled, Hub
+								writes SKILL.md directly to the server instead of using{" "}
+								<code className="text-[11px]">hermes skills install</code>. This
+								skips the scanner but only installs a single SKILL.md file —
+								scripts and reference folders are not copied. Use only when you
+								trust the source.
+							</p>
+						) : (
+							<p className="m-0 text-xs text-amber-700">
+								{bypassUnavailableReason}
+							</p>
+						)}
 					</div>
 				)}
 			</div>
