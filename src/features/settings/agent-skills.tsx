@@ -1,4 +1,4 @@
-import { Banner } from "#/components/ui/banner";
+import { AlertPanel } from "#/components/ui/alert-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import type { AgentSkillSummary } from "#shared/contracts/agent-skills";
 import { SkillForm } from "./agent-skills/components/skill-form";
@@ -67,9 +67,9 @@ export function AgentSkills({
 				)}
 
 				{message && (
-					<Banner tone={message.type} className="mt-4">
+					<AlertPanel tone={message.type} withStatusIcon className="mt-4">
 						{message.text}
-					</Banner>
+					</AlertPanel>
 				)}
 			</div>
 

@@ -7,6 +7,11 @@ import { buildStoredCredentialSubscriptionSummary } from "./subscription-credent
 
 type ModelAccessRecords = Awaited<ReturnType<typeof loadModelAccessRecords>>;
 
+type ActiveAccessSummary = {
+	apiProvider: ModelAccessSnapshot["apiProvider"];
+	subscription: ModelAccessSnapshot["subscription"];
+};
+
 function buildApiProviderSummary(
 	record: NonNullable<ModelAccessRecords["apiRecord"]>,
 ) {
@@ -26,33 +31,55 @@ function buildApiProviderSummary(
 	};
 }
 
-export function buildModelAccessSnapshot(
+function resolveActiveAccessSummary(
 	records: ModelAccessRecords,
-): ModelAccessSnapshot {
+): ActiveAccessSummary {
 	const { apiRecord, subscriptionRecord } = records;
+
+	if (subscriptionRecord) {
+		return {
+			apiProvider: null,
+			subscription: {
+				kind: "subscription",
+				subscriptionProvider: subscriptionRecord.subscriptionProvider,
+				model: subscriptionRecord.model,
+				authMode: subscriptionRecord.authMode,
+			},
+		};
+	}
 
 	const credentialOption =
 		apiRecord?.isActive && apiRecord.provider
 			? getSubscriptionByStorageProviderId(apiRecord.provider)
 			: null;
 
-	const apiProvider =
-		apiRecord?.isActive &&
-		isApiProviderId(apiRecord.provider) &&
-		!credentialOption
-			? buildApiProviderSummary(apiRecord)
-			: null;
+	if (credentialOption && apiRecord) {
+		return {
+			apiProvider: null,
+			subscription: buildStoredCredentialSubscriptionSummary(
+				credentialOption,
+				apiRecord,
+			),
+		};
+	}
 
-	const subscription = subscriptionRecord
-		? {
-				kind: "subscription" as const,
-				subscriptionProvider: subscriptionRecord.subscriptionProvider,
-				model: subscriptionRecord.model,
-				authMode: subscriptionRecord.authMode,
-			}
-		: credentialOption && apiRecord
-			? buildStoredCredentialSubscriptionSummary(credentialOption, apiRecord)
-			: null;
+	if (apiRecord?.isActive && isApiProviderId(apiRecord.provider)) {
+		return {
+			apiProvider: buildApiProviderSummary(apiRecord),
+			subscription: null,
+		};
+	}
+
+	return {
+		apiProvider: null,
+		subscription: null,
+	};
+}
+
+export function buildModelAccessSnapshot(
+	records: ModelAccessRecords,
+): ModelAccessSnapshot {
+	const { apiProvider, subscription } = resolveActiveAccessSummary(records);
 
 	return {
 		apiProvider,

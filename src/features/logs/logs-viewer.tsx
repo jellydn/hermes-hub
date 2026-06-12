@@ -1,8 +1,7 @@
 import { LoaderCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
-
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { alertPanelClass } from "#/components/ui/alert-panel-class";
-import { Banner } from "#/components/ui/banner";
 import { Button } from "#/components/ui/button";
 import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "#/lib/logs";
 import { formatActionLabel } from "#/lib/server-detail";
@@ -102,7 +101,11 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 					</div>
 				</div>
 
-				{state.error ? <Banner tone="error">{state.error}</Banner> : null}
+				{state.error ? (
+					<AlertPanel tone="error" withStatusIcon className="mt-5">
+						{state.error}
+					</AlertPanel>
+				) : null}
 
 				{state.showConfirmation ? (
 					<div className={alertPanelClass("warning", "mt-5 px-4 py-4")}>

@@ -5,7 +5,7 @@ import { formatAiProviderLabel } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
 import {
 	formatUserSubscriptionLabel,
-	subscriptionRequiresCredentials,
+	subscriptionSupportsConnectionTest,
 } from "#/lib/user-subscriptions";
 import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import type {
@@ -52,7 +52,7 @@ export function ProviderSettingsAside({
 	const requiresCodexAuth =
 		activeBackend === "subscription" &&
 		savedSubscription &&
-		!subscriptionRequiresCredentials(savedSubscription.subscriptionProvider);
+		!subscriptionSupportsConnectionTest(savedSubscription.subscriptionProvider);
 	const codexReadyForDeploy =
 		!requiresCodexAuth ||
 		(!isLoadingCodexAuth && codexAuthStatus?.authenticated === true);

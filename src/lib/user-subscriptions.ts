@@ -19,6 +19,7 @@ type BaseSubscriptionOption = {
 	defaultModel: string;
 	authMode: string;
 	hermesProviderId: string;
+	supportsConnectionTest: boolean;
 };
 
 export type OAuthSubscriptionOption = BaseSubscriptionOption & {
@@ -45,6 +46,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		hermesProviderId: LEGACY_CODEX_PROVIDER_ID,
 		authMode: "chatgpt",
 		credentialKind: "oauth",
+		supportsConnectionTest: false,
 		models: [
 			"gpt-5.5",
 			"gpt-5.4-mini",
@@ -62,6 +64,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		hermesProviderId: "xiaomi",
 		authMode: "mimo-token-plan",
 		credentialKind: "api-key",
+		supportsConnectionTest: true,
 		storageProviderId: "mimo",
 		defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
 		deployEnv: {
@@ -157,8 +160,10 @@ export function isValidSubscriptionModel(
 	return option.models.includes(model);
 }
 
-export function subscriptionRequiresCredentials(
+export function subscriptionSupportsConnectionTest(
 	subscription: UserSubscriptionId,
 ) {
-	return getUserSubscriptionOption(subscription)?.credentialKind === "api-key";
+	return (
+		getUserSubscriptionOption(subscription)?.supportsConnectionTest ?? false
+	);
 }

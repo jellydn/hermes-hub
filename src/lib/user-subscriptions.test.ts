@@ -7,7 +7,6 @@ import {
 	getSubscriptionStorageProviderId,
 	getUserSubscriptionOption,
 	isValidSubscriptionModel,
-	subscriptionRequiresCredentials,
 	userSubscriptionOptions,
 } from "./user-subscriptions";
 
@@ -74,8 +73,12 @@ describe("mimo subscription metadata", () => {
 		expect(getSubscriptionDefaultBaseUrl("mimo")).toBe(
 			"https://token-plan-cn.xiaomimimo.com/v1",
 		);
-		expect(subscriptionRequiresCredentials("mimo")).toBe(true);
-		expect(subscriptionRequiresCredentials("chatgpt")).toBe(false);
+		expect(getUserSubscriptionOption("mimo")?.supportsConnectionTest).toBe(
+			true,
+		);
+		expect(getUserSubscriptionOption("chatgpt")?.supportsConnectionTest).toBe(
+			false,
+		);
 	});
 });
 

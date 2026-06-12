@@ -1,5 +1,5 @@
 import { Activity, LoaderCircle } from "lucide-react";
-import { Banner } from "#/components/ui/banner";
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 import { StatusIcon } from "#/components/ui/status-icon";
 import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
@@ -36,7 +36,11 @@ export function ServerHealthCheckPanel({
 				</Button>
 			</div>
 
-			{error ? <Banner tone="error">{error}</Banner> : null}
+			{error ? (
+				<AlertPanel tone="error" withStatusIcon className="mt-5">
+					{error}
+				</AlertPanel>
+			) : null}
 
 			{result ? <ServerHealthCheckResults result={result} /> : null}
 		</>

@@ -1,22 +1,18 @@
-import {
-	CheckCircle2,
-	KeyRound,
-	LoaderCircle,
-	ShieldCheck,
-} from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-import { AlertPanel } from "#/components/ui/alert-panel";
-import { Button } from "#/components/ui/button";
 import { inputClassName } from "#/components/ui/input-class";
 import {
 	formatUserSubscriptionLabel,
 	getCredentialSubscriptionOption,
 	getUserSubscriptionOption,
-	subscriptionRequiresCredentials,
+	subscriptionSupportsConnectionTest,
 	type UserSubscriptionId,
 	userSubscriptionOptions,
 } from "#/lib/user-subscriptions";
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
+import {
+	AccessSelectionActions,
+	AccessSelectionFeedback,
+} from "./access-selection-chrome";
 import { CodexAuthPanel, type CodexAuthStatusChange } from "./codex-auth-panel";
 import { ProviderSettingsField } from "./provider-settings-ui";
 
@@ -63,7 +59,7 @@ export function SubscriptionSelectionPanel({
 	const subscriptionOption = getUserSubscriptionOption(
 		form.subscriptionProvider,
 	);
-	const requiresCredentials = subscriptionRequiresCredentials(
+	const requiresCredentials = subscriptionSupportsConnectionTest(
 		form.subscriptionProvider,
 	);
 	const credentialOption = getCredentialSubscriptionOption(
@@ -189,61 +185,22 @@ export function SubscriptionSelectionPanel({
 				) : null}
 			</div>
 
-			{saveMessage ? (
-				<AlertPanel tone="success" className="mt-6">
-					{saveMessage}
-				</AlertPanel>
-			) : null}
+			<AccessSelectionFeedback
+				isConnected={isConnected}
+				saveError={saveError}
+				saveMessage={saveMessage}
+				testError={testError}
+			/>
 
-			{saveError ? (
-				<AlertPanel tone="error" className="mt-6">
-					{saveError}
-				</AlertPanel>
-			) : null}
-
-			{testError ? (
-				<AlertPanel tone="error" className="mt-6">
-					{testError}
-				</AlertPanel>
-			) : null}
-
-			{isConnected ? (
-				<AlertPanel
-					tone="success"
-					className="mt-6"
-					LeadingIcon={CheckCircle2}
-					leadingIconClassName="h-4 w-4 text-[var(--alert-success-fg)]"
-				>
-					Provider connected
-				</AlertPanel>
-			) : null}
-
-			<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-				<Button type="button" onClick={onSave} disabled={isSaving}>
-					{isSaving ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<KeyRound className="h-4 w-4" />
-					)}
-					<span>{isSaving ? "Saving..." : "Save Subscription"}</span>
-				</Button>
-
-				{requiresCredentials ? (
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={onTest}
-						disabled={isTesting}
-					>
-						{isTesting ? (
-							<LoaderCircle className="h-4 w-4 animate-spin" />
-						) : (
-							<ShieldCheck className="h-4 w-4" />
-						)}
-						<span>{isTesting ? "Testing..." : "Test Connection"}</span>
-					</Button>
-				) : null}
-			</div>
+			<AccessSelectionActions
+				isSaving={isSaving}
+				isTesting={isTesting}
+				onSave={onSave}
+				onTest={onTest}
+				saveLabel="Save Subscription"
+				savingLabel="Saving..."
+				showTest={requiresCredentials}
+			/>
 
 			{form.subscriptionProvider === "chatgpt" ? (
 				<CodexAuthPanel

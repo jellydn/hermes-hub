@@ -12,7 +12,6 @@ import {
 	getUserSubscriptionOption,
 	isUserSubscriptionId,
 	isValidSubscriptionModel,
-	subscriptionRequiresCredentials,
 } from "#/lib/user-subscriptions";
 import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import { getAuthSession } from "./auth";
@@ -32,6 +31,7 @@ import {
 	verifyOpenAiCompatibleConnection,
 	verifyProviderConnection,
 } from "./providers/connection";
+import { resolveStoredCredentials } from "./providers/credential-resolution";
 import { readApiBackendKeyForEnvMap } from "./providers/deploy-material";
 import { buildModelAccessSnapshot } from "./providers/model-access";
 import {
@@ -39,17 +39,13 @@ import {
 	activateCredentialSubscription,
 	activateSubscription,
 } from "./providers/model-access-persistence";
-import {
-	decryptStoredApiKey,
-	getApiKeyLast4,
-	getLatestProviderRecord,
-} from "./providers/records";
+import { getApiKeyLast4, getLatestProviderRecord } from "./providers/records";
 import {
 	buildCredentialSubscriptionSummary,
 	buildSubscriptionCredentialEnvMap,
 	readCredentialSubscriptionKeyMaterial,
-	resolveSubscriptionCredentials,
 } from "./providers/subscription-credentials";
+import { loadCredentialSubscriptionCredentials } from "./providers/subscription-request";
 
 export async function getModelAccessSnapshot(
 	userId: string,
@@ -166,39 +162,26 @@ export async function saveSubscriptionConfig(context: Context) {
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
+	const credentialOption = getCredentialSubscriptionOption(
+		parsed.subscriptionProvider,
+	);
 
 	try {
-		if (subscriptionRequiresCredentials(parsed.subscriptionProvider)) {
-			const credentialOption = getCredentialSubscriptionOption(
-				parsed.subscriptionProvider,
+		if (credentialOption) {
+			const credentialContext = await loadCredentialSubscriptionCredentials(
+				session.user.id,
+				parsed,
 			);
-			if (!credentialOption) {
-				return context.json(
-					{ error: "Choose a valid subscription provider." },
-					400,
-				);
-			}
-
-			const existingRecord = await getLatestProviderRecord(session.user.id);
-			const resolvedCredentials = resolveSubscriptionCredentials(
-				parsed.subscriptionProvider,
-				{
-					apiKey: parsed.apiKey,
-					baseUrl: parsed.baseUrl,
-				},
-				existingRecord,
-				credentialOption,
-			);
-			if ("error" in resolvedCredentials) {
-				return context.json({ error: resolvedCredentials.error }, 400);
+			if ("error" in credentialContext) {
+				return context.json({ error: credentialContext.error }, 400);
 			}
 
 			await db.transaction(async (tx) => {
 				await activateCredentialSubscription(tx, {
 					userId: session.user.id,
 					subscriptionProvider: parsed.subscriptionProvider,
-					apiKey: resolvedCredentials.apiKey,
-					baseUrl: resolvedCredentials.baseUrl,
+					apiKey: credentialContext.credentials.apiKey,
+					baseUrl: credentialContext.credentials.baseUrl,
 					model: parsed.model,
 					ipAddress,
 				});
@@ -207,11 +190,14 @@ export async function saveSubscriptionConfig(context: Context) {
 			clearDashboardCache();
 
 			return context.json({
-				subscription: buildCredentialSubscriptionSummary(credentialOption, {
-					model: parsed.model,
-					apiKey: resolvedCredentials.apiKey,
-					baseUrl: resolvedCredentials.baseUrl,
-				}),
+				subscription: buildCredentialSubscriptionSummary(
+					credentialContext.option,
+					{
+						model: parsed.model,
+						apiKey: credentialContext.credentials.apiKey,
+						baseUrl: credentialContext.credentials.baseUrl,
+					},
+				),
 			});
 		}
 
@@ -309,41 +295,18 @@ export async function testSubscriptionConfig(context: Context) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
-	if (!subscriptionRequiresCredentials(parsed.subscriptionProvider)) {
-		return context.json(
-			{ error: "This subscription does not support connection tests." },
-			400,
-		);
-	}
-
-	const credentialOption = getCredentialSubscriptionOption(
-		parsed.subscriptionProvider,
+	const credentialContext = await loadCredentialSubscriptionCredentials(
+		session.user.id,
+		parsed,
 	);
-	if (!credentialOption) {
-		return context.json(
-			{ error: "Choose a valid subscription provider." },
-			400,
-		);
-	}
-
-	const existingRecord = await getLatestProviderRecord(session.user.id);
-	const resolvedCredentials = resolveSubscriptionCredentials(
-		parsed.subscriptionProvider,
-		{
-			apiKey: parsed.apiKey,
-			baseUrl: parsed.baseUrl,
-		},
-		existingRecord,
-		credentialOption,
-	);
-	if ("error" in resolvedCredentials) {
-		return context.json({ error: resolvedCredentials.error }, 400);
+	if ("error" in credentialContext) {
+		return context.json({ error: credentialContext.error }, 400);
 	}
 
 	try {
 		await verifyOpenAiCompatibleConnection({
-			apiKey: resolvedCredentials.apiKey,
-			baseUrl: resolvedCredentials.baseUrl,
+			apiKey: credentialContext.credentials.apiKey,
+			baseUrl: credentialContext.credentials.baseUrl,
 		});
 
 		return context.json({ status: "connected" });
@@ -406,35 +369,20 @@ function resolveProviderApiKey(
 	},
 	existingRecord: StoredProviderRecord | null,
 ) {
-	let resolvedApiKey = parsed.apiKey;
-	let resolvedBaseUrl = parsed.baseUrl;
-
-	if (!resolvedApiKey && existingRecord?.provider === parsed.provider) {
-		if (existingRecord.encryptedApiKey) {
-			const decryptResult = decryptStoredApiKey(existingRecord.encryptedApiKey);
-			if (!decryptResult.ok) {
-				return { error: "Stored API key could not be read. Paste a new key." };
-			}
-
-			resolvedApiKey = decryptResult.apiKey;
-		}
-
-		if (!resolvedBaseUrl) {
-			resolvedBaseUrl = existingRecord.baseUrl ?? undefined;
-		}
-	}
-
 	const credentialPolicy = getProviderCredentialPolicy(parsed.provider);
 
-	if (credentialPolicy.requiresBaseUrl && !resolvedBaseUrl) {
-		return { error: "Base URL is required." };
-	}
-
-	if (credentialPolicy.requiresApiKey && !resolvedApiKey) {
-		return { error: "API key is required." };
-	}
-
-	return { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl };
+	return resolveStoredCredentials(
+		{
+			apiKey: parsed.apiKey,
+			baseUrl: parsed.baseUrl ?? "",
+		},
+		existingRecord,
+		{
+			storageId: parsed.provider,
+			requiresApiKey: credentialPolicy.requiresApiKey,
+			requiresBaseUrl: credentialPolicy.requiresBaseUrl,
+		},
+	);
 }
 
 export async function getProviderDeployConfig(

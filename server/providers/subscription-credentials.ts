@@ -1,9 +1,7 @@
-import type {
-	CredentialSubscriptionOption,
-	UserSubscriptionId,
-} from "#/lib/user-subscriptions";
+import type { CredentialSubscriptionOption } from "#/lib/user-subscriptions";
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
 import type { StoredProviderRecord } from "./config";
+import { resolveStoredCredentials } from "./credential-resolution";
 import { decryptStoredApiKey, getApiKeyLast4 } from "./records";
 
 export function buildSubscriptionCredentialEnvMap(
@@ -63,49 +61,27 @@ export function buildStoredCredentialSubscriptionSummary(
 }
 
 export function resolveSubscriptionCredentials(
-	_subscriptionProvider: UserSubscriptionId,
 	input: {
 		apiKey: string;
 		baseUrl: string;
 	},
 	existingRecord: StoredProviderRecord | null,
 	option: CredentialSubscriptionOption,
-) {
-	let resolvedApiKey = input.apiKey;
-	let resolvedBaseUrl = input.baseUrl;
+): { error: string } | { apiKey: string; baseUrl: string } {
+	const resolved = resolveStoredCredentials(input, existingRecord, {
+		storageId: option.storageProviderId,
+		requiresApiKey: true,
+		requiresBaseUrl: true,
+	});
 
-	if (
-		!resolvedApiKey &&
-		existingRecord?.provider === option.storageProviderId
-	) {
-		if (existingRecord.encryptedApiKey) {
-			const decryptResult = decryptStoredApiKey(existingRecord.encryptedApiKey);
-			if (!decryptResult.ok) {
-				return {
-					error: "Stored API key could not be read. Paste a new key.",
-				} as const;
-			}
-
-			resolvedApiKey = decryptResult.apiKey;
-		}
-
-		if (!resolvedBaseUrl) {
-			resolvedBaseUrl = existingRecord.baseUrl ?? "";
-		}
-	}
-
-	if (!resolvedBaseUrl) {
-		return { error: "Base URL is required." } as const;
-	}
-
-	if (!resolvedApiKey) {
-		return { error: "API key is required." } as const;
+	if ("error" in resolved) {
+		return { error: resolved.error };
 	}
 
 	return {
-		apiKey: resolvedApiKey,
-		baseUrl: resolvedBaseUrl,
-	} as const;
+		apiKey: resolved.apiKey,
+		baseUrl: resolved.baseUrl ?? "",
+	};
 }
 
 export function readCredentialSubscriptionKeyMaterial(backend: {

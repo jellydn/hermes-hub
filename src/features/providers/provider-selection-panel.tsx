@@ -1,13 +1,5 @@
-import {
-	CheckCircle2,
-	KeyRound,
-	LoaderCircle,
-	Radio,
-	ShieldCheck,
-} from "lucide-react";
+import { Radio } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-import { AlertPanel } from "#/components/ui/alert-panel";
-import { Button } from "#/components/ui/button";
 import { inputClassName } from "#/components/ui/input-class";
 import {
 	type ApiProviderId,
@@ -16,6 +8,10 @@ import {
 	getAiProviderOption,
 } from "#/lib/ai-providers";
 import type { ApiProviderConfigSummary } from "#shared/contracts/model-access";
+import {
+	AccessSelectionActions,
+	AccessSelectionFeedback,
+} from "./access-selection-chrome";
 import { ProviderSettingsField } from "./provider-settings-ui";
 
 type ProviderFormState = {
@@ -202,58 +198,21 @@ export function ProviderSelectionPanel({
 				)}
 			</div>
 
-			{saveMessage ? (
-				<AlertPanel tone="success" className="mt-6">
-					{saveMessage}
-				</AlertPanel>
-			) : null}
+			<AccessSelectionFeedback
+				isConnected={isConnected}
+				saveError={saveError}
+				saveMessage={saveMessage}
+				testError={testError}
+			/>
 
-			{saveError ? (
-				<AlertPanel tone="error" className="mt-6">
-					{saveError}
-				</AlertPanel>
-			) : null}
-
-			{testError ? (
-				<AlertPanel tone="error" className="mt-6">
-					{testError}
-				</AlertPanel>
-			) : null}
-
-			{isConnected ? (
-				<AlertPanel
-					tone="success"
-					className="mt-6"
-					LeadingIcon={CheckCircle2}
-					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
-				>
-					Provider connected
-				</AlertPanel>
-			) : null}
-
-			<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-				<Button type="button" onClick={onSave} disabled={isSaving}>
-					{isSaving ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<KeyRound className="h-4 w-4" />
-					)}
-					<span>{isSaving ? "Saving..." : "Save Provider"}</span>
-				</Button>
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={onTest}
-					disabled={isTesting}
-				>
-					{isTesting ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<ShieldCheck className="h-4 w-4" />
-					)}
-					<span>{isTesting ? "Testing..." : "Test Connection"}</span>
-				</Button>
-			</div>
+			<AccessSelectionActions
+				isSaving={isSaving}
+				isTesting={isTesting}
+				onSave={onSave}
+				onTest={onTest}
+				saveLabel="Save Provider"
+				savingLabel="Saving..."
+			/>
 		</section>
 	);
 }

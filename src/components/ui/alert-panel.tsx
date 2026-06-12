@@ -39,7 +39,7 @@ export function AlertPanel({
 						className={cn("h-5 w-5 shrink-0", leadingIconClassName)}
 					/>
 				) : null}
-				<span>{children}</span>
+				<div className="min-w-0 flex-1">{children}</div>
 			</div>
 		</div>
 	);

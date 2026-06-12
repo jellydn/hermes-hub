@@ -9,7 +9,6 @@ import {
 import { useState } from "react";
 
 import { AlertPanel } from "#/components/ui/alert-panel";
-import { Banner } from "#/components/ui/banner";
 import { Button } from "#/components/ui/button";
 import type {
 	ServerDetailChangeHandler,
@@ -155,15 +154,29 @@ export function ServerDetail({
 						install={detail.install}
 					/>
 					{basics.success ? (
-						<Banner tone="success">{basics.success}</Banner>
+						<AlertPanel tone="success" withStatusIcon className="mt-5">
+							{basics.success}
+						</AlertPanel>
 					) : null}
-					{basics.error ? <Banner tone="error">{basics.error}</Banner> : null}
-					{installError ? <Banner tone="error">{installError}</Banner> : null}
+					{basics.error ? (
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{basics.error}
+						</AlertPanel>
+					) : null}
+					{installError ? (
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{installError}
+						</AlertPanel>
+					) : null}
 					{actions.actionState.success ? (
-						<Banner tone="success">{actions.actionState.success}</Banner>
+						<AlertPanel tone="success" withStatusIcon className="mt-5">
+							{actions.actionState.success}
+						</AlertPanel>
 					) : null}
 					{actions.actionState.error ? (
-						<Banner tone="error">{actions.actionState.error}</Banner>
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{actions.actionState.error}
+						</AlertPanel>
 					) : null}
 
 					<ServerActionControls
