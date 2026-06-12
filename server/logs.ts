@@ -326,7 +326,3 @@ function readActionType(action: string): ActionLogEntry["action"] {
 
 	return "restart";
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}

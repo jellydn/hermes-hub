@@ -5,6 +5,7 @@ import type {
 	ServerActionType,
 	ServerDetailSnapshot,
 } from "#/lib/server-detail";
+import { USER_INITIATED_ACTION_NAME_SET } from "./audit-log-actions";
 import { getDb } from "./db";
 import { auditLogs } from "./db/schema";
 import { getLatestInstallForServer } from "./install/records";
@@ -27,14 +28,7 @@ type AuditRecord = {
 	createdAt: Date;
 };
 
-const finishedActionNames = new Set([
-	"server.action.restart.succeeded",
-	"server.action.restart.failed",
-	"server.action.update.succeeded",
-	"server.action.update.failed",
-	"server.action.rollback.succeeded",
-	"server.action.rollback.failed",
-]);
+const finishedActionNames = USER_INITIATED_ACTION_NAME_SET;
 
 export async function getServerDetailSnapshot(input: {
 	serverId: string;
@@ -216,8 +210,4 @@ function readActionMessage(
 	}
 
 	return `${formatActionLabel(action)} completed.`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
