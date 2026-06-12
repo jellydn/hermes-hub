@@ -17,6 +17,7 @@ import {
 } from "#/lib/ai-providers";
 import type { ApiProviderConfigSummary } from "#shared/contracts/model-access";
 import { ProviderSettingsField } from "./provider-settings-ui";
+
 type ProviderFormState = {
 	provider: ApiProviderId;
 	model: string;
@@ -78,7 +79,7 @@ export function ProviderSelectionPanel({
 						<label
 							key={option.id}
 							className={[
-								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition",
+								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition focus-within:ring-2 focus-within:ring-[color:var(--lagoon)] focus-within:ring-offset-2",
 								isSelected
 									? "border-[color:var(--lagoon)] bg-[rgba(79,184,178,0.14)]"
 									: "border-[var(--chip-line)] bg-[var(--chip-bg)]",

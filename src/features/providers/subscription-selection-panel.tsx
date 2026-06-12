@@ -19,6 +19,7 @@ import {
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
 import { CodexAuthPanel, type CodexAuthStatusChange } from "./codex-auth-panel";
 import { ProviderSettingsField } from "./provider-settings-ui";
+
 type SubscriptionFormState = {
 	subscriptionProvider: UserSubscriptionId;
 	model: string;
@@ -94,7 +95,7 @@ export function SubscriptionSelectionPanel({
 						<label
 							key={option.id}
 							className={[
-								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition",
+								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition focus-within:ring-2 focus-within:ring-[color:var(--lagoon)] focus-within:ring-offset-2",
 								isSelected
 									? "border-[color:var(--lagoon)] bg-[rgba(79,184,178,0.14)]"
 									: "border-[var(--chip-line)] bg-[var(--chip-bg)]",

@@ -5,7 +5,7 @@ import {
 	RotateCcw,
 } from "lucide-react";
 
-import { AlertPanel } from "#/components/ui/alert-panel"
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { StatusIcon } from "#/components/ui/status-icon";

@@ -2,7 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 
 import { cn } from "#/lib/utils";
 
-import { alertPanelClass, type AlertTone } from "./alert-panel-class";
+import { type AlertTone, alertPanelClass } from "./alert-panel-class";
 import { StatusIcon } from "./status-icon";
 
 export type { AlertTone } from "./alert-panel-class";

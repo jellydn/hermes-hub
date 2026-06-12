@@ -215,7 +215,7 @@ export function TelegramPairingSection({
 							tone="success"
 							className="mt-4"
 							LeadingIcon={CheckCircle2}
-					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
+							leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
 						>
 							{state.successMessage}
 						</AlertPanel>

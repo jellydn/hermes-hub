@@ -143,7 +143,7 @@ export function ServerDetail({
 							tone="warning"
 							className="mt-4"
 							LeadingIcon={TriangleAlert}
-					leadingIconClassName="h-4 w-4 shrink-0"
+							leadingIconClassName="h-4 w-4 shrink-0"
 						>
 							This OS is not officially supported. Hermes runs via Docker but
 							some features may not work.

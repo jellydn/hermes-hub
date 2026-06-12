@@ -2,7 +2,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useReducer } from "react";
 
-import { AlertPanel } from "#/components/ui/alert-panel"
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { AppShell } from "#/features/dashboard/app-shell";
