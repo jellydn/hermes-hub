@@ -50,7 +50,7 @@ export function McpRecommendedPresets({
 										{preset.title}
 									</p>
 									{savedServer ? (
-										<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700">
+										<span className="inline-flex items-center gap-1 rounded-full bg-[var(--alert-success-bg)] px-2 py-1 text-xs font-medium text-[var(--alert-success-fg)]">
 											<Check className="h-3.5 w-3.5" />
 											Saved
 										</span>

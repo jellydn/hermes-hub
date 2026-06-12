@@ -1,6 +1,7 @@
 import { LoaderCircle, Save } from "lucide-react";
 import { useState } from "react";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
 import type { PersonaSettingsSummary } from "#server/settings/config";
 
@@ -101,13 +102,9 @@ export function PersonaSettings({
 				</div>
 
 				{saveMessage ? (
-					<p
-						className={`mt-4 mb-0 text-sm ${
-							saveMessage.type === "error" ? "text-red-600" : "text-emerald-600"
-						}`}
-					>
+					<FormFeedback className="mt-4 mb-0 text-sm" tone={saveMessage.type}>
 						{saveMessage.text}
-					</p>
+					</FormFeedback>
 				) : null}
 
 				<div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">

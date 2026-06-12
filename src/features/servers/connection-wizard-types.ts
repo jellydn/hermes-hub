@@ -47,8 +47,7 @@ export const initialDraft: ConnectionDraft = {
 	storeCredential: true,
 };
 
-export const inputClassName =
-	"w-full rounded-full border border-[var(--chip-line)] bg-white/80 px-4 py-3 text-sm text-[var(--sea-ink)] outline-none focus:border-[color:var(--lagoon)] focus:ring-2 focus:ring-[rgba(79,184,178,0.18)]";
+export { inputClassName } from "#/components/ui/input-class";
 
 function isValidIpv6Host(host: string) {
 	if (!host.includes(":")) {

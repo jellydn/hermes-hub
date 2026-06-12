@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { type ComponentType, useRef, useState } from "react";
 
+import { AlertPanel } from "#/components/ui/alert-panel"
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { StatusIcon } from "#/components/ui/status-icon";
 
@@ -194,16 +196,15 @@ export function DashboardStatusOverview({
 								: "Connect your first VPS to get started."}
 						</p>
 						{snapshot?.server?.supportLevel === "untested" ? (
-							<p className="mt-3 flex items-center gap-2 rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-200">
-								<TriangleAlert
-									className="h-4 w-4 shrink-0"
-									aria-hidden="true"
-								/>
-								<span>
-									This OS is not officially supported. Hermes runs via Docker
-									but some features may not work.
-								</span>
-							</p>
+							<AlertPanel
+								tone="warning"
+								className="mt-3 px-4 py-2"
+								LeadingIcon={TriangleAlert}
+								leadingIconClassName="h-4 w-4 shrink-0"
+							>
+								This OS is not officially supported. Hermes runs via Docker but
+								some features may not work.
+							</AlertPanel>
 						) : null}
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
@@ -246,11 +247,14 @@ export function DashboardStatusOverview({
 
 			{pollingPaused ? (
 				<section
-					className="flex flex-col items-start justify-between gap-4 rounded-[1.5rem] border border-red-600/20 bg-red-600/10 px-4 py-3 text-sm sm:flex-row sm:items-center"
+					className={alertPanelClass(
+						"error",
+						"flex flex-col items-start justify-between gap-4 px-4 py-3 text-sm sm:flex-row sm:items-center",
+					)}
 					role="alert"
 					aria-live="assertive"
 				>
-					<div className="flex items-center gap-2 text-red-900 dark:text-red-200">
+					<div className="flex items-center gap-2 text-[var(--alert-error-fg)]">
 						<TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
 						<span>
 							Connection lost. Automatic updates are paused until you retry.
@@ -286,7 +290,7 @@ export function DashboardStatusOverview({
 				<>
 					{fetchError ? (
 						<output
-							className="block rounded-[1.5rem] border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+							className={alertPanelClass("warning", "block")}
 							aria-live="polite"
 						>
 							The latest refresh failed, so these cards may be stale.{" "}
@@ -427,7 +431,7 @@ function VpsHealthCard({
 	if (vps.status === "error") {
 		return (
 			<article className="island-shell rounded-[2rem] p-5">
-				<div className="mb-4 inline-flex rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-red-600">
+				<div className="mb-4 inline-flex rounded-2xl border border-[var(--alert-error-border)] bg-[var(--alert-error-bg)] p-3 text-[var(--alert-error-fg)]">
 					<TriangleAlert className="h-5 w-5" />
 				</div>
 				<p className="island-kicker mb-2">VPS health</p>
@@ -562,7 +566,7 @@ function DashboardErrorGrid({
 			{["Servers", "Agent status", "VPS health", "AI provider", "Telegram"].map(
 				(label) => (
 					<article key={label} className="island-shell rounded-[2rem] p-5">
-						<div className="mb-4 inline-flex rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-red-600">
+						<div className="mb-4 inline-flex rounded-2xl border border-[var(--alert-error-border)] bg-[var(--alert-error-bg)] p-3 text-[var(--alert-error-fg)]">
 							<TriangleAlert className="h-5 w-5" />
 						</div>
 						<p className="island-kicker mb-2">{label}</p>

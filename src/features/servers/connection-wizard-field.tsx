@@ -24,7 +24,7 @@ export function WizardField({
 				id={messageId}
 				className={cn(
 					"block min-h-5 text-xs",
-					error ? "text-[#b42318]" : "text-[var(--sea-ink-soft)]",
+					error ? "text-[var(--alert-error-fg)]" : "text-[var(--sea-ink-soft)]",
 				)}
 			>
 				{error ?? hint}

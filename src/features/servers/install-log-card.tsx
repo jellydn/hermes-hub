@@ -7,6 +7,7 @@ import {
 	LoaderCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { StatusIcon } from "#/components/ui/status-icon";
 import { formatInstallStatus } from "./server-detail-helpers";
 
@@ -122,17 +123,17 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 				{install.version ? <span>• Version: {install.version}</span> : null}
 			</p>
 
-			{isFailed && lastErrorLine ? (
-				<div className="mt-3 flex items-center gap-3 rounded-[1rem] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
+			{isFailed ? (
+				<div
+					className={alertPanelClass(
+						"error",
+						"mt-3 flex items-center gap-3 rounded-[1rem] px-3 py-2 text-xs",
+					)}
+				>
 					<AlertCircle className="h-4 w-4 shrink-0" />
-					<span className="truncate">{lastErrorLine}</span>
-				</div>
-			) : null}
-
-			{isFailed && !lastErrorLine ? (
-				<div className="mt-3 flex items-center gap-3 rounded-[1rem] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
-					<AlertCircle className="h-4 w-4 shrink-0" />
-					<span>Install failed. Expand the log to see details.</span>
+					<span className="truncate">
+						{lastErrorLine ?? "Install failed. Expand the log to see details."}
+					</span>
 				</div>
 			) : null}
 
@@ -175,7 +176,7 @@ export function InstallLogCard({ serverId, install }: InstallLogCardProps) {
 							<span>Loading log...</span>
 						</div>
 					) : error ? (
-						<div className="flex items-center gap-2 text-red-600">
+						<div className="flex items-center gap-2 text-[var(--alert-error-fg)]">
 							<AlertCircle className="h-4 w-4" />
 							<span>{error}</span>
 						</div>

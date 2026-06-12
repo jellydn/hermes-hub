@@ -1,5 +1,6 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import { formatAiProviderLabel } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
 import {
@@ -131,12 +132,14 @@ export function ProviderSettingsAside({
 							</Button>
 						</div>
 						{deployError ? (
-							<p className="mt-3 mb-0 text-sm text-red-600">{deployError}</p>
+							<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
+								{deployError}
+							</FormFeedback>
 						) : null}
 						{deployResult ? (
-							<p className="mt-3 mb-0 text-sm text-emerald-600">
+							<FormFeedback className="mt-3 mb-0 text-sm" tone="success">
 								{deployResult}
-							</p>
+							</FormFeedback>
 						) : null}
 					</>
 				) : (

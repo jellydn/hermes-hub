@@ -79,8 +79,8 @@ export function SkillListItem({
 							onClick={() => onDelete(skill.id)}
 							disabled={isDeleting}
 						>
-							<Trash2 className="h-3.5 w-3.5 text-red-500" />
-							<span className="text-red-500">Delete</span>
+							<Trash2 className="h-3.5 w-3.5 text-[var(--alert-error-fg)]" />
+							<span className="text-[var(--alert-error-fg)]">Delete</span>
 						</Button>
 					</div>
 				</div>

@@ -1,6 +1,7 @@
 import { LoaderCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Banner } from "#/components/ui/banner";
 import { Button } from "#/components/ui/button";
 import type { ActionLogEntry, InstallLogEntry, LogsSnapshot } from "#/lib/logs";
@@ -104,7 +105,7 @@ export function LogsViewer({ initialLogs }: LogsViewerProps) {
 				{state.error ? <Banner tone="error">{state.error}</Banner> : null}
 
 				{state.showConfirmation ? (
-					<div className="mt-5 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
+					<div className={alertPanelClass("warning", "mt-5 px-4 py-4")}>
 						<p className="m-0 font-semibold">Clear displayed logs?</p>
 						<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">
 							This removes the persisted install log text and action history

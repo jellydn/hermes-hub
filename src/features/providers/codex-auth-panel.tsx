@@ -1,4 +1,6 @@
 import { useReducer, useRef } from "react";
+
+import { FormFeedback } from "#/components/ui/form-feedback";
 import { useMountEffect } from "#/lib/use-mount-effect";
 import {
 	CODEX_MAX_POLL_ATTEMPTS,
@@ -244,7 +246,9 @@ export function CodexAuthPanel({
 			/>
 
 			{state.startError ? (
-				<p className="mt-3 mb-0 text-sm text-red-600">{state.startError}</p>
+				<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
+					{state.startError}
+				</FormFeedback>
 			) : null}
 
 			<CodexAuthDeviceCodeSection
@@ -253,7 +257,9 @@ export function CodexAuthPanel({
 			/>
 
 			{state.completeError ? (
-				<p className="mt-3 mb-0 text-sm text-red-600">{state.completeError}</p>
+				<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
+					{state.completeError}
+				</FormFeedback>
 			) : null}
 		</div>
 	);

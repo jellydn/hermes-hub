@@ -1,6 +1,7 @@
 import { CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useState } from "react";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 
 import type { TelegramSettingsSummary } from "./telegram-settings";
@@ -71,29 +72,30 @@ export function TelegramDeploySection({
 			</div>
 
 			{isDeployed && deployedHost ? (
-				<div className="rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-						<span>
-							Deployed to <strong>{deployedHost}</strong>
-						</span>
-					</div>
-				</div>
+				<AlertPanel
+					tone="success"
+					LeadingIcon={CheckCircle2}
+					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
+				>
+					Deployed to <strong>{deployedHost}</strong>
+				</AlertPanel>
 			) : null}
 
 			{successMessage ? (
-				<div className="mt-3 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-						<span>{successMessage}</span>
-					</div>
-				</div>
+				<AlertPanel
+					tone="success"
+					className="mt-3"
+					LeadingIcon={CheckCircle2}
+					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
+				>
+					{successMessage}
+				</AlertPanel>
 			) : null}
 
 			{error ? (
-				<div className="mt-3 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+				<AlertPanel tone="error" className="mt-3">
 					{error}
-				</div>
+				</AlertPanel>
 			) : null}
 
 			<div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">

@@ -132,8 +132,8 @@ export function formatInstallStatus(status: string) {
 
 export function badgeClassName(result: ServerActionHistoryItem["result"]) {
 	return result === "succeeded"
-		? "inline-flex shrink-0 rounded-full bg-emerald-500/10 p-1.5"
-		: "inline-flex shrink-0 rounded-full bg-red-500/10 p-1.5";
+		? "inline-flex shrink-0 rounded-full bg-[var(--alert-success-bg)] p-1.5"
+		: "inline-flex shrink-0 rounded-full bg-[var(--alert-error-bg)] p-1.5";
 }
 
 export function badgeIconType(

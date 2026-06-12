@@ -1,5 +1,6 @@
 import { LoaderCircle, Save } from "lucide-react";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import { cn } from "#/lib/utils";
 import {
 	canDeriveScannerBypassUrl,
@@ -183,7 +184,7 @@ export function SkillForm({
 				</label>
 
 				{(form.sourceType === "hub" || form.sourceType === "url") && (
-					<div className="space-y-2 rounded-[1rem] border border-amber-500/30 bg-amber-500/5 p-4">
+					<div className="space-y-2 rounded-[1rem] border border-[var(--alert-warning-border)] bg-[var(--alert-warning-bg)] p-4">
 						<label
 							className={cn(
 								"flex items-start gap-2 text-sm font-medium text-[var(--sea-ink)]",
@@ -214,9 +215,9 @@ export function SkillForm({
 								trust the source.
 							</p>
 						) : (
-							<p className="m-0 text-xs text-amber-700">
+							<FormFeedback className="m-0 text-xs" tone="warning">
 								{bypassUnavailableReason}
-							</p>
+							</FormFeedback>
 						)}
 					</div>
 				)}

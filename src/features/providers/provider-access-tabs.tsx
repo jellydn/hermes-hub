@@ -53,7 +53,7 @@ export function ProviderAccessTabs({
 							"flex min-h-14 items-center justify-between gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition",
 							isSelected
 								? "border-[color:var(--lagoon)] bg-[rgba(79,184,178,0.14)] text-[var(--sea-ink)]"
-								: "border-transparent bg-transparent text-[var(--sea-ink-soft)] hover:border-[var(--chip-line)] hover:bg-white/50 hover:text-[var(--sea-ink)]",
+								: "border-transparent bg-transparent text-[var(--sea-ink-soft)] hover:border-[var(--chip-line)] hover:bg-[var(--chip-bg)] hover:text-[var(--sea-ink)]",
 						)}
 					>
 						<span className="text-sm font-semibold sm:text-base">

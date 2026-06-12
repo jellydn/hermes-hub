@@ -20,10 +20,10 @@ const ICON_MAP: Record<StatusType, ComponentType<{ className?: string }>> = {
 };
 
 const COLOR_MAP: Record<StatusType, string> = {
-	success: "text-emerald-600",
-	error: "text-red-600",
-	warning: "text-amber-600",
-	info: "text-blue-600",
+	success: "text-[var(--alert-success-fg)]",
+	error: "text-[var(--alert-error-fg)]",
+	warning: "text-[var(--alert-warning-fg)]",
+	info: "text-[var(--alert-info-fg)]",
 	neutral: "text-[var(--sea-ink-soft)]",
 };
 

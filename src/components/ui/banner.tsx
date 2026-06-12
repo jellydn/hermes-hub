@@ -2,27 +2,18 @@ import type { ReactNode } from "react";
 
 import { cn } from "#/lib/utils";
 
+import { alertPanelClass, type AlertTone } from "./alert-panel-class";
 import { StatusIcon } from "./status-icon";
 
 type BannerProps = {
 	children: ReactNode;
 	className?: string;
-	tone: "success" | "error" | "info";
+	tone: AlertTone;
 };
 
 export function Banner({ children, className, tone }: BannerProps) {
 	return (
-		<div
-			className={cn(
-				"mt-5 rounded-[1.5rem] border px-4 py-3 text-sm text-[var(--sea-ink)]",
-				tone === "success"
-					? "border-emerald-500/30 bg-emerald-500/10"
-					: tone === "error"
-						? "border-red-500/30 bg-red-500/10"
-						: "border-blue-500/30 bg-blue-500/10",
-				className,
-			)}
-		>
+		<div className={alertPanelClass(tone, cn("mt-5", className))}>
 			<div className="flex items-center gap-3">
 				<StatusIcon status={tone} size={5} />
 				<span>{children}</span>

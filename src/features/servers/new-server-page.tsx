@@ -2,6 +2,8 @@ import { getRouteApi } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useReducer } from "react";
 
+import { AlertPanel } from "#/components/ui/alert-panel"
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { AppShell } from "#/features/dashboard/app-shell";
 import { ConnectionWizard } from "#/features/servers/connection-wizard";
@@ -137,7 +139,7 @@ export function NewServerPage() {
 					</ul>
 					{state.submittedLabel ? (
 						<div className="mt-5 rounded-[1.5rem] border border-[rgba(47,106,74,0.18)] bg-[rgba(47,106,74,0.08)] px-4 py-4 text-sm text-[var(--sea-ink)]">
-							<div className="mb-2 inline-flex rounded-full bg-white/70 p-2 text-[var(--palm)]">
+							<div className="mb-2 inline-flex rounded-full bg-[var(--input-bg)] p-2 text-[var(--palm)]">
 								<CheckCircle2 className="h-4 w-4" />
 							</div>
 							<p className="m-0 font-semibold">Connection draft ready</p>
@@ -147,8 +149,8 @@ export function NewServerPage() {
 						</div>
 					) : null}
 					{state.connectionError ? (
-						<div className="mt-5 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
-							<div className="mb-2 inline-flex rounded-full bg-white/70 p-2 text-red-600">
+						<div className={alertPanelClass("error", "mt-5 px-4 py-4")}>
+							<div className="mb-2 inline-flex rounded-full bg-[var(--input-bg)] p-2 text-[var(--alert-error-fg)]">
 								<AlertCircle className="h-4 w-4" />
 							</div>
 							<p className="m-0 font-semibold">Connection failed</p>
@@ -194,9 +196,9 @@ export function NewServerPage() {
 						</div>
 
 						{state.installError ? (
-							<div className="mt-5 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+							<AlertPanel tone="error" className="mt-5">
 								{state.installError}
-							</div>
+							</AlertPanel>
 						) : null}
 
 						<div className="mt-6 flex flex-wrap items-center gap-3">

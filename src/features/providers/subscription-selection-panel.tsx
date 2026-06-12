@@ -5,7 +5,9 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
+import { inputClassName } from "#/components/ui/input-class";
 import {
 	formatUserSubscriptionLabel,
 	getCredentialSubscriptionOption,
@@ -16,11 +18,7 @@ import {
 } from "#/lib/user-subscriptions";
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
 import { CodexAuthPanel, type CodexAuthStatusChange } from "./codex-auth-panel";
-import {
-	ProviderSettingsField,
-	providerInputClassName,
-} from "./provider-settings-ui";
-
+import { ProviderSettingsField } from "./provider-settings-ui";
 type SubscriptionFormState = {
 	subscriptionProvider: UserSubscriptionId;
 	model: string;
@@ -141,7 +139,7 @@ export function SubscriptionSelectionPanel({
 					<select
 						id="subscription-model"
 						{...register("model")}
-						className={providerInputClassName}
+						className={inputClassName}
 					>
 						{subscriptionOption?.models.map((model) => (
 							<option key={model} value={model}>
@@ -168,7 +166,7 @@ export function SubscriptionSelectionPanel({
 								autoComplete="off"
 								placeholder={existingKeyLast4 ? "••••••••••••" : "tp-..."}
 								{...register("apiKey")}
-								className={providerInputClassName}
+								className={inputClassName}
 							/>
 						</ProviderSettingsField>
 
@@ -183,7 +181,7 @@ export function SubscriptionSelectionPanel({
 								autoComplete="off"
 								placeholder={credentialOption?.defaultBaseUrl}
 								{...register("baseUrl")}
-								className={providerInputClassName}
+								className={inputClassName}
 							/>
 						</ProviderSettingsField>
 					</>
@@ -191,28 +189,32 @@ export function SubscriptionSelectionPanel({
 			</div>
 
 			{saveMessage ? (
-				<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+				<AlertPanel tone="success" className="mt-6">
 					{saveMessage}
-				</div>
+				</AlertPanel>
 			) : null}
 
 			{saveError ? (
-				<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+				<AlertPanel tone="error" className="mt-6">
 					{saveError}
-				</div>
+				</AlertPanel>
 			) : null}
 
 			{testError ? (
-				<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+				<AlertPanel tone="error" className="mt-6">
 					{testError}
-				</div>
+				</AlertPanel>
 			) : null}
 
 			{isConnected ? (
-				<div className="mt-6 flex items-center gap-2 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<CheckCircle2 className="h-4 w-4 text-emerald-600" />
-					<span>Provider connected</span>
-				</div>
+				<AlertPanel
+					tone="success"
+					className="mt-6"
+					LeadingIcon={CheckCircle2}
+					leadingIconClassName="h-4 w-4 text-[var(--alert-success-fg)]"
+				>
+					Provider connected
+				</AlertPanel>
 			) : null}
 
 			<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">

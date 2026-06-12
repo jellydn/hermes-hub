@@ -29,7 +29,7 @@ export function TelegramSidebar({ savedConfig }: TelegramSidebarProps) {
 				) : null}
 				{isDeployed && deployedHost ? (
 					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						<CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-emerald-600" />
+						<CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-[var(--alert-success-fg)]" />
 						Deployed to {deployedHost}
 					</p>
 				) : null}
