@@ -14,8 +14,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
 	return {
+		AlertCircle: MockIcon,
 		CheckCircle2: MockIcon,
+		Circle: MockIcon,
 		CloudUpload: MockIcon,
+		Info: MockIcon,
+		TriangleAlert: MockIcon,
 		KeyRound: MockIcon,
 		LoaderCircle: MockIcon,
 		Radio: MockIcon,

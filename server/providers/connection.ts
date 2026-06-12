@@ -53,6 +53,7 @@ export async function verifyOpenAiCompatibleConnection(input: {
 			headers: {
 				Authorization: `Bearer ${input.apiKey}`,
 			},
+			signal: AbortSignal.timeout(5000),
 		});
 	} catch {
 		throw new ProviderConnectionError("Connection failed", "connection_failed");

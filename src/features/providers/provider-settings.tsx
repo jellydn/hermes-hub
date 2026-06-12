@@ -169,10 +169,10 @@ export function ProviderSettings({
 		try {
 			const payload = await saveSubscriptionAccess(subscriptionFormValues);
 
-			if (!payload.subscription) {
+			if (!payload?.subscription) {
 				dispatch({
 					type: "subscription_save_failed",
-					error: payload.error ?? "Unable to save subscription settings.",
+					error: payload?.error ?? "Unable to save subscription settings.",
 				});
 				return;
 			}
