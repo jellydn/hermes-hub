@@ -100,17 +100,29 @@ export function formatOsSummary(detail: ServerDetailSnapshot) {
 	return summary || "Verified";
 }
 
-const formatActionTitle = formatActionLabel;
-
-export { formatActionTitle };
-
 /** Keep action history readable; full failure output lives in Logs. */
 export function formatActionHistorySummary(item: ServerActionHistoryItem) {
 	if (item.result === "failed") {
-		return `${formatActionTitle(item.action)} failed.`;
+		return `${formatActionLabel(item.action)} failed.`;
 	}
 
 	return item.message;
+}
+
+export function createHistoryEntry(input: {
+	action: ServerActionType;
+	result: ServerActionResult;
+	message: string;
+	imageRef: string | null;
+}): ServerActionHistoryItem {
+	return {
+		id: `${input.action}-${Date.now()}`,
+		action: input.action,
+		result: input.result,
+		createdAt: new Date().toISOString(),
+		message: input.message,
+		imageRef: input.imageRef,
+	};
 }
 
 export function formatTimestamp(timestamp: string) {

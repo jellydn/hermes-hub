@@ -1,15 +1,15 @@
 import { StatusIcon } from "#/components/ui/status-icon";
-import type {
-	ServerActionHistoryItem,
-	ServerDetailChangeHandler,
-	ServerDetailSnapshot,
+import {
+	formatActionLabel,
+	type ServerActionHistoryItem,
+	type ServerDetailChangeHandler,
+	type ServerDetailSnapshot,
 } from "#/lib/server-detail";
 import { HermesWebUiCard } from "./hermes-web-ui-card";
 import {
 	badgeClassName,
 	badgeIconType,
 	formatActionHistorySummary,
-	formatActionTitle,
 	formatInstallStatus,
 	formatOsSummary,
 	formatTimestamp,
@@ -81,7 +81,7 @@ function ActionHistoryItem({ item }: { item: ServerActionHistoryItem }) {
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					<p className="m-0 text-sm font-semibold text-[var(--sea-ink)]">
-						{formatActionTitle(item.action)}
+						{formatActionLabel(item.action)}
 					</p>
 					{!isSuccess ? (
 						<p className="mt-1 mb-0 line-clamp-2 text-sm text-[var(--sea-ink-soft)]">
