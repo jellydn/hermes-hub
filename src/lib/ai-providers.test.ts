@@ -91,6 +91,7 @@ describe("api provider metadata", () => {
 		expect(apiProviderOptions.map((option) => option.id)).not.toContain(
 			"openai-codex",
 		);
+		expect(apiProviderOptions.map((option) => option.id)).not.toContain("mimo");
 		expect(usesOAuthDeviceCode("openai")).toBe(false);
 		expect(providerRequiresApiKey("openai")).toBe(true);
 	});

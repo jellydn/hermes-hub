@@ -489,6 +489,107 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("saves and tests MiMo Token Plan credentials via subscription endpoints", async () => {
+		const { saveSubscriptionConfig, testSubscriptionConfig } = await import(
+			"./providers"
+		);
+
+		const saveResponse = await saveSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions", {
+				subscriptionProvider: "mimo",
+				model: "mimo-v2.5-pro",
+				apiKey: "tp-live-secret",
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+			}),
+		);
+
+		expect(saveResponse.status).toBe(200);
+		expect(encryptSecret).toHaveBeenCalledWith("tp-live-secret");
+		expect(insertProviderValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				provider: "mimo",
+				model: "mimo-v2.5-pro",
+				encryptedApiKey: "encrypted-api-key",
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+				isActive: true,
+			}),
+		);
+		expect(insertSubscriptionValues).not.toHaveBeenCalled();
+		expect(insertAuditValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "subscription.saved",
+			}),
+		);
+		expect(await saveResponse.json()).toMatchObject({
+			subscription: {
+				kind: "subscription",
+				subscriptionProvider: "mimo",
+				model: "mimo-v2.5-pro",
+				authMode: "mimo-token-plan",
+				keyLast4: "cret",
+				hasStoredKey: true,
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+			},
+		});
+
+		const testResponse = await testSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions/test", {
+				subscriptionProvider: "mimo",
+				model: "mimo-v2.5-pro",
+				apiKey: "tp-live-secret",
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+			}),
+		);
+
+		expect(testResponse.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://token-plan-cn.xiaomimimo.com/v1/models",
+			expect.objectContaining({
+				method: "GET",
+				headers: expect.objectContaining({
+					Authorization: "Bearer tp-live-secret",
+				}),
+			}),
+		);
+	});
+
+	it("builds Hermes deploy env for MiMo Token Plan", async () => {
+		loadModelAccessRecords.mockResolvedValueOnce({
+			apiRecord: {
+				provider: "mimo",
+				model: "mimo-v2.5-pro",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+				isActive: true,
+			},
+			subscriptionRecord: null,
+			activeBackend: {
+				kind: "subscription",
+				access: "credential",
+				subscriptionProvider: "mimo",
+				model: "mimo-v2.5-pro",
+				authMode: "mimo-token-plan",
+				hermesProviderId: "xiaomi",
+				storageProviderId: "mimo",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+			},
+		});
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "mimo-v2.5-pro",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "xiaomi",
+				XIAOMI_API_KEY: "stored-api-key",
+				XIAOMI_BASE_URL: "https://token-plan-cn.xiaomimimo.com/v1",
+			},
+		});
+	});
+
 	it("rejects deploy config when stored API-key ciphertext is unreadable", async () => {
 		decryptSecret.mockImplementation((value: string) => {
 			if (value === "corrupt-ciphertext") {
@@ -529,6 +630,7 @@ function mockActiveSubscriptionLookup(subscription: {
 		subscriptionRecord,
 		activeBackend: {
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: subscription.subscriptionProvider,
 			model: subscription.model,
 			authMode: subscription.authMode,

@@ -28,6 +28,7 @@ export type ProviderSettingsUiState = {
 
 export type ProviderSettingsUiAction =
 	| { type: "provider_changed" }
+	| { type: "subscription_changed" }
 	| { type: "provider_save_started" }
 	| { type: "provider_save_failed"; error: string }
 	| { type: "provider_save_succeeded"; config: ApiProviderConfigSummary }
@@ -37,6 +38,7 @@ export type ProviderSettingsUiAction =
 	| {
 			type: "subscription_save_succeeded";
 			config: UserSubscriptionConfigSummary;
+			preserveConnection?: boolean;
 	  }
 	| { type: "subscription_save_finished" }
 	| { type: "test_started" }
@@ -90,6 +92,14 @@ export function providerSettingsUiReducer(
 				...state,
 				providerSaveMessage: null,
 				providerSaveError: null,
+				testError: null,
+				isConnected: false,
+			};
+		case "subscription_changed":
+			return {
+				...state,
+				subscriptionSaveMessage: null,
+				subscriptionSaveError: null,
 				testError: null,
 				isConnected: false,
 			};
@@ -149,6 +159,8 @@ export function providerSettingsUiReducer(
 				savedSubscription: action.config,
 				activeBackend: "subscription",
 				subscriptionSaveMessage: "Subscription settings saved.",
+				savedApiConfig: null,
+				isConnected: action.preserveConnection ? state.isConnected : false,
 			};
 		case "subscription_save_finished":
 			return {

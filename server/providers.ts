@@ -7,10 +7,12 @@ import {
 	isValidAiModel,
 } from "#/lib/ai-providers";
 import {
+	getCredentialSubscriptionOption,
 	getDefaultSubscriptionModel,
 	getUserSubscriptionOption,
 	isUserSubscriptionId,
 	isValidSubscriptionModel,
+	subscriptionRequiresCredentials,
 } from "#/lib/user-subscriptions";
 import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import { getAuthSession } from "./auth";
@@ -27,12 +29,14 @@ import {
 } from "./providers/config";
 import {
 	ProviderConnectionError,
+	verifyOpenAiCompatibleConnection,
 	verifyProviderConnection,
 } from "./providers/connection";
 import { readApiBackendKeyForEnvMap } from "./providers/deploy-material";
 import { buildModelAccessSnapshot } from "./providers/model-access";
 import {
 	activateApiProvider,
+	activateCredentialSubscription,
 	activateSubscription,
 } from "./providers/model-access-persistence";
 import {
@@ -40,6 +44,12 @@ import {
 	getApiKeyLast4,
 	getLatestProviderRecord,
 } from "./providers/records";
+import {
+	buildCredentialSubscriptionSummary,
+	buildSubscriptionCredentialEnvMap,
+	readCredentialSubscriptionKeyMaterial,
+	resolveSubscriptionCredentials,
+} from "./providers/subscription-credentials";
 
 export async function getModelAccessSnapshot(
 	userId: string,
@@ -146,17 +156,71 @@ export async function saveSubscriptionConfig(context: Context) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
+	const option = getUserSubscriptionOption(parsed.subscriptionProvider);
+	if (!option) {
+		return context.json(
+			{ error: "Choose a valid subscription provider." },
+			400,
+		);
+	}
+
 	const db = getDb();
 	const ipAddress = getClientIp(context);
-	const option = getUserSubscriptionOption(parsed.subscriptionProvider);
 
 	try {
+		if (subscriptionRequiresCredentials(parsed.subscriptionProvider)) {
+			const credentialOption = getCredentialSubscriptionOption(
+				parsed.subscriptionProvider,
+			);
+			if (!credentialOption) {
+				return context.json(
+					{ error: "Choose a valid subscription provider." },
+					400,
+				);
+			}
+
+			const existingRecord = await getLatestProviderRecord(session.user.id);
+			const resolvedCredentials = resolveSubscriptionCredentials(
+				parsed.subscriptionProvider,
+				{
+					apiKey: parsed.apiKey,
+					baseUrl: parsed.baseUrl,
+				},
+				existingRecord,
+				credentialOption,
+			);
+			if ("error" in resolvedCredentials) {
+				return context.json({ error: resolvedCredentials.error }, 400);
+			}
+
+			await db.transaction(async (tx) => {
+				await activateCredentialSubscription(tx, {
+					userId: session.user.id,
+					subscriptionProvider: parsed.subscriptionProvider,
+					apiKey: resolvedCredentials.apiKey,
+					baseUrl: resolvedCredentials.baseUrl,
+					model: parsed.model,
+					ipAddress,
+				});
+			});
+
+			clearDashboardCache();
+
+			return context.json({
+				subscription: buildCredentialSubscriptionSummary(credentialOption, {
+					model: parsed.model,
+					apiKey: resolvedCredentials.apiKey,
+					baseUrl: resolvedCredentials.baseUrl,
+				}),
+			});
+		}
+
 		await db.transaction(async (tx) => {
 			await activateSubscription(tx, {
 				userId: session.user.id,
 				subscriptionProvider: parsed.subscriptionProvider,
 				model: parsed.model,
-				authMode: option?.authMode ?? "chatgpt",
+				authMode: option.authMode,
 				ipAddress,
 			});
 		});
@@ -168,7 +232,7 @@ export async function saveSubscriptionConfig(context: Context) {
 				kind: "subscription",
 				subscriptionProvider: parsed.subscriptionProvider,
 				model: parsed.model,
-				authMode: option?.authMode ?? "chatgpt",
+				authMode: option.authMode,
 			},
 		});
 	} catch (error) {
@@ -226,6 +290,75 @@ export async function testProviderConfig(context: Context) {
 	}
 }
 
+export async function testSubscriptionConfig(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	let payload: SubscriptionRequest;
+
+	try {
+		payload = await context.req.json<SubscriptionRequest>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const parsed = parseSubscriptionRequest(payload);
+	if ("error" in parsed) {
+		return context.json({ error: parsed.error }, 400);
+	}
+
+	if (!subscriptionRequiresCredentials(parsed.subscriptionProvider)) {
+		return context.json(
+			{ error: "This subscription does not support connection tests." },
+			400,
+		);
+	}
+
+	const credentialOption = getCredentialSubscriptionOption(
+		parsed.subscriptionProvider,
+	);
+	if (!credentialOption) {
+		return context.json(
+			{ error: "Choose a valid subscription provider." },
+			400,
+		);
+	}
+
+	const existingRecord = await getLatestProviderRecord(session.user.id);
+	const resolvedCredentials = resolveSubscriptionCredentials(
+		parsed.subscriptionProvider,
+		{
+			apiKey: parsed.apiKey,
+			baseUrl: parsed.baseUrl,
+		},
+		existingRecord,
+		credentialOption,
+	);
+	if ("error" in resolvedCredentials) {
+		return context.json({ error: resolvedCredentials.error }, 400);
+	}
+
+	try {
+		await verifyOpenAiCompatibleConnection({
+			apiKey: resolvedCredentials.apiKey,
+			baseUrl: resolvedCredentials.baseUrl,
+		});
+
+		return context.json({ status: "connected" });
+	} catch (error) {
+		if (error instanceof ProviderConnectionError) {
+			return context.json(
+				{ error: error.message },
+				error.code === "invalid_api_key" ? 400 : 502,
+			);
+		}
+
+		return context.json({ error: "Connection failed" }, 502);
+	}
+}
+
 function parseProviderRequest(payload: ProviderRequest) {
 	if (!isApiProviderId(payload.provider)) {
 		return { error: "Choose a valid API provider." };
@@ -259,6 +392,8 @@ function parseSubscriptionRequest(payload: SubscriptionRequest) {
 	return {
 		subscriptionProvider: payload.subscriptionProvider,
 		model,
+		apiKey: payload.apiKey?.trim() ?? "",
+		baseUrl: payload.baseUrl?.trim() ?? "",
 	};
 }
 
@@ -311,6 +446,29 @@ export async function getProviderDeployConfig(
 	}
 
 	if (activeBackend.kind === "subscription") {
+		if (activeBackend.access === "credential") {
+			const credentialOption = getCredentialSubscriptionOption(
+				activeBackend.subscriptionProvider,
+			);
+			if (!credentialOption) {
+				throw new Error("Unsupported credential-backed subscription.");
+			}
+
+			const keyMaterial = readCredentialSubscriptionKeyMaterial(activeBackend);
+			if (!keyMaterial.ok) {
+				throw new Error(keyMaterial.error);
+			}
+
+			return {
+				envVars: buildSubscriptionCredentialEnvMap(
+					credentialOption,
+					keyMaterial.apiKey,
+					activeBackend.baseUrl,
+				),
+				model: activeBackend.model,
+			};
+		}
+
 		return {
 			envVars: buildSubscriptionEnvMap(activeBackend.hermesProviderId),
 			model: activeBackend.model,

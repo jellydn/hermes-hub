@@ -15,6 +15,9 @@ export type UserSubscriptionConfigSummary = {
 	subscriptionProvider: UserSubscriptionId;
 	model: string;
 	authMode: string;
+	keyLast4?: string | null;
+	hasStoredKey?: boolean;
+	baseUrl?: string;
 };
 
 export type ModelAccessSnapshot = {

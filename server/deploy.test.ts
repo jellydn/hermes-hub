@@ -265,6 +265,7 @@ describe("deployProviderToHermes", () => {
 
 		resolveActiveModelBackend.mockResolvedValueOnce({
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: "chatgpt",
 			model: "gpt-5.5",
 			authMode: "chatgpt",
@@ -292,6 +293,7 @@ describe("deployProviderToHermes", () => {
 
 		resolveActiveModelBackend.mockResolvedValueOnce({
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: "chatgpt",
 			model: "gpt-5.4-mini",
 			authMode: "chatgpt",
@@ -329,6 +331,7 @@ describe("deployProviderToHermes", () => {
 
 		resolveActiveModelBackend.mockResolvedValueOnce({
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: "chatgpt",
 			model: "gpt-5.4-mini",
 			authMode: "chatgpt",

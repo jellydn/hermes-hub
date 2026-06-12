@@ -132,7 +132,7 @@ describe("ProviderSettings", () => {
 		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
 	});
 
-	it("does not show ChatGPT in the API provider grid", () => {
+	it("does not show ChatGPT or MiMo in the API provider grid", () => {
 		render(<ProviderSettings initialAccess={null} />);
 		selectApiProvidersTab();
 
@@ -140,8 +140,55 @@ describe("ProviderSettings", () => {
 			screen.queryByRole("radio", { name: /openai codex \/ chatgpt/i }),
 		).toBeNull();
 		expect(
+			screen.queryByRole("radio", { name: /xiaomi mimo token plan/i }),
+		).toBeNull();
+		expect(
 			screen.getByRole("tab", { name: /user subscriptions/i }),
 		).toBeTruthy();
+	});
+
+	it("shows MiMo Token Plan controls in the User subscriptions tab", () => {
+		render(<ProviderSettings initialAccess={null} />);
+
+		fireEvent.click(
+			screen.getByRole("radio", { name: /xiaomi mimo token plan/i }),
+		);
+
+		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
+		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
+		expect(screen.getByDisplayValue("mimo-v2.5-pro")).toBeTruthy();
+		expect(
+			screen.getByDisplayValue("https://token-plan-cn.xiaomimimo.com/v1"),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: /test connection/i }),
+		).toBeTruthy();
+	});
+
+	it("keeps the User subscriptions tab active for saved MiMo config", () => {
+		render(
+			<ProviderSettings
+				initialAccess={{
+					apiProvider: null,
+					subscription: {
+						kind: "subscription",
+						subscriptionProvider: "mimo",
+						model: "mimo-v2.5-pro",
+						authMode: "mimo-token-plan",
+						keyLast4: "1234",
+						hasStoredKey: true,
+						baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+					},
+					activeBackend: "subscription",
+				}}
+			/>,
+		);
+
+		const subscriptionTab = screen.getByRole("tab", {
+			name: /user subscriptions/i,
+		});
+		expect(within(subscriptionTab).getByText(/^active$/i)).toBeTruthy();
+		expect(screen.getByText(/^stored key ending in 1234$/i)).toBeTruthy();
 	});
 
 	it("marks the active backend on the matching tab", () => {
@@ -194,7 +241,7 @@ describe("ProviderSettings", () => {
 
 		await flushAsyncWork();
 
-		expect(screen.queryByLabelText(/api key/i)).toBeNull();
+		expect(document.getElementById("subscription-api-key")).toBeNull();
 		expect(
 			screen.getAllByText(/chatgpt device-code login/i).length,
 		).toBeGreaterThan(0);

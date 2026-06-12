@@ -8,7 +8,12 @@ import {
 	getDefaultAiModel,
 } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
-import { getDefaultSubscriptionModel } from "#/lib/user-subscriptions";
+import {
+	getDefaultSubscriptionModel,
+	getSubscriptionDefaultBaseUrl,
+	subscriptionRequiresCredentials,
+	type UserSubscriptionId,
+} from "#/lib/user-subscriptions";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
@@ -28,6 +33,10 @@ import {
 	createInitialProviderSettingsUiState,
 	providerSettingsUiReducer,
 } from "./provider-settings-state";
+import {
+	saveSubscriptionAccess,
+	testSubscriptionAccess,
+} from "./subscription-actions";
 import { SubscriptionSelectionPanel } from "./subscription-selection-panel";
 
 type ProviderSettingsProps = {
@@ -43,8 +52,10 @@ type ProviderFormState = {
 };
 
 type SubscriptionFormState = {
-	subscriptionProvider: "chatgpt";
+	subscriptionProvider: UserSubscriptionId;
 	model: string;
+	apiKey: string;
+	baseUrl: string;
 };
 
 const initialProvider = "openai" as ApiProviderId;
@@ -57,8 +68,10 @@ const providerSchema = z.object({
 });
 
 const subscriptionSchema = z.object({
-	subscriptionProvider: z.literal("chatgpt"),
+	subscriptionProvider: z.custom<UserSubscriptionId>(),
 	model: z.string(),
+	apiKey: z.string(),
+	baseUrl: z.string(),
 });
 
 export function ProviderSettings({
@@ -102,6 +115,23 @@ export function ProviderSettings({
 		dispatch({ type: "provider_changed" });
 	}
 
+	function updateSubscription(subscription: UserSubscriptionId) {
+		subscriptionForm.setValue("subscriptionProvider", subscription);
+		subscriptionForm.setValue(
+			"model",
+			getDefaultSubscriptionModel(subscription),
+		);
+		subscriptionForm.setValue("apiKey", "");
+		subscriptionForm.setValue(
+			"baseUrl",
+			uiState.savedSubscription?.subscriptionProvider === subscription &&
+				uiState.savedSubscription.baseUrl
+				? uiState.savedSubscription.baseUrl
+				: getSubscriptionDefaultBaseUrl(subscription),
+		);
+		dispatch({ type: "subscription_changed" });
+	}
+
 	async function handleSaveProvider() {
 		dispatch({ type: "provider_save_started" });
 
@@ -137,32 +167,57 @@ export function ProviderSettings({
 		dispatch({ type: "subscription_save_started" });
 
 		try {
-			const response = await fetch("/api/providers/subscriptions", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(subscriptionFormValues),
-			});
+			const payload = await saveSubscriptionAccess(subscriptionFormValues);
 
-			const payload = (await response.json().catch(() => null)) as {
-				error?: string;
-				subscription?: UserSubscriptionConfigSummary;
-			} | null;
-
-			if (!response.ok || !payload?.subscription) {
+			if (!payload.subscription) {
 				dispatch({
 					type: "subscription_save_failed",
-					error: payload?.error ?? "Unable to save subscription settings.",
+					error: payload.error ?? "Unable to save subscription settings.",
 				});
 				return;
+			}
+
+			if (
+				subscriptionRequiresCredentials(
+					subscriptionFormValues.subscriptionProvider,
+				)
+			) {
+				subscriptionForm.setValue("apiKey", "");
 			}
 
 			dispatch({
 				type: "subscription_save_succeeded",
 				config: payload.subscription,
+				preserveConnection: subscriptionRequiresCredentials(
+					subscriptionFormValues.subscriptionProvider,
+				),
 			});
 			setSelectedTab("subscription");
 		} finally {
 			dispatch({ type: "subscription_save_finished" });
+		}
+	}
+
+	async function handleTestSubscription() {
+		dispatch({ type: "test_started" });
+
+		try {
+			const result = await testSubscriptionAccess(subscriptionFormValues);
+
+			if (!result.ok) {
+				dispatch({
+					type: "test_failed",
+					error: result.error,
+				});
+				return;
+			}
+
+			dispatch({
+				type: "test_succeeded",
+				connected: true,
+			});
+		} finally {
+			dispatch({ type: "test_finished" });
 		}
 	}
 
@@ -252,9 +307,13 @@ export function ProviderSettings({
 								register={subscriptionForm.register}
 								savedSubscription={uiState.savedSubscription}
 								isSaving={uiState.isSavingSubscription}
+								isTesting={uiState.isTesting}
 								saveMessage={uiState.subscriptionSaveMessage}
 								saveError={uiState.subscriptionSaveError}
+								testError={uiState.testError}
+								isConnected={uiState.isConnected}
 								telegramDeployed={Boolean(telegramDeploy)}
+								onSubscriptionChange={updateSubscription}
 								onCodexAuthStatusChange={(change) =>
 									dispatch({
 										type: "codex_auth_status_changed",
@@ -264,6 +323,7 @@ export function ProviderSettings({
 									})
 								}
 								onSave={() => void handleSaveSubscription()}
+								onTest={() => void handleTestSubscription()}
 							/>
 						</div>
 					) : (
@@ -324,8 +384,17 @@ function createInitialProviderFormState(
 function createInitialSubscriptionFormState(
 	initialSubscription: UserSubscriptionConfigSummary | null | undefined,
 ) {
+	const subscriptionProvider =
+		initialSubscription?.subscriptionProvider ?? "chatgpt";
+
 	return {
-		subscriptionProvider: "chatgpt" as const,
-		model: initialSubscription?.model ?? getDefaultSubscriptionModel("chatgpt"),
+		subscriptionProvider,
+		model:
+			initialSubscription?.model ??
+			getDefaultSubscriptionModel(subscriptionProvider),
+		apiKey: "",
+		baseUrl:
+			initialSubscription?.baseUrl ??
+			getSubscriptionDefaultBaseUrl(subscriptionProvider),
 	};
 }
