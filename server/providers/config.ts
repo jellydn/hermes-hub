@@ -10,6 +10,8 @@ export type ProviderRequest = {
 export type SubscriptionRequest = {
 	subscriptionProvider: string;
 	model?: string;
+	apiKey?: string;
+	baseUrl?: string;
 };
 
 export type StoredProviderRecord = {

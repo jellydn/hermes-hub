@@ -6,6 +6,7 @@ import {
 	Wrench,
 } from "lucide-react";
 
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import type { ServerActionType } from "#/lib/server-detail";
 
@@ -80,9 +81,9 @@ export function ServerActionControls({
 			</div>
 
 			{activeAction ? (
-				<div className="mt-5 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
+				<div className={alertPanelClass("warning", "mt-5 px-4 py-4")}>
 					<div className="flex items-start gap-3">
-						<ShieldAlert className="mt-0.5 h-5 w-5 text-amber-600" />
+						<ShieldAlert className="mt-0.5 h-5 w-5 text-[var(--alert-warning-fg)]" />
 						<div className="flex-1">
 							<p className="m-0 font-semibold">Are you sure?</p>
 							<p className="mt-2 mb-0 text-[var(--sea-ink-soft)]">

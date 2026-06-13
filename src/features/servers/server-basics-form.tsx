@@ -107,8 +107,10 @@ function ServerBasicsField({
 			</label>
 			<div
 				className={cn(
-					"flex items-center gap-2 rounded-full border bg-white/80 pr-1 pl-4",
-					error ? "border-[#b42318]" : "border-[var(--chip-line)]",
+					"flex items-center gap-2 rounded-full border bg-[var(--input-bg)] pr-1 pl-4",
+					error
+						? "border-[var(--alert-error-border)]"
+						: "border-[var(--chip-line)]",
 				)}
 			>
 				<input
@@ -125,7 +127,7 @@ function ServerBasicsField({
 					<button
 						type="button"
 						onClick={onEdit}
-						className="inline-flex size-9 items-center justify-center rounded-full border border-transparent text-[var(--sea-ink-soft)] transition hover:border-[var(--chip-line)] hover:bg-white hover:text-[var(--sea-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--lagoon)]"
+						className="inline-flex size-9 items-center justify-center rounded-full border border-transparent text-[var(--sea-ink-soft)] transition hover:border-[var(--chip-line)] hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--lagoon)]"
 						aria-label={`Edit ${label}`}
 					>
 						<Pencil className="h-4 w-4" />
@@ -135,7 +137,7 @@ function ServerBasicsField({
 			<p
 				className={cn(
 					"block min-h-5 text-xs",
-					error ? "text-[#b42318]" : "text-[var(--sea-ink-soft)]",
+					error ? "text-[var(--alert-error-fg)]" : "text-[var(--sea-ink-soft)]",
 				)}
 			>
 				{error ?? hint}

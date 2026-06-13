@@ -1,12 +1,6 @@
-import {
-	CheckCircle2,
-	KeyRound,
-	LoaderCircle,
-	Radio,
-	ShieldCheck,
-} from "lucide-react";
+import { Radio } from "lucide-react";
 import type { UseFormRegister } from "react-hook-form";
-import { Button } from "#/components/ui/button";
+import { inputClassName } from "#/components/ui/input-class";
 import {
 	type ApiProviderId,
 	apiProviderOptions,
@@ -15,9 +9,10 @@ import {
 } from "#/lib/ai-providers";
 import type { ApiProviderConfigSummary } from "#shared/contracts/model-access";
 import {
-	ProviderSettingsField,
-	providerInputClassName,
-} from "./provider-settings-ui";
+	AccessSelectionActions,
+	AccessSelectionFeedback,
+} from "./access-selection-chrome";
+import { ProviderSettingsField } from "./provider-settings-ui";
 
 type ProviderFormState = {
 	provider: ApiProviderId;
@@ -80,7 +75,7 @@ export function ProviderSelectionPanel({
 						<label
 							key={option.id}
 							className={[
-								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition",
+								"block cursor-pointer rounded-[1.75rem] border p-5 text-left transition focus-within:ring-2 focus-within:ring-[color:var(--lagoon)] focus-within:ring-offset-2",
 								isSelected
 									? "border-[color:var(--lagoon)] bg-[rgba(79,184,178,0.14)]"
 									: "border-[var(--chip-line)] bg-[var(--chip-bg)]",
@@ -94,7 +89,7 @@ export function ProviderSelectionPanel({
 								onChange={() => onProviderChange(option.id)}
 								className="sr-only"
 							/>
-							<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-white/70 p-3 text-[var(--lagoon-deep)]">
+							<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-[var(--input-bg)] p-3 text-[var(--lagoon-deep)]">
 								<Radio className="h-5 w-5" />
 							</div>
 							<div className="space-y-2">
@@ -107,7 +102,7 @@ export function ProviderSelectionPanel({
 											"rounded-full px-3 py-1 text-xs font-semibold",
 											isSelected
 												? "bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]"
-												: "bg-white/70 text-[var(--sea-ink-soft)]",
+												: "bg-[var(--input-bg)] text-[var(--sea-ink-soft)]",
 										].join(" ")}
 									>
 										{isSelected ? "Selected" : "Choose"}
@@ -138,7 +133,7 @@ export function ProviderSelectionPanel({
 						id="apiKey"
 						type="password"
 						{...register("apiKey")}
-						className={providerInputClassName}
+						className={inputClassName}
 						placeholder={
 							existingKeyLast4 ? `••••${existingKeyLast4}` : "Paste API key"
 						}
@@ -157,7 +152,7 @@ export function ProviderSelectionPanel({
 							id="baseUrl"
 							type="text"
 							{...register("baseUrl")}
-							className={providerInputClassName}
+							className={inputClassName}
 							placeholder={
 								providerOption?.defaultBaseUrl ??
 								"https://api.yourprovider.com/v1"
@@ -178,7 +173,7 @@ export function ProviderSelectionPanel({
 							id="model"
 							type="text"
 							{...register("model")}
-							className={providerInputClassName}
+							className={inputClassName}
 							placeholder={providerOption?.defaultModel || "deepseek-chat"}
 						/>
 					</ProviderSettingsField>
@@ -191,7 +186,7 @@ export function ProviderSelectionPanel({
 						<select
 							id="model"
 							{...register("model")}
-							className={providerInputClassName}
+							className={inputClassName}
 						>
 							{providerOption?.models.map((model) => (
 								<option key={model} value={model}>
@@ -203,56 +198,21 @@ export function ProviderSelectionPanel({
 				)}
 			</div>
 
-			{saveMessage ? (
-				<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					{saveMessage}
-				</div>
-			) : null}
+			<AccessSelectionFeedback
+				isConnected={isConnected}
+				saveError={saveError}
+				saveMessage={saveMessage}
+				testError={testError}
+			/>
 
-			{saveError ? (
-				<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					{saveError}
-				</div>
-			) : null}
-
-			{testError ? (
-				<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					{testError}
-				</div>
-			) : null}
-
-			{isConnected ? (
-				<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-						<span>Provider connected</span>
-					</div>
-				</div>
-			) : null}
-
-			<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-				<Button type="button" onClick={onSave} disabled={isSaving}>
-					{isSaving ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<KeyRound className="h-4 w-4" />
-					)}
-					<span>{isSaving ? "Saving..." : "Save Provider"}</span>
-				</Button>
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={onTest}
-					disabled={isTesting}
-				>
-					{isTesting ? (
-						<LoaderCircle className="h-4 w-4 animate-spin" />
-					) : (
-						<ShieldCheck className="h-4 w-4" />
-					)}
-					<span>{isTesting ? "Testing..." : "Test Connection"}</span>
-				</Button>
-			</div>
+			<AccessSelectionActions
+				isSaving={isSaving}
+				isTesting={isTesting}
+				onSave={onSave}
+				onTest={onTest}
+				saveLabel="Save Provider"
+				savingLabel="Saving..."
+			/>
 		</section>
 	);
 }

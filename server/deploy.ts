@@ -51,31 +51,33 @@ export async function deployProviderToHermes(context: Context) {
 	let deployProviderLabel: string;
 
 	if (activeBackend.kind === "subscription") {
-		try {
-			const codexAuth = await resolveRemoteCodexAuthStatus({
-				host: sshCtx.server.host,
-				port: sshCtx.server.port,
-				username: sshCtx.server.username,
-				authMethod: sshCtx.authMethod,
-				credential: sshCtx.credential,
-				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-			});
+		if (activeBackend.access === "oauth") {
+			try {
+				const codexAuth = await resolveRemoteCodexAuthStatus({
+					host: sshCtx.server.host,
+					port: sshCtx.server.port,
+					username: sshCtx.server.username,
+					authMethod: sshCtx.authMethod,
+					credential: sshCtx.credential,
+					expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+				});
 
-			if (!codexAuth.authenticated) {
-				return context.json(
-					{
-						error:
-							"Codex is not authenticated on the deployed Hermes server. Complete ChatGPT device-code login first.",
-					},
-					400,
-				);
+				if (!codexAuth.authenticated) {
+					return context.json(
+						{
+							error:
+								"Codex is not authenticated on the deployed Hermes server. Complete ChatGPT device-code login first.",
+						},
+						400,
+					);
+				}
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: "Unable to verify Codex authentication.";
+				return context.json({ error: message }, 502);
 			}
-		} catch (error) {
-			const message =
-				error instanceof Error
-					? error.message
-					: "Unable to verify Codex authentication.";
-			return context.json({ error: message }, 502);
 		}
 
 		const deployTarget = resolveSubscriptionDeployTarget(activeBackend);

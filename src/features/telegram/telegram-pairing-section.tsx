@@ -7,10 +7,10 @@ import {
 } from "lucide-react";
 import { useReducer } from "react";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
+import { inputClassName } from "#/components/ui/input-class";
 import { useMountEffect } from "#/lib/use-mount-effect";
-
-import { inputClassName } from "./telegram-input-class";
 import {
 	initialTelegramPairingState,
 	telegramPairingReducer,
@@ -133,12 +133,13 @@ export function TelegramPairingSection({
 			</div>
 
 			{!isDeployed ? (
-				<div className="rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<XCircle className="h-5 w-5 text-amber-600" />
-						<span>Deploy Hermes before managing pairings.</span>
-					</div>
-				</div>
+				<AlertPanel
+					tone="warning"
+					LeadingIcon={XCircle}
+					leadingIconClassName="h-5 w-5 text-[var(--alert-warning-fg)]"
+				>
+					Deploy Hermes before managing pairings.
+				</AlertPanel>
 			) : (
 				<>
 					<div className="space-y-2">
@@ -210,18 +211,20 @@ export function TelegramPairingSection({
 					</div>
 
 					{state.successMessage ? (
-						<div className="mt-4 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-							<div className="flex items-center gap-3">
-								<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-								<span>{state.successMessage}</span>
-							</div>
-						</div>
+						<AlertPanel
+							tone="success"
+							className="mt-4"
+							LeadingIcon={CheckCircle2}
+							leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
+						>
+							{state.successMessage}
+						</AlertPanel>
 					) : null}
 
 					{state.error ? (
-						<div className="mt-4 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+						<AlertPanel tone="error" className="mt-4">
 							{state.error}
-						</div>
+						</AlertPanel>
 					) : null}
 
 					{state.pairings ? (
@@ -235,7 +238,7 @@ export function TelegramPairingSection({
 										{state.pairings.pending.map((request) => (
 											<li
 												key={`${request.userId}-${request.code}`}
-												className="flex list-none flex-col gap-2 rounded-2xl border border-[var(--line)] bg-white/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+												className="flex list-none flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--chip-bg)] p-3 sm:flex-row sm:items-center sm:justify-between"
 											>
 												<div className="min-w-0">
 													<div className="font-semibold">

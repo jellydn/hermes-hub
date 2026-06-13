@@ -5,6 +5,8 @@ import {
 	RotateCcw,
 } from "lucide-react";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { StatusIcon } from "#/components/ui/status-icon";
 import {
@@ -70,20 +72,13 @@ export function ServerInstallProgress({
 					</div>
 
 					{isFinished ? (
-						<div
-							className={cn(
-								"mb-6 rounded-[1.5rem] border px-5 py-4 text-sm",
-								bannerTone === "success"
-									? "border-emerald-500/30 bg-emerald-500/10 text-[var(--sea-ink)]"
-									: "border-red-500/30 bg-red-500/10 text-[var(--sea-ink)]",
-							)}
-						>
+						<div className={cn(alertPanelClass(bannerTone), "mb-6 px-5 py-4")}>
 							<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 								<div className="flex items-start gap-3">
 									{snapshot.status === "succeeded" ? (
-										<CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+										<CheckCircle2 className="mt-0.5 h-5 w-5 text-[var(--alert-success-fg)]" />
 									) : (
-										<AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+										<AlertCircle className="mt-0.5 h-5 w-5 text-[var(--alert-error-fg)]" />
 									)}
 									<div>
 										<p className="m-0 font-semibold">
@@ -137,16 +132,16 @@ export function ServerInstallProgress({
 					</div>
 
 					{connectionState === "reconnecting" && isRunning ? (
-						<div className="mt-4 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+						<AlertPanel tone="warning" className="mt-4">
 							The live stream dropped. HermesHub is reconnecting and will replay
 							persisted install events when the connection returns.
-						</div>
+						</AlertPanel>
 					) : null}
 
 					{retryError ? (
-						<div className="mt-4 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+						<AlertPanel tone="error" className="mt-4">
 							{retryError}
-						</div>
+						</AlertPanel>
 					) : null}
 				</div>
 
@@ -207,7 +202,7 @@ export function ServerInstallProgress({
 								<li key={getInstallEventKey(event)} className="list-none">
 									<div className="flex flex-wrap items-center gap-2 text-[rgba(235,255,252,0.72)]">
 										<span>{formatInstallTimestamp(event.timestamp)}</span>
-										<span className="rounded-full bg-white/10 px-2 py-0.5 text-xs uppercase tracking-[0.2em]">
+										<span className="rounded-full bg-[var(--chip-bg)] px-2 py-0.5 text-xs uppercase tracking-[0.2em]">
 											{formatStepLabel(event.step)}
 										</span>
 									</div>

@@ -16,6 +16,7 @@ import {
 	saveProviderConfig,
 	saveSubscriptionConfig,
 	testProviderConfig,
+	testSubscriptionConfig,
 } from "./providers";
 import {
 	completeCodexAuth,
@@ -257,6 +258,11 @@ apiApp.post(
 	"/providers/subscriptions",
 	httpsMiddleware,
 	saveSubscriptionConfig,
+);
+apiApp.post(
+	"/providers/subscriptions/test",
+	httpsMiddleware,
+	testSubscriptionConfig,
 );
 apiApp.post("/providers/test", httpsMiddleware, testProviderConfig);
 apiApp.post("/providers/deploy", httpsMiddleware, deployProviderToHermes);

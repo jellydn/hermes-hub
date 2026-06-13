@@ -1,4 +1,4 @@
-import type { AiProviderId } from "#/lib/ai-providers";
+import type { ApiProviderId } from "#/lib/ai-providers";
 import { getAiProviderOption } from "#/lib/ai-providers";
 
 export class ProviderConnectionError extends Error {
@@ -12,7 +12,7 @@ export class ProviderConnectionError extends Error {
 }
 
 export async function verifyProviderConnection(input: {
-	provider: AiProviderId;
+	provider: ApiProviderId;
 	apiKey: string;
 	baseUrl?: string;
 }) {
@@ -37,8 +37,41 @@ export async function verifyProviderConnection(input: {
 	throw new ProviderConnectionError("Connection failed", "connection_failed");
 }
 
+export async function verifyOpenAiCompatibleConnection(input: {
+	apiKey: string;
+	baseUrl: string;
+}) {
+	const baseUrl = input.baseUrl.endsWith("/")
+		? `${input.baseUrl}models`
+		: `${input.baseUrl}/models`;
+
+	let response: Response;
+
+	try {
+		response = await fetch(baseUrl, {
+			method: "GET",
+			headers: {
+				Authorization: `Bearer ${input.apiKey}`,
+			},
+			signal: AbortSignal.timeout(5000),
+		});
+	} catch {
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
+
+	if (response.ok) {
+		return;
+	}
+
+	if (response.status === 401 || response.status === 403) {
+		throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
+	}
+
+	throw new ProviderConnectionError("Connection failed", "connection_failed");
+}
+
 function createProviderTestRequest(input: {
-	provider: AiProviderId;
+	provider: ApiProviderId;
 	apiKey: string;
 	baseUrl?: string;
 }): { url: string; init: RequestInit } {

@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 
 import { type ApiProviderId, formatAiProviderLabel } from "#/lib/ai-providers";
-import type { UserSubscriptionId } from "#/lib/user-subscriptions";
+import {
+	formatUserSubscriptionLabel,
+	getCredentialSubscriptionOption,
+	type UserSubscriptionId,
+} from "#/lib/user-subscriptions";
 import { encryptSecret } from "../crypto";
 import type { getDb } from "../db";
 import { aiProviders } from "../db/schema";
@@ -52,6 +56,46 @@ export async function activateApiProvider(
 		action: "provider.saved",
 		details: {
 			provider: input.provider,
+			model: input.model,
+		},
+		ipAddress: input.ipAddress,
+	});
+}
+
+export async function activateCredentialSubscription(
+	writer: ModelAccessWriter,
+	input: {
+		userId: string;
+		subscriptionProvider: UserSubscriptionId;
+		apiKey: string;
+		baseUrl: string;
+		model: string;
+		ipAddress: string | null;
+	},
+) {
+	const option = getCredentialSubscriptionOption(input.subscriptionProvider);
+	if (!option) {
+		throw new Error("Choose a valid credential-backed subscription.");
+	}
+
+	await deactivateUserSubscriptions(writer, input.userId);
+	await deactivateAllApiProviders(writer, input.userId);
+
+	await writer.insert(aiProviders).values({
+		userId: input.userId,
+		provider: option.storageProviderId,
+		encryptedApiKey: encryptSecret(input.apiKey),
+		baseUrl: input.baseUrl,
+		model: input.model,
+		label: formatUserSubscriptionLabel(option.id),
+		isActive: true,
+	});
+
+	await insertAuditLog(writer, {
+		userId: input.userId,
+		action: "subscription.saved",
+		details: {
+			subscriptionProvider: option.id,
 			model: input.model,
 		},
 		ipAddress: input.ipAddress,

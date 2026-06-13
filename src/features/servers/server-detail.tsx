@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Banner } from "#/components/ui/banner";
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 import type {
 	ServerDetailChangeHandler,
@@ -138,13 +138,15 @@ export function ServerDetail({
 					/>
 
 					{detail.server.supportLevel === "untested" ? (
-						<div className="mt-4 flex items-center gap-2 rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
-							<TriangleAlert className="h-4 w-4 shrink-0" />
-							<span>
-								This OS is not officially supported. Hermes runs via Docker but
-								some features may not work.
-							</span>
-						</div>
+						<AlertPanel
+							tone="warning"
+							className="mt-4"
+							LeadingIcon={TriangleAlert}
+							leadingIconClassName="h-4 w-4 shrink-0"
+						>
+							This OS is not officially supported. Hermes runs via Docker but
+							some features may not work.
+						</AlertPanel>
 					) : null}
 
 					<InstallLogCard
@@ -152,15 +154,29 @@ export function ServerDetail({
 						install={detail.install}
 					/>
 					{basics.success ? (
-						<Banner tone="success">{basics.success}</Banner>
+						<AlertPanel tone="success" withStatusIcon className="mt-5">
+							{basics.success}
+						</AlertPanel>
 					) : null}
-					{basics.error ? <Banner tone="error">{basics.error}</Banner> : null}
-					{installError ? <Banner tone="error">{installError}</Banner> : null}
+					{basics.error ? (
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{basics.error}
+						</AlertPanel>
+					) : null}
+					{installError ? (
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{installError}
+						</AlertPanel>
+					) : null}
 					{actions.actionState.success ? (
-						<Banner tone="success">{actions.actionState.success}</Banner>
+						<AlertPanel tone="success" withStatusIcon className="mt-5">
+							{actions.actionState.success}
+						</AlertPanel>
 					) : null}
 					{actions.actionState.error ? (
-						<Banner tone="error">{actions.actionState.error}</Banner>
+						<AlertPanel tone="error" withStatusIcon className="mt-5">
+							{actions.actionState.error}
+						</AlertPanel>
 					) : null}
 
 					<ServerActionControls
@@ -180,7 +196,7 @@ export function ServerDetail({
 					/>
 
 					<div className="mt-6 border-t border-[var(--line)] pt-6">
-						<p className="m-0 text-xs font-semibold uppercase tracking-wider text-red-600">
+						<p className="m-0 text-xs font-semibold uppercase tracking-wider text-[var(--alert-error-fg)]">
 							Danger zone
 						</p>
 						<p className="mt-2 mb-0 text-sm text-[var(--sea-ink-soft)]">

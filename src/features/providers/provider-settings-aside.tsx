@@ -1,8 +1,12 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import { formatAiProviderLabel } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
-import { formatUserSubscriptionLabel } from "#/lib/user-subscriptions";
+import {
+	formatUserSubscriptionLabel,
+	subscriptionSupportsConnectionTest,
+} from "#/lib/user-subscriptions";
 import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import type {
 	ApiProviderConfigSummary,
@@ -45,8 +49,12 @@ export function ProviderSettingsAside({
 			: savedApiConfig
 				? formatAiProviderLabel(savedApiConfig.provider)
 				: null;
+	const requiresCodexAuth =
+		activeBackend === "subscription" &&
+		savedSubscription &&
+		!subscriptionSupportsConnectionTest(savedSubscription.subscriptionProvider);
 	const codexReadyForDeploy =
-		activeBackend !== "subscription" ||
+		!requiresCodexAuth ||
 		(!isLoadingCodexAuth && codexAuthStatus?.authenticated === true);
 	const canDeploy =
 		Boolean(activeBackend) && Boolean(telegramDeploy) && codexReadyForDeploy;
@@ -73,6 +81,16 @@ export function ProviderSettingsAside({
 						Stored key ending in {savedApiConfig.keyLast4}
 					</p>
 				) : null}
+				{savedSubscription?.baseUrl ? (
+					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
+						Base URL: {savedSubscription.baseUrl}
+					</p>
+				) : null}
+				{savedSubscription?.keyLast4 ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+						Stored key ending in {savedSubscription.keyLast4}
+					</p>
+				) : null}
 			</section>
 
 			<section className="island-shell rounded-[2rem] p-6">
@@ -90,7 +108,7 @@ export function ProviderSettingsAside({
 								</span>
 							</p>
 						) : null}
-						{activeBackend === "subscription" && !codexReadyForDeploy ? (
+						{requiresCodexAuth && !codexReadyForDeploy ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 								{isLoadingCodexAuth
 									? "Checking remote Codex auth status..."
@@ -114,12 +132,14 @@ export function ProviderSettingsAside({
 							</Button>
 						</div>
 						{deployError ? (
-							<p className="mt-3 mb-0 text-sm text-red-600">{deployError}</p>
+							<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
+								{deployError}
+							</FormFeedback>
 						) : null}
 						{deployResult ? (
-							<p className="mt-3 mb-0 text-sm text-emerald-600">
+							<FormFeedback className="mt-3 mb-0 text-sm" tone="success">
 								{deployResult}
-							</p>
+							</FormFeedback>
 						) : null}
 					</>
 				) : (
@@ -146,6 +166,10 @@ export function ProviderSettingsAside({
 					<li>
 						ChatGPT: Subscription models via device-code OAuth on the deployed
 						Hermes server.
+					</li>
+					<li>
+						Xiaomi MiMo Token Plan: mimo-v2.5-pro and mimo-v2.5 via tp-* API key
+						and the MiMo base URL.
 					</li>
 				</ul>
 			</section>

@@ -19,6 +19,7 @@ const {
 	saveProviderConfig,
 	saveSubscriptionConfig,
 	testProviderConfig,
+	testSubscriptionConfig,
 	connectTelegram,
 	disconnectTelegram,
 	deployTelegramToServer,
@@ -56,6 +57,7 @@ const {
 	saveProviderConfig: vi.fn(),
 	saveSubscriptionConfig: vi.fn(),
 	testProviderConfig: vi.fn(),
+	testSubscriptionConfig: vi.fn(),
 	connectTelegram: vi.fn(),
 	disconnectTelegram: vi.fn(),
 	deployTelegramToServer: vi.fn(),
@@ -117,6 +119,7 @@ vi.mock("./providers", () => ({
 	saveProviderConfig,
 	saveSubscriptionConfig,
 	testProviderConfig,
+	testSubscriptionConfig,
 }));
 
 vi.mock("./telegram", () => ({

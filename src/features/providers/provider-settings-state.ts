@@ -17,7 +17,7 @@ export type ProviderSettingsUiState = {
 	providerSaveError: string | null;
 	subscriptionSaveError: string | null;
 	testError: string | null;
-	isConnected: boolean;
+	verifiedConnectionFingerprint: string | null;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
@@ -28,6 +28,7 @@ export type ProviderSettingsUiState = {
 
 export type ProviderSettingsUiAction =
 	| { type: "provider_changed" }
+	| { type: "subscription_changed" }
 	| { type: "provider_save_started" }
 	| { type: "provider_save_failed"; error: string }
 	| { type: "provider_save_succeeded"; config: ApiProviderConfigSummary }
@@ -37,11 +38,12 @@ export type ProviderSettingsUiAction =
 	| {
 			type: "subscription_save_succeeded";
 			config: UserSubscriptionConfigSummary;
+			connectionFingerprint?: string | null;
 	  }
 	| { type: "subscription_save_finished" }
 	| { type: "test_started" }
 	| { type: "test_failed"; error: string }
-	| { type: "test_succeeded"; connected: boolean }
+	| { type: "test_succeeded"; fingerprint: string }
 	| { type: "test_finished" }
 	| { type: "deploy_started" }
 	| { type: "deploy_failed"; error: string }
@@ -70,7 +72,7 @@ export function createInitialProviderSettingsUiState(
 		providerSaveError: null,
 		subscriptionSaveError: null,
 		testError: null,
-		isConnected: false,
+		verifiedConnectionFingerprint: null,
 		isDeploying: false,
 		deployError: null,
 		deployResult: null,
@@ -91,7 +93,15 @@ export function providerSettingsUiReducer(
 				providerSaveMessage: null,
 				providerSaveError: null,
 				testError: null,
-				isConnected: false,
+				verifiedConnectionFingerprint: null,
+			};
+		case "subscription_changed":
+			return {
+				...state,
+				subscriptionSaveMessage: null,
+				subscriptionSaveError: null,
+				testError: null,
+				verifiedConnectionFingerprint: null,
 			};
 		case "codex_auth_status_load_started":
 			return {
@@ -125,6 +135,7 @@ export function providerSettingsUiReducer(
 				savedApiConfig: action.config,
 				activeBackend: "api-provider",
 				providerSaveMessage: "API provider settings saved.",
+				verifiedConnectionFingerprint: null,
 			};
 		case "provider_save_finished":
 			return {
@@ -149,6 +160,9 @@ export function providerSettingsUiReducer(
 				savedSubscription: action.config,
 				activeBackend: "subscription",
 				subscriptionSaveMessage: "Subscription settings saved.",
+				savedApiConfig: null,
+				verifiedConnectionFingerprint:
+					action.connectionFingerprint ?? state.verifiedConnectionFingerprint,
 			};
 		case "subscription_save_finished":
 			return {
@@ -161,7 +175,7 @@ export function providerSettingsUiReducer(
 				isTesting: true,
 				testError: null,
 				providerSaveError: null,
-				isConnected: false,
+				verifiedConnectionFingerprint: null,
 			};
 		case "test_failed":
 			return {
@@ -171,7 +185,7 @@ export function providerSettingsUiReducer(
 		case "test_succeeded":
 			return {
 				...state,
-				isConnected: action.connected,
+				verifiedConnectionFingerprint: action.fingerprint,
 			};
 		case "test_finished":
 			return {

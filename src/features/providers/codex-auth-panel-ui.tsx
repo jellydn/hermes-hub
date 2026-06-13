@@ -1,5 +1,6 @@
 import { ExternalLink, KeyRound, LoaderCircle } from "lucide-react";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 
 import type { CodexAuthPanelState } from "./codex-auth-panel-state";
@@ -26,10 +27,10 @@ export function CodexAuthStatusSection({
 	return (
 		<>
 			{status?.authenticated ? (
-				<p className="mt-3 mb-0 text-sm text-emerald-600">
+				<FormFeedback className="mt-3 mb-0 text-sm" tone="success">
 					Codex is authenticated on{" "}
 					{status.serverHost ?? "your deployed server"}.
-				</p>
+				</FormFeedback>
 			) : (
 				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 					{isLoadingStatus
@@ -39,7 +40,9 @@ export function CodexAuthStatusSection({
 			)}
 
 			{statusError ? (
-				<p className="mt-3 mb-0 text-sm text-red-600">{statusError}</p>
+				<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
+					{statusError}
+				</FormFeedback>
 			) : null}
 
 			<div className="mt-4 flex flex-wrap gap-3">
@@ -85,7 +88,7 @@ export function CodexAuthDeviceCodeSection({
 	}
 
 	return (
-		<div className="mt-4 space-y-3 rounded-[1.25rem] border border-[var(--chip-line)] bg-white/70 px-4 py-4 text-sm text-[var(--sea-ink)]">
+		<div className="mt-4 space-y-3 rounded-[1.25rem] border border-[var(--chip-line)] bg-[var(--input-bg)] px-4 py-4 text-sm text-[var(--sea-ink)]">
 			<p className="m-0">
 				1. Open{" "}
 				<a

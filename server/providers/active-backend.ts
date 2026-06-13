@@ -5,6 +5,7 @@ import {
 } from "#/lib/ai-providers";
 import {
 	formatUserSubscriptionLabel,
+	getSubscriptionByStorageProviderId,
 	getSubscriptionHermesProviderId,
 	isLegacyCodexProviderId,
 	isUserSubscriptionId,
@@ -22,13 +23,30 @@ export type ActiveApiProviderBackend = {
 	baseUrl: string | null;
 };
 
-export type ActiveSubscriptionBackend = {
+export type ActiveOAuthSubscriptionBackend = {
 	kind: "subscription";
+	access: "oauth";
 	subscriptionProvider: UserSubscriptionId;
 	model: string;
 	authMode: string;
 	hermesProviderId: string;
 };
+
+export type ActiveCredentialSubscriptionBackend = {
+	kind: "subscription";
+	access: "credential";
+	subscriptionProvider: UserSubscriptionId;
+	model: string;
+	authMode: string;
+	hermesProviderId: string;
+	storageProviderId: string;
+	encryptedApiKey: string;
+	baseUrl: string | null;
+};
+
+export type ActiveSubscriptionBackend =
+	| ActiveOAuthSubscriptionBackend
+	| ActiveCredentialSubscriptionBackend;
 
 export type ActiveModelBackend =
 	| ActiveApiProviderBackend
@@ -49,6 +67,7 @@ export function deriveActiveModelBackend(
 	if (subscription) {
 		return {
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: subscription.subscriptionProvider,
 			model: subscription.model,
 			authMode: subscription.authMode,
@@ -65,10 +84,28 @@ export function deriveActiveModelBackend(
 	if (isLegacyCodexProviderId(providerRecord.provider)) {
 		return {
 			kind: "subscription",
+			access: "oauth",
 			subscriptionProvider: "chatgpt",
 			model: providerRecord.model,
 			authMode: "chatgpt",
 			hermesProviderId: getSubscriptionHermesProviderId("chatgpt"),
+		};
+	}
+
+	const credentialOption = getSubscriptionByStorageProviderId(
+		providerRecord.provider,
+	);
+	if (credentialOption) {
+		return {
+			kind: "subscription",
+			access: "credential",
+			subscriptionProvider: credentialOption.id,
+			model: providerRecord.model,
+			authMode: credentialOption.authMode,
+			hermesProviderId: credentialOption.hermesProviderId,
+			storageProviderId: credentialOption.storageProviderId,
+			encryptedApiKey: providerRecord.encryptedApiKey,
+			baseUrl: providerRecord.baseUrl,
 		};
 	}
 

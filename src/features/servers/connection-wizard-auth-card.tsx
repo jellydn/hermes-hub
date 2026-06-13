@@ -20,7 +20,7 @@ export function AuthCard({
 					: "border-[var(--chip-line)] bg-[var(--chip-bg)]",
 			)}
 		>
-			<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-white/70 p-3 text-[var(--lagoon-deep)]">
+			<div className="mb-4 inline-flex rounded-2xl border border-[var(--chip-line)] bg-[var(--input-bg)] p-3 text-[var(--lagoon-deep)]">
 				<Icon className="h-5 w-5" />
 			</div>
 			<div className="space-y-2">
@@ -33,7 +33,7 @@ export function AuthCard({
 							"rounded-full px-3 py-1 text-xs font-semibold",
 							selected
 								? "bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]"
-								: "bg-white/70 text-[var(--sea-ink-soft)]",
+								: "bg-[var(--input-bg)] text-[var(--sea-ink-soft)]",
 						)}
 					>
 						{selected ? "Selected" : "Choose"}

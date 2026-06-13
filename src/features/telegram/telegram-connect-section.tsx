@@ -2,8 +2,10 @@ import { CheckCircle2, LoaderCircle, PlugZap, Unplug } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
-import { inputClassName } from "./telegram-input-class";
+import { FormFeedback } from "#/components/ui/form-feedback";
+import { inputClassName } from "#/components/ui/input-class";
 import type { TelegramSettingsSummary } from "./telegram-settings";
 
 type TelegramConnectSectionProps = {
@@ -142,9 +144,9 @@ export function TelegramConnectSection({
 					}
 				/>
 				{formErrors.botToken ? (
-					<p className="mt-1 text-xs text-red-500">
+					<FormFeedback className="mt-1 text-xs" tone="error">
 						{formErrors.botToken.message}
-					</p>
+					</FormFeedback>
 				) : null}
 				<p className="block min-h-5 text-xs text-[var(--sea-ink-soft)]">
 					{savedConfig?.botTokenLast4
@@ -154,18 +156,20 @@ export function TelegramConnectSection({
 			</div>
 
 			{successMessage ? (
-				<div className="mt-6 rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<CheckCircle2 className="h-5 w-5 text-emerald-600" />
-						<span>{successMessage}</span>
-					</div>
-				</div>
+				<AlertPanel
+					tone="success"
+					className="mt-6"
+					LeadingIcon={CheckCircle2}
+					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
+				>
+					{successMessage}
+				</AlertPanel>
 			) : null}
 
 			{error ? (
-				<div className="mt-6 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+				<AlertPanel tone="error" className="mt-6">
 					{error}
-				</div>
+				</AlertPanel>
 			) : null}
 
 			<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">

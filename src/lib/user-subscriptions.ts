@@ -1,4 +1,4 @@
-export type UserSubscriptionId = "chatgpt";
+export type UserSubscriptionId = "chatgpt" | "mimo";
 
 export const FUTURE_USER_SUBSCRIPTION_IDS = ["github-copilot"] as const;
 export type FutureUserSubscriptionId =
@@ -6,15 +6,36 @@ export type FutureUserSubscriptionId =
 
 export const LEGACY_CODEX_PROVIDER_ID = "openai-codex" as const;
 
-export type UserSubscriptionOption = {
+export type SubscriptionDeployEnvConfig = {
+	apiKeyEnvVar: string;
+	baseUrlEnvVar: string;
+};
+
+type BaseSubscriptionOption = {
 	id: UserSubscriptionId;
 	label: string;
 	description: string;
-	hermesProviderId: typeof LEGACY_CODEX_PROVIDER_ID;
-	authMode: string;
 	models: readonly string[];
 	defaultModel: string;
+	authMode: string;
+	hermesProviderId: string;
+	supportsConnectionTest: boolean;
 };
+
+export type OAuthSubscriptionOption = BaseSubscriptionOption & {
+	credentialKind: "oauth";
+};
+
+export type CredentialSubscriptionOption = BaseSubscriptionOption & {
+	credentialKind: "api-key";
+	storageProviderId: string;
+	defaultBaseUrl: string;
+	deployEnv: SubscriptionDeployEnvConfig;
+};
+
+export type UserSubscriptionOption =
+	| OAuthSubscriptionOption
+	| CredentialSubscriptionOption;
 
 export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 	{
@@ -24,6 +45,8 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 			"Use ChatGPT subscription models via Codex OAuth on your deployed Hermes server.",
 		hermesProviderId: LEGACY_CODEX_PROVIDER_ID,
 		authMode: "chatgpt",
+		credentialKind: "oauth",
+		supportsConnectionTest: false,
 		models: [
 			"gpt-5.5",
 			"gpt-5.4-mini",
@@ -32,6 +55,24 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 			"gpt-5.3-codex-spark",
 		],
 		defaultModel: "gpt-5.5",
+	},
+	{
+		id: "mimo",
+		label: "Xiaomi MiMo Token Plan",
+		description:
+			"Use MiMo Token Plan with a tp-* API key and the exclusive MiMo base URL.",
+		hermesProviderId: "xiaomi",
+		authMode: "mimo-token-plan",
+		credentialKind: "api-key",
+		supportsConnectionTest: true,
+		storageProviderId: "mimo",
+		defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+		deployEnv: {
+			apiKeyEnvVar: "XIAOMI_API_KEY",
+			baseUrlEnvVar: "XIAOMI_BASE_URL",
+		},
+		models: ["mimo-v2.5-pro", "mimo-v2.5"],
+		defaultModel: "mimo-v2.5-pro",
 	},
 ] as const;
 
@@ -53,8 +94,45 @@ export function getUserSubscriptionOption(subscription: UserSubscriptionId) {
 	);
 }
 
+export function getCredentialSubscriptionOption(
+	subscription: UserSubscriptionId,
+): CredentialSubscriptionOption | null {
+	const option = getUserSubscriptionOption(subscription);
+	return option?.credentialKind === "api-key" ? option : null;
+}
+
+export function getSubscriptionByStorageProviderId(
+	storageProviderId: string,
+): CredentialSubscriptionOption | null {
+	return (
+		userSubscriptionOptions.find(
+			(option): option is CredentialSubscriptionOption =>
+				option.credentialKind === "api-key" &&
+				option.storageProviderId === storageProviderId,
+		) ?? null
+	);
+}
+
+export function isSubscriptionStorageProviderId(value: string) {
+	return getSubscriptionByStorageProviderId(value) !== null;
+}
+
 export function getDefaultSubscriptionModel(subscription: UserSubscriptionId) {
 	return getUserSubscriptionOption(subscription)?.defaultModel ?? "";
+}
+
+export function getSubscriptionDefaultBaseUrl(
+	subscription: UserSubscriptionId,
+) {
+	return getCredentialSubscriptionOption(subscription)?.defaultBaseUrl ?? "";
+}
+
+export function getSubscriptionStorageProviderId(
+	subscription: UserSubscriptionId,
+) {
+	return (
+		getCredentialSubscriptionOption(subscription)?.storageProviderId ?? null
+	);
 }
 
 export function formatUserSubscriptionLabel(subscription: UserSubscriptionId) {
@@ -80,4 +158,12 @@ export function isValidSubscriptionModel(
 	}
 
 	return option.models.includes(model);
+}
+
+export function subscriptionSupportsConnectionTest(
+	subscription: UserSubscriptionId,
+) {
+	return (
+		getUserSubscriptionOption(subscription)?.supportsConnectionTest ?? false
+	);
 }

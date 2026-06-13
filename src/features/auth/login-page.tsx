@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import { authClient } from "#/lib/auth-client";
 
 const loginSchema = z.object({
@@ -63,15 +65,15 @@ export function LoginPage() {
 				</p>
 
 				{submitted ? (
-					<div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+					<AlertPanel tone="success" className="rounded-2xl">
 						Check your email for the magic link
-					</div>
+					</AlertPanel>
 				) : null}
 
 				{error ? (
-					<div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+					<AlertPanel tone="error" className="mt-4 rounded-2xl">
 						{error}
-					</div>
+					</AlertPanel>
 				) : null}
 
 				<form
@@ -89,11 +91,13 @@ export function LoginPage() {
 							id="email"
 							type="email"
 							placeholder="you@example.com"
-							className="w-full rounded-2xl border border-[var(--line)] bg-white/70 px-4 py-3 text-base text-[var(--sea-ink)] outline-none transition focus:border-[var(--sea-ink)] dark:bg-white/5"
+							className="w-full rounded-2xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-3 text-base text-[var(--sea-ink)] outline-none transition focus:border-[color:var(--focus-ring)] focus:ring-2 focus:ring-[color:var(--focus-ring)]"
 							{...register("email")}
 						/>
 						{errors.email ? (
-							<p className="text-xs text-red-500">{errors.email.message}</p>
+							<FormFeedback className="text-xs" tone="error">
+								{errors.email.message}
+							</FormFeedback>
 						) : null}
 					</div>
 

@@ -35,7 +35,7 @@ export function SettingsPage() {
 					className={cn(
 						"rounded-full border px-4 py-2 text-sm font-medium transition",
 						activeTab === "persona"
-							? "border-[var(--sea-ink)] bg-[var(--sea-ink)] text-white"
+							? "border-[var(--selected-bg)] bg-[var(--selected-bg)] text-[var(--selected-fg)]"
 							: "border-[var(--line)] bg-[var(--surface)] text-[var(--sea-ink)]",
 					)}
 				>
@@ -47,7 +47,7 @@ export function SettingsPage() {
 					className={cn(
 						"rounded-full border px-4 py-2 text-sm font-medium transition",
 						activeTab === "mcp"
-							? "border-[var(--sea-ink)] bg-[var(--sea-ink)] text-white"
+							? "border-[var(--selected-bg)] bg-[var(--selected-bg)] text-[var(--selected-fg)]"
 							: "border-[var(--line)] bg-[var(--surface)] text-[var(--sea-ink)]",
 					)}
 				>
@@ -59,7 +59,7 @@ export function SettingsPage() {
 					className={cn(
 						"rounded-full border px-4 py-2 text-sm font-medium transition",
 						activeTab === "skills"
-							? "border-[var(--sea-ink)] bg-[var(--sea-ink)] text-white"
+							? "border-[var(--selected-bg)] bg-[var(--selected-bg)] text-[var(--selected-fg)]"
 							: "border-[var(--line)] bg-[var(--surface)] text-[var(--sea-ink)]",
 					)}
 				>

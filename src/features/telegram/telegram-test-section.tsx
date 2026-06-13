@@ -1,9 +1,9 @@
 import { LoaderCircle, Send, XCircle } from "lucide-react";
 import { useState } from "react";
 
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
-
-import { inputClassName } from "./telegram-input-class";
+import { inputClassName } from "#/components/ui/input-class";
 
 type TelegramTestSectionProps = {
 	isDeployed: boolean;
@@ -61,12 +61,13 @@ export function TelegramTestSection({ isDeployed }: TelegramTestSectionProps) {
 			</div>
 
 			{!isDeployed ? (
-				<div className="rounded-[1.5rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
-					<div className="flex items-center gap-3">
-						<XCircle className="h-5 w-5 text-amber-600" />
-						<span>Deploy the bot token to a server first before testing.</span>
-					</div>
-				</div>
+				<AlertPanel
+					tone="warning"
+					LeadingIcon={XCircle}
+					leadingIconClassName="h-5 w-5 text-[var(--alert-warning-fg)]"
+				>
+					Deploy the bot token to a server first before testing.
+				</AlertPanel>
 			) : (
 				<>
 					<div className="space-y-2">
@@ -122,9 +123,9 @@ export function TelegramTestSection({ isDeployed }: TelegramTestSectionProps) {
 					) : null}
 
 					{testError ? (
-						<div className="mt-4 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-[var(--sea-ink)]">
+						<AlertPanel tone="error" className="mt-4">
 							{testError}
-						</div>
+						</AlertPanel>
 					) : null}
 				</>
 			)}

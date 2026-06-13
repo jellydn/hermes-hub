@@ -8,7 +8,7 @@ import {
 	Rocket,
 } from "lucide-react";
 
-import { Banner } from "#/components/ui/banner";
+import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
 import type {
@@ -66,24 +66,24 @@ export function HermesWebUiCard({
 					</p>
 
 					{isDeploying ? (
-						<Banner tone="info" className="mt-4">
+						<AlertPanel tone="info" withStatusIcon className="mt-4">
 							<span className="inline-flex items-center gap-2">
 								<LoaderCircle className="h-4 w-4 animate-spin" />
 								Setting up Web UI...
 							</span>
-						</Banner>
+						</AlertPanel>
 					) : null}
 
 					{webUiState.successMessage ? (
-						<Banner tone="success" className="mt-4">
+						<AlertPanel tone="success" withStatusIcon className="mt-4">
 							{webUiState.successMessage}
-						</Banner>
+						</AlertPanel>
 					) : null}
 
 					{webUiState.error || (isFailed && deployError) ? (
-						<Banner tone="error" className="mt-4">
+						<AlertPanel tone="error" withStatusIcon className="mt-4">
 							{webUiState.error ?? deployError}
-						</Banner>
+						</AlertPanel>
 					) : null}
 
 					<div className="mt-4 flex flex-wrap gap-3">

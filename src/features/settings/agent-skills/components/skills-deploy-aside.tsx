@@ -1,4 +1,5 @@
 import { LoaderCircle, TriangleAlert } from "lucide-react";
+import { FormFeedback } from "#/components/ui/form-feedback";
 import type { DeployResponsePayload } from "#/features/settings/hermes-deploy-panel";
 import { HermesDeployPanel } from "#/features/settings/hermes-deploy-panel";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
@@ -107,44 +108,44 @@ function ManagedSkillSummary({
 				{expectedNames.length === 1 ? "" : "s"} present on remote
 			</p>
 			{lastBypassUnavailableSkills.length > 0 && (
-				<div
-					className="flex items-start gap-1.5 text-sm text-amber-600"
+				<FormFeedback
+					tone="warning"
+					className="text-sm"
 					id="bypass-unavailable-managed-skills"
+					LeadingIcon={TriangleAlert}
+					leadingIconClassName="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
 				>
-					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>
-						Scanner bypass unavailable on last deploy:
-						{lastBypassUnavailableSkills.map((n) => ` ${n}`)}. Use a GitHub
-						folder URL or direct raw SKILL.md link.
-					</span>
-				</div>
+					Scanner bypass unavailable on last deploy:
+					{lastBypassUnavailableSkills.map((n) => ` ${n}`)}. Use a GitHub folder
+					URL or direct raw SKILL.md link.
+				</FormFeedback>
 			)}
 			{lastBlockedSkills.length > 0 && (
-				<div
-					className="flex items-start gap-1.5 text-sm text-amber-600"
+				<FormFeedback
+					tone="warning"
+					className="text-sm"
 					id="blocked-managed-skills"
+					LeadingIcon={TriangleAlert}
+					leadingIconClassName="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
 				>
-					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>
-						Blocked by Hermes scanner on last deploy:
-						{lastBlockedSkills.map((n) => ` ${n}`)}. Enable "Accept scanner
-						risk" on the skill to bypass via direct file write, or install
-						manually on the server.
-					</span>
-				</div>
+					Blocked by Hermes scanner on last deploy:
+					{lastBlockedSkills.map((n) => ` ${n}`)}. Enable "Accept scanner risk"
+					on the skill to bypass via direct file write, or install manually on
+					the server.
+				</FormFeedback>
 			)}
 			{missing.length > 0 && (
-				<div
-					className="flex items-start gap-1.5 text-sm text-amber-600"
+				<FormFeedback
+					tone="warning"
+					className="text-sm"
 					id="missing-managed-skills"
+					LeadingIcon={TriangleAlert}
+					leadingIconClassName="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
 				>
-					<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-					<span>
-						Not in Hub manifest on remote:
-						{missing.map((n) => ` ${n}`)}. Deploy again to sync, or check the
-						raw CLI output for the full remote inventory.
-					</span>
-				</div>
+					Not in Hub manifest on remote:
+					{missing.map((n) => ` ${n}`)}. Deploy again to sync, or check the raw
+					CLI output for the full remote inventory.
+				</FormFeedback>
 			)}
 		</div>
 	);
@@ -213,9 +214,13 @@ export function SkillsDeployAside({
 							<span>Fetching remote inventory...</span>
 						</div>
 					) : remoteError ? (
-						<p className="m-0 text-sm text-red-600" id="remote-inventory-error">
+						<FormFeedback
+							className="m-0 text-sm"
+							id="remote-inventory-error"
+							tone="error"
+						>
 							{remoteError}
-						</p>
+						</FormFeedback>
 					) : remoteInventory ? (
 						<div className="space-y-3" id="remote-inventory-details">
 							<h4 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">

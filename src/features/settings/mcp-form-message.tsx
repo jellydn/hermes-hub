@@ -1,3 +1,5 @@
+import { FormFeedback } from "#/components/ui/form-feedback";
+
 export type McpFormMessage = { type: "success" | "error"; text: string };
 
 type McpFormMessageBannerProps = {
@@ -14,12 +16,8 @@ export function McpFormMessageBanner({
 	}
 
 	return (
-		<p
-			className={`${className} ${
-				message.type === "error" ? "text-red-600" : "text-emerald-600"
-			}`}
-		>
+		<FormFeedback className={className} tone={message.type}>
 			{message.text}
-		</p>
+		</FormFeedback>
 	);
 }

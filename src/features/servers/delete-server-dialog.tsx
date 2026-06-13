@@ -1,7 +1,9 @@
 import { LoaderCircle, ShieldAlert, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
+import { FormFeedback } from "#/components/ui/form-feedback";
 
 type DeleteServerDialogProps = {
 	serverId: string;
@@ -50,9 +52,9 @@ export function DeleteServerDialog({
 	}
 
 	return (
-		<div className="mt-5 rounded-[1.5rem] border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-[var(--sea-ink)]">
+		<div className={alertPanelClass("error", "mt-5 px-4 py-4")}>
 			<div className="flex items-start gap-3">
-				<ShieldAlert className="mt-0.5 h-5 w-5 text-red-600" />
+				<ShieldAlert className="mt-0.5 h-5 w-5 text-[var(--alert-error-fg)]" />
 				<div className="flex-1">
 					<p className="m-0 font-semibold">
 						Are you sure you want to delete this server?
@@ -77,7 +79,9 @@ export function DeleteServerDialog({
 						className="mt-1 w-full rounded-[1rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-2 text-sm text-[var(--sea-ink)] placeholder:text-[var(--sea-ink-soft)]"
 					/>
 					{error ? (
-						<p className="mt-2 mb-0 text-xs text-red-600">{error}</p>
+						<FormFeedback className="mt-2 mb-0 text-xs" tone="error">
+							{error}
+						</FormFeedback>
 					) : null}
 					<div className="mt-4 flex flex-wrap gap-3">
 						<Button
