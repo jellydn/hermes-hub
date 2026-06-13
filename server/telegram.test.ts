@@ -85,6 +85,48 @@ vi.mock("./managed-compose-deploy", () => ({
 	deployManagedCompose,
 }));
 
+const setProviderModel = vi.fn();
+const setProviderInferenceProvider = vi.fn();
+
+vi.mock("./hermes/runtime", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./hermes/runtime")>();
+	return {
+		...actual,
+		setProviderModel,
+		setProviderInferenceProvider,
+	};
+});
+
+vi.mock("#/lib/ai-providers", () => ({
+	isApiProviderId: (value: string) =>
+		["openai", "anthropic", "openrouter", "ollama", "custom"].includes(value),
+	isValidAiModel: (provider: string, model: string) => {
+		if (provider === "openai") {
+			return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"].includes(model);
+		}
+		return true;
+	},
+	isValidModelString: (model: string) =>
+		/^[A-Za-z0-9._:/-]{1,120}$/.test(model),
+	apiProviderOptions: [
+		{ id: "openai", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"], requiresCustomModel: false },
+		{ id: "anthropic", models: ["claude-sonnet-4-20250514"], requiresCustomModel: false },
+		{ id: "openrouter", models: [], requiresCustomModel: true },
+		{ id: "ollama", models: [], requiresCustomModel: true },
+		{ id: "custom", models: [], requiresCustomModel: true },
+	],
+}));
+
+vi.mock("./providers/config", () => ({
+	PROVIDER_ENV_CONFIGS: {
+		openai: { hermesProvider: "openai-api" },
+		anthropic: { hermesProvider: "anthropic" },
+		openrouter: { hermesProvider: "openrouter" },
+		ollama: { hermesProvider: "custom" },
+		custom: { hermesProvider: "custom" },
+	},
+}));
+
 describe("telegram handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -562,6 +604,277 @@ describe("telegram handlers", () => {
 		);
 		// The command should end with a closing single quote
 		expect(capturedCommand?.trim()).toMatch(/'$/);
+	});
+});
+
+describe("switchModelProvider", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		setProviderModel.mockResolvedValue(undefined);
+		setProviderInferenceProvider.mockResolvedValue(undefined);
+	});
+
+	it("returns 401 when not authenticated", async () => {
+		getAuthSession.mockResolvedValueOnce(null);
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(401);
+		expect(payload).toEqual({ error: "Unauthorized" });
+	});
+
+	it("returns 400 when neither model nor provider is provided", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(createContext({}));
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("At least one of");
+	});
+
+	it("returns 400 for invalid provider", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ provider: "invalid-provider" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("Invalid provider");
+	});
+
+	it("returns 400 for invalid model string", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ model: "invalid model with spaces!" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("Invalid model");
+	});
+
+	it("returns 400 when model is not valid for the given provider", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ provider: "openai", model: "claude-sonnet" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("not valid for provider");
+	});
+
+	it("returns 400 when no active telegram config", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		selectLimit.mockResolvedValueOnce([]);
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("No active Telegram config");
+	});
+
+	it("switches model successfully via SSH", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+				return callback({});
+			},
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload).toEqual({ status: "switched", model: "gpt-4o" });
+		expect(setProviderModel).toHaveBeenCalledWith(expect.anything(), "gpt-4o");
+		expect(setProviderInferenceProvider).not.toHaveBeenCalled();
+	});
+
+	it("switches provider successfully via SSH", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+				return callback({});
+			},
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ provider: "anthropic" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload).toEqual({ status: "switched", provider: "anthropic" });
+		expect(setProviderInferenceProvider).toHaveBeenCalledWith(
+			expect.anything(),
+			"anthropic",
+		);
+		expect(setProviderModel).not.toHaveBeenCalled();
+	});
+
+	it("switches both model and provider via SSH", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+				return callback({});
+			},
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ provider: "openai", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload).toEqual({
+			status: "switched",
+			provider: "openai",
+			model: "gpt-4o",
+		});
+		expect(setProviderInferenceProvider).toHaveBeenCalledWith(
+			expect.anything(),
+			"openai-api",
+		);
+		expect(setProviderModel).toHaveBeenCalledWith(expect.anything(), "gpt-4o");
+	});
+
+	it("returns 502 when SSH connection fails", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockRejectedValueOnce(
+			new Error("SSH connection refused"),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain("SSH connection refused");
 	});
 });
 

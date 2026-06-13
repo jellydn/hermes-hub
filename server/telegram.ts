@@ -26,6 +26,15 @@ import {
 	findServerForDeploy,
 	getLatestTelegramRecord,
 } from "./telegram/records";
+import {
+	type ApiProviderId,
+	apiProviderOptions,
+	isApiProviderId,
+	isValidAiModel,
+	isValidModelString,
+} from "#/lib/ai-providers";
+import { PROVIDER_ENV_CONFIGS } from "./providers/config";
+import { setProviderModel, setProviderInferenceProvider } from "./hermes/runtime";
 
 export type {
 	TelegramConfigSummary,
@@ -414,6 +423,163 @@ export async function testTelegramBot(context: Context) {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Test failed";
 		return context.json({ error: message }, 502);
+	}
+}
+
+export async function switchModelProvider(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
+	}
+
+	let payload: { model?: string; provider?: string };
+	try {
+		payload = await context.req.json<{ model?: string; provider?: string }>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const { model, provider } = payload;
+
+	if (!model && !provider) {
+		return context.json(
+			{ error: "At least one of 'model' or 'provider' is required." },
+			400,
+		);
+	}
+
+	// Validate provider if provided
+	if (provider !== undefined) {
+		if (!isApiProviderId(provider)) {
+			return context.json(
+				{
+					error: `Invalid provider: '${provider}'. Valid options: openai, anthropic, openrouter, ollama, custom.`,
+				},
+				400,
+			);
+		}
+	}
+
+	// Validate model if provided
+	if (model !== undefined) {
+		if (!model.trim()) {
+			return context.json({ error: "Model cannot be empty." }, 400);
+		}
+		if (!isValidModelString(model)) {
+			return context.json(
+				{
+					error: `Invalid model: '${model}'. Use alphanumeric, dots, underscores, colons, slashes, and hyphens (1-120 chars).`,
+				},
+				400,
+			);
+		}
+		// If both provider and model are provided, validate model against provider
+		if (provider && !isValidAiModel(provider as ApiProviderId, model)) {
+			const option = apiProviderOptions.find((o) => o.id === provider);
+			if (option && !option.requiresCustomModel) {
+				return context.json(
+					{
+						error: `Model '${model}' is not valid for provider '${provider}'. Valid models: ${option.models.join(", ")}.`,
+					},
+					400,
+				);
+			}
+		}
+	}
+
+	// Resolve SSH context
+	const record = await getLatestTelegramRecord(session.user.id);
+	if (!record?.isActive) {
+		return context.json(
+			{ error: "No active Telegram config. Connect a bot first." },
+			400,
+		);
+	}
+
+	if (!record.deployedServerId) {
+		return context.json(
+			{ error: "Bot is not deployed to any server. Deploy it first." },
+			400,
+		);
+	}
+
+	const serverRecord = await getServerById(record.deployedServerId);
+	if (!serverRecord) {
+		return context.json({ error: "Deployed server not found." }, 404);
+	}
+
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return context.json({ error: sshResult.error }, 400);
+	}
+	const { authMethod, credential } = sshResult;
+
+	const ipAddress = getClientIp(context);
+	const db = getDb();
+
+	try {
+		await withSshConnection(
+			{
+				host: serverRecord.host,
+				port: serverRecord.port,
+				username: serverRecord.username,
+				authMethod,
+				credential,
+				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			},
+			async (ssh) => {
+				if (provider) {
+					const hermesProviderId =
+						PROVIDER_ENV_CONFIGS[provider as ApiProviderId]?.hermesProvider;
+					if (hermesProviderId) {
+						await setProviderInferenceProvider(ssh, hermesProviderId);
+					}
+				}
+				if (model) {
+					await setProviderModel(ssh, model);
+				}
+			},
+		);
+
+		await insertAuditLog(db, {
+			userId: session.user.id,
+			action: "telegram.model.switched",
+			serverId: serverRecord.id,
+			details: {
+				...(provider ? { provider } : {}),
+				...(model ? { model } : {}),
+				serverHost: serverRecord.host,
+			},
+			ipAddress,
+		});
+
+		clearDashboardCache();
+
+		return context.json({
+			status: "switched",
+			...(provider ? { provider } : {}),
+			...(model ? { model } : {}),
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Model switch failed";
+
+		await insertAuditLog(db, {
+			userId: session.user.id,
+			action: "telegram.model.switch.failed",
+			serverId: serverRecord.id,
+			details: {
+				...(provider ? { provider } : {}),
+				...(model ? { model } : {}),
+				error: message,
+			},
+			ipAddress,
+		});
+
+		return context.json({ error: `Switch failed: ${message}` }, 502);
 	}
 }
 
