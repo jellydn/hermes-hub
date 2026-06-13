@@ -109,8 +109,16 @@ vi.mock("#/lib/ai-providers", () => ({
 	isValidModelString: (model: string) =>
 		/^[A-Za-z0-9._:/-]{1,120}$/.test(model),
 	apiProviderOptions: [
-		{ id: "openai", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"], requiresCustomModel: false },
-		{ id: "anthropic", models: ["claude-sonnet-4-20250514"], requiresCustomModel: false },
+		{
+			id: "openai",
+			models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			requiresCustomModel: false,
+		},
+		{
+			id: "anthropic",
+			models: ["claude-sonnet-4-20250514"],
+			requiresCustomModel: false,
+		},
 		{ id: "openrouter", models: [], requiresCustomModel: true },
 		{ id: "ollama", models: [], requiresCustomModel: true },
 		{ id: "custom", models: [], requiresCustomModel: true },
@@ -719,7 +727,10 @@ describe("switchModelProvider", () => {
 			credential: "test-credential",
 		});
 		withSshConnection.mockImplementation(
-			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
 				return callback({});
 			},
 		);
@@ -764,7 +775,10 @@ describe("switchModelProvider", () => {
 			credential: "test-credential",
 		});
 		withSshConnection.mockImplementation(
-			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
 				return callback({});
 			},
 		);
@@ -812,7 +826,10 @@ describe("switchModelProvider", () => {
 			credential: "test-credential",
 		});
 		withSshConnection.mockImplementation(
-			async (_config: unknown, callback: (ssh: unknown) => Promise<unknown>) => {
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
 				return callback({});
 			},
 		);
