@@ -20,6 +20,7 @@ const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
 const deployManagedCompose = vi.fn();
+const loadModelAccessRecords = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -85,6 +86,10 @@ vi.mock("./managed-compose-deploy", () => ({
 	deployManagedCompose,
 }));
 
+vi.mock("./providers/active-backend", () => ({
+	loadModelAccessRecords,
+}));
+
 const setProviderModel = vi.fn();
 const setProviderInferenceProvider = vi.fn();
 
@@ -98,6 +103,16 @@ vi.mock("./hermes/runtime", async (importOriginal) => {
 });
 
 vi.mock("#/lib/ai-providers", () => ({
+	getDefaultAiModel: (provider: string) => {
+		const defaults: Record<string, string> = {
+			openai: "gpt-4o",
+			anthropic: "claude-sonnet-4-20250514",
+			openrouter: "gpt-4o",
+			ollama: "llama3",
+			custom: "gpt-4o",
+		};
+		return defaults[provider] ?? "";
+	},
 	isApiProviderId: (value: string) =>
 		["openai", "anthropic", "openrouter", "ollama", "custom"].includes(value),
 	isValidAiModel: (provider: string, model: string) => {
@@ -163,6 +178,7 @@ describe("telegram handlers", () => {
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 		insertValues.mockResolvedValue(undefined);
+		loadModelAccessRecords.mockResolvedValue({ activeBackend: null });
 		selectInnerJoin.mockReturnValue({
 			where: selectWhere,
 			orderBy: selectOrderBy,
@@ -790,12 +806,19 @@ describe("switchModelProvider", () => {
 		const payload = await response.json();
 
 		expect(response.status).toBe(200);
-		expect(payload).toEqual({ status: "switched", provider: "anthropic" });
+		expect(payload).toEqual({
+			status: "switched",
+			provider: "anthropic",
+			model: "claude-sonnet-4-20250514",
+		});
 		expect(setProviderInferenceProvider).toHaveBeenCalledWith(
 			expect.anything(),
 			"anthropic",
 		);
-		expect(setProviderModel).not.toHaveBeenCalled();
+		expect(setProviderModel).toHaveBeenCalledWith(
+			expect.anything(),
+			"claude-sonnet-4-20250514",
+		);
 	});
 
 	it("switches both model and provider via SSH", async () => {

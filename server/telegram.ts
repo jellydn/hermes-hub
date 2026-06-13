@@ -5,6 +5,7 @@ import type { Context } from "hono";
 import {
 	type ApiProviderId,
 	apiProviderOptions,
+	getDefaultAiModel,
 	isApiProviderId,
 	isValidAiModel,
 	isValidModelString,
@@ -13,7 +14,7 @@ import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { telegramConfigs } from "./db/schema";
+import { aiProviders, aiUserSubscriptions, telegramConfigs } from "./db/schema";
 import {
 	setProviderInferenceProvider,
 	setProviderModel,
@@ -22,6 +23,7 @@ import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
+import { loadModelAccessRecords } from "./providers/active-backend";
 import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
@@ -493,8 +495,8 @@ export async function switchModelProvider(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	let { model } = payload;
-	const { provider } = payload;
+	let { model } = payload || {};
+	const { provider } = payload || {};
 
 	if (!model && !provider) {
 		return context.json(
@@ -526,6 +528,11 @@ export async function switchModelProvider(context: Context) {
 				400,
 			);
 		}
+	}
+
+	// If provider is specified without a model, default to the provider's default model
+	if (validatedProvider && model === undefined) {
+		model = getDefaultAiModel(validatedProvider);
 	}
 
 	// Validate model if provided
@@ -590,6 +597,25 @@ export async function switchModelProvider(context: Context) {
 				}
 			},
 		);
+
+		// Persist the new provider/model to the local database
+		const { activeBackend } = await loadModelAccessRecords(session.user.id);
+		if (activeBackend) {
+			if (activeBackend.kind === "api-provider") {
+				await db
+					.update(aiProviders)
+					.set({
+						...(validatedProvider ? { provider: validatedProvider } : {}),
+						...(model ? { model } : {}),
+					})
+					.where(eq(aiProviders.userId, session.user.id));
+			} else if (model) {
+				await db
+					.update(aiUserSubscriptions)
+					.set({ model, updatedAt: new Date() })
+					.where(eq(aiUserSubscriptions.userId, session.user.id));
+			}
+		}
 
 		await insertAuditLog(db, {
 			userId: session.user.id,
