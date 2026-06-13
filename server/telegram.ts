@@ -2,15 +2,27 @@ import crypto from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
+import {
+	type ApiProviderId,
+	apiProviderOptions,
+	isApiProviderId,
+	isValidAiModel,
+	isValidModelString,
+} from "#/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
+import {
+	setProviderInferenceProvider,
+	setProviderModel,
+} from "./hermes/runtime";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
+import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { shellQuote, withSshConnection } from "./ssh";
 import {
@@ -26,15 +38,6 @@ import {
 	findServerForDeploy,
 	getLatestTelegramRecord,
 } from "./telegram/records";
-import {
-	type ApiProviderId,
-	apiProviderOptions,
-	isApiProviderId,
-	isValidAiModel,
-	isValidModelString,
-} from "#/lib/ai-providers";
-import { PROVIDER_ENV_CONFIGS } from "./providers/config";
-import { setProviderModel, setProviderInferenceProvider } from "./hermes/runtime";
 
 export type {
 	TelegramConfigSummary,
@@ -426,9 +429,13 @@ export async function testTelegramBot(context: Context) {
 	}
 }
 
-
 type SshContextResult =
-	| { ok: true; serverRecord: NonNullable<Awaited<ReturnType<typeof getServerById>>>; authMethod: string; credential: string }
+	| {
+			ok: true;
+			serverRecord: NonNullable<Awaited<ReturnType<typeof getServerById>>>;
+			authMethod: string;
+			credential: string;
+	  }
 	| { ok: false; error: string; status: number };
 
 async function resolveTelegramSshContext(session: {
