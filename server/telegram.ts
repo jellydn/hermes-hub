@@ -24,7 +24,7 @@ import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
 import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
-import { shellQuote, withSshConnection } from "./ssh";
+import { shellQuote, type SshAuthMethod, withSshConnection } from "./ssh";
 import {
 	getTokenLast4,
 	TelegramConnectionError,
@@ -433,7 +433,7 @@ type SshContextResult =
 	| {
 			ok: true;
 			serverRecord: NonNullable<Awaited<ReturnType<typeof getServerById>>>;
-			authMethod: string;
+			authMethod: SshAuthMethod;
 			credential: string;
 	  }
 	| { ok: false; error: string; status: number };
@@ -559,7 +559,7 @@ export async function switchModelProvider(context: Context) {
 	// Resolve SSH context
 	const sshContext = await resolveTelegramSshContext(session);
 	if (!sshContext.ok) {
-		return context.json({ error: sshContext.error }, sshContext.status);
+		return context.json({ error: sshContext.error }, sshContext.status as Parameters<typeof context.json>[1]);
 	}
 	const { serverRecord } = sshContext;
 
