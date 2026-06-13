@@ -24,7 +24,7 @@ import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
 import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
-import { shellQuote, type SshAuthMethod, withSshConnection } from "./ssh";
+import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 import {
 	getTokenLast4,
 	TelegramConnectionError,
@@ -559,7 +559,10 @@ export async function switchModelProvider(context: Context) {
 	// Resolve SSH context
 	const sshContext = await resolveTelegramSshContext(session);
 	if (!sshContext.ok) {
-		return context.json({ error: sshContext.error }, sshContext.status as Parameters<typeof context.json>[1]);
+		return context.json(
+			{ error: sshContext.error },
+			sshContext.status as Parameters<typeof context.json>[1],
+		);
 	}
 	const { serverRecord } = sshContext;
 
