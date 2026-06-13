@@ -426,6 +426,53 @@ export async function testTelegramBot(context: Context) {
 	}
 }
 
+
+type SshContextResult =
+	| { ok: true; serverRecord: NonNullable<Awaited<ReturnType<typeof getServerById>>>; authMethod: string; credential: string }
+	| { ok: false; error: string; status: number };
+
+async function resolveTelegramSshContext(session: {
+	user: { id: string };
+	session: { id: string };
+}): Promise<SshContextResult> {
+	const record = await getLatestTelegramRecord(session.user.id);
+	if (!record?.isActive) {
+		return {
+			ok: false,
+			error: "No active Telegram config. Connect a bot first.",
+			status: 400,
+		};
+	}
+
+	if (!record.deployedServerId) {
+		return {
+			ok: false,
+			error: "Bot is not deployed to any server. Deploy it first.",
+			status: 400,
+		};
+	}
+
+	const serverRecord = await getServerById(record.deployedServerId);
+	if (!serverRecord) {
+		return { ok: false, error: "Deployed server not found.", status: 404 };
+	}
+
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return { ok: false, error: sshResult.error, status: 400 };
+	}
+
+	return {
+		ok: true,
+		serverRecord,
+		authMethod: sshResult.authMethod,
+		credential: sshResult.credential,
+	};
+}
+
 export async function switchModelProvider(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
 	if (!session) {
@@ -439,7 +486,8 @@ export async function switchModelProvider(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	const { model, provider } = payload;
+	let { model } = payload;
+	const { provider } = payload;
 
 	if (!model && !provider) {
 		return context.json(
@@ -449,6 +497,7 @@ export async function switchModelProvider(context: Context) {
 	}
 
 	// Validate provider if provided
+	let validatedProvider: ApiProviderId | undefined;
 	if (provider !== undefined) {
 		if (!isApiProviderId(provider)) {
 			return context.json(
@@ -458,11 +507,24 @@ export async function switchModelProvider(context: Context) {
 				400,
 			);
 		}
+		validatedProvider = provider;
+
+		// Ensure the provider has a valid hermesProvider mapping
+		const providerConfig = PROVIDER_ENV_CONFIGS[validatedProvider];
+		if (!providerConfig?.hermesProvider) {
+			return context.json(
+				{
+					error: `Provider '${provider}' does not have a valid inference provider mapping.`,
+				},
+				400,
+			);
+		}
 	}
 
 	// Validate model if provided
 	if (model !== undefined) {
-		if (!model.trim()) {
+		model = model.trim();
+		if (!model) {
 			return context.json({ error: "Model cannot be empty." }, 400);
 		}
 		if (!isValidModelString(model)) {
@@ -474,12 +536,12 @@ export async function switchModelProvider(context: Context) {
 			);
 		}
 		// If both provider and model are provided, validate model against provider
-		if (provider && !isValidAiModel(provider as ApiProviderId, model)) {
-			const option = apiProviderOptions.find((o) => o.id === provider);
+		if (validatedProvider && !isValidAiModel(validatedProvider, model)) {
+			const option = apiProviderOptions.find((o) => o.id === validatedProvider);
 			if (option && !option.requiresCustomModel) {
 				return context.json(
 					{
-						error: `Model '${model}' is not valid for provider '${provider}'. Valid models: ${option.models.join(", ")}.`,
+						error: `Model '${model}' is not valid for provider '${validatedProvider}'. Valid models: ${option.models.join(", ")}.`,
 					},
 					400,
 				);
@@ -488,34 +550,11 @@ export async function switchModelProvider(context: Context) {
 	}
 
 	// Resolve SSH context
-	const record = await getLatestTelegramRecord(session.user.id);
-	if (!record?.isActive) {
-		return context.json(
-			{ error: "No active Telegram config. Connect a bot first." },
-			400,
-		);
+	const sshContext = await resolveTelegramSshContext(session);
+	if (!sshContext.ok) {
+		return context.json({ error: sshContext.error }, sshContext.status);
 	}
-
-	if (!record.deployedServerId) {
-		return context.json(
-			{ error: "Bot is not deployed to any server. Deploy it first." },
-			400,
-		);
-	}
-
-	const serverRecord = await getServerById(record.deployedServerId);
-	if (!serverRecord) {
-		return context.json({ error: "Deployed server not found." }, 404);
-	}
-
-	const sshResult = resolveServerSshConfigOrError(
-		serverRecord,
-		session.session.id,
-	);
-	if (!sshResult.ok) {
-		return context.json({ error: sshResult.error }, 400);
-	}
-	const { authMethod, credential } = sshResult;
+	const { serverRecord } = sshContext;
 
 	const ipAddress = getClientIp(context);
 	const db = getDb();
@@ -526,17 +565,15 @@ export async function switchModelProvider(context: Context) {
 				host: serverRecord.host,
 				port: serverRecord.port,
 				username: serverRecord.username,
-				authMethod,
-				credential,
+				authMethod: sshContext.authMethod,
+				credential: sshContext.credential,
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
-				if (provider) {
+				if (validatedProvider) {
 					const hermesProviderId =
-						PROVIDER_ENV_CONFIGS[provider as ApiProviderId]?.hermesProvider;
-					if (hermesProviderId) {
-						await setProviderInferenceProvider(ssh, hermesProviderId);
-					}
+						PROVIDER_ENV_CONFIGS[validatedProvider].hermesProvider;
+					await setProviderInferenceProvider(ssh, hermesProviderId);
 				}
 				if (model) {
 					await setProviderModel(ssh, model);
@@ -549,7 +586,7 @@ export async function switchModelProvider(context: Context) {
 			action: "telegram.model.switched",
 			serverId: serverRecord.id,
 			details: {
-				...(provider ? { provider } : {}),
+				...(validatedProvider ? { provider: validatedProvider } : {}),
 				...(model ? { model } : {}),
 				serverHost: serverRecord.host,
 			},
@@ -560,7 +597,7 @@ export async function switchModelProvider(context: Context) {
 
 		return context.json({
 			status: "switched",
-			...(provider ? { provider } : {}),
+			...(validatedProvider ? { provider: validatedProvider } : {}),
 			...(model ? { model } : {}),
 		});
 	} catch (error) {
@@ -572,7 +609,7 @@ export async function switchModelProvider(context: Context) {
 			action: "telegram.model.switch.failed",
 			serverId: serverRecord.id,
 			details: {
-				...(provider ? { provider } : {}),
+				...(validatedProvider ? { provider: validatedProvider } : {}),
 				...(model ? { model } : {}),
 				error: message,
 			},
