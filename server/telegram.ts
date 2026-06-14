@@ -7,18 +7,11 @@ import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
-import { aiProviders, aiUserSubscriptions, telegramConfigs } from "./db/schema";
-import {
-	composeUp,
-	setProviderInferenceProvider,
-	setProviderModel,
-	writeComposeFile,
-} from "./hermes/runtime";
+import { telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
-import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 import {
@@ -30,6 +23,7 @@ import {
 	getModelAccessOptions,
 	resolveSwitchOption,
 } from "./telegram/model-access";
+import { executeModelSwitch } from "./telegram/model-switch";
 import {
 	approveTelegramPairing,
 	listTelegramPairings,
@@ -321,7 +315,7 @@ export async function testTelegramBot(context: Context) {
 		);
 	}
 
-	if (!record.apiServerKey || !record.deployedServerId) {
+	if (!record.apiServerKey) {
 		return context.json(
 			{
 				error: "Bot token is not deployed to any server. Deploy it first.",
@@ -343,19 +337,14 @@ export async function testTelegramBot(context: Context) {
 		return context.json({ error: errMessage }, 400);
 	}
 
-	const serverRecord = await getServerById(record.deployedServerId);
-	if (!serverRecord) {
-		return context.json({ error: "Deployed server not found." }, 404);
+	const sshContext = await resolveTelegramSshContext(session);
+	if (!sshContext.ok) {
+		return context.json(
+			{ error: sshContext.error },
+			sshContext.status as Parameters<typeof context.json>[1],
+		);
 	}
-
-	const sshResult = resolveServerSshConfigOrError(
-		serverRecord,
-		session.session.id,
-	);
-	if (!sshResult.ok) {
-		return context.json({ error: sshResult.error }, 400);
-	}
-	const { authMethod, credential } = sshResult;
+	const { serverRecord } = sshContext;
 
 	const curlCommand = [
 		`curl -s -X POST http://localhost:8642/v1/chat/completions`,
@@ -375,8 +364,8 @@ export async function testTelegramBot(context: Context) {
 				host: serverRecord.host,
 				port: serverRecord.port,
 				username: serverRecord.username,
-				authMethod,
-				credential,
+				authMethod: sshContext.authMethod,
+				credential: sshContext.credential,
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
@@ -532,13 +521,11 @@ export async function switchModelProvider(context: Context) {
 		);
 	}
 
-	// Resolve and validate the option
 	const resolved = await resolveSwitchOption(session.user.id, optionId);
 	if (!resolved.ok) {
 		return context.json({ error: resolved.error }, 400);
 	}
 
-	// Validate model against the resolved option
 	if (!resolved.allowsCustomModel) {
 		if (!resolved.fixedModels.includes(model)) {
 			return context.json(
@@ -550,7 +537,6 @@ export async function switchModelProvider(context: Context) {
 		}
 	}
 
-	// Resolve SSH context
 	const sshContext = await resolveTelegramSshContext(session);
 	if (!sshContext.ok) {
 		return context.json(
@@ -558,82 +544,26 @@ export async function switchModelProvider(context: Context) {
 			sshContext.status as Parameters<typeof context.json>[1],
 		);
 	}
-	const { serverRecord } = sshContext;
 
 	const ipAddress = getClientIp(context);
-	const db = getDb();
 
 	try {
-		await withSshConnection(
-			{
-				host: serverRecord.host,
-				port: serverRecord.port,
-				username: serverRecord.username,
+		await executeModelSwitch({
+			userId: session.user.id,
+			optionId,
+			model,
+			resolved,
+			serverRecord: sshContext.serverRecord,
+			sshConfig: {
+				host: sshContext.serverRecord.host,
+				port: sshContext.serverRecord.port,
+				username: sshContext.serverRecord.username,
 				authMethod: sshContext.authMethod,
 				credential: sshContext.credential,
-				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+				expectedFingerprint:
+					sshContext.serverRecord.hostKeyFingerprint ?? undefined,
 			},
-			async (ssh) => {
-				await setProviderInferenceProvider(ssh, resolved.hermesProviderId);
-				await setProviderModel(ssh, model);
-
-				// Rewrite the compose file with the correct env vars for the
-				// new provider/model so the container picks them up on restart.
-				const composeContent = await buildManagedComposeContent({
-					userId: session.user.id,
-					serverId: serverRecord.id,
-				});
-				await writeComposeFile(ssh, composeContent);
-				await composeUp(ssh, {
-					services: ["hermes"],
-					forceRecreate: true,
-				});
-			},
-		);
-
-		// After remote deploy succeeds, deactivate other access records and
-		// mark the resolved row active in a DB transaction.
-		await db.transaction(async (tx) => {
-			// Deactivate all other active rows
-			for (const id of resolved.activeOptionIds) {
-				await tx
-					.update(aiProviders)
-					.set({ isActive: false })
-					.where(eq(aiProviders.id, id));
-				await tx
-					.update(aiUserSubscriptions)
-					.set({ isActive: false, updatedAt: new Date() })
-					.where(eq(aiUserSubscriptions.id, id));
-			}
-
-			// Activate the resolved option
-			const optParts = optionId.split(":");
-			const recordId = optParts[1];
-			if (resolved.kind === "oauth-subscription") {
-				await tx
-					.update(aiUserSubscriptions)
-					.set({ model, isActive: true, updatedAt: new Date() })
-					.where(eq(aiUserSubscriptions.id, recordId));
-			} else {
-				await tx
-					.update(aiProviders)
-					.set({ model, isActive: true })
-					.where(eq(aiProviders.id, recordId));
-			}
-
-			await insertAuditLog(tx, {
-				userId: session.user.id,
-				action: "telegram.model.switched",
-				serverId: serverRecord.id,
-				details: {
-					optionId,
-					model,
-					provider: resolved.provider,
-					kind: resolved.kind,
-					serverHost: serverRecord.host,
-				},
-				ipAddress,
-			});
+			ipAddress,
 		});
 
 		clearDashboardCache();
@@ -649,15 +579,11 @@ export async function switchModelProvider(context: Context) {
 			error instanceof Error ? error.message : "Model switch failed";
 
 		try {
-			await insertAuditLog(db, {
+			await insertAuditLog(getDb(), {
 				userId: session.user.id,
 				action: "telegram.model.switch.failed",
-				serverId: serverRecord.id,
-				details: {
-					optionId,
-					model,
-					error: message,
-				},
+				serverId: sshContext.serverRecord.id,
+				details: { optionId, model, error: message },
 				ipAddress,
 			});
 		} catch {

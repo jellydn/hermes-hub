@@ -19,8 +19,3 @@ export type ModelAccessOptionsResponse = {
 	options: ModelAccessOption[];
 	activeOptionId: string | null;
 };
-
-export type ModelSwitchPayload = {
-	optionId: string;
-	model: string;
-};
