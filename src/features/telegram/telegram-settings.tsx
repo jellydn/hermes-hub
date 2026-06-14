@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { TelegramConnectSection } from "./telegram-connect-section";
 import { TelegramDeploySection } from "./telegram-deploy-section";
+import { TelegramModelAccessSection } from "./telegram-model-access-section";
 import { TelegramPairingSection } from "./telegram-pairing-section";
 import { TelegramSidebar } from "./telegram-sidebar";
 import { TelegramTestSection } from "./telegram-test-section";
@@ -51,6 +52,8 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 								savedConfig={savedConfig}
 								onConfigChange={handleConfigUpdate}
 							/>
+
+							<TelegramModelAccessSection isDeployed={isDeployed} />
 
 							<TelegramPairingSection
 								key={savedConfig.deployedServerHost ?? "not-deployed"}

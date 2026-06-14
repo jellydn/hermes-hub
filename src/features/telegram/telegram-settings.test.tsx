@@ -14,8 +14,10 @@ vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
 	return {
 		AlertCircle: MockIcon,
+		ArrowRight: MockIcon,
 		CheckCircle2: MockIcon,
 		Circle: MockIcon,
+		ExternalLink: MockIcon,
 		Info: MockIcon,
 		LoaderCircle: MockIcon,
 		TriangleAlert: MockIcon,
@@ -58,14 +60,12 @@ afterEach(() => {
 
 beforeEach(() => {
 	fetchMock.mockReset();
+	// Default response for model-access-options: empty options list
 	fetchMock.mockResolvedValue(
 		new Response(
 			JSON.stringify({
-				telegram: {
-					botUsername: "hermes_helper_bot",
-					botTokenLast4: "1234",
-					isActive: true,
-				},
+				options: [],
+				activeOptionId: null,
 			}),
 			{
 				status: 200,
@@ -161,27 +161,35 @@ describe("TelegramSettings", () => {
 	});
 
 	it("loads pending Telegram pairing requests and approves one from the list", async () => {
-		fetchMock.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({
-					pairings: {
-						pending: [
-							{
-								code: "ABCD2345",
-								userId: "123456",
-								userName: "Dung",
-								ageMinutes: 1,
-							},
-						],
-						approved: [],
-					},
-				}),
-				{
+		fetchMock
+			// model-access-options (the model-access-section mounts)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ options: [], activeOptionId: null }), {
 					status: 200,
 					headers: { "content-type": "application/json" },
-				},
-			),
-		);
+				}),
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						pairings: {
+							pending: [
+								{
+									code: "ABCD2345",
+									userId: "123456",
+									userName: "Dung",
+									ageMinutes: 1,
+								},
+							],
+							approved: [],
+						},
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			);
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
@@ -246,20 +254,28 @@ describe("TelegramSettings", () => {
 	});
 
 	it("approves a Telegram pairing code", async () => {
-		fetchMock.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({
-					pairings: {
-						pending: [],
-						approved: [],
-					},
-				}),
-				{
+		fetchMock
+			// model-access-options (section mounts)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ options: [], activeOptionId: null }), {
 					status: 200,
 					headers: { "content-type": "application/json" },
-				},
-			),
-		);
+				}),
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						pairings: {
+							pending: [],
+							approved: [],
+						},
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			);
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
