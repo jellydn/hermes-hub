@@ -92,6 +92,9 @@ vi.mock("./providers/active-backend", () => ({
 
 const setProviderModel = vi.fn();
 const setProviderInferenceProvider = vi.fn();
+const writeComposeFile = vi.fn();
+const composeUp = vi.fn();
+const buildManagedComposeContent = vi.fn();
 
 vi.mock("./hermes/runtime", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./hermes/runtime")>();
@@ -99,8 +102,14 @@ vi.mock("./hermes/runtime", async (importOriginal) => {
 		...actual,
 		setProviderModel,
 		setProviderInferenceProvider,
+		writeComposeFile,
+		composeUp,
 	};
 });
+
+vi.mock("./server-compose", () => ({
+	buildManagedComposeContent,
+}));
 
 vi.mock("#/lib/ai-providers", () => ({
 	getDefaultAiModel: (provider: string) => {
@@ -179,6 +188,9 @@ describe("telegram handlers", () => {
 		updateWhere.mockResolvedValue(undefined);
 		insertValues.mockResolvedValue(undefined);
 		loadModelAccessRecords.mockResolvedValue({ activeBackend: null });
+		writeComposeFile.mockResolvedValue(undefined);
+		composeUp.mockResolvedValue(undefined);
+		buildManagedComposeContent.mockResolvedValue("services:\n  hermes: {}");
 		selectInnerJoin.mockReturnValue({
 			where: selectWhere,
 			orderBy: selectOrderBy,

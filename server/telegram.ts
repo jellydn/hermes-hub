@@ -10,14 +10,20 @@ import {
 	isValidAiModel,
 	isValidModelString,
 } from "#/lib/ai-providers";
+import {
+	isValidSubscriptionModel,
+	type UserSubscriptionId,
+} from "#/lib/user-subscriptions";
 import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { aiProviders, aiUserSubscriptions, telegramConfigs } from "./db/schema";
 import {
+	composeUp,
 	setProviderInferenceProvider,
 	setProviderModel,
+	writeComposeFile,
 } from "./hermes/runtime";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
@@ -25,6 +31,7 @@ import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
 import { loadModelAccessRecords } from "./providers/active-backend";
 import { PROVIDER_ENV_CONFIGS } from "./providers/config";
+import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 import {
@@ -482,6 +489,23 @@ async function resolveTelegramSshContext(session: {
 	};
 }
 
+/**
+ * Returns a user-facing error message when `model` is not valid for `provider`,
+ * or null if the model is acceptable. Returns null for providers that allow
+ * custom models (e.g. OpenRouter, Ollama).
+ */
+function getModelValidationError(
+	model: string,
+	provider: ApiProviderId,
+): string | null {
+	if (isValidAiModel(provider, model)) return null;
+	const option = apiProviderOptions.find((o) => o.id === provider);
+	if (option && !option.requiresCustomModel) {
+		return `Model '${model}' is not valid for provider '${provider}'. Valid models: ${option.models.join(", ")}.`;
+	}
+	return null;
+}
+
 export async function switchModelProvider(context: Context) {
 	const session = await getAuthSession(context.req.raw.headers);
 	if (!session) {
@@ -518,7 +542,6 @@ export async function switchModelProvider(context: Context) {
 		}
 		validatedProvider = provider;
 
-		// Ensure the provider has a valid hermesProvider mapping
 		const providerConfig = PROVIDER_ENV_CONFIGS[validatedProvider];
 		if (!providerConfig?.hermesProvider) {
 			return context.json(
@@ -535,6 +558,11 @@ export async function switchModelProvider(context: Context) {
 		model = getDefaultAiModel(validatedProvider);
 	}
 
+	// Resolve the current active backend once (needed for validation and DB persist)
+	const { activeBackend: preSwitchBackend } = await loadModelAccessRecords(
+		session.user.id,
+	);
+
 	// Validate model if provided
 	if (model !== undefined) {
 		model = model.trim();
@@ -549,13 +577,43 @@ export async function switchModelProvider(context: Context) {
 				400,
 			);
 		}
-		// If both provider and model are provided, validate model against provider
-		if (validatedProvider && !isValidAiModel(validatedProvider, model)) {
-			const option = apiProviderOptions.find((o) => o.id === validatedProvider);
-			if (option && !option.requiresCustomModel) {
+
+		// Determine which provider to validate against — either the new one or the current backend
+		const providerToValidate: ApiProviderId | undefined =
+			validatedProvider ??
+			(preSwitchBackend?.kind === "api-provider"
+				? preSwitchBackend.provider
+				: undefined);
+		const subscriptionToValidate:
+			| { id: string; access: "credential" | "oauth" }
+			| undefined =
+			!validatedProvider && preSwitchBackend?.kind === "subscription"
+				? {
+						id: preSwitchBackend.subscriptionProvider,
+						access: preSwitchBackend.access,
+					}
+				: undefined;
+
+		if (providerToValidate) {
+			const validationError = getModelValidationError(
+				model,
+				providerToValidate,
+			);
+			if (validationError) {
+				return context.json({ error: validationError }, 400);
+			}
+		}
+
+		if (subscriptionToValidate) {
+			if (
+				!isValidSubscriptionModel(
+					subscriptionToValidate.id as UserSubscriptionId,
+					model,
+				)
+			) {
 				return context.json(
 					{
-						error: `Model '${model}' is not valid for provider '${validatedProvider}'. Valid models: ${option.models.join(", ")}.`,
+						error: `Model '${model}' is not valid for subscription '${subscriptionToValidate.id}'.`,
 					},
 					400,
 				);
@@ -595,11 +653,27 @@ export async function switchModelProvider(context: Context) {
 				if (model) {
 					await setProviderModel(ssh, model);
 				}
+
+				// Rewrite the compose file with the correct env vars for the
+				// new provider/model so the container picks them up on restart.
+				const composeContent = await buildManagedComposeContent({
+					userId: session.user.id,
+					serverId: serverRecord.id,
+				});
+				await writeComposeFile(ssh, composeContent);
+				await composeUp(ssh, {
+					services: ["hermes"],
+					forceRecreate: true,
+				});
 			},
 		);
 
-		// Persist the new provider/model to the local database
-		const { activeBackend } = await loadModelAccessRecords(session.user.id);
+		// Persist the new provider/model to the local database after SSH
+		// succeeds so the DB is never updated when the remote container
+		// configuration failed.
+		const { activeBackend } = preSwitchBackend
+			? { activeBackend: preSwitchBackend }
+			: await loadModelAccessRecords(session.user.id);
 		if (activeBackend) {
 			if (activeBackend.kind === "api-provider") {
 				await db
@@ -609,7 +683,20 @@ export async function switchModelProvider(context: Context) {
 						...(model ? { model } : {}),
 					})
 					.where(eq(aiProviders.userId, session.user.id));
-			} else if (model) {
+			} else if (
+				activeBackend.kind === "subscription" &&
+				activeBackend.access === "credential" &&
+				model
+			) {
+				await db
+					.update(aiProviders)
+					.set({ model })
+					.where(eq(aiProviders.userId, session.user.id));
+			} else if (
+				activeBackend.kind === "subscription" &&
+				activeBackend.access === "oauth" &&
+				model
+			) {
 				await db
 					.update(aiUserSubscriptions)
 					.set({ model, updatedAt: new Date() })
