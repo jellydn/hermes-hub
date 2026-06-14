@@ -111,11 +111,16 @@ vi.mock("./providers/active-backend", () => ({
 }));
 
 const resolveSwitchOptionMock = vi.fn();
+const executeModelSwitchMock = vi.fn();
 
 vi.mock("./telegram/model-access", () => ({
 	resolveSwitchOption: resolveSwitchOptionMock,
 	getModelAccessOptions: vi.fn(),
 	findActiveOptionIds: vi.fn(),
+}));
+
+vi.mock("./telegram/model-switch", () => ({
+	executeModelSwitch: executeModelSwitchMock,
 }));
 
 const setProviderModel = vi.fn();
@@ -348,7 +353,7 @@ describe("telegram handlers", () => {
 			model: "test's-model",
 		});
 
-		selectLimit.mockResolvedValueOnce([
+		selectLimit.mockResolvedValue([
 			{
 				botToken: "enc:123456:secret-token",
 				botUsername: "hermes_helper_bot",
@@ -677,6 +682,8 @@ describe("switchModelProvider", () => {
 		setProviderModel.mockResolvedValue(undefined);
 		setProviderInferenceProvider.mockResolvedValue(undefined);
 		resolveSwitchOptionMock.mockReset();
+		executeModelSwitchMock.mockReset();
+		executeModelSwitchMock.mockResolvedValue(undefined);
 
 		// Re-establish default mock chain that the outer beforeEach sets up,
 		// because vi.clearAllMocks() clears all mock implementations.
@@ -807,10 +814,9 @@ describe("switchModelProvider", () => {
 			model: "gpt-4o",
 			allowsCustomModel: false,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-			activeOptionIds: [],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		const { switchModelProvider } = await import("./telegram");
-
 		const response = await switchModelProvider(
 			createContext({
 				optionId: "api-provider:abc123",
@@ -836,7 +842,7 @@ describe("switchModelProvider", () => {
 			model: "gpt-4o",
 			allowsCustomModel: false,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-			activeOptionIds: ["other-row-id"],
+			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
 		});
 		// resolveTelegramSshContext -> getLatestTelegramRecord
 		selectLimit.mockResolvedValue([
@@ -890,11 +896,16 @@ describe("switchModelProvider", () => {
 			model: "gpt-4o",
 			provider: "openai",
 		});
-		expect(setProviderInferenceProvider).toHaveBeenCalledWith(
-			expect.anything(),
-			"openai-api",
+		expect(executeModelSwitchMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				optionId: "api-provider:abc123",
+				model: "gpt-4o",
+				resolved: expect.objectContaining({
+					hermesProviderId: "openai-api",
+				}),
+			}),
 		);
-		expect(setProviderModel).toHaveBeenCalledWith(expect.anything(), "gpt-4o");
 	});
 
 	it("switches subscription option successfully via SSH", async () => {
@@ -910,7 +921,7 @@ describe("switchModelProvider", () => {
 			model: "mimo-v2.5-pro",
 			allowsCustomModel: false,
 			fixedModels: ["mimo-v2.5-pro", "mimo-v2.5"],
-			activeOptionIds: ["other-row-id"],
+			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([
 			{
@@ -966,13 +977,15 @@ describe("switchModelProvider", () => {
 			model: "mimo-v2.5",
 			provider: "mimo",
 		});
-		expect(setProviderInferenceProvider).toHaveBeenCalledWith(
-			expect.anything(),
-			"xiaomi",
-		);
-		expect(setProviderModel).toHaveBeenCalledWith(
-			expect.anything(),
-			"mimo-v2.5",
+		expect(executeModelSwitchMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				optionId: "credential-subscription:def456",
+				model: "mimo-v2.5",
+				resolved: expect.objectContaining({
+					hermesProviderId: "xiaomi",
+				}),
+			}),
 		);
 	});
 
@@ -989,7 +1002,7 @@ describe("switchModelProvider", () => {
 			model: "gpt-4o",
 			allowsCustomModel: false,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-			activeOptionIds: [],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([
 			{
@@ -1013,7 +1026,7 @@ describe("switchModelProvider", () => {
 			authMethod: "password",
 			credential: "test-credential",
 		});
-		withSshConnection.mockRejectedValueOnce(
+		executeModelSwitchMock.mockRejectedValueOnce(
 			new Error("SSH connection refused"),
 		);
 
