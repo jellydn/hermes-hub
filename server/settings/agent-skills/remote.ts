@@ -120,9 +120,12 @@ export function buildDirectSkillInstallCommand(
 ): string {
 	const skillDir = `${managedComposeVolumeHome}/.hermes/skills/hermeshub/${skillName}`;
 	const skillMdPath = `${skillDir}/SKILL.md`;
+	const tmpPath = `${skillMdPath}.download`;
 	return [
 		`sudo mkdir -p ${shellQuote(skillDir)}`,
-		`curl -fsSL ${shellQuote(fetchUrl)} | sudo tee ${shellQuote(skillMdPath)} > /dev/null`,
+		`sudo curl -fsSL ${shellQuote(fetchUrl)} -o ${shellQuote(tmpPath)}`,
+		`sudo test -s ${shellQuote(tmpPath)}`,
+		`sudo mv ${shellQuote(tmpPath)} ${shellQuote(skillMdPath)}`,
 	].join(" && ");
 }
 
