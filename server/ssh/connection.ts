@@ -18,7 +18,9 @@ export type SshConnectionInput = {
 	authMethod: SshAuthMethod;
 	credential: string;
 	expectedFingerprint?: string;
-	requireHostKeyPin?: boolean;
+	/** Set only on first-connect to allow storing the fingerprint. All
+	 *  post-registration paths require a pin by default. */
+	allowMissingHostKeyPin?: boolean;
 };
 
 export type HostKeyInfo = HostKeyFingerprint;
@@ -36,16 +38,22 @@ export type VerifiedServerConnection = {
 export async function verifyServerConnection(
 	input: SshConnectionInput,
 ): Promise<VerifiedServerConnection> {
-	return withSshConnection(input, async (ssh, hostKey) => {
-		const [osRelease, architecture] = await Promise.all([
-			execStrict(ssh, "cat /etc/os-release"),
-			execStrict(ssh, "uname -m"),
-		]);
+	return withSshConnection(
+		{ ...input, allowMissingHostKeyPin: true },
+		async (ssh, hostKey) => {
+			const [osRelease, architecture] = await Promise.all([
+				execStrict(ssh, "cat /etc/os-release"),
+				execStrict(ssh, "uname -m"),
+			]);
 
-		const verified = parseAndValidateOs(osRelease.stdout, architecture.stdout);
+			const verified = parseAndValidateOs(
+				osRelease.stdout,
+				architecture.stdout,
+			);
 
-		return { verified, hostKey };
-	});
+			return { verified, hostKey };
+		},
+	);
 }
 
 /**
@@ -74,7 +82,7 @@ export async function establishSshConnection(
 			hostVerifier: (rawKey: Buffer) => {
 				const observed = fingerprintFromKeyBuffer(rawKey);
 				capturedHostKey = observed;
-				if (input.requireHostKeyPin && !input.expectedFingerprint) {
+				if (!input.allowMissingHostKeyPin && !input.expectedFingerprint) {
 					throw new SshConnectError(
 						"host key pin required but not stored",
 						"host_key_missing",

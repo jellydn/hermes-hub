@@ -229,7 +229,6 @@ async function executeServerAction(input: {
 			authMethod: input.authMethod,
 			credential: input.credential,
 			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 		},
 		async (ssh) => {
 			switch (input.action) {

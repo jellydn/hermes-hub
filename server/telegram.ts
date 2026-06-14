@@ -3,15 +3,16 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { isValidModelString } from "#/lib/ai-providers";
-import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { isResponse } from "./lib/is-response";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
+import { requireAuthSession } from "./request-guards";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 import {
@@ -66,10 +67,9 @@ function parseChatCompletion(raw: unknown): string {
 }
 
 export async function connectTelegram(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	let payload: { botToken?: string };
 
@@ -134,10 +134,9 @@ export async function connectTelegram(context: Context) {
 }
 
 export async function disconnectTelegram(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
@@ -174,10 +173,9 @@ export async function disconnectTelegram(context: Context) {
 }
 
 export async function deployTelegramToServer(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	const db = getDb();
 	const record = await getLatestTelegramRecord(session.user.id);
@@ -230,7 +228,6 @@ export async function deployTelegramToServer(context: Context) {
 			authMethod,
 			credential,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 			apiServerKey,
 			telegramBotToken,
 		});
@@ -291,10 +288,9 @@ export async function deployTelegramToServer(context: Context) {
 }
 
 export async function testTelegramBot(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	let payload: { message?: string };
 	try {
@@ -368,7 +364,6 @@ export async function testTelegramBot(context: Context) {
 				authMethod: sshContext.authMethod,
 				credential: sshContext.credential,
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
-				requireHostKeyPin: true,
 			},
 			async (ssh) => {
 				const execResult = await ssh.execCommand(curlCommand, {
@@ -472,10 +467,9 @@ async function resolveTelegramSshContext(session: {
 }
 
 export async function getModelAccessOptionsHandler(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	try {
 		const result = await getModelAccessOptions(session.user.id);
@@ -490,10 +484,9 @@ export async function getModelAccessOptionsHandler(context: Context) {
 }
 
 export async function switchModelProvider(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	let payload: { optionId?: string; model?: string };
 	try {
@@ -564,7 +557,6 @@ export async function switchModelProvider(context: Context) {
 				credential: sshContext.credential,
 				expectedFingerprint:
 					sshContext.serverRecord.hostKeyFingerprint ?? undefined,
-				requireHostKeyPin: true,
 			},
 			ipAddress,
 		});

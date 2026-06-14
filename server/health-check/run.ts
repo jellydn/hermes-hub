@@ -35,7 +35,6 @@ export async function runServerHealthChecks(input: {
 			authMethod: input.authMethod,
 			credential: input.credential,
 			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 		},
 		async (ssh) => collectHealthCheckOutput(ssh),
 	);

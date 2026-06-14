@@ -153,26 +153,13 @@ async function getLatestSubscriptionRows(
 		.orderBy(desc(aiUserSubscriptions.createdAt));
 }
 
-function keepLatestPerGroup<T extends { provider: string }>(rows: T[]): T[] {
+function keepLatestBy<T>(rows: T[], keyFn: (r: T) => string): T[] {
 	const seen = new Set<string>();
 	const result: T[] = [];
 	for (const row of rows) {
-		if (!seen.has(row.provider)) {
-			seen.add(row.provider);
-			result.push(row);
-		}
-	}
-	return result;
-}
-
-function keepLatestPerSubscriptionGroup<
-	T extends { subscriptionProvider: string },
->(rows: T[]): T[] {
-	const seen = new Set<string>();
-	const result: T[] = [];
-	for (const row of rows) {
-		if (!seen.has(row.subscriptionProvider)) {
-			seen.add(row.subscriptionProvider);
+		const key = keyFn(row);
+		if (!seen.has(key)) {
+			seen.add(key);
 			result.push(row);
 		}
 	}
@@ -203,13 +190,15 @@ export async function getModelAccessOptions(
 	const storageTypes = allTypes.filter((t) => !isApiProviderId(t));
 
 	// 2. Batch-fetch latest rows per group (2 queries instead of N+M)
-	const apiRows = keepLatestPerGroup(
+	const apiRows = keepLatestBy(
 		await getLatestProviderRows(userId, apiTypes),
+		(r) => r.provider,
 	);
 	for (const record of apiRows) collect(buildApiProviderOption(record));
 
-	const storageRows = keepLatestPerGroup(
+	const storageRows = keepLatestBy(
 		await getLatestProviderRows(userId, storageTypes),
+		(r) => r.provider,
 	);
 	for (const record of storageRows)
 		collect(buildCredentialSubscriptionOption(record));
@@ -224,8 +213,9 @@ export async function getModelAccessOptions(
 		.map((r) => r.subscriptionProvider)
 		.filter(isUserSubscriptionId);
 
-	const subRows = keepLatestPerSubscriptionGroup(
+	const subRows = keepLatestBy(
 		await getLatestSubscriptionRows(userId, subTypes),
+		(r) => r.subscriptionProvider,
 	);
 	for (const record of subRows) collect(buildOAuthSubscriptionOption(record));
 
@@ -250,15 +240,23 @@ export type ActiveOptionIds = {
 	subscriptionIds: string[];
 };
 
+export function parseOptionId(
+	optionId: string,
+): { kind: string; recordId: string } | null {
+	const parts = optionId.split(":");
+	if (parts.length !== 2) return null;
+	return { kind: parts[0], recordId: parts[1] };
+}
+
 export async function resolveSwitchOption(
 	userId: string,
 	optionId: string,
 ): Promise<ResolvedOption> {
-	const parts = optionId.split(":");
-	if (parts.length !== 2) {
+	const parsed = parseOptionId(optionId);
+	if (!parsed) {
 		return { ok: false, error: "Invalid option ID format." };
 	}
-	const [kind, recordId] = parts;
+	const { kind, recordId } = parsed;
 
 	if (kind === "api-provider" || kind === "credential-subscription") {
 		const [record] = await getDb()

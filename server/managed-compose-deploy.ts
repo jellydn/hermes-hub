@@ -95,7 +95,6 @@ export type ManagedComposeDeployInput = {
 	authMethod: SshAuthMethod;
 	credential: string;
 	expectedFingerprint?: string;
-	requireHostKeyPin?: boolean;
 	apiServerKey?: string;
 	telegramBotToken?: string;
 	webUiPassword?: string;
@@ -133,6 +132,5 @@ export async function deployManagedCompose(input: ManagedComposeDeployInput) {
 		preSshCommands: policy.preSshCommands,
 		extraSshCommands: policy.extraSshCommands,
 		expectedFingerprint: input.expectedFingerprint,
-		requireHostKeyPin: input.requireHostKeyPin,
 	});
 }

@@ -59,7 +59,6 @@ export async function deployToHermesAgent(
 				authMethod: sshCtx.authMethod,
 				credential: sshCtx.credential,
 				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-				requireHostKeyPin: true,
 			},
 			async (ssh) => {
 				try {

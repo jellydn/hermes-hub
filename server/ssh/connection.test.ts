@@ -46,6 +46,7 @@ describe("withSshConnection host key fingerprint", () => {
 				username: "root",
 				authMethod: "password",
 				credential: "secret",
+				allowMissingHostKeyPin: true,
 			},
 			async (ssh) => {
 				await ssh.execCommand("uptime");
@@ -195,7 +196,7 @@ describe("withSshConnection host key fingerprint", () => {
 		// If we reach here without a host_key_mismatch error, the comparison succeeded
 	});
 
-	it("rejects with host_key_missing when requireHostKeyPin is set but no fingerprint stored", async () => {
+	it("rejects with host_key_missing by default when no fingerprint stored", async () => {
 		await expect(
 			withSshConnection(
 				{
@@ -204,7 +205,6 @@ describe("withSshConnection host key fingerprint", () => {
 					username: "root",
 					authMethod: "password",
 					credential: "secret",
-					requireHostKeyPin: true,
 				},
 				async () => undefined,
 			),
@@ -213,7 +213,7 @@ describe("withSshConnection host key fingerprint", () => {
 		});
 	});
 
-	it("accepts when requireHostKeyPin is set and fingerprint matches", async () => {
+	it("accepts when fingerprint matches (pin required by default)", async () => {
 		await withSshConnection(
 			{
 				host: "203.0.113.1",
@@ -222,7 +222,6 @@ describe("withSshConnection host key fingerprint", () => {
 				authMethod: "password",
 				credential: "secret",
 				expectedFingerprint: expected,
-				requireHostKeyPin: true,
 			},
 			async (ssh) => {
 				await ssh.execCommand("echo hi");
@@ -230,7 +229,7 @@ describe("withSshConnection host key fingerprint", () => {
 		);
 	});
 
-	it("allows missing fingerprint when requireHostKeyPin is not set (first-connect)", async () => {
+	it("allows missing fingerprint only when allowMissingHostKeyPin is set (first-connect)", async () => {
 		await withSshConnection(
 			{
 				host: "203.0.113.1",
@@ -238,6 +237,7 @@ describe("withSshConnection host key fingerprint", () => {
 				username: "root",
 				authMethod: "password",
 				credential: "secret",
+				allowMissingHostKeyPin: true,
 			},
 			async (ssh) => {
 				await ssh.execCommand("echo hi");

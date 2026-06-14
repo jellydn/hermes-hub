@@ -30,7 +30,6 @@ export async function withHermesServerSsh<T>(
 			authMethod: sshCtx.authMethod,
 			credential: sshCtx.credential,
 			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 		},
 		async (ssh) => run(ssh, sshCtx),
 	);

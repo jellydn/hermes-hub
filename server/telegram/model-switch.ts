@@ -12,7 +12,7 @@ import { insertAuditLog } from "../lib/insert-audit-log";
 import { buildManagedComposeContent } from "../server-compose";
 import { withSshConnection } from "../ssh";
 import type { SshConnectionInput } from "../ssh/connection";
-import type { ResolvedOption } from "./model-access";
+import { parseOptionId, type ResolvedOption } from "./model-access";
 
 export type ModelSwitchInput = {
 	userId: string;
@@ -66,7 +66,7 @@ export async function executeModelSwitch(
 				.where(inArray(aiUserSubscriptions.id, subscriptionIds));
 		}
 
-		const recordId = optionId.split(":")[1];
+		const recordId = parseOptionId(optionId)?.recordId ?? "";
 		if (resolved.kind === "oauth-subscription") {
 			await tx
 				.update(aiUserSubscriptions)

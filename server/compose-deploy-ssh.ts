@@ -1,14 +1,10 @@
 import type { NodeSSH } from "node-ssh";
 
 import { composeUp, writeComposeFile } from "./hermes/runtime";
-import { type SshAuthMethod, withSshConnection } from "./ssh";
+import { withSshConnection } from "./ssh";
+import type { SshConnectionInput } from "./ssh/connection";
 
-export type DeployComposeInput = {
-	host: string;
-	port: number;
-	username: string;
-	authMethod: SshAuthMethod;
-	credential: string;
+export type DeployComposeInput = SshConnectionInput & {
 	composeContent: string;
 	/** When set, only recreate these services so the Hermes gateway keeps running. */
 	composeServices?: string[];
@@ -18,37 +14,33 @@ export type DeployComposeInput = {
 	forceRecreate?: boolean;
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
-	expectedFingerprint?: string;
-	requireHostKeyPin?: boolean;
 };
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
-	await withSshConnection(
-		{
-			host: input.host,
-			port: input.port,
-			username: input.username,
-			authMethod: input.authMethod,
-			credential: input.credential,
-			expectedFingerprint: input.expectedFingerprint,
-			requireHostKeyPin: input.requireHostKeyPin,
-		},
-		async (ssh) => {
-			if (input.preSshCommands) {
-				await input.preSshCommands(ssh);
-			}
+	const {
+		composeContent,
+		composeServices,
+		pullImages,
+		forceRecreate,
+		preSshCommands,
+		extraSshCommands,
+		...sshInput
+	} = input;
+	await withSshConnection(sshInput, async (ssh) => {
+		if (preSshCommands) {
+			await preSshCommands(ssh);
+		}
 
-			await writeComposeFile(ssh, input.composeContent);
+		await writeComposeFile(ssh, composeContent);
 
-			await composeUp(ssh, {
-				services: input.composeServices,
-				pull: input.pullImages,
-				forceRecreate: input.forceRecreate,
-			});
+		await composeUp(ssh, {
+			services: composeServices,
+			pull: pullImages,
+			forceRecreate: forceRecreate,
+		});
 
-			if (input.extraSshCommands) {
-				await input.extraSshCommands(ssh);
-			}
-		},
-	);
+		if (extraSshCommands) {
+			await extraSshCommands(ssh);
+		}
+	});
 }

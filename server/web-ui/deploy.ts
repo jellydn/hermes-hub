@@ -220,7 +220,6 @@ async function runDeployInBackground(input: BackgroundDeployInput) {
 			authMethod: ctx.authMethod,
 			credential: ctx.credential,
 			expectedFingerprint: ctx.server.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 			webUiPassword: password,
 			webUiPort,
 		});

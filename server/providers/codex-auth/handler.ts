@@ -37,7 +37,6 @@ type SshConnectionConfig = {
 	authMethod: "password" | "ssh-key";
 	credential: string;
 	expectedFingerprint?: string;
-	requireHostKeyPin?: boolean;
 };
 
 function toSshConnectionConfig(
@@ -50,7 +49,6 @@ function toSshConnectionConfig(
 		authMethod: sshCtx.authMethod,
 		credential: sshCtx.credential,
 		expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
-		requireHostKeyPin: true,
 	};
 }
 

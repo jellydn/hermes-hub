@@ -131,7 +131,6 @@ async function executeInstallWorkflow(input: InstallWorkflowInput) {
 			authMethod: input.authMethod,
 			credential: input.credential,
 			expectedFingerprint: input.server.hostKeyFingerprint ?? undefined,
-			requireHostKeyPin: true,
 		},
 		async (ssh) => {
 			await runInstallStepsOverSsh(ssh, input);
