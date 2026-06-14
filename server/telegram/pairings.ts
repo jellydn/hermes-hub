@@ -82,6 +82,7 @@ async function withDeployedServerSsh<T>(
 			authMethod,
 			credential,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			requireHostKeyPin: true,
 		},
 		fn,
 	);

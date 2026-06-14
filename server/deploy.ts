@@ -60,6 +60,7 @@ export async function deployProviderToHermes(context: Context) {
 					authMethod: sshCtx.authMethod,
 					credential: sshCtx.credential,
 					expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+					requireHostKeyPin: true,
 				});
 
 				if (!codexAuth.authenticated) {
@@ -108,6 +109,7 @@ export async function deployProviderToHermes(context: Context) {
 			authMethod: sshCtx.authMethod,
 			credential: sshCtx.credential,
 			expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+			requireHostKeyPin: true,
 			apiServerKey: decryptedApiServerKey,
 			providerModel: deployModel,
 			providerHermesId,

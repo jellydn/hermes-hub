@@ -383,6 +383,7 @@ describe("deployProviderToHermes", () => {
 			authMethod: "ssh-key",
 			credential: "mock-credential",
 			expectedFingerprint: undefined,
+			requireHostKeyPin: true,
 			apiServerKey: "api-server-key-value",
 			providerModel: "gpt-4o",
 			providerHermesId: "openai-api",

@@ -19,6 +19,7 @@ export type DeployComposeInput = {
 	preSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	extraSshCommands?: (ssh: NodeSSH) => Promise<void>;
 	expectedFingerprint?: string;
+	requireHostKeyPin?: boolean;
 };
 
 export async function deployComposeViaSsh(input: DeployComposeInput) {
@@ -30,6 +31,7 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			authMethod: input.authMethod,
 			credential: input.credential,
 			expectedFingerprint: input.expectedFingerprint,
+			requireHostKeyPin: input.requireHostKeyPin,
 		},
 		async (ssh) => {
 			if (input.preSshCommands) {

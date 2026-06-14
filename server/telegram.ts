@@ -230,6 +230,7 @@ export async function deployTelegramToServer(context: Context) {
 			authMethod,
 			credential,
 			expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+			requireHostKeyPin: true,
 			apiServerKey,
 			telegramBotToken,
 		});
@@ -367,6 +368,7 @@ export async function testTelegramBot(context: Context) {
 				authMethod: sshContext.authMethod,
 				credential: sshContext.credential,
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
+				requireHostKeyPin: true,
 			},
 			async (ssh) => {
 				const execResult = await ssh.execCommand(curlCommand, {
@@ -562,6 +564,7 @@ export async function switchModelProvider(context: Context) {
 				credential: sshContext.credential,
 				expectedFingerprint:
 					sshContext.serverRecord.hostKeyFingerprint ?? undefined,
+				requireHostKeyPin: true,
 			},
 			ipAddress,
 		});

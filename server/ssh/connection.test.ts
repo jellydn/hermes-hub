@@ -194,6 +194,56 @@ describe("withSshConnection host key fingerprint", () => {
 		);
 		// If we reach here without a host_key_mismatch error, the comparison succeeded
 	});
+
+	it("rejects with host_key_missing when requireHostKeyPin is set but no fingerprint stored", async () => {
+		await expect(
+			withSshConnection(
+				{
+					host: "203.0.113.1",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					credential: "secret",
+					requireHostKeyPin: true,
+				},
+				async () => undefined,
+			),
+		).rejects.toMatchObject({
+			code: "host_key_missing",
+		});
+	});
+
+	it("accepts when requireHostKeyPin is set and fingerprint matches", async () => {
+		await withSshConnection(
+			{
+				host: "203.0.113.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "secret",
+				expectedFingerprint: expected,
+				requireHostKeyPin: true,
+			},
+			async (ssh) => {
+				await ssh.execCommand("echo hi");
+			},
+		);
+	});
+
+	it("allows missing fingerprint when requireHostKeyPin is not set (first-connect)", async () => {
+		await withSshConnection(
+			{
+				host: "203.0.113.1",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				credential: "secret",
+			},
+			async (ssh) => {
+				await ssh.execCommand("echo hi");
+			},
+		);
+	});
 });
 
 describe("normalizeSshError", () => {

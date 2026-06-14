@@ -18,6 +18,7 @@ export type SshConnectionInput = {
 	authMethod: SshAuthMethod;
 	credential: string;
 	expectedFingerprint?: string;
+	requireHostKeyPin?: boolean;
 };
 
 export type HostKeyInfo = HostKeyFingerprint;
@@ -73,6 +74,13 @@ export async function establishSshConnection(
 			hostVerifier: (rawKey: Buffer) => {
 				const observed = fingerprintFromKeyBuffer(rawKey);
 				capturedHostKey = observed;
+				if (input.requireHostKeyPin && !input.expectedFingerprint) {
+					throw new SshConnectError(
+						"host key pin required but not stored",
+						"host_key_missing",
+						observed,
+					);
+				}
 				if (
 					input.expectedFingerprint &&
 					!fingerprintsMatch(observed.fingerprint, input.expectedFingerprint)

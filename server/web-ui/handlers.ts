@@ -121,6 +121,7 @@ export async function proxyServerWebUi(context: Context) {
 				authMethod: ctx.authMethod,
 				credential: ctx.credential,
 				expectedFingerprint: ctx.server.hostKeyFingerprint ?? undefined,
+				requireHostKeyPin: true,
 			},
 			remoteHost: "127.0.0.1",
 			remotePort: ctx.webUi.port,

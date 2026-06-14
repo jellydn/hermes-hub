@@ -52,6 +52,7 @@ export async function deployToTelegramLinkedHermes(
 				authMethod: sshCtx.authMethod,
 				credential: sshCtx.credential,
 				expectedFingerprint: sshCtx.server.hostKeyFingerprint ?? undefined,
+				requireHostKeyPin: true,
 			},
 			async (ssh) => {
 				await options.deploy(ssh);
