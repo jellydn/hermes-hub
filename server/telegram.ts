@@ -2,18 +2,7 @@ import crypto from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
-import {
-	type ApiProviderId,
-	apiProviderOptions,
-	getDefaultAiModel,
-	isApiProviderId,
-	isValidAiModel,
-	isValidModelString,
-} from "#/lib/ai-providers";
-import {
-	isValidSubscriptionModel,
-	type UserSubscriptionId,
-} from "#/lib/user-subscriptions";
+import { isValidModelString } from "#/lib/ai-providers";
 import { getAuthSession } from "./auth";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
@@ -29,8 +18,6 @@ import { getClientIp } from "./lib/get-client-ip";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
-import { loadModelAccessRecords } from "./providers/active-backend";
-import { PROVIDER_ENV_CONFIGS } from "./providers/config";
 import { buildManagedComposeContent } from "./server-compose";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
@@ -39,6 +26,10 @@ import {
 	TelegramConnectionError,
 	verifyTelegramToken,
 } from "./telegram/config";
+import {
+	getModelAccessOptions,
+	resolveSwitchOption,
+} from "./telegram/model-access";
 import {
 	approveTelegramPairing,
 	listTelegramPairings,
@@ -489,21 +480,22 @@ async function resolveTelegramSshContext(session: {
 	};
 }
 
-/**
- * Returns a user-facing error message when `model` is not valid for `provider`,
- * or null if the model is acceptable. Returns null for providers that allow
- * custom models (e.g. OpenRouter, Ollama).
- */
-function getModelValidationError(
-	model: string,
-	provider: ApiProviderId,
-): string | null {
-	if (isValidAiModel(provider, model)) return null;
-	const option = apiProviderOptions.find((o) => o.id === provider);
-	if (option && !option.requiresCustomModel) {
-		return `Model '${model}' is not valid for provider '${provider}'. Valid models: ${option.models.join(", ")}.`;
+export async function getModelAccessOptionsHandler(context: Context) {
+	const session = await getAuthSession(context.req.raw.headers);
+	if (!session) {
+		return context.json({ error: "Unauthorized" }, 401);
 	}
-	return null;
+
+	try {
+		const result = await getModelAccessOptions(session.user.id);
+		return context.json(result);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to load model access options";
+		return context.json({ error: message }, 500);
+	}
 }
 
 export async function switchModelProvider(context: Context) {
@@ -512,112 +504,49 @@ export async function switchModelProvider(context: Context) {
 		return context.json({ error: "Unauthorized" }, 401);
 	}
 
-	let payload: { model?: string; provider?: string };
+	let payload: { optionId?: string; model?: string };
 	try {
-		payload = await context.req.json<{ model?: string; provider?: string }>();
+		payload = await context.req.json<{ optionId?: string; model?: string }>();
 	} catch {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	let { model } = payload || {};
-	const { provider } = payload || {};
+	const { optionId, model: rawModel } = payload || {};
+	if (!optionId) {
+		return context.json({ error: "'optionId' is required." }, 400);
+	}
+	if (!rawModel) {
+		return context.json({ error: "'model' is required." }, 400);
+	}
 
-	if (!model && !provider) {
+	const model = rawModel.trim();
+	if (!model) {
+		return context.json({ error: "Model cannot be empty." }, 400);
+	}
+	if (!isValidModelString(model)) {
 		return context.json(
-			{ error: "At least one of 'model' or 'provider' is required." },
+			{
+				error: `Invalid model: '${model}'. Use alphanumeric, dots, underscores, colons, slashes, and hyphens (1-120 chars).`,
+			},
 			400,
 		);
 	}
 
-	// Validate provider if provided
-	let validatedProvider: ApiProviderId | undefined;
-	if (provider !== undefined) {
-		if (!isApiProviderId(provider)) {
-			return context.json(
-				{
-					error: `Invalid provider: '${provider}'. Valid options: openai, anthropic, openrouter, ollama, custom.`,
-				},
-				400,
-			);
-		}
-		validatedProvider = provider;
-
-		const providerConfig = PROVIDER_ENV_CONFIGS[validatedProvider];
-		if (!providerConfig?.hermesProvider) {
-			return context.json(
-				{
-					error: `Provider '${provider}' does not have a valid inference provider mapping.`,
-				},
-				400,
-			);
-		}
+	// Resolve and validate the option
+	const resolved = await resolveSwitchOption(session.user.id, optionId);
+	if (!resolved.ok) {
+		return context.json({ error: resolved.error }, 400);
 	}
 
-	// If provider is specified without a model, default to the provider's default model
-	if (validatedProvider && model === undefined) {
-		model = getDefaultAiModel(validatedProvider);
-	}
-
-	// Resolve the current active backend once (needed for validation and DB persist)
-	const { activeBackend: preSwitchBackend } = await loadModelAccessRecords(
-		session.user.id,
-	);
-
-	// Validate model if provided
-	if (model !== undefined) {
-		model = model.trim();
-		if (!model) {
-			return context.json({ error: "Model cannot be empty." }, 400);
-		}
-		if (!isValidModelString(model)) {
+	// Validate model against the resolved option
+	if (!resolved.allowsCustomModel) {
+		if (!resolved.fixedModels.includes(model)) {
 			return context.json(
 				{
-					error: `Invalid model: '${model}'. Use alphanumeric, dots, underscores, colons, slashes, and hyphens (1-120 chars).`,
+					error: `Model '${model}' is not valid for '${resolved.provider}'. Valid models: ${resolved.fixedModels.join(", ")}.`,
 				},
 				400,
 			);
-		}
-
-		// Determine which provider to validate against — either the new one or the current backend
-		const providerToValidate: ApiProviderId | undefined =
-			validatedProvider ??
-			(preSwitchBackend?.kind === "api-provider"
-				? preSwitchBackend.provider
-				: undefined);
-		const subscriptionToValidate:
-			| { id: string; access: "credential" | "oauth" }
-			| undefined =
-			!validatedProvider && preSwitchBackend?.kind === "subscription"
-				? {
-						id: preSwitchBackend.subscriptionProvider,
-						access: preSwitchBackend.access,
-					}
-				: undefined;
-
-		if (providerToValidate) {
-			const validationError = getModelValidationError(
-				model,
-				providerToValidate,
-			);
-			if (validationError) {
-				return context.json({ error: validationError }, 400);
-			}
-		}
-
-		if (subscriptionToValidate) {
-			if (
-				!isValidSubscriptionModel(
-					subscriptionToValidate.id as UserSubscriptionId,
-					model,
-				)
-			) {
-				return context.json(
-					{
-						error: `Model '${model}' is not valid for subscription '${subscriptionToValidate.id}'.`,
-					},
-					400,
-				);
-			}
 		}
 	}
 
@@ -645,14 +574,8 @@ export async function switchModelProvider(context: Context) {
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
-				if (validatedProvider) {
-					const hermesProviderId =
-						PROVIDER_ENV_CONFIGS[validatedProvider].hermesProvider;
-					await setProviderInferenceProvider(ssh, hermesProviderId);
-				}
-				if (model) {
-					await setProviderModel(ssh, model);
-				}
+				await setProviderInferenceProvider(ssh, resolved.hermesProviderId);
+				await setProviderModel(ssh, model);
 
 				// Rewrite the compose file with the correct env vars for the
 				// new provider/model so the container picks them up on restart.
@@ -668,76 +591,78 @@ export async function switchModelProvider(context: Context) {
 			},
 		);
 
-		// Persist the new provider/model to the local database after SSH
-		// succeeds so the DB is never updated when the remote container
-		// configuration failed.
-		const { activeBackend } = preSwitchBackend
-			? { activeBackend: preSwitchBackend }
-			: await loadModelAccessRecords(session.user.id);
-		if (activeBackend) {
-			if (activeBackend.kind === "api-provider") {
-				await db
+		// After remote deploy succeeds, deactivate other access records and
+		// mark the resolved row active in a DB transaction.
+		await db.transaction(async (tx) => {
+			// Deactivate all other active rows
+			for (const id of resolved.activeOptionIds) {
+				await tx
 					.update(aiProviders)
-					.set({
-						...(validatedProvider ? { provider: validatedProvider } : {}),
-						...(model ? { model } : {}),
-					})
-					.where(eq(aiProviders.userId, session.user.id));
-			} else if (
-				activeBackend.kind === "subscription" &&
-				activeBackend.access === "credential" &&
-				model
-			) {
-				await db
-					.update(aiProviders)
-					.set({ model })
-					.where(eq(aiProviders.userId, session.user.id));
-			} else if (
-				activeBackend.kind === "subscription" &&
-				activeBackend.access === "oauth" &&
-				model
-			) {
-				await db
+					.set({ isActive: false })
+					.where(eq(aiProviders.id, id));
+				await tx
 					.update(aiUserSubscriptions)
-					.set({ model, updatedAt: new Date() })
-					.where(eq(aiUserSubscriptions.userId, session.user.id));
+					.set({ isActive: false, updatedAt: new Date() })
+					.where(eq(aiUserSubscriptions.id, id));
 			}
-		}
 
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "telegram.model.switched",
-			serverId: serverRecord.id,
-			details: {
-				...(validatedProvider ? { provider: validatedProvider } : {}),
-				...(model ? { model } : {}),
-				serverHost: serverRecord.host,
-			},
-			ipAddress,
+			// Activate the resolved option
+			const optParts = optionId.split(":");
+			const recordId = optParts[1];
+			if (resolved.kind === "oauth-subscription") {
+				await tx
+					.update(aiUserSubscriptions)
+					.set({ model, isActive: true, updatedAt: new Date() })
+					.where(eq(aiUserSubscriptions.id, recordId));
+			} else {
+				await tx
+					.update(aiProviders)
+					.set({ model, isActive: true })
+					.where(eq(aiProviders.id, recordId));
+			}
+
+			await insertAuditLog(tx, {
+				userId: session.user.id,
+				action: "telegram.model.switched",
+				serverId: serverRecord.id,
+				details: {
+					optionId,
+					model,
+					provider: resolved.provider,
+					kind: resolved.kind,
+					serverHost: serverRecord.host,
+				},
+				ipAddress,
+			});
 		});
 
 		clearDashboardCache();
 
 		return context.json({
 			status: "switched",
-			...(validatedProvider ? { provider: validatedProvider } : {}),
-			...(model ? { model } : {}),
+			optionId,
+			model,
+			provider: resolved.provider,
 		});
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Model switch failed";
 
-		await insertAuditLog(db, {
-			userId: session.user.id,
-			action: "telegram.model.switch.failed",
-			serverId: serverRecord.id,
-			details: {
-				...(validatedProvider ? { provider: validatedProvider } : {}),
-				...(model ? { model } : {}),
-				error: message,
-			},
-			ipAddress,
-		});
+		try {
+			await insertAuditLog(db, {
+				userId: session.user.id,
+				action: "telegram.model.switch.failed",
+				serverId: serverRecord.id,
+				details: {
+					optionId,
+					model,
+					error: message,
+				},
+				ipAddress,
+			});
+		} catch {
+			// Audit logging is historical only; still return failure to client.
+		}
 
 		return context.json({ error: `Switch failed: ${message}` }, 502);
 	}
