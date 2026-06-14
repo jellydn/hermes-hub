@@ -193,8 +193,7 @@ export function SubscriptionSelectionPanel({
 			/>
 
 			<AccessSelectionActions
-				isSaving={isSaving}
-				isTesting={isTesting}
+				status={isSaving ? "saving" : isTesting ? "testing" : "idle"}
 				onSave={onSave}
 				onTest={onTest}
 				saveLabel="Save Subscription"

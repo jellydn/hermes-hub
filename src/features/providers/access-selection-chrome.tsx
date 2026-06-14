@@ -54,8 +54,7 @@ export function AccessSelectionFeedback({
 }
 
 type AccessSelectionActionsProps = {
-	isSaving: boolean;
-	isTesting: boolean;
+	status: "idle" | "saving" | "testing";
 	onSave: () => void;
 	onTest: () => void;
 	saveLabel: string;
@@ -64,8 +63,7 @@ type AccessSelectionActionsProps = {
 };
 
 export function AccessSelectionActions({
-	isSaving,
-	isTesting,
+	status,
 	onSave,
 	onTest,
 	saveLabel,
@@ -74,27 +72,27 @@ export function AccessSelectionActions({
 }: AccessSelectionActionsProps) {
 	return (
 		<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-			<Button type="button" onClick={onSave} disabled={isSaving}>
-				{isSaving ? (
+			<Button type="button" onClick={onSave} disabled={status === "saving"}>
+				{status === "saving" ? (
 					<LoaderCircle className="h-4 w-4 animate-spin" />
 				) : (
 					<KeyRound className="h-4 w-4" />
 				)}
-				<span>{isSaving ? savingLabel : saveLabel}</span>
+				<span>{status === "saving" ? savingLabel : saveLabel}</span>
 			</Button>
 			{showTest ? (
 				<Button
 					type="button"
 					variant="secondary"
 					onClick={onTest}
-					disabled={isTesting}
+					disabled={status === "testing"}
 				>
-					{isTesting ? (
+					{status === "testing" ? (
 						<LoaderCircle className="h-4 w-4 animate-spin" />
 					) : (
 						<ShieldCheck className="h-4 w-4" />
 					)}
-					<span>{isTesting ? "Testing..." : "Test Connection"}</span>
+					<span>{status === "testing" ? "Testing..." : "Test Connection"}</span>
 				</Button>
 			) : null}
 		</div>
