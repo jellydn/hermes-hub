@@ -499,6 +499,76 @@ describe("telegram handlers", () => {
 		);
 	});
 
+	it("returns 409 with hostKey details when deploy throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: null,
+				deployedServerHost: null,
+				apiServerKey: null,
+			},
+		]);
+
+		// Server with NULL hostKeyFingerprint — causes host_key_missing
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: false,
+				hostKeyFingerprint: null,
+			},
+		]);
+
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		deployManagedCompose.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:abc123", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { deployTelegramToServer } = await import("./telegram");
+		const response = await deployTelegramToServer(
+			createContext() as unknown as Context,
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "1.2.3.4",
+			hostKey: {
+				observedFingerprint: "SHA256:abc123",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+
+		// No audit log for recoverable errors
+		expect(insertValues).not.toHaveBeenCalled();
+		// No deploy state persisted
+		expect(updateSet).not.toHaveBeenCalled();
+	});
+
 	it("deployTelegramToServer persists deploy state and audit log in a single transaction", async () => {
 		getAuthSession.mockResolvedValue({
 			user: { id: "user_123" },
@@ -677,6 +747,72 @@ describe("telegram handlers", () => {
 		);
 		// The command should end with a closing single quote
 		expect(capturedCommand?.trim()).toMatch(/'$/);
+	});
+
+	it("returns 409 with hostKey details when testTelegramBot SSH throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		getProviderDeployConfig.mockResolvedValue({
+			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
+			model: "gpt-4o",
+		});
+
+		selectLimit.mockResolvedValue([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+
+		// Server with NULL hostKeyFingerprint
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+			hostKeyFingerprint: null,
+		});
+
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		withSshConnection.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:xyz789", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { testTelegramBot } = await import("./telegram");
+		const response = await testTelegramBot(createContext({ message: "Hello" }));
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:xyz789",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
 	});
 });
 
