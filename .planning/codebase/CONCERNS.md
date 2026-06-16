@@ -1,278 +1,105 @@
-# Codebase Concerns
+# Concerns & Technical Debt
 
-**Analysis Date:** 2026-06-06
+## Active Issues
 
-## Tech Debt
+### 1. Large Files (Complexity Hotspots)
+Several files exceed healthy size thresholds, indicating they may benefit from refactoring:
 
-**Server detail page bypasses route loader pattern:**
+| File | Lines | Concern |
+|------|-------|---------|
+| `server/hermes/runtime.test.ts` | 768 | Largest test file — may indicate untested production code or over-testing |
+| `server/web-ui/proxy.ts` | 464 | SSH proxy logic — complex, hard to test |
+| `server/telegram/model-access.ts` | 448 | Model access logic — feature creeping |
+| `server/settings/mcp.test.ts` | 399 | Large test file |
+| `server/hermes/runtime.ts` | 398 | Runtime management — core logic |
+| `server/db/schema.ts` | 397 | Schema definitions — low cognitive complexity, file is mainly table definitions |
+| `server/web-ui/handlers.test.ts` | 393 | Large test file |
+| `server/settings/agent-skills.ts` | 331 | Settings logic |
+| `server/settings/mcp.ts` | 300 | MCP server manager |
 
-- Issue: `ServerDetailPage` fetches `/api/servers/:id` client-side via `useMountEffect` instead of a `createServerFn` loader like other dashboard pages.
-- Files: `src/routes/servers.$id.tsx`, `src/features/servers/server-detail-page.tsx`
-- Impact: Extra client round-trip, no SSR snapshot, inconsistent data-loading pattern across routes, harder to test at route level.
-- Fix approach: Add a route loader mirroring `dashboard.tsx` / `logs.tsx`; keep `useMountEffect` only if intentional refresh is needed.
+### 2. In-Memory State (Single-Instance Boundary)
+The following are module-level in-memory state and are **not shared** across nodes:
+- Install SSE event streams (`server/install/sse-stream.ts`)
+- Session credentials (`server/credentials.ts`)
+- Magic-link rate limiter (`server/app.ts`)
+- Dashboard metric caches (`server/dashboard/metrics.ts`)
 
-**Install version not captured from pulled image tag:**
+This means horizontal scaling would break critical functionality (install progress streaming, rate limiting, credential storage). Documented in ADR 0009.
 
-- Issue: Install progress no longer overwrites `installs.version` on every SSE event or retry reset, but completion still does not persist the actual pulled image tag.
-- Files: `server/install/sse-stream.ts`, `server/install/records.ts`, `server/hermes/runtime.ts`
-- Impact: Rollback fallback via `installs.version` only reflects explicit update/rollback actions, not the tag running after a fresh install.
-- Fix approach: Parse and persist the deployed image tag when install succeeds.
+### 3. Test Coverage Gaps
+- **`src/features/`**: Growing but many feature components untested
+- **`server/web-ui/proxy.ts`**: Complex proxy logic with limited test coverage
+- **SSR rendering**: Not tested (requires integration/E2E setup)
+- **No coverage threshold** enforced in CI
 
-**Large/complex modules:**
+### 4. TanStack Framework Mock Complexity
+Testing route-level orchestration (``createFileRoute``, ``createServerFn`` handlers, ``beforeLoad``) requires extensive mocking of TanStack Router and TanStack Start internals:
+- `@tanstack/react-router` must provide `createFileRoute`, `getRouteApi`, `Link`, `useNavigate`, and `redirect`
+- `@tanstack/react-start` must unwrap `createServerFn` to return raw handlers (since Vitest's `happy-dom` environment lacks SSR context)
+- `@tanstack/react-start/server` must provide `getRequestHeaders`
+- These mocks are fragile and may break when TanStack releases API changes
 
-- Issue: Several files mix orchestration, UI, and infrastructure in single modules (>350 lines).
-- Files: `server/servers.ts` (564 lines), `src/features/dashboard/status-overview.tsx` (608 lines), `server/hermes/runtime.ts` (380 lines), `server/telegram.ts` (462 lines), `src/features/servers/install-progress.tsx` (375 lines)
-- Impact: Higher merge conflict risk, harder to reason about change blast radius.
-- Fix approach: Extract SSH route handlers from `servers.ts`, split status-overview into hook + presentational cards, keep extracting runtime command builders.
-
-**Generated route tree:**
-
-- Issue: `src/routeTree.gen.ts` is auto-generated and excluded from Biome checks.
-- Files: `src/routeTree.gen.ts`, `biome.json`, `AGENTS.md`
-- Impact: Manual edits are overwritten; tooling must respect exclusions.
-- Fix approach: Never edit by hand; regenerate via TanStack Router after route changes.
-
-## Known Bugs
-
-_None documented at audit time._
+### 5. `node-ssh` Native Dependencies
+- `node-ssh` pulls in `ssh2` and `cpu-features` which bundle native `.node` binaries
+- Requires special handling in `vite.config.ts` (excluded from `optimizeDeps`)
+- Adds complexity to the dev build pipeline
 
 ## Security Considerations
 
-**HTTPS guard depends on trusted reverse proxy:**
-
-- Risk: `requireHttps()` trusts `x-forwarded-proto` or URL scheme; spoofed headers on a pass-through CDN could bypass the guard.
-- Files: `server/app.ts`
-- Current mitigation: Documented deployment assumption (single TLS-terminating proxy that overwrites headers); returns 426 on plaintext in production; uses `globalThis.process.env.NODE_ENV` to avoid Vite tree-shaking the guard away.
-- Recommendations: Document required proxy config in deployment guide; consider rejecting requests when `x-forwarded-proto` is absent in production unless direct HTTPS.
-
-**SSH session credentials held in process memory:**
-
-- Risk: Passwords/private keys stored plaintext in a module-level `Map` for up to 30 minutes.
-- Files: `server/credentials.ts`, `server/server-records.ts`
-- Current mitigation: 30-minute TTL on read and periodic cleanup (`CREDENTIAL_CLEANUP_INTERVAL_MS`); not persisted to DB when `storeCredential` is false.
-- Recommendations: Consider shorter TTL for high-risk deployments; zero credentials on session end if Better Auth exposes a hook.
-
-**Development auth secret fallback:**
-
-- Risk: Missing `BETTER_AUTH_SECRET` in development falls back to `"dev-only-better-auth-secret"`.
-- Files: `server/auth.ts`
-- Current mitigation: Throws in production when env vars missing.
-- Recommendations: Require explicit dev secret via `.env.example`; warn on startup when using default.
-
-**Legacy unencrypted API server keys:**
-
-- Risk: `decryptApiServerKey` returns plaintext payloads that lack the AES-GCM structure, preserving legacy unencrypted values.
-- Files: `server/crypto.ts`
-- Current mitigation: New writes use `encryptSecret`; decryption fails loudly on malformed encrypted payloads.
-- Recommendations: Migration script to re-encrypt legacy keys; remove plaintext fallback after migration.
-
-**In-memory rate limiting:**
-
-- Risk: Magic-link rate limits (`RateLimiterMemory`, 3 per 5 min per email) do not share state across processes.
-- Files: `server/app.ts`
-- Current mitigation: Adequate for single-instance deployment.
-- Recommendations: Redis-backed limiter before horizontal scaling.
-
-**Encryption key required at runtime:**
-
-- Risk: Missing `ENCRYPTION_KEY` throws on first encrypt/decrypt, not at startup.
-- Files: `server/crypto.ts`, `drizzle.config.ts` (no DB URL at config time — by design)
-- Current mitigation: Lazy failure pattern consistent with auth.
-- Recommendations: Health check could surface missing secrets before first user action.
-
-## Performance Bottlenecks
-
-**Dashboard status polling with SSH metrics:**
-
-- Problem: Client polls `/api/dashboard/status` every 30s; server may SSH into VPS for cpu/memory/disk when metrics cache (15s) expires.
-- Files: `src/features/dashboard/status-overview.tsx`, `server/dashboard.ts`, `server/dashboard/metrics.ts`
-- Cause: Live metrics require remote `execCommand` over SSH; static data cached 60s but metrics cache is shorter.
-- Improvement path: Already has exponential backoff (30s→120s, stops after 3 failures). Consider longer metrics TTL or push-based metrics from agent.
-
-**Install log card polling during active installs:**
-
-- Problem: Polls `/api/servers/:id/install/log` every 3s while install status is `running`, duplicating SSE on the install page.
-- Files: `src/features/servers/install-log-card.tsx`, `server/install.ts`
-- Cause: Server detail page uses HTTP polling for log tail; install page uses SSE separately.
-- Improvement path: Share SSE snapshot or increase poll interval when install page is open.
-
-**Telegram pairing list polling:**
-
-- Problem: Polls pairings on a fixed interval while Telegram is deployed.
-- Files: `src/features/telegram/telegram-pairing-section.tsx`
-- Cause: No webhook/SSE for pairing state changes.
-- Improvement path: SSE or longer interval with manual refresh; acceptable for low-frequency pairing.
-
-**Web UI deploy status polling:**
-
-- Problem: Client polls deploy status until terminal state.
-- Files: `src/features/servers/web-ui-deploy-poll.ts`
-- Cause: Deploy is async over SSH with no server-push channel.
-- Improvement path: Reuse install SSE pattern or websocket for deploy progress.
-
-**Vite dev prebundling and native SSH modules:**
-
-- Problem: `node-ssh`, `ssh2`, `cpu-features` break Vite `optimizeDeps` if pulled into client scan.
-- Files: `vite.config.ts`, `AGENTS.md`
-- Cause: Native `.node` binaries in server-only dependency chain.
-- Improvement path: Keep exclusions; audit imports so SSH code never enters client bundles.
-
-## Fragile Areas
-
-**Install events + in-memory SSE stream sync:**
-
-- Files: `server/install/sse-stream.ts`, `server/install.ts`, `server/install/workflow.ts`, `server/install/records.ts`
-- Why fragile: Two sources of truth — persisted `install_events` rows and `installStreams` Map. `emitInstallEvent` uses a transaction for DB writes but in-memory listeners are outside the transaction. `tryClaimInstallStream` is single-process only.
-- Safe modification: Always update DB and stream in `emitInstallEvent`; use `runId` gating; on retry, `upsertInstallRecord` deletes old events before reset. Test both `sse-stream.test.ts` and `install-idle-timeout.test.ts`.
-- Test coverage: Good unit coverage for stream helpers and idle timeout; limited multi-request concurrency tests.
-
-**Rollback target resolution:**
-
-- Files: `server/server-actions.ts`, `server/server-detail-snapshot.ts`, `server/hermes/runtime.ts`, `src/features/servers/use-server-actions.ts`
-- Why fragile: `rollbackGateway` uses `sed` on remote `docker-compose.yml`; install version may still lag the running image after fresh installs.
-- Safe modification: Route all resolution through `resolveRollbackTargetFromSources`; validate tags with `isValidDockerTag` before SSH; keep transaction wrapping audit log + version update in `runServerAction`.
-- Test coverage: Unit tests for explicit target, audit-history preference, installs-table fallback, and snapshot display alignment.
-
-**DB transaction boundaries:**
-
-- Files: `server/telegram.ts`, `server/server-actions.ts`, `server/install/sse-stream.ts`, `AGENTS.md`
-- Why fragile: Only three paths use transactions; other primary+audit sequences are intentionally sequential and can leave audit gaps.
-- Safe modification: Wrap new multi-write paths that must stay consistent (deploy state, version tracking) in `db.transaction()`; do not wrap purely historical audit logs unless divergence is unacceptable.
-- Test coverage: `server-actions.test.ts` mocks transactions; telegram deploy transaction tested in `server/telegram.test.ts`.
-
-**Lazy auth initialization:**
-
-- Files: `server/auth.ts`, `src/lib/auth-client.ts`
-- Why fragile: Eager `getAuth()` at module scope crashes pages when `DATABASE_URL` is unset.
-- Safe modification: Keep lazy `getAuth()` singleton; use `hasDatabaseUrl()` guards on auth routes.
-- Test coverage: `server/app.test.ts` covers 503 when DB unavailable; `src/lib/session.test.ts` covers `requireSession` redirect.
-
-## Scaling Limits
-
-**Single-instance in-memory state (documented constraint):**
-
-- Current capacity: Designed for single-process self-hosted deployment (per `CONTEXT.md`).
-- Limit: Horizontal scaling breaks install SSE claims, session credentials, dashboard/metrics caches, SSH web-ui pool, deploy locks, and rate limiting.
-- Scaling path: Externalize state (Redis for credentials TTL, rate limits, install pub/sub), sticky sessions for SSE, or move to DB-backed event streaming.
-
-**In-memory Maps and Sets:**
-
-- Files: `server/install/sse-stream.ts` (`installStreams`), `server/credentials.ts`, `server/dashboard.ts`, `server/dashboard/metrics.ts`, `server/web-ui/ssh-pool.ts`, `server/web-ui/deploy-lock.ts`, `server/app.ts` (rate limiter)
-- Current capacity: One Node process, one user/session workload typical.
-- Limit: Process restart evicts all ephemeral state; second instance sees empty maps.
-- Scaling path: Document single-instance requirement in ops runbooks; add Redis/DB adapters per subsystem.
-
-**PostgreSQL connection pool:**
-
-- Files: `server/db/index.ts`
-- Current capacity: Default `max: 5` connections (`DB_POOL_MAX` override).
-- Limit: Concurrent SSH-heavy dashboard refreshes + install SSE + auth can contend for connections.
-- Scaling path: Tune `DB_POOL_MAX`; ensure long-running work does not hold connections (current handlers release after await).
-
-**Install SSE idle timeout:**
-
-- Files: `server/install/sse-stream.ts`, `server/install.ts`, `src/features/servers/install-progress.tsx`
-- Current capacity: 90s idle (`IDLE_TIMEOUT_MS`), 30s heartbeat (`HEARTBEAT_INTERVAL_MS`).
-- Limit: Long silent SSH steps rely on heartbeat to stay alive; client reconnects with exponential backoff and replays persisted events after timeout.
-- Scaling path: Sticky sessions or shared pub/sub if multiple Hub instances serve the same install stream.
-
-## Dependencies at Risk
-
-**`node-ssh` / `ssh2` / `cpu-features`:**
-
-- Risk: Native `.node` addons complicate Vite dev bundling and cross-platform builds.
-- Impact: Dev server crashes if SSH imports leak into client graph.
-- Migration plan: Keep `optimizeDeps.exclude` in `vite.config.ts`; strict server/client boundary.
-
-**`rate-limiter-flexible` (in-memory store):**
-
-- Risk: No distributed rate limiting.
-- Impact: Magic-link abuse possible across instances or after restart (counter reset).
-- Migration plan: Switch to `RateLimiterRedis` or similar before multi-instance deploy.
-
-**TanStack Start + Vite 8 (bleeding-edge stack):**
-
-- Risk: Rapid API changes in `@tanstack/react-start`, `@tanstack/react-router`, `vite@8`.
-- Impact: Build/plugin breakage on upgrades.
-- Migration plan: Pin versions in `package.json`; run full CI (`biome`, `typecheck`, `test`, `build`) on upgrades.
-
-## Missing Critical Features
-
-**Multi-instance / HA deployment:**
-
-- Problem: No shared state layer for SSE, credentials, caches, or locks.
-- Blocks: Running multiple HermesHub replicas behind a load balancer.
-
-**Unified version tracking:**
-
-- Problem: Rollback resolution is unified, but install completion still does not persist the deployed image tag into `installs.version`.
-- Blocks: Reliable one-click rollback to the actual running image tag after a fresh install.
-
-## Test Coverage Gaps
-
-**Auth module (`server/auth.ts`):**
-
-- What's not tested: `createAuth()` production vs development branches, `getAuth()` singleton behavior, magic-link plugin wiring.
-- Files: `server/auth.ts`
-- Risk: Production misconfiguration (missing secrets) or dev fallback leaking into prod build.
-- Priority: Medium
-
-**Crypto helpers (`server/crypto.ts`):**
-
-- What's not tested: `encryptSecret`/`decryptSecret` round-trip, legacy plaintext fallback in `decryptApiServerKey`.
-- Files: `server/crypto.ts`
-- Risk: Encryption regressions or silent legacy plaintext reads.
-- Priority: High
-
-**Server records / credential resolution (`server/server-records.ts`):**
-
-- What's not tested: `resolveServerCredential`, `resolveServerSshConfigOrError` edge cases (expired session cred, missing encrypted blob).
-- Files: `server/server-records.ts`
-- Risk: SSH operations fail opaquely or with wrong error messages.
-- Priority: High
-
-**Request guards (`server/request-guards.ts`):**
-
-- What's not tested: `requireOwnedServer`, `requireOwnedServerSsh` helper paths.
-- Files: `server/request-guards.ts`
-- Risk: Authorization gaps on new routes that skip guards.
-- Priority: Medium
-
-**Route files (`src/routes/`):**
-
-- What's not tested: No `*.test.ts` under `src/routes/`; loaders and `beforeLoad` auth redirects untested at route level.
-- Files: `src/routes/*.tsx`
-- Risk: Route wiring regressions (e.g. missing `requireSession`).
-- Priority: Medium
-
-**Server detail page client fetch (`server-detail-page.tsx`):**
-
-- What's not tested: Mount fetch, error states, loading skeleton integration.
-- Files: `src/features/servers/server-detail-page.tsx`
-- Risk: Broken server detail UX without test signal (component tests cover `server-detail.tsx` but not the page wrapper).
-- Priority: Medium
-
-**Install log card polling (`install-log-card.tsx`):**
-
-- What's not tested: 3s polling lifecycle, expand/collapse fetch behavior.
-- Files: `src/features/servers/install-log-card.tsx`
-- Risk: Poll leaks or duplicate fetch storms during running installs.
-- Priority: Low
-
-**Rollback full fallback chain integration:**
-
-- What's not tested: End-to-end browser flow from snapshot `rollbackTarget` through `POST /actions` to SSH `rollbackGateway` (unit tests cover resolver branches only).
-- Files: `server/server-actions.ts`, `server/server-detail-snapshot.ts`, `server/server-actions.test.ts`
-- Risk: Wiring regressions between snapshot display and action execution.
-- Priority: Medium
-
-**E2E / browser tests:**
-
-- What's not tested: No Playwright/Cypress suite; SSE and cookie auth flows only partially covered by unit/component tests.
-- Files: N/A (gap)
-- Risk: Integration failures between TanStack Start SSR, Hono API, and browser cookies.
-- Priority: Medium
-
----
-
-_Concerns audit: 2026-06-06_
+### Addressed
+- ✅ **HTTPS enforcement** via `requireHttps()` middleware on mutating routes in production
+- ✅ **AES-256-GCM encryption** for all stored SSH credentials (`server/crypto.ts`)
+- ✅ **Rate limiting** on magic-link authentication (3/5min per email)
+- ✅ **Host key trust** management for SSH connections
+
+### Watch Items
+- ⚠️ `ENCRYPTION_KEY` rotation invalidates all stored SSH credentials — no re-encryption mechanism
+- ⚠️ Magic-link rate limiter is in-memory (reset on restart)
+- ⚠️ No audit trail for credential access (only for server actions)
+- ⚠️ SSRF risk potential in SSH proxy and web UI features — data flows to arbitrary hosts
+
+## Performance Considerations
+
+- **Dashboard metrics** are cached in-memory (module-level state)
+- **SSH connections** use a managed pool in `server/web-ui/ssh-pool.ts`
+- **SSE streaming** for install progress — single-instance limitation
+- No apparent caching layer for database queries beyond Drizzle query optimization
+- No CDN or edge caching configured
+
+## Closed Items
+
+### ✅ Empty Catch Blocks in `server/deploy.ts`
+The two truly silent catch blocks (audit log insert failures after deploy success/failure) were fixed in June 2026. Both now log via `console.error` with the original error message, preserving the existing behavior (audit failure does not block the main operation).
+
+Note: `server/servers.ts` and `server/server-actions.ts` were flagged in the original scan but their `catch { }` blocks are **not empty** — they return error responses to the client for JSON parse failures. No change was needed.
+
+### ✅ Route Test Coverage
+Added 7 route-level test files covering the main authenticated pages:
+- `src/routes/dashboard.test.tsx`
+- `src/routes/servers.index.test.tsx`
+- `src/routes/settings.test.tsx`
+- `src/routes/logs.test.tsx`
+- `src/routes/telegram.test.tsx`
+- `src/routes/ai-provider.test.tsx`
+- `src/routes/servers.$id.test.tsx`
+
+Each tests route configuration (component, `beforeLoad`), data loading orchestration, and unauthenticated edge cases. 27 tests total.
+
+## Technical Debt Summary
+
+| Area | Severity | Impact |
+|------|----------|--------|
+| Large files (400+ lines) | Low-Medium | Maintainability, readability |
+| Single-instance boundaries | Medium | No horizontal scaling |
+| Test coverage gaps (features/proxy) | Medium | Regression risk |
+| TanStack mock fragility | Low | Route tests break on TanStack version bumps |
+| Proxy complexity (464 lines) | Medium | Bug-prone, hard to test |
+| No CI coverage threshold | Low | Coverage can regress unnoticed |
+
+## Recommendations
+
+1. **Refactor large files** — split `server/web-ui/proxy.ts` and `server/hermes/runtime.ts` by concern
+2. **Implement re-encryption** for credential rotation (rotate `ENCRYPTION_KEY` without data loss)
+3. **Add CI coverage threshold** — start with a reasonable floor (e.g., 40-50%) and trend upward
+4. **Consider externalizing SSE/rate-limiter state** for future horizontal scaling
+5. **Add remaining route tests** — `servers.$id.install`, `servers.new`, `__root`, `index`, `login`
