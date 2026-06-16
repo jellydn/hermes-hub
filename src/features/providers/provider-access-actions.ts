@@ -34,10 +34,27 @@ type ConnectionTestResponse = {
 	status?: string;
 };
 
+export type HostKeyErrorPayload = {
+	code: "host_key_missing" | "host_key_mismatch";
+	serverId: string;
+	serverHost: string;
+	observedFingerprint: string;
+	observedAlgorithm: string;
+	expectedFingerprint?: string;
+};
+
 type DeployResponse = {
 	error?: string;
 	model?: string;
 	status?: string;
+	code?: string;
+	serverId?: string;
+	serverHost?: string;
+	hostKey?: {
+		observedFingerprint?: string;
+		observedAlgorithm?: string;
+		expectedFingerprint?: string;
+	};
 };
 
 async function readJsonBody<T>(response: Response): Promise<T | null> {
@@ -131,7 +148,8 @@ export async function testSubscriptionAccess(
 }
 
 export async function deployModelAccess(): Promise<
-	{ ok: true; message: string } | { ok: false; error: string }
+	| { ok: true; message: string }
+	| { ok: false; error: string; hostKeyError?: HostKeyErrorPayload }
 > {
 	const response = await fetch("/api/providers/deploy", {
 		method: "POST",
@@ -139,6 +157,25 @@ export async function deployModelAccess(): Promise<
 	const body = await readJsonBody<DeployResponse>(response);
 
 	if (!response.ok) {
+		const hostKeyCode = body?.code;
+		if (
+			hostKeyCode === "host_key_missing" ||
+			hostKeyCode === "host_key_mismatch"
+		) {
+			return {
+				ok: false,
+				error: body?.error ?? "Host key error",
+				hostKeyError: {
+					code: hostKeyCode,
+					serverId: body?.serverId ?? "",
+					serverHost: body?.serverHost ?? "",
+					observedFingerprint: body?.hostKey?.observedFingerprint ?? "",
+					observedAlgorithm: body?.hostKey?.observedAlgorithm ?? "",
+					expectedFingerprint: body?.hostKey?.expectedFingerprint,
+				},
+			};
+		}
+
 		return {
 			ok: false,
 			error: body?.error ?? "Deploy failed",

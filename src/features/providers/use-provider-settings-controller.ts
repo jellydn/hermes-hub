@@ -288,6 +288,7 @@ export function useProviderSettingsController(
 				dispatch({
 					type: "deploy_failed",
 					error: result.error,
+					hostKeyError: result.hostKeyError,
 				});
 				return;
 			}
@@ -298,6 +299,47 @@ export function useProviderSettingsController(
 			});
 		} finally {
 			dispatch({ type: "deploy_finished" });
+		}
+	}
+
+	async function handleTrustAndRetryDeploy() {
+		const hostKeyError = uiState.hostKeyError;
+		if (!hostKeyError) {
+			return;
+		}
+
+		dispatch({ type: "deploy_trust_starting" });
+
+		try {
+			const res = await fetch(
+				`/api/servers/${hostKeyError.serverId}/host-key/accept`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						fingerprint: hostKeyError.observedFingerprint,
+						algorithm: hostKeyError.observedAlgorithm,
+					}),
+				},
+			);
+
+			if (!res.ok) {
+				const data = (await res.json()) as { error?: string };
+				dispatch({
+					type: "deploy_trust_failed",
+					error: data.error ?? "Failed to accept host key",
+				});
+				return;
+			}
+
+			// Dismiss the host-key panel and retry deploy
+			dispatch({ type: "deploy_trust_cancelled" });
+			void handleDeployToHermes();
+		} catch {
+			dispatch({
+				type: "deploy_trust_failed",
+				error: "Network error during host key acceptance",
+			});
 		}
 	}
 
@@ -321,6 +363,7 @@ export function useProviderSettingsController(
 		handleTestSubscription,
 		handleTestConnection,
 		handleDeployToHermes,
+		handleTrustAndRetryDeploy,
 		dispatchUiAction,
 	};
 }
