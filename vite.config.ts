@@ -25,6 +25,26 @@ export default defineConfig(async () => {
 				"server/**/*.{test,spec}.{js,ts,jsx,tsx}",
 				"shared/**/*.{test,spec}.{js,ts,jsx,tsx}",
 			],
+			coverage: {
+				provider: "v8",
+				reporter: ["text", "lcov", "html"],
+				thresholds: {
+					lines: 45,
+					functions: 40,
+					branches: 35,
+					statements: 45,
+				},
+				include: ["src/**/*.ts", "src/**/*.tsx", "server/**/*.ts"],
+				exclude: [
+					"src/routeTree.gen.ts",
+					"src/router.tsx",
+					"src/server.ts",
+					"**/*.test.ts",
+					"**/*.test.tsx",
+					"**/*.d.ts",
+					"scripts/**",
+				],
+			},
 		},
-	};
+	} as Record<string, unknown>;
 });

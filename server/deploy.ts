@@ -148,7 +148,11 @@ export async function deployProviderToHermes(context: Context) {
 				},
 				ipAddress,
 			});
-		} catch {
+		} catch (auditError) {
+			console.error(
+				`Failed to record deploy failure audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
+				auditError,
+			);
 			// Audit logging is historical only; still return deploy failure to client.
 		}
 
@@ -168,7 +172,11 @@ export async function deployProviderToHermes(context: Context) {
 			},
 			ipAddress,
 		});
-	} catch {
+	} catch (auditError) {
+		console.error(
+			`Failed to record deploy success audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
+			auditError,
+		);
 		// Deploy already succeeded remotely; audit logging is historical only.
 	}
 
