@@ -14,7 +14,12 @@ import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
 import { requireAuthSession } from "./request-guards";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
-import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
+import {
+	type SshAuthMethod,
+	SshConnectError,
+	shellQuote,
+	withSshConnection,
+} from "./ssh";
 import {
 	getTokenLast4,
 	TelegramConnectionError,
@@ -570,6 +575,34 @@ export async function switchModelProvider(context: Context) {
 			provider: resolved.provider,
 		});
 	} catch (error) {
+		if (
+			error instanceof SshConnectError &&
+			(error.code === "host_key_missing" || error.code === "host_key_mismatch")
+		) {
+			const hostKeyBase = {
+				observedFingerprint: error.hostKey?.fingerprint ?? "",
+				observedAlgorithm: error.hostKey?.algorithm ?? "",
+			};
+
+			const payload: Record<string, unknown> = {
+				code: error.code,
+				error:
+					error.code === "host_key_missing"
+						? "Host key fingerprint not stored for this server. Trust the host key and retry."
+						: "Host key fingerprint mismatch.",
+				serverId: sshContext.serverRecord.id,
+				serverHost: sshContext.serverRecord.host,
+				hostKey: hostKeyBase,
+			};
+
+			if (error.code === "host_key_mismatch") {
+				(payload.hostKey as Record<string, string>).expectedFingerprint =
+					sshContext.serverRecord.hostKeyFingerprint ?? "";
+			}
+
+			return context.json(payload, 409);
+		}
+
 		const message =
 			error instanceof Error ? error.message : "Model switch failed";
 

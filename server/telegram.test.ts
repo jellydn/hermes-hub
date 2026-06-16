@@ -87,10 +87,14 @@ vi.mock("./db/schema", () => ({
 	},
 }));
 
-vi.mock("./ssh", () => ({
-	withSshConnection,
-	shellQuote: (value: string) => `'${value.replace(/'/g, "'\\''")}'`,
-}));
+vi.mock("./ssh", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./ssh")>();
+	return {
+		...actual,
+		withSshConnection,
+		shellQuote: (value: string) => `'${value.replace(/'/g, "'\\''")}'`,
+	};
+});
 
 vi.mock("./providers", () => ({
 	getProviderDeployConfig,
@@ -1038,6 +1042,192 @@ describe("switchModelProvider", () => {
 
 		expect(response.status).toBe(502);
 		expect(payload.error).toContain("SSH connection refused");
+	});
+
+	it("returns 409 with hostKey details when executeModelSwitch throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:abc123", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:abc123",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+	});
+
+	it("returns 409 with expectedFingerprint when executeModelSwitch throws host_key_mismatch", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+			// Simulate a stored host-key pin that the observed key doesn't match
+			hostKeyFingerprint: "SHA256:stored-pin",
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError("host key mismatch", "host_key_mismatch", {
+				fingerprint: "SHA256:observed-key",
+				algorithm: "ssh-ed25519",
+			}),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_mismatch",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:observed-key",
+				observedAlgorithm: "ssh-ed25519",
+				expectedFingerprint: "SHA256:stored-pin",
+			},
+		});
+	});
+
+	it("still returns 502 for generic SSH errors", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError("Connection timed out", "host_unreachable"),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain("Connection timed out");
 	});
 });
 
