@@ -134,6 +134,13 @@
       "when": 1781101200000,
       "tag": "0018_agent_skills_accept_scanner_risk",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781601400000,
+      "tag": "0019_drop_health_checks",
+      "breakpoints": true
     }
   ]
 }
