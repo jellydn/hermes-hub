@@ -22,6 +22,12 @@ function createMockForwardStream(response: string) {
 		}
 
 		_read() {}
+
+		// node:_http_client calls sock.setTimeout(msecs, callback)
+		// when ClientRequest.setTimeout is used on a createConnection socket.
+		setTimeout(_msecs?: number, _callback?: () => void) {
+			return this;
+		}
 	})() as TcpForwardStream;
 }
 
