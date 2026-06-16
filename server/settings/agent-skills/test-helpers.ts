@@ -58,6 +58,37 @@ export function createContext(body: unknown, method = "POST", id?: string) {
 	} as never;
 }
 
+export function installedSkillFindStdout(paths: string[]): string {
+	return paths.join("\n");
+}
+
+export function createDeployExecMock(options: {
+	installedSkillPaths: string[];
+	previousManifest?: unknown;
+	installFails?: boolean;
+}) {
+	return vi.fn().mockImplementation((cmd: string) => {
+		if (options.installFails && cmd.includes("install")) {
+			return Promise.resolve({ code: 1, stderr: "Install failed!" });
+		}
+		if (cmd.includes("cat") && cmd.includes("hermeshub-agent-skills.json")) {
+			return Promise.resolve({
+				code: 0,
+				stdout: options.previousManifest
+					? JSON.stringify(options.previousManifest)
+					: "",
+			});
+		}
+		if (cmd.includes("find") && cmd.includes(".hermes/skills")) {
+			return Promise.resolve({
+				code: 0,
+				stdout: installedSkillFindStdout(options.installedSkillPaths),
+			});
+		}
+		return Promise.resolve({ code: 0, stdout: "" });
+	});
+}
+
 export function setupAgentSkillsTestState(mocks: AgentSkillsTestMocks) {
 	beforeEach(() => {
 		vi.clearAllMocks();
