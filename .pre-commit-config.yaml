@@ -24,6 +24,7 @@ repos:
         language: system
         pass_filenames: false
         files: \.(ts|tsx)$
+        stages: [push]
   - repo: local
     hooks:
       - id: react-doctor
