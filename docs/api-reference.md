@@ -527,6 +527,98 @@ Use this from the server detail page (**Check setup**) when you need to confirm 
 
 ---
 
+### POST `/api/servers/:id/host-key/accept`
+
+Accepts a new host key fingerprint for a server. Use this when a deploy or action returns a 409 host key error — trust the observed fingerprint to store it as the new pin, then retry the operation.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+
+```json
+{
+  "fingerprint": "SHA256:abc123def456",
+  "algorithm": "ssh-ed25519"
+}
+```
+
+**Fields:**
+
+| Field         | Type   | Description                                           |
+| ------------- | ------ | ----------------------------------------------------- |
+| `fingerprint` | string | Required. SHA256-prefixed host key fingerprint.       |
+| `algorithm`   | string | Optional. Algorithm of the host key (e.g. `ssh-ed25519`). |
+
+**Response (200):**
+
+```json
+{
+  "ok": true,
+  "fingerprint": "SHA256:abc123def456"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                   |
+| ------ | --------------------------- |
+| 400    | Invalid JSON body           |
+| 400    | Missing or invalid fingerprint (must be `SHA256:`-prefixed) |
+| 401    | Unauthorized                |
+| 404    | Server not found            |
+
+---
+
+### Host Key Recovery Flow
+
+When a deploy or switch endpoint connects to a server via SSH and encounters a host key error, it returns a **409** with a structured recovery payload instead of a generic 502. The client surfaces a trust panel so the user can accept the observed fingerprint and retry.
+
+**409 response shape:**
+
+```json
+{
+  "code": "host_key_missing",
+  "error": "Host key fingerprint not stored for this server. Trust the host key and retry.",
+  "serverId": "uuid",
+  "serverHost": "192.168.1.100",
+  "hostKey": {
+    "observedFingerprint": "SHA256:abc123def456",
+    "observedAlgorithm": "ssh-ed25519"
+  }
+}
+```
+
+**Error codes:**
+
+| Code               | Meaning                                                |
+| ------------------ | ------------------------------------------------------ |
+| `host_key_missing` | No host key fingerprint is stored for this server.     |
+| `host_key_mismatch`| The observed fingerprint doesn't match the stored pin. |
+
+When `code` is `host_key_mismatch`, the `hostKey` object also includes `expectedFingerprint` (the previously stored pin).
+
+**Recovery flow:**
+
+1. Client receives 409 → displays `HostKeyTrustPanel` showing the observed fingerprint and algorithm
+2. User reviews the fingerprint and clicks "Trust host key and retry"
+3. Client calls `POST /api/servers/:id/host-key/accept` with the observed fingerprint
+4. On success, the original operation is retried automatically
+
+**Endpoints that return 409 for host key errors:**
+
+| Endpoint                              | Covered by                           |
+| ------------------------------------- | ------------------------------------ |
+| `POST /api/telegram/deploy`           | Direct host key catch                |
+| `POST /api/telegram/test`             | Direct host key catch                |
+| `POST /api/telegram/model-switch`     | Direct host key catch                |
+| `POST /api/providers/deploy`          | Direct host key catch                |
+| `POST /api/settings/persona/deploy`   | Via `deployToHermesAgent`            |
+| `POST /api/settings/mcp-servers/deploy` | Via `deployToHermesAgent`         |
+| `POST /api/settings/agent-skills/deploy` | Via `deployToHermesAgent`         |
+| `POST /api/servers/:id/web-ui/deploy` | Via `deployToHermesAgent`            |
+
+---
+
 ## Dashboard
 
 ### GET `/api/dashboard/status`
@@ -783,6 +875,7 @@ For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVID
 | 400    | Credential unavailable / expired                         |
 | 401    | Unauthorized                                             |
 | 404    | Deployed server not found                                |
+| 409    | Host key missing or mismatch (see Host Key Recovery)     |
 | 502    | SSH connect or deploy command failed                     |
 
 ---
@@ -947,6 +1040,121 @@ Deactivates the currently active Telegram configuration.
 
 ---
 
+### POST `/api/telegram/deploy`
+
+Deploys the saved Telegram bot configuration to a Hermes VPS. Requires a server with a successful Hermes install. Over SSH, writes a Docker Compose file with the bot token and API server key, then starts the Hermes container.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:** None (uses the latest saved Telegram config)
+
+**Response (200):**
+
+```json
+{
+  "status": "deployed",
+  "serverHost": "192.168.1.100"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                |
+| ------ | -------------------------------------------------------- |
+| 400    | No active Telegram config (connect a bot first)          |
+| 400    | No server with a successful Hermes install found         |
+| 400    | Credential unavailable / expired                         |
+| 401    | Unauthorized                                             |
+| 409    | Host key missing or mismatch (see Host Key Recovery)     |
+| 500    | Failed to decrypt bot token                              |
+| 502    | SSH connect or deploy command failed                     |
+
+---
+
+### POST `/api/telegram/test`
+
+Sends a test message to the deployed Hermes agent over SSH. The agent processes the message through the active AI provider and returns a text response.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+
+```json
+{
+  "message": "What can you do?"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "response": "I can help you with a variety of tasks..."
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                       |
+| ------ | --------------------------------------------------------------- |
+| 400    | Invalid JSON body / message required                           |
+| 400    | No active Telegram config / bot not deployed to a server       |
+| 400    | Provider config could not be loaded                             |
+| 401    | Unauthorized                                                    |
+| 404    | Deployed server not found                                       |
+| 409    | Host key missing or mismatch (see Host Key Recovery)            |
+| 502    | SSH connection failed / Hermes API unreachable / test failed    |
+
+---
+
+### POST `/api/telegram/model-switch`
+
+Switches the active AI model on the deployed Hermes agent without redeploying the full Docker Compose stack. Updates the provider inference config and model inside the Hermes container, then recreates the container.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body:**
+
+```json
+{
+  "optionId": "api-provider:abc123",
+  "model": "gpt-4o"
+}
+```
+
+**Fields:**
+
+| Field      | Type   | Description                                                        |
+| ---------- | ------ | ------------------------------------------------------------------ |
+| `optionId` | string | Required. Identifies the provider or subscription record to switch.|
+| `model`    | string | Required. Model ID to switch to. Must be valid for the option.     |
+
+`optionId` format: `<kind>:<recordId>` where `kind` is one of `api-provider`, `credential-subscription`, or `oauth-subscription`.
+
+**Response (200):**
+
+```json
+{
+  "status": "switched",
+  "optionId": "api-provider:abc123",
+  "model": "gpt-4o",
+  "provider": "openai"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                       |
+| ------ | --------------------------------------------------------------- |
+| 400    | Invalid JSON body / `optionId` or `model` missing               |
+| 400    | Invalid model string / model not valid for the given option     |
+| 400    | Option not found                                                 |
+| 401    | Unauthorized                                                    |
+| 409    | Host key missing or mismatch (see Host Key Recovery)            |
+| 502    | SSH connection failed or model switch command failed            |
+
+---
+
 ### GET `/api/telegram/pairings`
 
 Lists pending and approved Telegram pairing records from the deployed Hermes container. Requires Telegram to be deployed to a server.
@@ -1108,6 +1316,7 @@ Writes the saved persona to `SOUL.md` on a selected Hermes VPS over SSH, then re
 | 400    | Credential unavailable / expired                                  |
 | 401    | Unauthorized                                                      |
 | 404    | Server not found                                                  |
+| 409    | Host key missing or mismatch (see Host Key Recovery)            |
 | 502    | SSH connect, SOUL.md write, or gateway restart failed             |
 
 ---
@@ -1282,6 +1491,7 @@ Replaces the remote `mcp_servers` section in `/root/.hermes/config.yaml` with th
 | 400    | Credential unavailable / expired                                                          |
 | 401    | Unauthorized                                                                              |
 | 404    | Server not found                                                                          |
+| 409    | Host key missing or mismatch (see Host Key Recovery)                                      |
 | 502    | SSH connect, invalid existing `config.yaml`, config read/write, or gateway restart failed |
 
 ---
@@ -1460,6 +1670,7 @@ Deploys the user's enabled agent skills list to a selected Hermes VPS, uninstall
 | 400    | Selected server does not have a successful Hermes install                  |
 | 401    | Unauthorized                                                               |
 | 404    | Server not found                                                           |
+| 409    | Host key missing or mismatch (see Host Key Recovery)                         |
 | 502    | SSH connection error, command execution failure, or gateway restart failed |
 
 ---
@@ -1546,6 +1757,7 @@ On first deploy, generates and encrypts a Web UI password; redeploys reuse the s
 | 401    | Unauthorized                                              |
 | 404    | Server not found                                          |
 | 500    | Password resolution failed before deploy                  |
+| 409    | Host key missing or mismatch (see Host Key Recovery)     |
 | 502    | SSH connect, compose deploy, or reachability check failed |
 
 ---

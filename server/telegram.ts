@@ -2,22 +2,33 @@ import crypto from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
-import { getAuthSession } from "./auth";
+import { isValidModelString } from "#/lib/ai-providers";
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
 import { getClientIp } from "./lib/get-client-ip";
+import {
+	hostKeyErrorResponse,
+	isRecoverableHostKeyError,
+} from "./lib/host-key-error-response";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { isResponse } from "./lib/is-response";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
+import { requireAuthSession } from "./request-guards";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
-import { shellQuote, withSshConnection } from "./ssh";
+import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
 import {
 	getTokenLast4,
 	TelegramConnectionError,
 	verifyTelegramToken,
 } from "./telegram/config";
+import {
+	getModelAccessOptions,
+	resolveSwitchOption,
+} from "./telegram/model-access";
+import { executeModelSwitch } from "./telegram/model-switch";
 import {
 	approveTelegramPairing,
 	listTelegramPairings,
@@ -60,10 +71,9 @@ function parseChatCompletion(raw: unknown): string {
 }
 
 export async function connectTelegram(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	let payload: { botToken?: string };
 
@@ -128,10 +138,9 @@ export async function connectTelegram(context: Context) {
 }
 
 export async function disconnectTelegram(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	const db = getDb();
 	const ipAddress = getClientIp(context);
@@ -168,10 +177,9 @@ export async function disconnectTelegram(context: Context) {
 }
 
 export async function deployTelegramToServer(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	const db = getDb();
 	const record = await getLatestTelegramRecord(session.user.id);
@@ -266,6 +274,14 @@ export async function deployTelegramToServer(context: Context) {
 			serverHost: serverRecord.host,
 		});
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: serverRecord.id,
+				serverHost: serverRecord.host,
+				expectedFingerprint: serverRecord.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
 		await insertAuditLog(db, {
@@ -284,10 +300,9 @@ export async function deployTelegramToServer(context: Context) {
 }
 
 export async function testTelegramBot(context: Context) {
-	const session = await getAuthSession(context.req.raw.headers);
-	if (!session) {
-		return context.json({ error: "Unauthorized" }, 401);
-	}
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
 
 	let payload: { message?: string };
 	try {
@@ -309,7 +324,7 @@ export async function testTelegramBot(context: Context) {
 		);
 	}
 
-	if (!record.apiServerKey || !record.deployedServerId) {
+	if (!record.apiServerKey) {
 		return context.json(
 			{
 				error: "Bot token is not deployed to any server. Deploy it first.",
@@ -331,19 +346,14 @@ export async function testTelegramBot(context: Context) {
 		return context.json({ error: errMessage }, 400);
 	}
 
-	const serverRecord = await getServerById(record.deployedServerId);
-	if (!serverRecord) {
-		return context.json({ error: "Deployed server not found." }, 404);
+	const sshContext = await resolveTelegramSshContext(session);
+	if (!sshContext.ok) {
+		return context.json(
+			{ error: sshContext.error },
+			sshContext.status as Parameters<typeof context.json>[1],
+		);
 	}
-
-	const sshResult = resolveServerSshConfigOrError(
-		serverRecord,
-		session.session.id,
-	);
-	if (!sshResult.ok) {
-		return context.json({ error: sshResult.error }, 400);
-	}
-	const { authMethod, credential } = sshResult;
+	const { serverRecord } = sshContext;
 
 	const curlCommand = [
 		`curl -s -X POST http://localhost:8642/v1/chat/completions`,
@@ -363,8 +373,8 @@ export async function testTelegramBot(context: Context) {
 				host: serverRecord.host,
 				port: serverRecord.port,
 				username: serverRecord.username,
-				authMethod,
-				credential,
+				authMethod: sshContext.authMethod,
+				credential: sshContext.credential,
 				expectedFingerprint: serverRecord.hostKeyFingerprint ?? undefined,
 			},
 			async (ssh) => {
@@ -412,8 +422,198 @@ export async function testTelegramBot(context: Context) {
 
 		return context.json(result);
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: serverRecord.id,
+				serverHost: serverRecord.host,
+				expectedFingerprint: serverRecord.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Test failed";
 		return context.json({ error: message }, 502);
+	}
+}
+
+type SshContextResult =
+	| {
+			ok: true;
+			serverRecord: NonNullable<Awaited<ReturnType<typeof getServerById>>>;
+			authMethod: SshAuthMethod;
+			credential: string;
+	  }
+	| { ok: false; error: string; status: number };
+
+async function resolveTelegramSshContext(session: {
+	user: { id: string };
+	session: { id: string };
+}): Promise<SshContextResult> {
+	const record = await getLatestTelegramRecord(session.user.id);
+	if (!record?.isActive) {
+		return {
+			ok: false,
+			error: "No active Telegram config. Connect a bot first.",
+			status: 400,
+		};
+	}
+
+	if (!record.deployedServerId) {
+		return {
+			ok: false,
+			error: "Bot is not deployed to any server. Deploy it first.",
+			status: 400,
+		};
+	}
+
+	const serverRecord = await getServerById(record.deployedServerId);
+	if (!serverRecord) {
+		return { ok: false, error: "Deployed server not found.", status: 404 };
+	}
+
+	const sshResult = resolveServerSshConfigOrError(
+		serverRecord,
+		session.session.id,
+	);
+	if (!sshResult.ok) {
+		return { ok: false, error: sshResult.error, status: 400 };
+	}
+
+	return {
+		ok: true,
+		serverRecord,
+		authMethod: sshResult.authMethod,
+		credential: sshResult.credential,
+	};
+}
+
+export async function getModelAccessOptionsHandler(context: Context) {
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
+
+	try {
+		const result = await getModelAccessOptions(session.user.id);
+		return context.json(result);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to load model access options";
+		return context.json({ error: message }, 500);
+	}
+}
+
+export async function switchModelProvider(context: Context) {
+	const sessionOrResponse = await requireAuthSession(context);
+	if (isResponse(sessionOrResponse)) return sessionOrResponse;
+	const session = sessionOrResponse;
+
+	let payload: { optionId?: string; model?: string };
+	try {
+		payload = await context.req.json<{ optionId?: string; model?: string }>();
+	} catch {
+		return context.json({ error: "Invalid JSON body" }, 400);
+	}
+
+	const { optionId, model: rawModel } = payload || {};
+	if (!optionId) {
+		return context.json({ error: "'optionId' is required." }, 400);
+	}
+	if (!rawModel) {
+		return context.json({ error: "'model' is required." }, 400);
+	}
+
+	const model = rawModel.trim();
+	if (!model) {
+		return context.json({ error: "Model cannot be empty." }, 400);
+	}
+	if (!isValidModelString(model)) {
+		return context.json(
+			{
+				error: `Invalid model: '${model}'. Use alphanumeric, dots, underscores, colons, slashes, and hyphens (1-120 chars).`,
+			},
+			400,
+		);
+	}
+
+	const resolved = await resolveSwitchOption(session.user.id, optionId);
+	if (!resolved.ok) {
+		return context.json({ error: resolved.error }, 400);
+	}
+
+	if (!resolved.allowsCustomModel) {
+		if (!resolved.fixedModels.includes(model)) {
+			return context.json(
+				{
+					error: `Model '${model}' is not valid for '${resolved.provider}'. Valid models: ${resolved.fixedModels.join(", ")}.`,
+				},
+				400,
+			);
+		}
+	}
+
+	const sshContext = await resolveTelegramSshContext(session);
+	if (!sshContext.ok) {
+		return context.json(
+			{ error: sshContext.error },
+			sshContext.status as Parameters<typeof context.json>[1],
+		);
+	}
+
+	const ipAddress = getClientIp(context);
+
+	try {
+		await executeModelSwitch({
+			userId: session.user.id,
+			optionId,
+			model,
+			resolved,
+			serverRecord: sshContext.serverRecord,
+			sshConfig: {
+				host: sshContext.serverRecord.host,
+				port: sshContext.serverRecord.port,
+				username: sshContext.serverRecord.username,
+				authMethod: sshContext.authMethod,
+				credential: sshContext.credential,
+				expectedFingerprint:
+					sshContext.serverRecord.hostKeyFingerprint ?? undefined,
+			},
+			ipAddress,
+		});
+
+		clearDashboardCache();
+
+		return context.json({
+			status: "switched",
+			optionId,
+			model,
+			provider: resolved.provider,
+		});
+	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: sshContext.serverRecord.id,
+				serverHost: sshContext.serverRecord.host,
+				expectedFingerprint: sshContext.serverRecord.hostKeyFingerprint,
+			});
+		}
+
+		const message =
+			error instanceof Error ? error.message : "Model switch failed";
+
+		try {
+			await insertAuditLog(getDb(), {
+				userId: session.user.id,
+				action: "telegram.model.switch.failed",
+				serverId: sshContext.serverRecord.id,
+				details: { optionId, model, error: message },
+				ipAddress,
+			});
+		} catch {
+			// Audit logging is historical only; still return failure to client.
+		}
+
+		return context.json({ error: `Switch failed: ${message}` }, 502);
 	}
 }
 

@@ -30,9 +30,13 @@ vi.mock("./db", () => ({
 	}),
 }));
 
-vi.mock("./ssh", () => ({
-	withSshConnection,
-}));
+vi.mock("./ssh", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./ssh")>();
+	return {
+		...actual,
+		withSshConnection,
+	};
+});
 
 vi.mock("./hermes/persona", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./hermes/persona")>();

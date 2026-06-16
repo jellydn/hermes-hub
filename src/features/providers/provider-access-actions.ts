@@ -1,3 +1,11 @@
+import {
+	type HostKeyErrorPayload,
+	parseHostKeyErrorPayload,
+} from "#/features/servers/host-key-recovery";
+import type { HostKeyErrorResponsePayload } from "#shared/contracts/host-key-error";
+
+export type { HostKeyErrorPayload };
+
 import type { ApiProviderId } from "#/lib/ai-providers";
 import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 import type {
@@ -38,7 +46,12 @@ type DeployResponse = {
 	error?: string;
 	model?: string;
 	status?: string;
-};
+} & Partial<
+	Pick<
+		HostKeyErrorResponsePayload,
+		"code" | "serverId" | "serverHost" | "hostKey"
+	>
+>;
 
 async function readJsonBody<T>(response: Response): Promise<T | null> {
 	return (await response.json().catch(() => null)) as T | null;
@@ -131,7 +144,8 @@ export async function testSubscriptionAccess(
 }
 
 export async function deployModelAccess(): Promise<
-	{ ok: true; message: string } | { ok: false; error: string }
+	| { ok: true; message: string }
+	| { ok: false; error: string; hostKeyError?: HostKeyErrorPayload }
 > {
 	const response = await fetch("/api/providers/deploy", {
 		method: "POST",
@@ -139,6 +153,15 @@ export async function deployModelAccess(): Promise<
 	const body = await readJsonBody<DeployResponse>(response);
 
 	if (!response.ok) {
+		const hostKeyErrorPayload = parseHostKeyErrorPayload(body);
+		if (hostKeyErrorPayload) {
+			return {
+				ok: false,
+				error: body?.error ?? "Host key error",
+				hostKeyError: hostKeyErrorPayload,
+			};
+		}
+
 		return {
 			ok: false,
 			error: body?.error ?? "Deploy failed",
@@ -151,4 +174,29 @@ export async function deployModelAccess(): Promise<
 			? `Model "${body.model}" deployed successfully.`
 			: "Deployed successfully.",
 	};
+}
+
+export async function acceptHostKey(
+	serverId: string,
+	fingerprint: string,
+	algorithm: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const res = await fetch(
+		`/api/servers/${encodeURIComponent(serverId)}/host-key/accept`,
+		{
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ fingerprint, algorithm }),
+		},
+	);
+
+	if (!res.ok) {
+		const data = await readJsonBody<{ error?: string }>(res);
+		return {
+			ok: false,
+			error: data?.error ?? "Failed to accept host key",
+		};
+	}
+
+	return { ok: true };
 }

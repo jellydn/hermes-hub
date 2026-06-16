@@ -1,6 +1,8 @@
 import { CloudUpload, LoaderCircle, Server } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { FormFeedback } from "#/components/ui/form-feedback";
+import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
+import type { HostKeyErrorPayload } from "#/features/servers/host-key-recovery";
 import { formatAiProviderLabel } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
 import {
@@ -24,7 +26,11 @@ type ProviderSettingsAsideProps = {
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
+	hostKeyError: HostKeyErrorPayload | null;
+	isAcceptingKey: boolean;
 	onDeploy: () => void;
+	onTrustAndRetry: () => void;
+	onDismissHostKey: () => void;
 };
 
 export function ProviderSettingsAside({
@@ -37,7 +43,11 @@ export function ProviderSettingsAside({
 	isDeploying,
 	deployError,
 	deployResult,
+	hostKeyError,
+	isAcceptingKey,
 	onDeploy,
+	onTrustAndRetry,
+	onDismissHostKey,
 }: ProviderSettingsAsideProps) {
 	const activeModel =
 		activeBackend === "subscription"
@@ -131,6 +141,18 @@ export function ProviderSettingsAside({
 								</span>
 							</Button>
 						</div>
+
+						{hostKeyError ? (
+							<div className="mt-3">
+								<HostKeyTrustPanel
+									hostKeyError={hostKeyError}
+									isAcceptingKey={isAcceptingKey}
+									onTrustAndRetry={onTrustAndRetry}
+									onDismiss={onDismissHostKey}
+								/>
+							</div>
+						) : null}
+
 						{deployError ? (
 							<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
 								{deployError}

@@ -19,6 +19,7 @@ import {
 	subscriptionConnectionFingerprint,
 } from "./connection-fingerprint";
 import {
+	acceptHostKey,
 	deployModelAccess,
 	saveProviderAccess,
 	saveSubscriptionAccess,
@@ -288,6 +289,7 @@ export function useProviderSettingsController(
 				dispatch({
 					type: "deploy_failed",
 					error: result.error,
+					hostKeyError: result.hostKeyError,
 				});
 				return;
 			}
@@ -298,6 +300,40 @@ export function useProviderSettingsController(
 			});
 		} finally {
 			dispatch({ type: "deploy_finished" });
+		}
+	}
+
+	async function handleTrustAndRetryDeploy() {
+		const hostKeyError = uiState.hostKeyError;
+		if (!hostKeyError) {
+			return;
+		}
+
+		dispatch({ type: "deploy_trust_starting" });
+
+		try {
+			const result = await acceptHostKey(
+				hostKeyError.serverId,
+				hostKeyError.observedFingerprint,
+				hostKeyError.observedAlgorithm,
+			);
+
+			if (!result.ok) {
+				dispatch({
+					type: "deploy_trust_failed",
+					error: result.error,
+				});
+				return;
+			}
+
+			// Dismiss the host-key panel and retry deploy
+			dispatch({ type: "deploy_trust_cancelled" });
+			void handleDeployToHermes();
+		} catch {
+			dispatch({
+				type: "deploy_trust_failed",
+				error: "Network error during host key acceptance",
+			});
 		}
 	}
 
@@ -321,6 +357,7 @@ export function useProviderSettingsController(
 		handleTestSubscription,
 		handleTestConnection,
 		handleDeployToHermes,
+		handleTrustAndRetryDeploy,
 		dispatchUiAction,
 	};
 }

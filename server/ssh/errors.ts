@@ -9,6 +9,7 @@ export type SshConnectErrorCode =
 	| "invalid_credentials"
 	| "host_unreachable"
 	| "host_key_mismatch"
+	| "host_key_missing"
 	| "unsupported_os";
 
 import type { HostKeyFingerprint } from "./host-key-fingerprint";

@@ -3,6 +3,10 @@ import { decryptApiServerKey, decryptSecret } from "./crypto";
 import { getDb } from "./db";
 import { resolveTelegramHermesDeployContext } from "./hermes/telegram-deploy-context";
 import { getClientIp } from "./lib/get-client-ip";
+import {
+	hostKeyErrorResponse,
+	isRecoverableHostKeyError,
+} from "./lib/host-key-error-response";
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { resolveActiveModelBackend } from "./providers/active-backend";
@@ -72,6 +76,14 @@ export async function deployProviderToHermes(context: Context) {
 					);
 				}
 			} catch (error) {
+				if (isRecoverableHostKeyError(error)) {
+					return hostKeyErrorResponse(context, error, {
+						serverId: sshCtx.serverId,
+						serverHost: sshCtx.server.host,
+						expectedFingerprint: sshCtx.server.hostKeyFingerprint,
+					});
+				}
+
 				const message =
 					error instanceof Error
 						? error.message
@@ -113,6 +125,14 @@ export async function deployProviderToHermes(context: Context) {
 			providerHermesId,
 		});
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: sshCtx.serverId,
+				serverHost: sshCtx.server.host,
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
 		try {

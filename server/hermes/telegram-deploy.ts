@@ -4,6 +4,10 @@ import type { NodeSSH } from "node-ssh";
 import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
 import { getClientIp } from "../lib/get-client-ip";
+import {
+	hostKeyErrorResponse,
+	isRecoverableHostKeyError,
+} from "../lib/host-key-error-response";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import type { AuthSession, OwnedServerSshContext } from "../request-guards";
 import { withSshConnection } from "../ssh";
@@ -59,6 +63,14 @@ export async function deployToTelegramLinkedHermes(
 			},
 		);
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: sshCtx.serverId,
+				serverHost: sshCtx.server.host,
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
 		try {

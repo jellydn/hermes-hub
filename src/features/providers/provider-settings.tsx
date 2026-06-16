@@ -98,7 +98,13 @@ export function ProviderSettings({
 					isDeploying={controller.uiState.isDeploying}
 					deployError={controller.uiState.deployError}
 					deployResult={controller.uiState.deployResult}
+					hostKeyError={controller.uiState.hostKeyError}
+					isAcceptingKey={controller.uiState.isAcceptingKey}
 					onDeploy={() => void controller.handleDeployToHermes()}
+					onTrustAndRetry={() => void controller.handleTrustAndRetryDeploy()}
+					onDismissHostKey={() =>
+						controller.dispatchUiAction({ type: "deploy_trust_cancelled" })
+					}
 				/>
 			</div>
 		</section>

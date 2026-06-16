@@ -127,7 +127,9 @@ vi.mock("./telegram", () => ({
 	connectTelegram,
 	disconnectTelegram,
 	deployTelegramToServer,
+	getModelAccessOptionsHandler: vi.fn(),
 	listTelegramPairings,
+	switchModelProvider: vi.fn(),
 	testTelegramBot,
 }));
 

@@ -50,7 +50,9 @@ import {
 	connectTelegram,
 	deployTelegramToServer,
 	disconnectTelegram,
+	getModelAccessOptionsHandler,
 	listTelegramPairings,
+	switchModelProvider,
 	testTelegramBot,
 } from "./telegram";
 import {
@@ -300,6 +302,8 @@ apiApp.post("/telegram/connect", httpsMiddleware, connectTelegram);
 apiApp.post("/telegram/disconnect", httpsMiddleware, disconnectTelegram);
 apiApp.post("/telegram/deploy", httpsMiddleware, deployTelegramToServer);
 apiApp.post("/telegram/test", httpsMiddleware, testTelegramBot);
+apiApp.post("/telegram/model-switch", httpsMiddleware, switchModelProvider);
+apiApp.get("/telegram/model-access-options", getModelAccessOptionsHandler);
 apiApp.get("/telegram/pairings", listTelegramPairings);
 apiApp.post(
 	"/telegram/pairings/approve",

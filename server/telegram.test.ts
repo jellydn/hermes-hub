@@ -20,6 +20,7 @@ const getServerByIdMock = vi.fn();
 const resolveServerSshConfig = vi.fn();
 const resolveServerSshConfigOrError = vi.fn();
 const deployManagedCompose = vi.fn();
+const loadModelAccessRecords = vi.fn();
 
 vi.mock("./auth", () => ({
 	getAuthSession,
@@ -64,12 +65,36 @@ vi.mock("./db/schema", () => ({
 		createdAt: Symbol("installs.createdAt"),
 	},
 	auditLogs: {},
+	aiProviders: {
+		id: Symbol("aiProviders.id"),
+		userId: Symbol("aiProviders.userId"),
+		provider: Symbol("aiProviders.provider"),
+		encryptedApiKey: Symbol("aiProviders.encryptedApiKey"),
+		baseUrl: Symbol("aiProviders.baseUrl"),
+		model: Symbol("aiProviders.model"),
+		isActive: Symbol("aiProviders.isActive"),
+		createdAt: Symbol("aiProviders.createdAt"),
+	},
+	aiUserSubscriptions: {
+		id: Symbol("aiUserSubscriptions.id"),
+		userId: Symbol("aiUserSubscriptions.userId"),
+		subscriptionProvider: Symbol("aiUserSubscriptions.subscriptionProvider"),
+		model: Symbol("aiUserSubscriptions.model"),
+		authMode: Symbol("aiUserSubscriptions.authMode"),
+		isActive: Symbol("aiUserSubscriptions.isActive"),
+		createdAt: Symbol("aiUserSubscriptions.createdAt"),
+		updatedAt: Symbol("aiUserSubscriptions.updatedAt"),
+	},
 }));
 
-vi.mock("./ssh", () => ({
-	withSshConnection,
-	shellQuote: (value: string) => `'${value.replace(/'/g, "'\\''")}'`,
-}));
+vi.mock("./ssh", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./ssh")>();
+	return {
+		...actual,
+		withSshConnection,
+		shellQuote: (value: string) => `'${value.replace(/'/g, "'\\''")}'`,
+	};
+});
 
 vi.mock("./providers", () => ({
 	getProviderDeployConfig,
@@ -83,6 +108,92 @@ vi.mock("./server-records", () => ({
 
 vi.mock("./managed-compose-deploy", () => ({
 	deployManagedCompose,
+}));
+
+vi.mock("./providers/active-backend", () => ({
+	loadModelAccessRecords,
+}));
+
+const resolveSwitchOptionMock = vi.fn();
+const executeModelSwitchMock = vi.fn();
+
+vi.mock("./telegram/model-access", () => ({
+	resolveSwitchOption: resolveSwitchOptionMock,
+	getModelAccessOptions: vi.fn(),
+	findActiveOptionIds: vi.fn(),
+}));
+
+vi.mock("./telegram/model-switch", () => ({
+	executeModelSwitch: executeModelSwitchMock,
+}));
+
+const setProviderModel = vi.fn();
+const setProviderInferenceProvider = vi.fn();
+const writeComposeFile = vi.fn();
+const composeUp = vi.fn();
+const buildManagedComposeContent = vi.fn();
+
+vi.mock("./hermes/runtime", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./hermes/runtime")>();
+	return {
+		...actual,
+		setProviderModel,
+		setProviderInferenceProvider,
+		writeComposeFile,
+		composeUp,
+	};
+});
+
+vi.mock("./server-compose", () => ({
+	buildManagedComposeContent,
+}));
+
+vi.mock("#/lib/ai-providers", () => ({
+	getDefaultAiModel: (provider: string) => {
+		const defaults: Record<string, string> = {
+			openai: "gpt-4o",
+			anthropic: "claude-sonnet-4-20250514",
+			openrouter: "gpt-4o",
+			ollama: "llama3",
+			custom: "gpt-4o",
+		};
+		return defaults[provider] ?? "";
+	},
+	isApiProviderId: (value: string) =>
+		["openai", "anthropic", "openrouter", "ollama", "custom"].includes(value),
+	isValidAiModel: (provider: string, model: string) => {
+		if (provider === "openai") {
+			return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"].includes(model);
+		}
+		return true;
+	},
+	isValidModelString: (model: string) =>
+		/^[A-Za-z0-9._:/-]{1,120}$/.test(model),
+	apiProviderOptions: [
+		{
+			id: "openai",
+			models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			requiresCustomModel: false,
+		},
+		{
+			id: "anthropic",
+			models: ["claude-sonnet-4-20250514"],
+			requiresCustomModel: false,
+		},
+		{ id: "openrouter", models: [], requiresCustomModel: true },
+		{ id: "ollama", models: [], requiresCustomModel: true },
+		{ id: "custom", models: [], requiresCustomModel: true },
+	],
+}));
+
+vi.mock("./providers/config", () => ({
+	PROVIDER_ENV_CONFIGS: {
+		openai: { hermesProvider: "openai-api" },
+		anthropic: { hermesProvider: "anthropic" },
+		openrouter: { hermesProvider: "openrouter" },
+		ollama: { hermesProvider: "custom" },
+		custom: { hermesProvider: "custom" },
+	},
 }));
 
 describe("telegram handlers", () => {
@@ -113,6 +224,10 @@ describe("telegram handlers", () => {
 		updateSet.mockReturnValue({ where: updateWhere });
 		updateWhere.mockResolvedValue(undefined);
 		insertValues.mockResolvedValue(undefined);
+		loadModelAccessRecords.mockResolvedValue({ activeBackend: null });
+		writeComposeFile.mockResolvedValue(undefined);
+		composeUp.mockResolvedValue(undefined);
+		buildManagedComposeContent.mockResolvedValue("services:\n  hermes: {}");
 		selectInnerJoin.mockReturnValue({
 			where: selectWhere,
 			orderBy: selectOrderBy,
@@ -242,7 +357,7 @@ describe("telegram handlers", () => {
 			model: "test's-model",
 		});
 
-		selectLimit.mockResolvedValueOnce([
+		selectLimit.mockResolvedValue([
 			{
 				botToken: "enc:123456:secret-token",
 				botUsername: "hermes_helper_bot",
@@ -382,6 +497,76 @@ describe("telegram handlers", () => {
 				}),
 			}),
 		);
+	});
+
+	it("returns 409 with hostKey details when deploy throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: null,
+				deployedServerHost: null,
+				apiServerKey: null,
+			},
+		]);
+
+		// Server with NULL hostKeyFingerprint — causes host_key_missing
+		selectLimit.mockResolvedValueOnce([
+			{
+				id: "server_1",
+				host: "1.2.3.4",
+				port: 22,
+				username: "root",
+				authMethod: "password",
+				encryptedCredential: null,
+				storeCredential: false,
+				hostKeyFingerprint: null,
+			},
+		]);
+
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		deployManagedCompose.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:abc123", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { deployTelegramToServer } = await import("./telegram");
+		const response = await deployTelegramToServer(
+			createContext() as unknown as Context,
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "1.2.3.4",
+			hostKey: {
+				observedFingerprint: "SHA256:abc123",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+
+		// No audit log for recoverable errors
+		expect(insertValues).not.toHaveBeenCalled();
+		// No deploy state persisted
+		expect(updateSet).not.toHaveBeenCalled();
 	});
 
 	it("deployTelegramToServer persists deploy state and audit log in a single transaction", async () => {
@@ -562,6 +747,623 @@ describe("telegram handlers", () => {
 		);
 		// The command should end with a closing single quote
 		expect(capturedCommand?.trim()).toMatch(/'$/);
+	});
+
+	it("returns 409 with hostKey details when testTelegramBot SSH throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		getProviderDeployConfig.mockResolvedValue({
+			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
+			model: "gpt-4o",
+		});
+
+		selectLimit.mockResolvedValue([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+
+		// Server with NULL hostKeyFingerprint
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+			hostKeyFingerprint: null,
+		});
+
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		withSshConnection.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:xyz789", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { testTelegramBot } = await import("./telegram");
+		const response = await testTelegramBot(createContext({ message: "Hello" }));
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:xyz789",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+	});
+});
+
+describe("switchModelProvider", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		setProviderModel.mockResolvedValue(undefined);
+		setProviderInferenceProvider.mockResolvedValue(undefined);
+		resolveSwitchOptionMock.mockReset();
+		executeModelSwitchMock.mockReset();
+		executeModelSwitchMock.mockResolvedValue(undefined);
+
+		// Re-establish default mock chain that the outer beforeEach sets up,
+		// because vi.clearAllMocks() clears all mock implementations.
+		encryptSecret.mockImplementation((value: string) => `enc:${value}`);
+		decryptSecret.mockImplementation((value: string) =>
+			value.startsWith("enc:") ? value.slice(4) : value,
+		);
+		decryptApiServerKey.mockReturnValue("decrypted-server-key");
+		resolveServerSshConfig.mockReturnValue({
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		getProviderDeployConfig.mockResolvedValue({
+			envVars: { HERMES_INFERENCE_PROVIDER: "openai" },
+			model: "gpt-4o",
+		});
+		deployManagedCompose.mockResolvedValue(undefined);
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				update: () => ({ set: updateSet }),
+				insert: () => ({ values: insertValues }),
+			};
+			return fn(tx);
+		});
+		updateSet.mockReturnValue({ where: updateWhere });
+		updateWhere.mockResolvedValue(undefined);
+		insertValues.mockResolvedValue(undefined);
+		loadModelAccessRecords.mockResolvedValue({ activeBackend: null });
+		writeComposeFile.mockResolvedValue(undefined);
+		composeUp.mockResolvedValue(undefined);
+		buildManagedComposeContent.mockResolvedValue("services:\n  hermes: {}");
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({});
+			},
+		);
+		selectFrom.mockReturnValue({
+			innerJoin: selectInnerJoin,
+			where: selectWhere,
+			orderBy: selectOrderBy,
+			limit: selectLimit,
+		});
+		selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: selectLimit });
+		selectOrderBy.mockReturnValue({ limit: selectLimit });
+		selectLimit.mockResolvedValue([]);
+	});
+
+	it("returns 401 when not authenticated", async () => {
+		getAuthSession.mockResolvedValueOnce(null);
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(401);
+		expect(payload).toEqual({ error: "Unauthorized" });
+	});
+
+	it("returns 400 when optionId is missing", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(createContext({}));
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("'optionId' is required");
+	});
+
+	it("returns 400 when model is missing", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("'model' is required");
+	});
+
+	it("returns 400 for invalid model string", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({
+				optionId: "api-provider:abc123",
+				model: "invalid model with spaces!",
+			}),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("Invalid model");
+	});
+
+	it("returns 400 when option ID is invalid", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: false,
+			error: "Option not found.",
+		});
+		const { switchModelProvider } = await import("./telegram");
+
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:nonexistent", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("Option not found");
+	});
+
+	it("returns 400 when model is not valid for the given option", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({
+				optionId: "api-provider:abc123",
+				model: "claude-sonnet",
+			}),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(payload.error).toContain("not valid for");
+	});
+
+	it("switches model successfully via SSH", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
+		});
+		// resolveTelegramSshContext -> getLatestTelegramRecord
+		selectLimit.mockResolvedValue([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({});
+			},
+		);
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				update: () => ({ set: () => ({ where: updateWhere }) }),
+				insert: () => ({ values: insertValues }),
+			};
+			return fn(tx);
+		});
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload).toEqual({
+			status: "switched",
+			optionId: "api-provider:abc123",
+			model: "gpt-4o",
+			provider: "openai",
+		});
+		expect(executeModelSwitchMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				optionId: "api-provider:abc123",
+				model: "gpt-4o",
+				resolved: expect.objectContaining({
+					hermesProviderId: "openai-api",
+				}),
+			}),
+		);
+	});
+
+	it("switches subscription option successfully via SSH", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "credential-subscription",
+			provider: "mimo",
+			hermesProviderId: "xiaomi",
+			model: "mimo-v2.5-pro",
+			allowsCustomModel: false,
+			fixedModels: ["mimo-v2.5-pro", "mimo-v2.5"],
+			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({});
+			},
+		);
+		transaction.mockImplementation(async (fn) => {
+			const tx = {
+				update: () => ({ set: () => ({ where: updateWhere }) }),
+				insert: () => ({ values: insertValues }),
+			};
+			return fn(tx);
+		});
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({
+				optionId: "credential-subscription:def456",
+				model: "mimo-v2.5",
+			}),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(payload).toEqual({
+			status: "switched",
+			optionId: "credential-subscription:def456",
+			model: "mimo-v2.5",
+			provider: "mimo",
+		});
+		expect(executeModelSwitchMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				optionId: "credential-subscription:def456",
+				model: "mimo-v2.5",
+				resolved: expect.objectContaining({
+					hermesProviderId: "xiaomi",
+				}),
+			}),
+		);
+	});
+
+	it("returns 502 when SSH connection fails", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new Error("SSH connection refused"),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain("SSH connection refused");
+	});
+
+	it("returns 409 with hostKey details when executeModelSwitch throws host_key_missing", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:abc123", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:abc123",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+	});
+
+	it("returns 409 with expectedFingerprint when executeModelSwitch throws host_key_mismatch", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+			// Simulate a stored host-key pin that the observed key doesn't match
+			hostKeyFingerprint: "SHA256:stored-pin",
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError("host key mismatch", "host_key_mismatch", {
+				fingerprint: "SHA256:observed-key",
+				algorithm: "ssh-ed25519",
+			}),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_mismatch",
+			serverId: "server_1",
+			serverHost: "192.168.1.1",
+			hostKey: {
+				observedFingerprint: "SHA256:observed-key",
+				observedAlgorithm: "ssh-ed25519",
+				expectedFingerprint: "SHA256:stored-pin",
+			},
+		});
+	});
+
+	it("still returns 502 for generic SSH errors", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: false,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+
+		const { SshConnectError } = await import("./ssh");
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new SshConnectError("Connection timed out", "host_unreachable"),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain("Connection timed out");
 	});
 });
 

@@ -26,19 +26,13 @@ import { formatModelAccessProviderLabel } from "#/lib/provider-labels";
 import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
 import { useMountEffect } from "#/lib/use-mount-effect";
 
-type DashboardStatusOverviewProps = {
-	initialStatus: DashboardStatusSnapshot | null;
-};
-
 type FetchState = "idle" | "loading" | "refreshing" | "error";
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const MAX_POLL_INTERVAL_MS = 120_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
-export function DashboardStatusOverview({
-	initialStatus,
-}: DashboardStatusOverviewProps) {
+function useDashboardPolling(initialStatus: DashboardStatusSnapshot | null) {
 	const [snapshot, setSnapshot] = useState(initialStatus);
 	const [fetchState, setFetchState] = useState<FetchState>(
 		initialStatus ? "idle" : "loading",
@@ -164,6 +158,32 @@ export function DashboardStatusOverview({
 			clearScheduledPoll();
 		};
 	});
+
+	return {
+		snapshot,
+		fetchState,
+		fetchError,
+		pollingPaused,
+		refreshStatus,
+		handleManualRetry,
+	};
+}
+
+type DashboardStatusOverviewProps = {
+	initialStatus: DashboardStatusSnapshot | null;
+};
+
+export function DashboardStatusOverview({
+	initialStatus,
+}: DashboardStatusOverviewProps) {
+	const {
+		snapshot,
+		fetchState,
+		fetchError,
+		pollingPaused,
+		refreshStatus,
+		handleManualRetry,
+	} = useDashboardPolling(initialStatus);
 
 	const showLoadingSkeleton = !snapshot && fetchState === "loading";
 	const showCardErrors = !snapshot && fetchState === "error";
