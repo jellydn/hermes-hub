@@ -171,11 +171,20 @@ export function rewriteProxyResponseHeaders(
 		}
 
 		if (lowerName === "set-cookie") {
-			rewritten.append(name, rewriteSetCookieHeader(value, proxyBasePath));
+			// Deferred: use getSetCookie() below for robust multi-cookie handling
 			continue;
 		}
 
 		rewritten.set(name, value);
+	}
+
+	if (typeof headers.getSetCookie === "function") {
+		for (const cookie of headers.getSetCookie()) {
+			rewritten.append(
+				"Set-Cookie",
+				rewriteCookieSegment(cookie.trim(), proxyBasePath),
+			);
+		}
 	}
 
 	return rewritten;

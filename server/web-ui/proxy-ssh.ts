@@ -50,8 +50,9 @@ export async function withSshTcpForward<T>(
 		);
 		try {
 			return await run(stream);
-		} finally {
+		} catch (err) {
 			stream.end();
+			throw err;
 		}
 	});
 }
