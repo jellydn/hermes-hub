@@ -11,7 +11,7 @@ COPY . .
 RUN bun run build
 RUN bun install --frozen-lockfile --production
 
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
