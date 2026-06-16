@@ -8,12 +8,7 @@ Several files exceed healthy size thresholds, indicating they may benefit from r
 | File | Lines | Concern |
 |------|-------|---------|
 | `server/hermes/runtime.test.ts` | 768 | Largest test file — may indicate untested production code or over-testing |
-| `server/web-ui/proxy.ts` | 464 | SSH proxy logic — complex, hard to test |
-| `server/telegram/model-access.ts` | 448 | Model access logic — feature creeping |
-| `server/settings/mcp.test.ts` | 399 | Large test file |
-| `server/hermes/runtime.ts` | 398 | Runtime management — core logic |
 | `server/db/schema.ts` | 397 | Schema definitions — low cognitive complexity, file is mainly table definitions |
-| `server/web-ui/handlers.test.ts` | 393 | Large test file |
 | `server/settings/agent-skills.ts` | 331 | Settings logic |
 | `server/settings/mcp.ts` | 300 | MCP server manager |
 
@@ -28,7 +23,7 @@ This means horizontal scaling would break critical functionality (install progre
 
 ### 3. Test Coverage Gaps
 - **`src/features/`**: Growing but many feature components untested
-- **`server/web-ui/proxy.ts`**: Complex proxy logic with limited test coverage
+- **`server/web-ui/proxy-http.ts` and `server/web-ui/proxy-ssh.ts`**: Complex proxy transport logic with limited test coverage (464-line monolith split into 6 focused modules in June 2026)
 - **SSR rendering**: Not tested (requires integration/E2E setup)
 - **No coverage threshold** enforced in CI
 
@@ -68,6 +63,19 @@ Testing route-level orchestration (``createFileRoute``, ``createServerFn`` handl
 
 ## Closed Items
 
+### ✅ Large File Splits (June 2026 — PR #47)
+Five of the nine large files from the original CONCERNS scan were split into focused, concern-driven modules:
+
+| Original | Lines | Split into | Modules |
+|----------|-------|------------|---------|
+| `server/web-ui/proxy.ts` | 464 | 6 files | auth, http, rewrite, ssh, types, barrel |
+| `server/telegram/model-access.ts` | 448 | 5 files | types, builders, queries, resolvers, barrel |
+| `server/hermes/runtime.ts` | 398 | 7 files | agent-sync, compose, container-status, gateway-lifecycle, pairing, webui-reachable, barrel |
+| `server/settings/mcp.test.ts` | 399 | 5 modules | test-helpers, create, update, delete, deploy |
+| `server/web-ui/handlers.test.ts` | 393 | 5 modules | test-helpers, deploy, status, password, proxy |
+
+All splits preserve the original public API via barrel re-exports at the original file path. Zero consumer import changes, zero circular dependencies.
+
 ### ✅ Empty Catch Blocks in `server/deploy.ts`
 The two truly silent catch blocks (audit log insert failures after deploy success/failure) were fixed in June 2026. Both now log via `console.error` with the original error message, preserving the existing behavior (audit failure does not block the main operation).
 
@@ -88,17 +96,15 @@ Each tests route configuration (component, `beforeLoad`), data loading orchestra
 ## Technical Debt Summary
 
 | Area | Severity | Impact |
-|------|----------|--------|
-| Large files (400+ lines) | Low-Medium | Maintainability, readability |
+|------|----------|--------|| Large files (400+ lines) | Low | Maintainability, readability — 5/9 split in June 2026 |
 | Single-instance boundaries | Medium | No horizontal scaling |
 | Test coverage gaps (features/proxy) | Medium | Regression risk |
 | TanStack mock fragility | Low | Route tests break on TanStack version bumps |
-| Proxy complexity (464 lines) | Medium | Bug-prone, hard to test |
 | No CI coverage threshold | Low | Coverage can regress unnoticed |
 
 ## Recommendations
 
-1. **Refactor large files** — split `server/web-ui/proxy.ts` and `server/hermes/runtime.ts` by concern
+1. **Split remaining large files** — `server/hermes/runtime.test.ts` (768 lines) and `server/settings/agent-skills.ts` (331 lines) are the next candidates
 2. **Implement re-encryption** for credential rotation (rotate `ENCRYPTION_KEY` without data loss)
 3. **Add CI coverage threshold** — start with a reasonable floor (e.g., 40-50%) and trend upward
 4. **Consider externalizing SSE/rate-limiter state** for future horizontal scaling
