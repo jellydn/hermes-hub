@@ -248,139 +248,163 @@ export function parseOptionId(
 	return { kind: parts[0], recordId: parts[1] };
 }
 
+async function resolveApiProviderOption(
+	userId: string,
+	recordId: string,
+): Promise<ResolvedOption> {
+	const [record] = await getDb()
+		.select({
+			id: aiProviders.id,
+			provider: aiProviders.provider,
+			model: aiProviders.model,
+			encryptedApiKey: aiProviders.encryptedApiKey,
+			baseUrl: aiProviders.baseUrl,
+		})
+		.from(aiProviders)
+		.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
+		.limit(1);
+
+	if (!record) return { ok: false, error: "Option not found." };
+	if (!isApiProviderId(record.provider)) {
+		return { ok: false, error: "Invalid provider option." };
+	}
+
+	const providerConfig = PROVIDER_ENV_CONFIGS[record.provider];
+	if (!providerConfig?.hermesProvider) {
+		return {
+			ok: false,
+			error: "Provider does not have a valid inference provider mapping.",
+		};
+	}
+
+	const option = apiProviderOptions.find((o) => o.id === record.provider);
+	if (!option) return { ok: false, error: "Invalid provider option." };
+
+	return {
+		ok: true,
+		kind: "api-provider",
+		provider: record.provider,
+		hermesProviderId: providerConfig.hermesProvider,
+		model: record.model,
+		allowsCustomModel: option.requiresCustomModel ?? false,
+		fixedModels: [...option.models],
+		activeOptionIds: await findActiveOptionIds(
+			userId,
+			`api-provider:${recordId}`,
+		),
+	};
+}
+
+async function resolveCredentialSubscriptionOption(
+	userId: string,
+	recordId: string,
+): Promise<ResolvedOption> {
+	const [record] = await getDb()
+		.select({
+			id: aiProviders.id,
+			provider: aiProviders.provider,
+			model: aiProviders.model,
+			encryptedApiKey: aiProviders.encryptedApiKey,
+			baseUrl: aiProviders.baseUrl,
+		})
+		.from(aiProviders)
+		.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
+		.limit(1);
+
+	if (!record) return { ok: false, error: "Option not found." };
+
+	const credentialOption = getSubscriptionByStorageProviderId(record.provider);
+	if (!credentialOption || !isUserSubscriptionId(credentialOption.id)) {
+		return { ok: false, error: "Invalid subscription option." };
+	}
+
+	const subOption = getUserSubscriptionOption(credentialOption.id);
+	if (!subOption) {
+		return { ok: false, error: "Invalid subscription option." };
+	}
+
+	const decrypted = decryptStoredApiKey(record.encryptedApiKey);
+	if (!decrypted.ok || !decrypted.apiKey) {
+		return {
+			ok: false,
+			error: "Stored API key could not be read. Save the subscription again.",
+		};
+	}
+
+	return {
+		ok: true,
+		kind: "credential-subscription",
+		provider: credentialOption.id,
+		hermesProviderId: credentialOption.hermesProviderId,
+		model: record.model,
+		allowsCustomModel: false,
+		fixedModels: [...subOption.models],
+		activeOptionIds: await findActiveOptionIds(
+			userId,
+			`credential-subscription:${recordId}`,
+		),
+	};
+}
+
+async function resolveOAuthSubscriptionOption(
+	userId: string,
+	recordId: string,
+): Promise<ResolvedOption> {
+	const [record] = await getDb()
+		.select({
+			id: aiUserSubscriptions.id,
+			subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
+			model: aiUserSubscriptions.model,
+		})
+		.from(aiUserSubscriptions)
+		.where(
+			and(
+				eq(aiUserSubscriptions.id, recordId),
+				eq(aiUserSubscriptions.userId, userId),
+			),
+		)
+		.limit(1);
+
+	if (!record) return { ok: false, error: "Option not found." };
+	if (!isUserSubscriptionId(record.subscriptionProvider)) {
+		return { ok: false, error: "Invalid subscription option." };
+	}
+
+	const option = getUserSubscriptionOption(record.subscriptionProvider);
+	if (!option) return { ok: false, error: "Invalid subscription option." };
+
+	return {
+		ok: true,
+		kind: "oauth-subscription",
+		provider: record.subscriptionProvider,
+		hermesProviderId: option.hermesProviderId,
+		model: record.model,
+		allowsCustomModel: false,
+		fixedModels: [...option.models],
+		activeOptionIds: await findActiveOptionIds(
+			userId,
+			`oauth-subscription:${recordId}`,
+		),
+	};
+}
+
 export async function resolveSwitchOption(
 	userId: string,
 	optionId: string,
 ): Promise<ResolvedOption> {
 	const parsed = parseOptionId(optionId);
-	if (!parsed) {
-		return { ok: false, error: "Invalid option ID format." };
+	if (!parsed) return { ok: false, error: "Invalid option ID format." };
+
+	switch (parsed.kind) {
+		case "api-provider":
+			return resolveApiProviderOption(userId, parsed.recordId);
+		case "credential-subscription":
+			return resolveCredentialSubscriptionOption(userId, parsed.recordId);
+		case "oauth-subscription":
+			return resolveOAuthSubscriptionOption(userId, parsed.recordId);
+		default:
+			return { ok: false, error: "Invalid option kind." };
 	}
-	const { kind, recordId } = parsed;
-
-	if (kind === "api-provider" || kind === "credential-subscription") {
-		const [record] = await getDb()
-			.select({
-				id: aiProviders.id,
-				provider: aiProviders.provider,
-				model: aiProviders.model,
-				encryptedApiKey: aiProviders.encryptedApiKey,
-				baseUrl: aiProviders.baseUrl,
-			})
-			.from(aiProviders)
-			.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
-			.limit(1);
-
-		if (!record) {
-			return { ok: false, error: "Option not found." };
-		}
-
-		if (kind === "credential-subscription") {
-			const credentialOption = getSubscriptionByStorageProviderId(
-				record.provider,
-			);
-			if (!credentialOption) {
-				return { ok: false, error: "Invalid subscription option." };
-			}
-			if (!isUserSubscriptionId(credentialOption.id)) {
-				return { ok: false, error: "Invalid subscription option." };
-			}
-			const subOption = getUserSubscriptionOption(credentialOption.id);
-			if (!subOption) {
-				return { ok: false, error: "Invalid subscription option." };
-			}
-
-			const decrypted = decryptStoredApiKey(record.encryptedApiKey);
-			if (!decrypted.ok || !decrypted.apiKey) {
-				return {
-					ok: false,
-					error:
-						"Stored API key could not be read. Save the subscription again.",
-				};
-			}
-
-			return {
-				ok: true,
-				kind: "credential-subscription",
-				provider: credentialOption.id,
-				hermesProviderId: credentialOption.hermesProviderId,
-				model: record.model,
-				allowsCustomModel: false,
-				fixedModels: [...subOption.models],
-				activeOptionIds: await findActiveOptionIds(userId, optionId),
-			};
-		}
-
-		// api-provider
-		if (!isApiProviderId(record.provider)) {
-			return { ok: false, error: "Invalid provider option." };
-		}
-		const providerConfig = PROVIDER_ENV_CONFIGS[record.provider];
-		if (!providerConfig?.hermesProvider) {
-			return {
-				ok: false,
-				error: "Provider does not have a valid inference provider mapping.",
-			};
-		}
-
-		const option = apiProviderOptions.find((o) => o.id === record.provider);
-		if (!option) {
-			return { ok: false, error: "Invalid provider option." };
-		}
-
-		return {
-			ok: true,
-			kind: "api-provider",
-			provider: record.provider,
-			hermesProviderId: providerConfig.hermesProvider,
-			model: record.model,
-			allowsCustomModel: option.requiresCustomModel ?? false,
-			fixedModels: [...option.models],
-			activeOptionIds: await findActiveOptionIds(userId, optionId),
-		};
-	}
-
-	if (kind === "oauth-subscription") {
-		const [record] = await getDb()
-			.select({
-				id: aiUserSubscriptions.id,
-				subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
-				model: aiUserSubscriptions.model,
-			})
-			.from(aiUserSubscriptions)
-			.where(
-				and(
-					eq(aiUserSubscriptions.id, recordId),
-					eq(aiUserSubscriptions.userId, userId),
-				),
-			)
-			.limit(1);
-
-		if (!record) {
-			return { ok: false, error: "Option not found." };
-		}
-		if (!isUserSubscriptionId(record.subscriptionProvider)) {
-			return { ok: false, error: "Invalid subscription option." };
-		}
-
-		const option = getUserSubscriptionOption(record.subscriptionProvider);
-		if (!option) {
-			return { ok: false, error: "Invalid subscription option." };
-		}
-
-		return {
-			ok: true,
-			kind: "oauth-subscription",
-			provider: record.subscriptionProvider,
-			hermesProviderId: option.hermesProviderId,
-			model: record.model,
-			allowsCustomModel: false,
-			fixedModels: [...option.models],
-			activeOptionIds: await findActiveOptionIds(userId, optionId),
-		};
-	}
-
-	return { ok: false, error: "Invalid option kind." };
 }
 
 export async function findActiveOptionIds(
