@@ -3,11 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({
-		children,
-		to,
-		...props
-	}: Record<string, unknown>) =>
+	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
 		React.createElement("a", { href: to, ...props }, children);
 
 	return {
@@ -42,8 +38,8 @@ vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
 }));
 
-import { Route } from "./login";
 import { getCurrentSession } from "#/lib/session";
+import { Route } from "./login";
 
 describe("/login route", () => {
 	it("renders LoginPage component", () => {
@@ -61,6 +57,7 @@ describe("/login route", () => {
 		});
 
 		await expect(
+			// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 			Route.options.beforeLoad!({ location: { href: "/login" } } as never),
 		).rejects.toThrow("Redirect");
 	});
@@ -68,6 +65,7 @@ describe("/login route", () => {
 	it("does nothing when unauthenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue(null);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/login" },
 		} as never);
@@ -80,6 +78,7 @@ describe("/login route", () => {
 	});
 
 	it("validateSearch extracts redirect from search params", () => {
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = Route.options.validateSearch!({
 			redirect: "/dashboard",
 		} as Record<string, unknown>);
@@ -88,12 +87,14 @@ describe("/login route", () => {
 	});
 
 	it("validateSearch returns undefined for missing redirect", () => {
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = Route.options.validateSearch!({} as Record<string, unknown>);
 
 		expect(result).toEqual({ redirect: undefined });
 	});
 
 	it("validateSearch ignores non-string redirect", () => {
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = Route.options.validateSearch!({
 			redirect: 123,
 		} as Record<string, unknown>);

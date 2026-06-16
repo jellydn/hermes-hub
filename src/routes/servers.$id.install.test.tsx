@@ -3,11 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({
-		children,
-		to,
-		...props
-	}: Record<string, unknown>) =>
+	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
 		React.createElement("a", { href: to, ...props }, children);
 
 	return {
@@ -49,6 +45,7 @@ describe("/servers/$id/install route", () => {
 	});
 
 	it("returns session from beforeLoad", async () => {
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/servers/server_123/install" },
 		} as never);

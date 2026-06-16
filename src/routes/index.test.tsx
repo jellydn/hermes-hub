@@ -3,11 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({
-		children,
-		to,
-		...props
-	}: Record<string, unknown>) =>
+	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
 		React.createElement("a", { href: to, ...props }, children);
 
 	return {
@@ -42,8 +38,8 @@ vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
 }));
 
-import { Route } from "./index";
 import { getCurrentSession } from "#/lib/session";
+import { Route } from "./index";
 
 describe("/ (landing) route", () => {
 	it("renders LandingPage component", () => {
@@ -61,6 +57,7 @@ describe("/ (landing) route", () => {
 		});
 
 		await expect(
+			// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 			Route.options.beforeLoad!({ location: { href: "/" } } as never),
 		).rejects.toThrow("Redirect");
 	});
@@ -68,6 +65,7 @@ describe("/ (landing) route", () => {
 	it("does nothing when unauthenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue(null);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/" },
 		} as never);

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
+		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
 		handler: (fn: Function) => fn,
 	}),
 }));
@@ -47,9 +48,9 @@ vi.mock("#server/dashboard", () => ({
 	getDashboardStatusSnapshot: vi.fn(),
 }));
 
-import { Route } from "./dashboard";
 import { getAuthSession } from "#server/auth";
 import { getDashboardStatusSnapshot } from "#server/dashboard";
+import { Route } from "./dashboard";
 
 describe("/dashboard route", () => {
 	it("renders DashboardPage component", () => {
@@ -77,6 +78,7 @@ describe("/dashboard route", () => {
 		});
 		vi.mocked(getDashboardStatusSnapshot).mockResolvedValue(mockSnapshot);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/dashboard" },
 		} as never);
@@ -91,6 +93,7 @@ describe("/dashboard route", () => {
 		vi.mocked(getAuthSession).mockResolvedValue(null);
 		vi.mocked(getDashboardStatusSnapshot).mockResolvedValue(null as never);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/dashboard" },
 		} as never);

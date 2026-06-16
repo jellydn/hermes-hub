@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
+		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
 		handler: (fn: Function) => fn,
 	}),
 }));
@@ -59,11 +60,11 @@ vi.mock("#/lib/load-hermes-deployment-targets", () => ({
 	loadHermesDeploymentTargets: vi.fn(() => Promise.resolve([])),
 }));
 
-import { Route } from "./settings";
 import { getAuthSession } from "#server/auth";
 import { getCurrentPersonaSettings } from "#server/settings";
-import { getCurrentMcpServers } from "#server/settings/mcp";
 import { getCurrentAgentSkills } from "#server/settings/agent-skills/records";
+import { getCurrentMcpServers } from "#server/settings/mcp";
+import { Route } from "./settings";
 
 describe("/settings route", () => {
 	it("renders SettingsPage component", () => {
@@ -86,6 +87,7 @@ describe("/settings route", () => {
 		vi.mocked(getCurrentMcpServers).mockResolvedValue([]);
 		vi.mocked(getCurrentAgentSkills).mockResolvedValue([]);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/settings" },
 		} as never);
@@ -107,6 +109,7 @@ describe("/settings route", () => {
 		vi.mocked(getCurrentMcpServers).mockResolvedValue([]);
 		vi.mocked(getCurrentAgentSkills).mockResolvedValue([]);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/settings" },
 		} as never);

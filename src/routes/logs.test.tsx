@@ -4,16 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
+		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
 		handler: (fn: Function) => fn,
 	}),
 }));
 
 vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({
-		children,
-		to,
-		...props
-	}: Record<string, unknown>) =>
+	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
 		React.createElement("a", { href: to, ...props }, children);
 
 	return {
@@ -55,9 +52,9 @@ vi.mock("#server/logs", () => ({
 	getLogsSnapshot: vi.fn(),
 }));
 
-import { Route } from "./logs";
 import { getAuthSession } from "#server/auth";
 import { getLogsSnapshot } from "#server/logs";
+import { Route } from "./logs";
 
 describe("/logs route", () => {
 	it("renders LogsPage component", () => {
@@ -99,6 +96,7 @@ describe("/logs route", () => {
 		});
 		vi.mocked(getLogsSnapshot).mockResolvedValue(mockLogs);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/logs" },
 		} as never);
@@ -112,6 +110,7 @@ describe("/logs route", () => {
 		vi.mocked(getAuthSession).mockResolvedValue(null);
 		vi.mocked(getLogsSnapshot).mockResolvedValue(null as never);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/logs" },
 		} as never);

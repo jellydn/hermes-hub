@@ -7,7 +7,9 @@ vi.mock("@tanstack/react-router", () => ({
 		options: { head: config.head },
 		component: config.shellComponent || config.component,
 	}),
-}));import { Route } from "./__root";
+}));
+
+import { Route } from "./__root";
 
 type TestRoute = {
 	component?: { name?: string };
@@ -30,9 +32,7 @@ describe("/ (root) route", () => {
 		const head = R.options?.head?.();
 		const meta = head?.meta ?? [];
 		expect(meta).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ title: "HermesHub" }),
-			]),
+			expect.arrayContaining([expect.objectContaining({ title: "HermesHub" })]),
 		);
 	});
 
@@ -54,9 +54,7 @@ describe("/ (root) route", () => {
 		const head = R.options?.head?.();
 		const links = head?.links ?? [];
 		expect(links).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ rel: "stylesheet" }),
-			]),
+			expect.arrayContaining([expect.objectContaining({ rel: "stylesheet" })]),
 		);
 	});
 

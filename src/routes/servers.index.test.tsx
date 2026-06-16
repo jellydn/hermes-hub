@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import type { ServerListSummary } from "#/lib/servers";
 import { describe, expect, it, vi } from "vitest";
+import type { ServerListSummary } from "#/lib/servers";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
+		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
 		handler: (fn: Function) => fn,
 	}),
 }));
@@ -48,9 +49,9 @@ vi.mock("#server/servers", () => ({
 	getServerListSnapshot: vi.fn(),
 }));
 
-import { Route } from "./servers.index";
 import { getAuthSession } from "#server/auth";
 import { getServerListSnapshot } from "#server/servers";
+import { Route } from "./servers.index";
 
 describe("/servers/ route", () => {
 	it("renders ServersIndexPage component", () => {
@@ -84,6 +85,7 @@ describe("/servers/ route", () => {
 		});
 		vi.mocked(getServerListSnapshot).mockResolvedValue(mockServers);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/servers" },
 		} as never);
@@ -97,6 +99,7 @@ describe("/servers/ route", () => {
 		vi.mocked(getAuthSession).mockResolvedValue(null);
 		vi.mocked(getServerListSnapshot).mockResolvedValue([]);
 
+		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
 			location: { href: "/servers" },
 		} as never);
