@@ -172,10 +172,11 @@ export async function deployProviderToHermes(context: Context) {
 			},
 			ipAddress,
 		});
-	} catch (auditError) {		console.error(
-				`Failed to record deploy success audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
-				auditError,
-			);
+	} catch (auditError) {
+		console.error(
+			`Failed to record deploy success audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
+			auditError,
+		);
 		// Deploy already succeeded remotely; audit logging is historical only.
 	}
 
