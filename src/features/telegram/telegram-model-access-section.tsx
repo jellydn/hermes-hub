@@ -5,101 +5,15 @@ import {
 	LoaderCircle,
 	RefreshCw,
 } from "lucide-react";
-import { useCallback, useReducer } from "react";
 
 import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
-import { useMountEffect } from "#/lib/use-mount-effect";
+import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
 import type { ModelAccessOptionsResponse } from "#shared/contracts/telegram-model-access";
+import { useModelAccessController } from "./use-model-access-controller";
 
 type TelegramModelAccessSectionProps = {
 	isDeployed: boolean;
-};
-
-type FormState = {
-	optionsState: ModelAccessOptionsResponse | null;
-	selectedOptionId: string;
-	selectedModel: string;
-	isLoading: boolean;
-	isSwitching: boolean;
-	message: { type: "error" | "success"; text: string } | null;
-};
-
-type FormAction =
-	| { type: "fetchStarted" }
-	| { type: "fetchSucceeded"; data: ModelAccessOptionsResponse }
-	| { type: "fetchFailed"; error: string }
-	| { type: "optionSelected"; optionId: string; model: string }
-	| { type: "modelChanged"; model: string }
-	| { type: "switchStarted" }
-	| { type: "switchSucceeded" }
-	| { type: "switchFailed"; error: string }
-	| { type: "messageCleared" };
-
-function formReducer(state: FormState, action: FormAction): FormState {
-	switch (action.type) {
-		case "fetchStarted":
-			return { ...state, isLoading: true, message: null };
-		case "fetchSucceeded": {
-			const { data } = action;
-			return {
-				...state,
-				isLoading: false,
-				optionsState: data,
-				selectedOptionId: state.selectedOptionId || data.activeOptionId || "",
-				selectedModel:
-					state.selectedModel ||
-					data.options?.find((o) => o.optionId === data.activeOptionId)
-						?.model ||
-					"",
-			};
-		}
-		case "fetchFailed":
-			return {
-				...state,
-				isLoading: false,
-				message: { type: "error", text: action.error },
-			};
-		case "optionSelected":
-			return {
-				...state,
-				selectedOptionId: action.optionId,
-				selectedModel: action.model,
-				message: null,
-			};
-		case "modelChanged":
-			return { ...state, selectedModel: action.model, message: null };
-		case "switchStarted":
-			return { ...state, isSwitching: true, message: null };
-		case "switchSucceeded":
-			return {
-				...state,
-				isSwitching: false,
-				message: {
-					type: "success",
-					text: "Model access switched successfully.",
-				},
-			};
-		case "switchFailed":
-			return {
-				...state,
-				isSwitching: false,
-				message: { type: "error", text: action.error },
-			};
-		case "messageCleared":
-			return { ...state, message: null };
-		default:
-			return state;
-	}
-}
-
-const initialState: FormState = {
-	optionsState: null,
-	selectedOptionId: "",
-	selectedModel: "",
-	isLoading: false,
-	isSwitching: false,
-	message: null,
 };
 
 const selectClassName =
@@ -254,37 +168,13 @@ function ModelAccessForm({
 export function TelegramModelAccessSection({
 	isDeployed,
 }: TelegramModelAccessSectionProps) {
-	const [state, dispatch] = useReducer(formReducer, initialState);
-
-	const fetchOptions = useCallback(async () => {
-		dispatch({ type: "fetchStarted" });
-		try {
-			const res = await fetch("/api/telegram/model-access-options");
-			const data = (await res.json()) as ModelAccessOptionsResponse & {
-				error?: string;
-			};
-			if (!res.ok) {
-				dispatch({
-					type: "fetchFailed",
-					error: data.error ?? "Failed to load options",
-				});
-				return;
-			}
-			dispatch({ type: "fetchSucceeded", data });
-		} catch {
-			dispatch({ type: "fetchFailed", error: "Network error loading options" });
-		}
-	}, []);
-
-	// Fetch options on mount when deployed. isDeployed is set by the parent
-	// based on external server state (not a user event), so this is a
-	// mount-time data fetch — the same pattern used by telegram-pairing-section.
-	useMountEffect(() => {
-		if (!isDeployed) {
-			return;
-		}
-		void fetchOptions();
-	});
+	const {
+		state,
+		dispatch,
+		fetchOptions,
+		handleSwitch,
+		handleTrustAndRetrySwitch,
+	} = useModelAccessController(isDeployed);
 
 	if (!isDeployed) {
 		return null;
@@ -297,47 +187,13 @@ export function TelegramModelAccessSection({
 		isLoading,
 		isSwitching,
 		message,
+		hostKeyError,
+		isAcceptingKey,
 	} = state;
 
 	const activeOption = optionsState?.options?.find(
 		(o) => o.optionId === optionsState?.activeOptionId,
 	);
-
-	async function handleSwitch() {
-		if (!selectedOptionId || !selectedModel) {
-			return;
-		}
-
-		dispatch({ type: "switchStarted" });
-
-		try {
-			const res = await fetch("/api/telegram/model-switch", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({
-					optionId: selectedOptionId,
-					model: selectedModel,
-				}),
-			});
-			const data = (await res.json()) as {
-				error?: string;
-				status?: string;
-			};
-
-			if (!res.ok) {
-				dispatch({
-					type: "switchFailed",
-					error: data.error ?? "Switch failed",
-				});
-				return;
-			}
-
-			dispatch({ type: "switchSucceeded" });
-			void fetchOptions();
-		} catch {
-			dispatch({ type: "switchFailed", error: "Network error during switch" });
-		}
-	}
 
 	return (
 		<section className="island-shell rounded-[2rem] p-6 sm:p-8">
@@ -378,6 +234,15 @@ export function TelegramModelAccessSection({
 				>
 					{message.text}
 				</AlertPanel>
+			) : null}
+
+			{hostKeyError ? (
+				<HostKeyTrustPanel
+					hostKeyError={hostKeyError}
+					isAcceptingKey={isAcceptingKey}
+					onTrustAndRetry={() => void handleTrustAndRetrySwitch()}
+					onDismiss={() => dispatch({ type: "hostKeyCleared" })}
+				/>
 			) : null}
 
 			{isLoading ? (
