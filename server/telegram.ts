@@ -274,6 +274,14 @@ export async function deployTelegramToServer(context: Context) {
 			serverHost: serverRecord.host,
 		});
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: serverRecord.id,
+				serverHost: serverRecord.host,
+				expectedFingerprint: serverRecord.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Deploy failed";
 
 		await insertAuditLog(db, {
@@ -414,6 +422,14 @@ export async function testTelegramBot(context: Context) {
 
 		return context.json(result);
 	} catch (error) {
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
+				serverId: serverRecord.id,
+				serverHost: serverRecord.host,
+				expectedFingerprint: serverRecord.hostKeyFingerprint,
+			});
+		}
+
 		const message = error instanceof Error ? error.message : "Test failed";
 		return context.json({ error: message }, 502);
 	}
