@@ -105,6 +105,152 @@ const initialState: FormState = {
 const selectClassName =
 	"block w-full rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--sea-ink)] outline-none ring-[var(--focus-ring)] transition-shadow focus:ring-2";
 
+type ModelAccessFormProps = {
+	optionsState: ModelAccessOptionsResponse | null;
+	selectedOptionId: string;
+	selectedModel: string;
+	isSwitching: boolean;
+	isLoading: boolean;
+	selectClassName: string;
+	onOptionChange: (optionId: string, model: string) => void;
+	onModelChange: (model: string) => void;
+	onSwitch: () => void;
+	onRefresh: () => void;
+};
+
+function ModelAccessForm({
+	optionsState,
+	selectedOptionId,
+	selectedModel,
+	isSwitching,
+	isLoading,
+	selectClassName,
+	onOptionChange,
+	onModelChange,
+	onSwitch,
+	onRefresh,
+}: ModelAccessFormProps) {
+	const selectedOption = optionsState?.options?.find(
+		(o) => o.optionId === selectedOptionId,
+	);
+
+	const modelsForSelected = selectedOption
+		? selectedOption.allowsCustomModel
+			? null
+			: selectedOption.fixedModels
+		: null;
+
+	return (
+		<div className="mt-4 space-y-4">
+			<div>
+				<label
+					htmlFor="model-access-option"
+					className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
+				>
+					Provider / Subscription
+				</label>
+				<select
+					id="model-access-option"
+					className={selectClassName}
+					value={selectedOptionId}
+					onChange={(e) => {
+						const opt = optionsState?.options.find(
+							(o) => o.optionId === e.target.value,
+						);
+						onOptionChange(e.target.value, opt?.model ?? "");
+					}}
+				>
+					<option value="">— Select —</option>
+					{optionsState?.options?.map((opt) => (
+						<option key={opt.optionId} value={opt.optionId}>
+							{opt.label}
+							{opt.isActive ? " (active)" : ""}
+							{opt.keyLast4 ? ` (••••${opt.keyLast4})` : ""}
+						</option>
+					))}
+				</select>
+				{selectedOption?.keyLast4 ? (
+					<p className="mt-1 text-xs text-[var(--sea-ink-soft)]">
+						Key: ••••{selectedOption.keyLast4}
+						{selectedOption.baseUrl ? ` · URL: ${selectedOption.baseUrl}` : ""}
+					</p>
+				) : null}
+			</div>
+
+			{selectedOption && modelsForSelected ? (
+				<div>
+					<label
+						htmlFor="model-access-model"
+						className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
+					>
+						Model
+					</label>
+					<select
+						id="model-access-model"
+						className={selectClassName}
+						value={selectedModel}
+						onChange={(e) => {
+							onModelChange(e.target.value);
+						}}
+					>
+						<option value="">— Select —</option>
+						{modelsForSelected.map((m) => (
+							<option key={m} value={m}>
+								{m}
+							</option>
+						))}
+					</select>
+				</div>
+			) : null}
+
+			{selectedOption?.allowsCustomModel ? (
+				<div>
+					<label
+						htmlFor="model-access-custom-model"
+						className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
+					>
+						Model
+					</label>
+					<input
+						id="model-access-custom-model"
+						type="text"
+						className={selectClassName}
+						placeholder="Enter model name (e.g. gpt-4o)"
+						value={selectedModel}
+						onChange={(e) => {
+							onModelChange(e.target.value);
+						}}
+					/>
+				</div>
+			) : null}
+
+			<div className="flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
+				<Button
+					type="button"
+					disabled={isSwitching || !selectedOptionId || !selectedModel}
+					onClick={onSwitch}
+				>
+					{isSwitching ? (
+						<LoaderCircle className="h-4 w-4 animate-spin" />
+					) : (
+						<ArrowRight className="h-4 w-4" />
+					)}
+					<span>{isSwitching ? "Switching..." : "Switch"}</span>
+				</Button>
+				<Button
+					type="button"
+					variant="secondary"
+					disabled={isLoading}
+					onClick={onRefresh}
+				>
+					<RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+					<span>Refresh</span>
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 export function TelegramModelAccessSection({
 	isDeployed,
 }: TelegramModelAccessSectionProps) {
@@ -153,10 +299,6 @@ export function TelegramModelAccessSection({
 		message,
 	} = state;
 
-	const selectedOption = optionsState?.options?.find(
-		(o) => o.optionId === selectedOptionId,
-	);
-
 	const activeOption = optionsState?.options?.find(
 		(o) => o.optionId === optionsState?.activeOptionId,
 	);
@@ -196,12 +338,6 @@ export function TelegramModelAccessSection({
 			dispatch({ type: "switchFailed", error: "Network error during switch" });
 		}
 	}
-
-	const modelsForSelected = selectedOption
-		? selectedOption.allowsCustomModel
-			? null
-			: selectedOption.fixedModels
-		: null;
 
 	return (
 		<section className="island-shell rounded-[2rem] p-6 sm:p-8">
@@ -262,125 +398,20 @@ export function TelegramModelAccessSection({
 					</Button>
 				</div>
 			) : (
-				<div className="mt-4 space-y-4">
-					{/* Option selector */}
-					<div>
-						<label
-							htmlFor="model-access-option"
-							className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
-						>
-							Provider / Subscription
-						</label>
-						<select
-							id="model-access-option"
-							className={selectClassName}
-							value={selectedOptionId}
-							onChange={(e) => {
-								const opt = optionsState?.options.find(
-									(o) => o.optionId === e.target.value,
-								);
-								dispatch({
-									type: "optionSelected",
-									optionId: e.target.value,
-									model: opt?.model ?? "",
-								});
-							}}
-						>
-							<option value="">— Select —</option>
-							{optionsState?.options?.map((opt) => (
-								<option key={opt.optionId} value={opt.optionId}>
-									{opt.label}
-									{opt.isActive ? " (active)" : ""}
-									{opt.keyLast4 ? ` (••••${opt.keyLast4})` : ""}
-								</option>
-							))}
-						</select>
-						{selectedOption?.keyLast4 ? (
-							<p className="mt-1 text-xs text-[var(--sea-ink-soft)]">
-								Key: ••••{selectedOption.keyLast4}
-								{selectedOption.baseUrl
-									? ` · URL: ${selectedOption.baseUrl}`
-									: ""}
-							</p>
-						) : null}
-					</div>
-
-					{/* Model selector */}
-					{selectedOption && modelsForSelected ? (
-						<div>
-							<label
-								htmlFor="model-access-model"
-								className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
-							>
-								Model
-							</label>
-							<select
-								id="model-access-model"
-								className={selectClassName}
-								value={selectedModel}
-								onChange={(e) => {
-									dispatch({ type: "modelChanged", model: e.target.value });
-								}}
-							>
-								<option value="">— Select —</option>
-								{modelsForSelected.map((m) => (
-									<option key={m} value={m}>
-										{m}
-									</option>
-								))}
-							</select>
-						</div>
-					) : null}
-
-					{/* Custom model input */}
-					{selectedOption?.allowsCustomModel ? (
-						<div>
-							<label
-								htmlFor="model-access-custom-model"
-								className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
-							>
-								Model
-							</label>
-							<input
-								id="model-access-custom-model"
-								type="text"
-								className={selectClassName}
-								placeholder="Enter model name (e.g. gpt-4o)"
-								value={selectedModel}
-								onChange={(e) => {
-									dispatch({ type: "modelChanged", model: e.target.value });
-								}}
-							/>
-						</div>
-					) : null}
-
-					{/* Switch button */}
-					<div className="flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-						<Button
-							type="button"
-							disabled={isSwitching || !selectedOptionId || !selectedModel}
-							onClick={() => void handleSwitch()}
-						>
-							{isSwitching ? (
-								<LoaderCircle className="h-4 w-4 animate-spin" />
-							) : (
-								<ArrowRight className="h-4 w-4" />
-							)}
-							<span>{isSwitching ? "Switching..." : "Switch"}</span>
-						</Button>
-						<Button
-							type="button"
-							variant="secondary"
-							disabled={isLoading}
-							onClick={() => void fetchOptions()}
-						>
-							<RefreshCw
-								className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-							/>
-							<span>Refresh</span>
-						</Button>
-					</div>
-				</div>
+				<ModelAccessForm
+					optionsState={optionsState}
+					selectedOptionId={selectedOptionId}
+					selectedModel={selectedModel}
+					isSwitching={isSwitching}
+					isLoading={isLoading}
+					selectClassName={selectClassName}
+					onOptionChange={(optionId, model) =>
+						dispatch({ type: "optionSelected", optionId, model })
+					}
+					onModelChange={(model) => dispatch({ type: "modelChanged", model })}
+					onSwitch={() => void handleSwitch()}
+					onRefresh={() => void fetchOptions()}
+				/>
 			)}
 		</section>
 	);
