@@ -4,9 +4,13 @@ import type { NodeSSH } from "node-ssh";
 import { clearDashboardCache } from "../dashboard";
 import { getDb } from "../db";
 import { getClientIp } from "../lib/get-client-ip";
+import {
+	hostKeyErrorResponse,
+	isRecoverableHostKeyError,
+} from "../lib/host-key-error-response";
 import { insertAuditLog } from "../lib/insert-audit-log";
 import type { AuthSession, OwnedServerSshContext } from "../request-guards";
-import { SshConnectError, withSshConnection } from "../ssh";
+import { withSshConnection } from "../ssh";
 import { resolveHermesDeployContext } from "./deploy-context";
 import { PartialDeployError } from "./partial-deploy-error";
 import { restartGateway } from "./runtime";
@@ -107,32 +111,12 @@ export async function deployToHermesAgent(
 			});
 		}
 
-		if (
-			error instanceof SshConnectError &&
-			(error.code === "host_key_missing" || error.code === "host_key_mismatch")
-		) {
-			const hostKeyBase = {
-				observedFingerprint: error.hostKey?.fingerprint ?? "",
-				observedAlgorithm: error.hostKey?.algorithm ?? "",
-			};
-
-			const payload: Record<string, unknown> = {
-				code: error.code,
-				error:
-					error.code === "host_key_missing"
-						? "Host key fingerprint not stored for this server. Trust the host key and retry."
-						: "Host key fingerprint mismatch.",
+		if (isRecoverableHostKeyError(error)) {
+			return hostKeyErrorResponse(context, error, {
 				serverId: sshCtx.serverId,
 				serverHost: sshCtx.server.host,
-				hostKey: hostKeyBase,
-			};
-
-			if (error.code === "host_key_mismatch") {
-				(payload.hostKey as Record<string, string>).expectedFingerprint =
-					sshCtx.server.hostKeyFingerprint ?? "";
-			}
-
-			return context.json(payload, 409);
+				expectedFingerprint: sshCtx.server.hostKeyFingerprint,
+			});
 		}
 
 		const message = error instanceof Error ? error.message : "Deploy failed";

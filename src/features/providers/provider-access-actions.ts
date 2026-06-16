@@ -1,3 +1,10 @@
+import {
+	type HostKeyErrorPayload,
+	parseHostKeyErrorPayload,
+} from "#/features/servers/host-key-recovery";
+
+export type { HostKeyErrorPayload };
+
 import type { ApiProviderId } from "#/lib/ai-providers";
 import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 import type {
@@ -32,15 +39,6 @@ type SubscriptionSaveResponse = {
 type ConnectionTestResponse = {
 	error?: string;
 	status?: string;
-};
-
-export type HostKeyErrorPayload = {
-	code: "host_key_missing" | "host_key_mismatch";
-	serverId: string;
-	serverHost: string;
-	observedFingerprint: string;
-	observedAlgorithm: string;
-	expectedFingerprint?: string;
 };
 
 type DeployResponse = {
@@ -157,22 +155,12 @@ export async function deployModelAccess(): Promise<
 	const body = await readJsonBody<DeployResponse>(response);
 
 	if (!response.ok) {
-		const hostKeyCode = body?.code;
-		if (
-			hostKeyCode === "host_key_missing" ||
-			hostKeyCode === "host_key_mismatch"
-		) {
+		const hostKeyErrorPayload = parseHostKeyErrorPayload(body);
+		if (hostKeyErrorPayload) {
 			return {
 				ok: false,
 				error: body?.error ?? "Host key error",
-				hostKeyError: {
-					code: hostKeyCode,
-					serverId: body?.serverId ?? "",
-					serverHost: body?.serverHost ?? "",
-					observedFingerprint: body?.hostKey?.observedFingerprint ?? "",
-					observedAlgorithm: body?.hostKey?.observedAlgorithm ?? "",
-					expectedFingerprint: body?.hostKey?.expectedFingerprint,
-				},
+				hostKeyError: hostKeyErrorPayload,
 			};
 		}
 
