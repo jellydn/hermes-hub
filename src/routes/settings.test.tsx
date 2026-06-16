@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-router", () => ({
 		useLoaderData: () => ({}),
 	}),
 	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children),
+		(React as any).createElement("a", { href: to, ...props }, children),
 	useNavigate: () => vi.fn(),
 }));
 
@@ -30,8 +30,8 @@ import React from "react";
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null },
-			session: { id: "session_1" },
+			user: { id: "user_1", email: "test@example.com", image: null } as any,
+			session: { id: "session_1" } as any,
 		}),
 	),
 }));
@@ -68,7 +68,7 @@ import { Route } from "./settings";
 
 describe("/settings route", () => {
 	it("renders SettingsPage component", () => {
-		expect(Route.component?.name).toBe("SettingsPage");
+		expect((Route as any).component?.name).toBe("SettingsPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -77,8 +77,8 @@ describe("/settings route", () => {
 
 	it("loads all settings data in beforeLoad", async () => {
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" },
-			session: { id: "session_1" },
+			user: { id: "user_1" } as any,
+			session: { id: "session_1" } as any,
 		});
 		vi.mocked(getCurrentPersonaSettings).mockResolvedValue({
 			agentPersona: "You are Hermes.",
@@ -102,8 +102,8 @@ describe("/settings route", () => {
 
 	it("returns null persona settings when none saved", async () => {
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" },
-			session: { id: "session_1" },
+			user: { id: "user_1" } as any,
+			session: { id: "session_1" } as any,
 		});
 		vi.mocked(getCurrentPersonaSettings).mockResolvedValue(null);
 		vi.mocked(getCurrentMcpServers).mockResolvedValue([]);

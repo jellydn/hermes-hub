@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		(React as any).createElement("a", { href: to, ...props }, children);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -27,8 +27,8 @@ import React from "react";
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null },
-			session: { id: "session_1" },
+			user: { id: "user_1", email: "test@example.com", image: null } as any,
+			session: { id: "session_1" } as any,
 		}),
 	),
 }));
@@ -37,7 +37,7 @@ import { Route } from "./servers.new";
 
 describe("/servers/new route", () => {
 	it("renders NewServerPage component", () => {
-		expect(Route.component?.name).toBe("NewServerPage");
+		expect((Route as any).component?.name).toBe("NewServerPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {

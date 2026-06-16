@@ -11,7 +11,7 @@ vi.mock("@tanstack/react-start", () => ({
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		(React as any).createElement("a", { href: to, ...props }, children);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -34,8 +34,8 @@ import React from "react";
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null },
-			session: { id: "session_1" },
+			user: { id: "user_1", email: "test@example.com", image: null } as any,
+			session: { id: "session_1" } as any,
 		}),
 	),
 }));
@@ -62,7 +62,7 @@ import { Route } from "./ai-provider";
 
 describe("/ai-provider route", () => {
 	it("renders AiProviderPage component", () => {
-		expect(Route.component?.name).toBe("AiProviderPage");
+		expect((Route as any).component?.name).toBe("AiProviderPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -77,10 +77,10 @@ describe("/ai-provider route", () => {
 		};
 
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" },
-			session: { id: "session_1" },
+			user: { id: "user_1" } as any,
+			session: { id: "session_1" } as any,
 		});
-		vi.mocked(getModelAccessSnapshot).mockResolvedValue(mockAccess);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue(mockAccess as any);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({

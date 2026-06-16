@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		(React as any).createElement("a", { href: to, ...props }, children);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -43,7 +43,7 @@ import { Route } from "./index";
 
 describe("/ (landing) route", () => {
 	it("renders LandingPage component", () => {
-		expect(Route.component?.name).toBe("LandingPage");
+		expect((Route as any).component?.name).toBe("LandingPage");
 	});
 
 	it("has beforeLoad defined", () => {
@@ -52,8 +52,8 @@ describe("/ (landing) route", () => {
 
 	it("redirects to dashboard when authenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue({
-			user: { id: "user_1" },
-			session: { id: "session_1" },
+			user: { id: "user_1" } as any,
+			session: { id: "session_1" } as any,
 		});
 
 		await expect(
@@ -74,7 +74,7 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page description", () => {
-		const head = Route.options?.head?.() as
+		const head = (Route as any).options?.head?.() as
 			| { meta?: Array<Record<string, string>> }
 			| undefined;
 		const meta = head?.meta ?? [];
@@ -88,7 +88,7 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page title", () => {
-		const head = Route.options?.head?.() as
+		const head = (Route as any).options?.head?.() as
 			| { meta?: Array<Record<string, string>> }
 			| undefined;
 		const meta = head?.meta ?? [];

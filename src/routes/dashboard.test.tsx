@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-router", () => ({
 		useLoaderData: () => ({}),
 	}),
 	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children),
+		(React as any).createElement("a", { href: to, ...props }, children),
 	useNavigate: () => vi.fn(),
 }));
 
@@ -30,8 +30,8 @@ import React from "react";
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null },
-			session: { id: "session_1" },
+			user: { id: "user_1", email: "test@example.com", image: null } as any,
+			session: { id: "session_1" } as any,
 		}),
 	),
 }));
@@ -54,7 +54,7 @@ import { Route } from "./dashboard";
 
 describe("/dashboard route", () => {
 	it("renders DashboardPage component", () => {
-		expect(Route.component?.name).toBe("DashboardPage");
+		expect((Route as any).component?.name).toBe("DashboardPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -73,10 +73,12 @@ describe("/dashboard route", () => {
 		};
 
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" },
-			session: { id: "session_1" },
+			user: { id: "user_1" } as any,
+			session: { id: "session_1" } as any,
 		});
-		vi.mocked(getDashboardStatusSnapshot).mockResolvedValue(mockSnapshot);
+		vi.mocked(getDashboardStatusSnapshot).mockResolvedValue(
+			mockSnapshot as any,
+		);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
