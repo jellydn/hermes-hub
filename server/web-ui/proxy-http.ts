@@ -111,7 +111,23 @@ export async function proxyHttpOverStream(input: {
 			},
 		);
 
+		outgoing.setTimeout(30_000, () => {
+			outgoing.destroy(
+				new WebUiProxyError("Upstream Web UI request timed out."),
+			);
+		});
+
+		const abortHandler = () => {
+			outgoing.destroy(new WebUiProxyError("Client request aborted."));
+		};
+		input.request.signal.addEventListener("abort", abortHandler, {
+			once: true,
+		});
+
 		outgoing.on("error", reject);
+		outgoing.on("close", () => {
+			input.request.signal.removeEventListener("abort", abortHandler);
+		});
 
 		if (input.request.body) {
 			Readable.fromWeb(
