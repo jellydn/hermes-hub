@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
 	isValidDockerTag,
@@ -7,21 +7,7 @@ import {
 	setProviderModel,
 	updateGateway,
 } from "../runtime";
-
-function mockSsh(
-	execImpl?: (
-		cmd: string,
-		opts?: unknown,
-	) => { code: number; stdout: string; stderr: string },
-) {
-	const execCommand = vi.fn(async (cmd: string, opts?: unknown) => {
-		if (execImpl) {
-			return execImpl(cmd, opts);
-		}
-		return { code: 0, stdout: "", stderr: "" };
-	});
-	return { execCommand };
-}
+import { mockSsh } from "./test-helpers";
 
 describe("restartGateway", () => {
 	it("restarts the Hermes container via docker compose", async () => {
