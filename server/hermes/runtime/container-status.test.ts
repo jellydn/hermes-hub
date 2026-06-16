@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-	isContainerRunning,
-	isWebUiContainerRunning,
-} from "../runtime";
+import { isContainerRunning, isWebUiContainerRunning } from "../runtime";
 
 function mockSsh(
 	execImpl?: (
