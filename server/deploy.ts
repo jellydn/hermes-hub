@@ -8,6 +8,7 @@ import {
 	isRecoverableHostKeyError,
 } from "./lib/host-key-error-response";
 import { insertAuditLog } from "./lib/insert-audit-log";
+import { logger } from "./lib/logger";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { resolveActiveModelBackend } from "./providers/active-backend";
 import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
@@ -149,9 +150,11 @@ export async function deployProviderToHermes(context: Context) {
 				ipAddress,
 			});
 		} catch (auditError) {
-			console.error(
-				`Failed to record deploy failure audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
-				auditError,
+			logger.error(
+				auditError instanceof Error
+					? auditError
+					: new Error(String(auditError)),
+				"Failed to record deploy failure audit log",
 			);
 			// Audit logging is historical only; still return deploy failure to client.
 		}
@@ -173,9 +176,9 @@ export async function deployProviderToHermes(context: Context) {
 			ipAddress,
 		});
 	} catch (auditError) {
-		console.error(
-			`Failed to record deploy success audit log: ${auditError instanceof Error ? auditError.message : String(auditError)}`,
-			auditError,
+		logger.error(
+			auditError instanceof Error ? auditError : new Error(String(auditError)),
+			"Failed to record deploy success audit log",
 		);
 		// Deploy already succeeded remotely; audit logging is historical only.
 	}
