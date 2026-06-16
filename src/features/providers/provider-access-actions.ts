@@ -2,6 +2,7 @@ import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
+import type { HostKeyErrorResponsePayload } from "#shared/contracts/host-key-error";
 
 export type { HostKeyErrorPayload };
 
@@ -45,15 +46,12 @@ type DeployResponse = {
 	error?: string;
 	model?: string;
 	status?: string;
-	code?: string;
-	serverId?: string;
-	serverHost?: string;
-	hostKey?: {
-		observedFingerprint?: string;
-		observedAlgorithm?: string;
-		expectedFingerprint?: string;
-	};
-};
+} & Partial<
+	Pick<
+		HostKeyErrorResponsePayload,
+		"code" | "serverId" | "serverHost" | "hostKey"
+	>
+>;
 
 async function readJsonBody<T>(response: Response): Promise<T | null> {
 	return (await response.json().catch(() => null)) as T | null;
@@ -176,4 +174,29 @@ export async function deployModelAccess(): Promise<
 			? `Model "${body.model}" deployed successfully.`
 			: "Deployed successfully.",
 	};
+}
+
+export async function acceptHostKey(
+	serverId: string,
+	fingerprint: string,
+	algorithm: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const res = await fetch(
+		`/api/servers/${encodeURIComponent(serverId)}/host-key/accept`,
+		{
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ fingerprint, algorithm }),
+		},
+	);
+
+	if (!res.ok) {
+		const data = await readJsonBody<{ error?: string }>(res);
+		return {
+			ok: false,
+			error: data?.error ?? "Failed to accept host key",
+		};
+	}
+
+	return { ok: true };
 }

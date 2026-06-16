@@ -1,19 +1,10 @@
 import type { Context } from "hono";
-
+import type {
+	HostKeyErrorCode,
+	HostKeyErrorResponsePayload,
+} from "../../shared/contracts/host-key-error";
 import { SshConnectError } from "../ssh";
 import type { HostKeyFingerprint } from "../ssh/host-key-fingerprint";
-
-export type HostKeyErrorResponsePayload = {
-	code: "host_key_missing" | "host_key_mismatch";
-	error: string;
-	serverId: string;
-	serverHost: string;
-	hostKey: {
-		observedFingerprint: string;
-		observedAlgorithm: string;
-		expectedFingerprint?: string;
-	};
-};
 
 /**
  * Type guard that narrows an unknown error to an SshConnectError with a
@@ -58,7 +49,7 @@ export function hostKeyErrorResponse(
 		hostKeyPayload.expectedFingerprint = serverContext.expectedFingerprint;
 	}
 
-	const code = error.code as "host_key_missing" | "host_key_mismatch";
+	const code = error.code as HostKeyErrorCode;
 
 	return context.json(
 		{

@@ -19,6 +19,7 @@ import {
 	subscriptionConnectionFingerprint,
 } from "./connection-fingerprint";
 import {
+	acceptHostKey,
 	deployModelAccess,
 	saveProviderAccess,
 	saveSubscriptionAccess,
@@ -311,23 +312,16 @@ export function useProviderSettingsController(
 		dispatch({ type: "deploy_trust_starting" });
 
 		try {
-			const res = await fetch(
-				`/api/servers/${hostKeyError.serverId}/host-key/accept`,
-				{
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify({
-						fingerprint: hostKeyError.observedFingerprint,
-						algorithm: hostKeyError.observedAlgorithm,
-					}),
-				},
+			const result = await acceptHostKey(
+				hostKeyError.serverId,
+				hostKeyError.observedFingerprint,
+				hostKeyError.observedAlgorithm,
 			);
 
-			if (!res.ok) {
-				const data = (await res.json()) as { error?: string };
+			if (!result.ok) {
 				dispatch({
 					type: "deploy_trust_failed",
-					error: data.error ?? "Failed to accept host key",
+					error: result.error,
 				});
 				return;
 			}

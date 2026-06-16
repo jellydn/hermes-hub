@@ -1,3 +1,5 @@
+import type { HostKeyErrorResponsePayload } from "#shared/contracts/host-key-error";
+
 export type HostKeyErrorPayload = {
 	code: "host_key_missing" | "host_key_mismatch";
 	serverId: string;
@@ -7,24 +9,18 @@ export type HostKeyErrorPayload = {
 	expectedFingerprint?: string;
 };
 
-export type HostKeyApiResponse = {
-	error?: string;
-	code?: string;
-	serverId?: string;
-	serverHost?: string;
-	hostKey?: {
-		observedFingerprint?: string;
-		observedAlgorithm?: string;
-		expectedFingerprint?: string;
-	};
-};
-
 /**
  * Parse a raw API response body into a structured HostKeyErrorPayload.
  * Returns undefined if the response is not a recoverable host-key error.
  */
+/** Accepts the shared contract type but also any loosely-typed API response
+ *  (e.g. from a union response type where fields are optional). */
+type HostKeyErrorBody = Partial<HostKeyErrorResponsePayload> & {
+	hostKey?: Partial<HostKeyErrorResponsePayload["hostKey"]>;
+};
+
 export function parseHostKeyErrorPayload(
-	body: HostKeyApiResponse | null | undefined,
+	body: HostKeyErrorBody | null | undefined,
 ): HostKeyErrorPayload | undefined {
 	const hostKeyCode = body?.code;
 	if (
