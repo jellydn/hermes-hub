@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 
 import { getClientIp } from "../lib/get-client-ip";
+import { logger } from "../lib/logger";
 import { requireOwnedServer, requireOwnedServerSsh } from "../request-guards";
 import { DeployError, getStatus, startDeploy } from "./deploy";
 import {
@@ -105,11 +106,12 @@ export async function proxyServerWebUi(context: Context) {
 
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
 	const upstreamOrigin = `http://127.0.0.1:${ctx.webUi.port}`;
+	let upstreamPath: string | undefined;
 
 	try {
 		// Use req.raw.url, not req.url — Hono's HonoRequest.url is not
 		// guaranteed across framework versions and an absent getter crashes.
-		const upstreamPath = resolveProxyRequestTarget(
+		upstreamPath = resolveProxyRequestTarget(
 			context.req.raw.url,
 			proxyBasePath,
 		);
@@ -141,6 +143,20 @@ export async function proxyServerWebUi(context: Context) {
 			),
 		});
 	} catch (error) {
+		logger.error(
+			{
+				event: "web_ui_proxy_failed",
+				serverId: ctx.serverId,
+				webUiPort: ctx.webUi.port,
+				method: context.req.raw.method,
+				upstreamPath,
+				upstreamUnreachable: isRemotePortUnreachable(error),
+				userId: ctx.session.user.id,
+				ipAddress: getClientIp(context),
+				err: error,
+			},
+			"web UI proxy returned 502",
+		);
 		return context.json(
 			{ error: formatWebUiProxyError(error, ctx.webUi.port) },
 			502 as const,

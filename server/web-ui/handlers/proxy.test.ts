@@ -7,12 +7,19 @@ const {
 	getAuthSession,
 	getOwnedServerRecord,
 	getResolvedServerWebUiRecord,
+	logger,
 	proxyRequestOverSsh,
 	resolveServerSshConfigOrError,
 } = vi.hoisted(() => ({
 	getAuthSession: vi.fn(),
 	getOwnedServerRecord: vi.fn(),
 	getResolvedServerWebUiRecord: vi.fn(),
+	logger: {
+		error: vi.fn(),
+		warn: vi.fn(),
+		info: vi.fn(),
+		debug: vi.fn(),
+	},
 	proxyRequestOverSsh: vi.fn(),
 	resolveServerSshConfigOrError: vi.fn(),
 }));
@@ -52,6 +59,10 @@ vi.mock(
 
 vi.mock("../../lib/get-client-ip", () => ({
 	getClientIp: () => "127.0.0.1",
+}));
+
+vi.mock("../../lib/logger", () => ({
+	logger,
 }));
 
 vi.mock("../../db", () => ({
@@ -196,6 +207,20 @@ describe("web-ui proxy", () => {
 		expect(payload.error).toContain(
 			"Request path is not nested under proxy base",
 		);
+		// The companion of the "logs a structured error event" test: when
+		// resolution throws before upstreamPath is ever assigned, the log
+		// event must still fire, with upstreamPath undefined and the
+		// upstreamUnreachable flag false (an unparseable path is a client
+		// bug, not an SSH/upstream outage).
+		expect(logger.error).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: "web_ui_proxy_failed",
+				serverId: "server_123",
+				upstreamPath: undefined,
+				upstreamUnreachable: false,
+			}),
+			expect.any(String),
+		);
 	});
 
 	it("returns actionable errors when the upstream port is closed", async () => {
@@ -227,6 +252,50 @@ describe("web-ui proxy", () => {
 		expect(payload.error).toContain(
 			"Hermes Web UI is not reachable on the server (127.0.0.1:8787)",
 		);
+	});
+
+	it("logs a structured error event when the proxy throws", async () => {
+		// 502s were silent before this change: the catch block formatted an
+		// error message for the client but emitted no server-side log line,
+		// so debugging required re-curl. Now every 502 is observable in
+		// structured logs with enough context to grep for the unrecoverable
+		// `upstreamUnreachable: true` case (Hermes Web UI container stopped).
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:generated-password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		proxyRequestOverSsh.mockRejectedValue(
+			new Error("(SSH) Channel open failure: Connection refused"),
+		);
+
+		await proxyServerWebUi(
+			createContext({
+				method: "HEAD",
+				url: "http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+			}),
+		);
+
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		const [fields, message] = logger.error.mock.calls[0] ?? [];
+		expect(message).toContain("web UI proxy returned 502");
+		expect(fields).toMatchObject({
+			event: "web_ui_proxy_failed",
+			serverId: "server_123",
+			webUiPort: 8787,
+			method: "HEAD",
+			upstreamPath: "/",
+			upstreamUnreachable: true,
+		});
+		expect(fields?.err).toBeInstanceOf(Error);
 	});
 
 	it("rewrites upstream root redirects to the proxy path", async () => {
