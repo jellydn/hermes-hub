@@ -104,13 +104,16 @@ export async function proxyServerWebUi(context: Context) {
 	}
 
 	const proxyBasePath = getWebUiProxyPath(ctx.serverId);
-	const upstreamPath = resolveProxyRequestTarget(
-		context.req.url,
-		proxyBasePath,
-	);
 	const upstreamOrigin = `http://127.0.0.1:${ctx.webUi.port}`;
 
 	try {
+		// Use req.raw.url, not req.url — Hono's HonoRequest.url is not
+		// guaranteed across framework versions and an absent getter crashes.
+		const upstreamPath = resolveProxyRequestTarget(
+			context.req.raw.url,
+			proxyBasePath,
+		);
+
 		const upstreamResponse = await proxyRequestOverSsh({
 			userId: ctx.session.user.id,
 			serverId: ctx.serverId,

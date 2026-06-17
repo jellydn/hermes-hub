@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createContext } from "./test-helpers";
@@ -112,6 +113,88 @@ describe("web-ui proxy", () => {
 			expect.objectContaining({
 				upstreamPath: "/",
 			}),
+		);
+	});
+
+	it("reads the request URL from req.raw, not req.url", async () => {
+		// Regression: production crashed when context.req.url was undefined by
+		// passing it straight into resolveProxyRequestTarget. The fix reads
+		// from context.req.raw.url instead. This test directly builds a
+		// context missing the .url property to simulate the production shape
+		// (HonoRequest that doesn't expose .url).
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:generated-password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		proxyRequestOverSsh.mockResolvedValue(new Response("ok", { status: 200 }));
+
+		const context = {
+			req: {
+				raw: new Request(
+					"http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+				),
+				// No `.url` — simulates HonoRequest that doesn't expose it.
+				param: (n: string) => (n === "id" ? "server_123" : undefined),
+				header: vi.fn().mockReturnValue(null),
+			},
+			json: (b: unknown, s = 200) =>
+				Response.json(b, { status: s }) as Response,
+		} as unknown as Context;
+
+		const response = await proxyServerWebUi(context);
+
+		expect(response.status).toBe(200);
+		expect(proxyRequestOverSsh).toHaveBeenCalledWith(
+			expect.objectContaining({ upstreamPath: "/" }),
+		);
+	});
+
+	it("returns 502 instead of crashing when the request path is outside the proxy base", async () => {
+		// Regression: resolution used to be outside the try/catch, so an
+		// unparseable path raised an uncaught TypeError → 500. Moving it
+		// inside the try/catch turns that into a 502 with a usable body.
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+		getResolvedServerWebUiRecord.mockResolvedValue({
+			enabled: true,
+			encryptedPassword: "enc:generated-password",
+			port: 8787,
+			deployStatus: "succeeded",
+			deployError: null,
+			deployStartedAt: null,
+			updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+		});
+		// Explicit setup so this test does not depend on the mock
+		// implementation from sibling tests persisting across beforeEach.
+		proxyRequestOverSsh.mockResolvedValue(new Response("ok", { status: 200 }));
+
+		const context = {
+			req: {
+				raw: new Request("http://localhost:3000/some-other-path/"),
+				param: (n: string) => (n === "id" ? "server_123" : undefined),
+				header: vi.fn().mockReturnValue(null),
+			},
+			json: (b: unknown, s = 200) =>
+				Response.json(b, { status: s }) as Response,
+		} as unknown as Context;
+
+		const response = await proxyServerWebUi(context);
+		const payload = (await response.json()) as { error?: string };
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain(
+			"Request path is not nested under proxy base",
 		);
 	});
 
