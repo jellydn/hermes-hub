@@ -61,6 +61,46 @@ Testing route-level orchestration (``createFileRoute``, ``createServerFn`` handl
 - No apparent caching layer for database queries beyond Drizzle query optimization
 - No CDN or edge caching configured
 
+## Conventions
+
+### Failure Observability — operational failures must be log-observable (since June 2026)
+
+Operational failures — SSH reconnects, deploy errors, upstream-unreachable, network timeouts, background-workflow errors — must be diagnosable from the structured log stream alone, without re-running the request or querying DB rows.
+
+**Convention.** Every Hono `catch` block that returns a **502 / 500 for an operational cause** calls `logHandlerFailure` from [`server/lib/handler-error-log.ts`](../../server/lib/handler-error-log.ts) BEFORE the `audit_logs` insert + response. Skip the convention for **400-class** responses (`Unauthorized`, `Not found`, JSON parse failures, validation) — those are already surfaced to the client and would just be log noise.
+
+**Audit-log is separate, not a substitute.** `audit_logs` is best-effort (the catch's `insertAuditLog` call may itself fail), aimed at user-visible history, and stores rows that operators cannot easily grep against. Always emit BOTH the audit row AND the structured log line for operational paths; never substitute one for the other.
+
+**Event-name schema** (the `event` field on the pino structured line):
+
+| Property | Rule |
+|---|---|
+| Format | `snake_case`, ASCII-only, no punctuation beyond `_` |
+| Subject | what failed; terse, domain-scoped (e.g. `web_ui_proxy`, not `web_ui_proxy_request`) |
+| Verb | implicit; only `_failed` is allowed because this helper only emits failures |
+| Suffix | `_failed` — mandatory |
+
+The helper does NOT auto-add `_failed`. Pass it explicitly. `web_ui_proxy_failed` (in production since June 2026) is the canonical example. The shape-check regex (in `server/lib/handler-error-log.ts`) is `/^[a-z][a-z0-9_]*_failed$/` — confirmed by five parametrised test cases (camelCase, missing suffix, uppercase, digit-first).
+
+**Always-typed fields** (carried by every emit):
+
+- `event` — discriminator (schema above)
+- `userId` — opaque session UUID; `null` for unauthenticated paths
+- `ipAddress` — best-effort, no PII beyond the IP
+- `method` — HTTP method of the failing request
+- `err` — raw Error; pino's `stdSerializers.err` applies (`{type, message, stack}`)
+
+**Suggested `extras` fields per failure category:**
+
+| Category | Extras |
+|---|---|
+| network failures | `serverId`, `port`, `upstreamPath`, `upstreamUnreachable: boolean` |
+| deploy failures  | `serverId`, `serverHost`, `intent` (the `managed-compose-deploy` intent enum) |
+| server actions   | `serverId`, `action`, `imageRef?` |
+| pairings         | `serverId`, `code`, `locked: boolean` |
+
+The June 2026 web-ui proxy fix (`3fd5286`) shipped the convention's first instance; the full audit's candidate-rollout list lives in the helper JSDoc and spans `server/telegram.ts`, `server/deploy.ts`, `server/hermes/{deploy,telegram-deploy}.ts`, `server/server-actions.ts`, `server/telegram/pairings.ts`, `server/health-check/handler.ts`, `server/providers/{providers,codex-auth/handler}.ts`, and `server/servers.ts`. Wiring the helper into these is the natural follow-up.
+
 ## Closed Items
 
 ### ✅ Large File Splits (June 2026 — PR #47)
@@ -104,8 +144,9 @@ Each tests route configuration (component, `beforeLoad`), data loading orchestra
 
 ## Recommendations
 
-1. **Split remaining large files** — `server/hermes/runtime.test.ts` (768 lines) and `server/settings/agent-skills.ts` (331 lines) are the next candidates
-2. **Implement re-encryption** for credential rotation (rotate `ENCRYPTION_KEY` without data loss)
-3. **Add CI coverage threshold** — start with a reasonable floor (e.g., 40-50%) and trend upward
-4. **Consider externalizing SSE/rate-limiter state** for future horizontal scaling
-5. **Add remaining route tests** — `servers.$id.install`, `servers.new`, `__root`, `index`, `login`
+1. **Wire the failure-observability helper into the remaining silent-catch sites** identified in the June 2026 audit (see *Failure Observability* above)
+2. **Split remaining large files** — `server/hermes/runtime.test.ts` (768 lines) and `server/settings/agent-skills.ts` (331 lines) are the next candidates
+3. **Implement re-encryption** for credential rotation (rotate `ENCRYPTION_KEY` without data loss)
+4. **Add CI coverage threshold** — start with a reasonable floor (e.g., 40-50%) and trend upward
+5. **Consider externalizing SSE/rate-limiter state** for future horizontal scaling
+6. **Add remaining route tests** — `servers.$id.install`, `servers.new`, `__root`, `index`, `login`
