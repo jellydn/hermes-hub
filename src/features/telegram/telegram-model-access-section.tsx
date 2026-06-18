@@ -14,6 +14,7 @@ import { useModelAccessController } from "./use-model-access-controller";
 
 type TelegramModelAccessSectionProps = {
 	isDeployed: boolean;
+	onSwitched?: () => void;
 };
 
 const selectClassName =
@@ -167,6 +168,7 @@ function ModelAccessForm({
 
 export function TelegramModelAccessSection({
 	isDeployed,
+	onSwitched,
 }: TelegramModelAccessSectionProps) {
 	const {
 		state,
@@ -174,7 +176,7 @@ export function TelegramModelAccessSection({
 		fetchOptions,
 		handleSwitch,
 		handleTrustAndRetrySwitch,
-	} = useModelAccessController(isDeployed);
+	} = useModelAccessController({ isDeployed, onSwitched });
 
 	if (!isDeployed) {
 		return null;

@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
@@ -25,6 +26,7 @@ export function TelegramSettings({
 	initialConfig,
 	initialAccess,
 }: TelegramSettingsProps) {
+	const router = useRouter();
 	const [savedConfig, setSavedConfig] =
 		useState<TelegramSettingsSummary | null>(initialConfig);
 
@@ -38,6 +40,12 @@ export function TelegramSettings({
 
 	function handleConfigUpdate(config: TelegramSettingsSummary) {
 		setSavedConfig(config);
+	}
+
+	// After a successful model switch, refetch the route loader so the sidebar's
+	// model-access deployment panel reflects the new active backend.
+	function handleModelSwitched() {
+		void router.invalidate();
 	}
 
 	const isDeployed = Boolean(savedConfig?.deployedServerHost);
@@ -59,7 +67,10 @@ export function TelegramSettings({
 								onConfigChange={handleConfigUpdate}
 							/>
 
-							<TelegramModelAccessSection isDeployed={isDeployed} />
+							<TelegramModelAccessSection
+								isDeployed={isDeployed}
+								onSwitched={handleModelSwitched}
+							/>
 
 							<TelegramPairingSection
 								key={savedConfig.deployedServerHost ?? "not-deployed"}
