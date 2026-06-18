@@ -17,6 +17,7 @@ vi.mock("lucide-react", () => {
 		ArrowRight: MockIcon,
 		CheckCircle2: MockIcon,
 		CloudUpload: MockIcon,
+		Cpu: MockIcon,
 		Circle: MockIcon,
 		ExternalLink: MockIcon,
 		Info: MockIcon,
@@ -26,6 +27,8 @@ vi.mock("lucide-react", () => {
 		RefreshCw: MockIcon,
 		Rocket: MockIcon,
 		Send: MockIcon,
+		Server: MockIcon,
+		Sparkles: MockIcon,
 		Unplug: MockIcon,
 		UserCheck: MockIcon,
 		Users: MockIcon,
@@ -80,6 +83,7 @@ describe("TelegramSettings", () => {
 	it("shows the current connected bot summary", () => {
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -95,7 +99,7 @@ describe("TelegramSettings", () => {
 	});
 
 	it("connects a Telegram bot and shows the success state", async () => {
-		render(<TelegramSettings initialConfig={null} />);
+		render(<TelegramSettings initialAccess={null} initialConfig={null} />);
 
 		fireEvent.change(screen.getByLabelText(/bot token/i), {
 			target: { value: "123456:secret-token" },
@@ -139,6 +143,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -228,6 +233,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -314,6 +320,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",

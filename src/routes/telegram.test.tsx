@@ -32,11 +32,16 @@ vi.mock("#server/telegram", () => ({
 	getCurrentTelegramConfig: vi.fn(),
 }));
 
+vi.mock("#server/providers", () => ({
+	getModelAccessSnapshot: vi.fn(),
+}));
+
 import {
 	assertRouteComponent,
 	createMockSession,
 } from "#/test-helpers/route-mocks";
 import { getAuthSession } from "#server/auth";
+import { getModelAccessSnapshot } from "#server/providers";
 import { getCurrentTelegramConfig } from "#server/telegram";
 import { Route } from "./telegram";
 
@@ -63,6 +68,11 @@ describe("/telegram route", () => {
 				Awaited<ReturnType<typeof getCurrentTelegramConfig>>
 			>,
 		);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue({
+			activeBackend: null,
+			apiProvider: null,
+			subscription: null,
+		});
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
@@ -71,12 +81,14 @@ describe("/telegram route", () => {
 
 		expect(result).toHaveProperty("session");
 		expect(result).toHaveProperty("telegramConfig");
+		expect(result).toHaveProperty("modelAccess");
 		expect(result.telegramConfig).toEqual(mockConfig);
 	});
 
 	it("returns null telegram config when unauthenticated", async () => {
 		vi.mocked(getAuthSession).mockResolvedValue(null);
 		vi.mocked(getCurrentTelegramConfig).mockResolvedValue(null as never);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue(null as never);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({

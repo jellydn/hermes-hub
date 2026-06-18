@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
+
 import { TelegramConnectSection } from "./telegram-connect-section";
 import { TelegramDeploySection } from "./telegram-deploy-section";
 import { TelegramModelAccessSection } from "./telegram-model-access-section";
@@ -16,9 +18,13 @@ export type TelegramSettingsSummary = {
 
 type TelegramSettingsProps = {
 	initialConfig: TelegramSettingsSummary | null;
+	initialAccess: ModelAccessSnapshot | null;
 };
 
-export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
+export function TelegramSettings({
+	initialConfig,
+	initialAccess,
+}: TelegramSettingsProps) {
 	const [savedConfig, setSavedConfig] =
 		useState<TelegramSettingsSummary | null>(initialConfig);
 
@@ -65,7 +71,12 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 					) : null}
 				</div>
 
-				<TelegramSidebar savedConfig={savedConfig} />
+				<TelegramSidebar
+					savedConfig={savedConfig}
+					activeBackend={initialAccess?.activeBackend ?? null}
+					savedApiConfig={initialAccess?.apiProvider ?? null}
+					savedSubscription={initialAccess?.subscription ?? null}
+				/>
 			</div>
 		</section>
 	);
