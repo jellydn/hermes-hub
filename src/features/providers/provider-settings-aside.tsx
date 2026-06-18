@@ -1,4 +1,4 @@
-import { CloudUpload, LoaderCircle, Server } from "lucide-react";
+import { CloudUpload, Cpu, LoaderCircle, Server, Sparkles } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { FormFeedback } from "#/components/ui/form-feedback";
 import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
@@ -72,35 +72,76 @@ export function ProviderSettingsAside({
 	return (
 		<aside className="space-y-4">
 			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Active model access</p>
-				<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
-					{activeLabel ?? "No model access configured"}
-				</h3>
-				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-					{activeModel
-						? `Model: ${activeModel}`
-						: "Save an API provider or subscription to power Hermes responses."}
-				</p>
-				{savedApiConfig?.baseUrl ? (
-					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-						Base URL: {savedApiConfig.baseUrl}
+				<div className="mb-3 flex items-center gap-2">
+					<div className="inline-flex rounded-xl border border-[var(--chip-line)] bg-[var(--chip-bg)] p-2 text-[var(--lagoon-deep)]">
+						{activeBackend ? (
+							activeBackend === "subscription" ? (
+								<Sparkles className="h-5 w-5" />
+							) : (
+								<Cpu className="h-5 w-5" />
+							)
+						) : (
+							<Server className="h-5 w-5" />
+						)}
+					</div>
+					<div>
+						<p className="island-kicker m-1">Active Runtime</p>
+						<h3 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
+							{activeLabel ?? "Not configured"}
+						</h3>
+					</div>
+				</div>
+
+				{activeModel ? (
+					<div className="space-y-3 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4">
+						<div className="flex items-center justify-between gap-3">
+							<span className="text-sm text-[var(--sea-ink-soft)]">Model</span>
+							<span className="text-sm font-semibold text-[var(--sea-ink)]">
+								{activeModel}
+							</span>
+						</div>
+						{activeBackend === "api-provider" && savedApiConfig?.baseUrl ? (
+							<div className="flex items-center justify-between gap-3">
+								<span className="text-sm text-[var(--sea-ink-soft)]">
+									Endpoint
+								</span>
+								<span className="max-w-[180px] truncate text-xs text-[var(--sea-ink)]">
+									{savedApiConfig.baseUrl}
+								</span>
+							</div>
+						) : null}
+						{activeBackend === "subscription" && savedSubscription?.baseUrl ? (
+							<div className="flex items-center justify-between gap-3">
+								<span className="text-sm text-[var(--sea-ink-soft)]">
+									Endpoint
+								</span>
+								<span className="max-w-[180px] truncate text-xs text-[var(--sea-ink)]">
+									{savedSubscription.baseUrl}
+								</span>
+							</div>
+						) : null}
+						{activeBackend === "api-provider" && savedApiConfig?.keyLast4 ? (
+							<div className="flex items-center justify-between gap-3">
+								<span className="text-sm text-[var(--sea-ink-soft)]">Key</span>
+								<span className="text-xs text-[var(--sea-ink)]">
+									···{savedApiConfig.keyLast4}
+								</span>
+							</div>
+						) : null}
+						{activeBackend === "subscription" && savedSubscription?.keyLast4 ? (
+							<div className="flex items-center justify-between gap-3">
+								<span className="text-sm text-[var(--sea-ink-soft)]">Key</span>
+								<span className="text-xs text-[var(--sea-ink)]">
+									···{savedSubscription.keyLast4}
+								</span>
+							</div>
+						) : null}
+					</div>
+				) : (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						Save an access method below to power Hermes responses.
 					</p>
-				) : null}
-				{savedApiConfig?.keyLast4 ? (
-					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						Stored key ending in {savedApiConfig.keyLast4}
-					</p>
-				) : null}
-				{savedSubscription?.baseUrl ? (
-					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-						Base URL: {savedSubscription.baseUrl}
-					</p>
-				) : null}
-				{savedSubscription?.keyLast4 ? (
-					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						Stored key ending in {savedSubscription.keyLast4}
-					</p>
-				) : null}
+				)}
 			</section>
 
 			<section className="island-shell rounded-[2rem] p-6">
@@ -178,20 +219,35 @@ export function ProviderSettingsAside({
 			</section>
 
 			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Model notes</p>
+				<p className="island-kicker mb-2">Supported providers</p>
 				<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
-					<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
-					<li>Anthropic: Sonnet and Haiku variants.</li>
-					<li>OpenRouter accepts any model ID.</li>
-					<li>Ollama: Run local open-weight models (e.g. llama3).</li>
-					<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
 					<li>
-						ChatGPT: Subscription models via device-code OAuth on the deployed
-						Hermes server.
+						<strong className="text-[var(--sea-ink)]">OpenAI</strong> — gpt-4o,
+						gpt-4o-mini, gpt-4-turbo
 					</li>
 					<li>
-						Xiaomi MiMo Token Plan: mimo-v2.5-pro and mimo-v2.5 via tp-* API key
-						and the MiMo base URL.
+						<strong className="text-[var(--sea-ink)]">Anthropic</strong> —
+						Sonnet and Haiku variants
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">OpenRouter</strong> — any
+						model ID
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">Ollama</strong> — local
+						open-weight models (e.g. llama3)
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">Custom</strong> — any
+						OpenAI-compatible endpoint
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">ChatGPT</strong> —
+						subscription models via device-code OAuth
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">MiMo</strong> —
+						mimo-v2.5-pro and mimo-v2.5 via tp-* API key
 					</li>
 				</ul>
 			</section>

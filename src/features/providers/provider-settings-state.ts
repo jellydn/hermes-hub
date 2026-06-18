@@ -12,13 +12,16 @@ export type ProviderSettingsUiState = {
 	activeBackend: ModelAccessSnapshot["activeBackend"];
 	isSavingProvider: boolean;
 	isSavingSubscription: boolean;
-	isTesting: boolean;
+	isTestingApiProvider: boolean;
+	isTestingSubscription: boolean;
 	providerSaveMessage: string | null;
 	subscriptionSaveMessage: string | null;
 	providerSaveError: string | null;
 	subscriptionSaveError: string | null;
-	testError: string | null;
-	verifiedConnectionFingerprint: string | null;
+	apiTestError: string | null;
+	subscriptionTestError: string | null;
+	verifiedApiConnectionFingerprint: string | null;
+	verifiedSubscriptionConnectionFingerprint: string | null;
 	isDeploying: boolean;
 	deployError: string | null;
 	deployResult: string | null;
@@ -44,10 +47,14 @@ export type ProviderSettingsUiAction =
 			connectionFingerprint?: string | null;
 	  }
 	| { type: "subscription_save_finished" }
-	| { type: "test_started" }
-	| { type: "test_failed"; error: string }
-	| { type: "test_succeeded"; fingerprint: string }
-	| { type: "test_finished" }
+	| { type: "api_test_started" }
+	| { type: "api_test_failed"; error: string }
+	| { type: "api_test_succeeded"; fingerprint: string }
+	| { type: "api_test_finished" }
+	| { type: "subscription_test_started" }
+	| { type: "subscription_test_failed"; error: string }
+	| { type: "subscription_test_succeeded"; fingerprint: string }
+	| { type: "subscription_test_finished" }
 	| { type: "deploy_started" }
 	| {
 			type: "deploy_failed";
@@ -76,13 +83,16 @@ export function createInitialProviderSettingsUiState(
 		activeBackend: initialAccess?.activeBackend ?? null,
 		isSavingProvider: false,
 		isSavingSubscription: false,
-		isTesting: false,
+		isTestingApiProvider: false,
+		isTestingSubscription: false,
 		providerSaveMessage: null,
 		subscriptionSaveMessage: null,
 		providerSaveError: null,
 		subscriptionSaveError: null,
-		testError: null,
-		verifiedConnectionFingerprint: null,
+		apiTestError: null,
+		subscriptionTestError: null,
+		verifiedApiConnectionFingerprint: null,
+		verifiedSubscriptionConnectionFingerprint: null,
 		isDeploying: false,
 		deployError: null,
 		deployResult: null,
@@ -104,16 +114,16 @@ export function providerSettingsUiReducer(
 				...state,
 				providerSaveMessage: null,
 				providerSaveError: null,
-				testError: null,
-				verifiedConnectionFingerprint: null,
+				apiTestError: null,
+				verifiedApiConnectionFingerprint: null,
 			};
 		case "subscription_changed":
 			return {
 				...state,
 				subscriptionSaveMessage: null,
 				subscriptionSaveError: null,
-				testError: null,
-				verifiedConnectionFingerprint: null,
+				subscriptionTestError: null,
+				verifiedSubscriptionConnectionFingerprint: null,
 			};
 		case "codex_auth_status_load_started":
 			return {
@@ -134,7 +144,7 @@ export function providerSettingsUiReducer(
 				isSavingProvider: true,
 				providerSaveMessage: null,
 				providerSaveError: null,
-				testError: null,
+				apiTestError: null,
 			};
 		case "provider_save_failed":
 			return {
@@ -147,7 +157,7 @@ export function providerSettingsUiReducer(
 				savedApiConfig: action.config,
 				activeBackend: "api-provider",
 				providerSaveMessage: "API provider settings saved.",
-				verifiedConnectionFingerprint: null,
+				verifiedApiConnectionFingerprint: null,
 			};
 		case "provider_save_finished":
 			return {
@@ -160,6 +170,7 @@ export function providerSettingsUiReducer(
 				isSavingSubscription: true,
 				subscriptionSaveMessage: null,
 				subscriptionSaveError: null,
+				subscriptionTestError: null,
 			};
 		case "subscription_save_failed":
 			return {
@@ -173,36 +184,60 @@ export function providerSettingsUiReducer(
 				activeBackend: "subscription",
 				subscriptionSaveMessage: "Subscription settings saved.",
 				savedApiConfig: null,
-				verifiedConnectionFingerprint:
-					action.connectionFingerprint ?? state.verifiedConnectionFingerprint,
+				verifiedSubscriptionConnectionFingerprint:
+					action.connectionFingerprint ??
+					state.verifiedSubscriptionConnectionFingerprint,
 			};
 		case "subscription_save_finished":
 			return {
 				...state,
 				isSavingSubscription: false,
 			};
-		case "test_started":
+		case "api_test_started":
 			return {
 				...state,
-				isTesting: true,
-				testError: null,
+				isTestingApiProvider: true,
+				apiTestError: null,
 				providerSaveError: null,
-				verifiedConnectionFingerprint: null,
+				verifiedApiConnectionFingerprint: null,
 			};
-		case "test_failed":
+		case "api_test_failed":
 			return {
 				...state,
-				testError: action.error,
+				apiTestError: action.error,
 			};
-		case "test_succeeded":
+		case "api_test_succeeded":
 			return {
 				...state,
-				verifiedConnectionFingerprint: action.fingerprint,
+				verifiedApiConnectionFingerprint: action.fingerprint,
 			};
-		case "test_finished":
+		case "api_test_finished":
 			return {
 				...state,
-				isTesting: false,
+				isTestingApiProvider: false,
+			};
+		case "subscription_test_started":
+			return {
+				...state,
+				isTestingSubscription: true,
+				subscriptionTestError: null,
+				subscriptionSaveError: null,
+				verifiedSubscriptionConnectionFingerprint: null,
+			};
+		case "subscription_test_failed":
+			return {
+				...state,
+				subscriptionTestError: action.error,
+			};
+		case "subscription_test_succeeded":
+			return {
+				...state,
+				verifiedSubscriptionConnectionFingerprint: action.fingerprint,
+			};
+		case "subscription_test_finished":
+			return {
+				...state,
+				isTestingSubscription: false,
 			};
 		case "deploy_started":
 			return {

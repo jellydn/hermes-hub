@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useReducer, useState } from "react";
+import { useReducer } from "react";
 import { useForm } from "react-hook-form";
 import {
 	type ApiProviderId,
@@ -27,10 +27,6 @@ import {
 	testSubscriptionAccess,
 } from "./provider-access-actions";
 import {
-	type ProviderAccessTab,
-	resolveInitialProviderAccessTab,
-} from "./provider-access-tab";
-import {
 	createInitialProviderFormState,
 	createInitialSubscriptionFormState,
 	providerSchema,
@@ -51,9 +47,6 @@ export function useProviderSettingsController(
 		initialAccess,
 		createInitialProviderSettingsUiState,
 	);
-	const [selectedTab, setSelectedTab] = useState<ProviderAccessTab>(() =>
-		resolveInitialProviderAccessTab(initialAccess?.activeBackend ?? null),
-	);
 	const providerForm = useForm({
 		resolver: zodResolver(providerSchema),
 		defaultValues: createInitialProviderFormState(initialAccess?.apiProvider),
@@ -67,33 +60,40 @@ export function useProviderSettingsController(
 
 	const apiForm = providerForm.watch();
 	const subscriptionFormValues = subscriptionForm.watch();
-	const activeConnectionFingerprint =
-		selectedTab === "subscription"
-			? subscriptionConnectionFingerprint(
-					subscriptionFormValues.subscriptionProvider,
-					{
-						model: subscriptionFormValues.model,
-						apiKey: subscriptionFormValues.apiKey,
-						baseUrl: subscriptionFormValues.baseUrl,
-						storedKeyLast4:
-							uiState.savedSubscription?.subscriptionProvider ===
-							subscriptionFormValues.subscriptionProvider
-								? uiState.savedSubscription.keyLast4
-								: null,
-					},
-				)
-			: providerConnectionFingerprint(apiForm.provider, {
-					model: apiForm.model,
-					apiKey: apiForm.apiKey,
-					baseUrl: apiForm.baseUrl,
-					storedKeyLast4:
-						uiState.savedApiConfig?.provider === apiForm.provider
-							? uiState.savedApiConfig.keyLast4
-							: null,
-				});
-	const isConnected =
-		uiState.verifiedConnectionFingerprint !== null &&
-		uiState.verifiedConnectionFingerprint === activeConnectionFingerprint;
+
+	const apiConnectionFingerprint = providerConnectionFingerprint(
+		apiForm.provider,
+		{
+			model: apiForm.model,
+			apiKey: apiForm.apiKey,
+			baseUrl: apiForm.baseUrl,
+			storedKeyLast4:
+				uiState.savedApiConfig?.provider === apiForm.provider
+					? uiState.savedApiConfig.keyLast4
+					: null,
+		},
+	);
+	const isApiProviderConnected =
+		uiState.verifiedApiConnectionFingerprint !== null &&
+		uiState.verifiedApiConnectionFingerprint === apiConnectionFingerprint;
+
+	const subscriptionConnectionFp = subscriptionConnectionFingerprint(
+		subscriptionFormValues.subscriptionProvider,
+		{
+			model: subscriptionFormValues.model,
+			apiKey: subscriptionFormValues.apiKey,
+			baseUrl: subscriptionFormValues.baseUrl,
+			storedKeyLast4:
+				uiState.savedSubscription?.subscriptionProvider ===
+				subscriptionFormValues.subscriptionProvider
+					? uiState.savedSubscription.keyLast4
+					: null,
+		},
+	);
+	const isSubscriptionConnected =
+		uiState.verifiedSubscriptionConnectionFingerprint !== null &&
+		uiState.verifiedSubscriptionConnectionFingerprint ===
+			subscriptionConnectionFp;
 
 	function updateProvider(provider: ApiProviderId) {
 		const option = getAiProviderOption(provider);
@@ -143,7 +143,6 @@ export function useProviderSettingsController(
 
 			providerForm.setValue("apiKey", "");
 			dispatch({ type: "provider_save_succeeded", config: result.provider });
-			setSelectedTab("api");
 		} finally {
 			dispatch({ type: "provider_save_finished" });
 		}
@@ -203,32 +202,31 @@ export function useProviderSettingsController(
 				type: "subscription_save_succeeded",
 				config: result.subscription,
 				connectionFingerprint:
-					uiState.verifiedConnectionFingerprint === priorFingerprint
+					uiState.verifiedSubscriptionConnectionFingerprint === priorFingerprint
 						? savedFingerprint
 						: null,
 			});
-			setSelectedTab("subscription");
 		} finally {
 			dispatch({ type: "subscription_save_finished" });
 		}
 	}
 
 	async function handleTestSubscription() {
-		dispatch({ type: "test_started" });
+		dispatch({ type: "subscription_test_started" });
 
 		try {
 			const result = await testSubscriptionAccess(subscriptionFormValues);
 
 			if (!result.ok) {
 				dispatch({
-					type: "test_failed",
+					type: "subscription_test_failed",
 					error: result.error,
 				});
 				return;
 			}
 
 			dispatch({
-				type: "test_succeeded",
+				type: "subscription_test_succeeded",
 				fingerprint: subscriptionConnectionFingerprint(
 					subscriptionFormValues.subscriptionProvider,
 					{
@@ -244,26 +242,26 @@ export function useProviderSettingsController(
 				),
 			});
 		} finally {
-			dispatch({ type: "test_finished" });
+			dispatch({ type: "subscription_test_finished" });
 		}
 	}
 
 	async function handleTestConnection() {
-		dispatch({ type: "test_started" });
+		dispatch({ type: "api_test_started" });
 
 		try {
 			const result = await testProviderAccess(apiForm);
 
 			if (!result.ok) {
 				dispatch({
-					type: "test_failed",
+					type: "api_test_failed",
 					error: result.error,
 				});
 				return;
 			}
 
 			dispatch({
-				type: "test_succeeded",
+				type: "api_test_succeeded",
 				fingerprint: providerConnectionFingerprint(apiForm.provider, {
 					model: apiForm.model,
 					apiKey: apiForm.apiKey,
@@ -275,7 +273,7 @@ export function useProviderSettingsController(
 				}),
 			});
 		} finally {
-			dispatch({ type: "test_finished" });
+			dispatch({ type: "api_test_finished" });
 		}
 	}
 
@@ -343,13 +341,12 @@ export function useProviderSettingsController(
 
 	return {
 		uiState,
-		selectedTab,
-		setSelectedTab,
 		providerForm,
 		subscriptionForm,
 		apiForm,
 		subscriptionFormValues,
-		isConnected,
+		isApiProviderConnected,
+		isSubscriptionConnected,
 		updateProvider,
 		updateSubscription,
 		handleSaveProvider,

@@ -13,8 +13,8 @@ export function AiProviderPage() {
 		<AppShell
 			userEmail={session.user.email}
 			title="AI Provider"
-			description="Connect an API provider or use your ChatGPT subscription, then deploy the active model access to Hermes."
-			kicker="Model Access"
+			description="Choose a subscription or bring your own API key, then deploy the active model access to Hermes."
+			kicker="Access Methods"
 		>
 			<ProviderSettings
 				initialAccess={modelAccess ?? null}
