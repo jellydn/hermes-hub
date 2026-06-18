@@ -35,9 +35,17 @@ on:
       - server/lib/logger.ts
       - server/lib/logger.test.ts
 
+# Deny-by-default at workflow scope; job-scoped permissions re-grant
+# the minimum the check actually needs. Parity with react-doctor.yml.
+permissions: {}
+
 # Cancels in-flight re-runs on the same PR so we only ever look at HEAD.
+# The `|| github.ref` fall-through keeps the group key safe if the
+# workflow is ever extended to `push:` or `schedule:` triggers — without
+# it, the unset `pull_request.number` would collapse every `main` run
+# into one concurrency slot and silently cancel siblings.
 concurrency:
-  group: stack-merge-order-${{ github.event.pull_request.number }}
+  group: stack-merge-order-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
