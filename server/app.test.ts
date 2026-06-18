@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	connectServer,
@@ -159,7 +159,7 @@ vi.mock("./auth", () => ({
 	hasDatabaseUrl,
 }));
 
-import { apiApp } from "./app";
+import { apiApp, magicLinkRateLimiter } from "./app";
 
 describe("apiApp", () => {
 	beforeEach(() => {
@@ -760,8 +760,116 @@ describe("apiApp", () => {
 				method: "POST",
 			},
 		);
-
 		expect(response.status).toBe(200);
 		expect(disconnectTelegram).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("magic-link rate limiter normalization", () => {
+	let consumeSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		// Reset all mock implementations between tests so the multi-call
+		// `authHandler.mockResolvedValue(...)` from one test does not bleed
+		// into the next test's call count.
+		vi.resetAllMocks();
+		// Spy on `consume` so the route's normalize/trim logic runs against
+		// the real controller code while the limiter's point-tracking state
+		// is inert. Spy is restored in afterEach so other describe blocks
+		// observe the real limiter.
+		// `RateLimiterMemory.consume()` returns `RateLimiterRes`; vi.spyOn
+		// locks the parameter type to that contract. Tests don't observe the
+		// return shape, so the `as never` cast bypasses the typed contract.
+		consumeSpy = vi
+			.spyOn(magicLinkRateLimiter, "consume")
+			.mockResolvedValue(undefined as never);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	function postMagicLink(email: string): Promise<Response> {
+		// `apiApp.request` is typed as `Response | Promise<Response>` because
+		// Hono handlers may return synchronously or asynchronously; the route
+		// we hit here is async, so coerce the return type to keep the test
+		// bodies strictly typed.
+		return apiApp.request("http://localhost/api/auth/send-magic-link", {
+			method: "POST",
+			body: JSON.stringify({ email }),
+			headers: { "content-type": "application/json" },
+		}) as Promise<Response>;
+	}
+
+	it("normalizes email casing and whitespace before consuming", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: "ok" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		await postMagicLink("A@x.com");
+		await postMagicLink("a@X.COM");
+		await postMagicLink(" a@x.com ");
+
+		expect(consumeSpy).toHaveBeenCalledTimes(3);
+		expect(
+			consumeSpy.mock.calls.map((args: readonly unknown[]) => String(args[0])),
+		).toEqual(["a@x.com", "a@x.com", "a@x.com"]);
+	});
+
+	it("does not consume for emails longer than 320 chars", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: "ok" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const longEmail = `${"a".repeat(400)}@x.com`;
+		const response = await postMagicLink(longEmail);
+
+		expect(response.status).toBe(200);
+		expect(authHandler).toHaveBeenCalledTimes(1);
+		expect(consumeSpy).not.toHaveBeenCalled();
+	});
+
+	it("rejects the 4th request after 3 normalized consumes", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: "ok" }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		// 4th call rejects, simulating the limiter reporting "rate-limited"
+		// after a 3-of-3 window. Reset the default-resolved spy so this
+		// per-call sequence is the only behavior.
+		consumeSpy.mockReset();
+		consumeSpy.mockResolvedValueOnce(undefined as never);
+		consumeSpy.mockResolvedValueOnce(undefined as never);
+		consumeSpy.mockResolvedValueOnce(undefined as never);
+		consumeSpy.mockRejectedValueOnce(new Error("rate-limited"));
+		// Sentinel: any consume() call beyond the 4 queued slots would
+		// otherwise fall back to the real limiter implementation (and silently
+		// deplete the module-level point tracker). Make extra calls loud.
+		consumeSpy.mockImplementation(() => {
+			throw new Error("unexpected consume() call beyond the 4 queued slots");
+		});
+
+		// Sequential `await` (not `Promise.all`) so the spy mock FIFO order
+		// and the response-array index agree — `responses[3]` is the request
+		// that hit the rate limit, not just the slowest concurrent one.
+		const responses: Response[] = [];
+		responses.push(await postMagicLink("A@x.com"));
+		responses.push(await postMagicLink("a@X.COM"));
+		responses.push(await postMagicLink(" a@x.com "));
+		responses.push(await postMagicLink("a@x.com"));
+
+		expect(responses.slice(0, 3).map((r) => r.status)).toEqual([200, 200, 200]);
+		expect(responses[3].status).toBe(429);
+		const payload = await responses[3].json();
+		expect(payload.error).toMatch(/Too many requests/);
 	});
 });
