@@ -1,4 +1,8 @@
-> **Stacked PRs — merge in order:** [#48 `feat: introduce pino structured logger`](/pull/48) first, then [#47 `refactor: split large files, drop health_checks, add failure observability`](/pull/47). PR #47 adds `server/lib/handler-error-log.ts` which imports from `server/lib/logger.ts` shipped in #48 — merging them in the wrong order (or in parallel) breaks the build. PR #47's base is `feat/logger` (PR #48's branch), so the GitHub UI blocks the order; this note covers local merges, which GitHub can't catch.
+> **Stacked PRs — merge in order:** [#48 `feat: introduce pino structured logger`](/pull/48) first, then [#47 `refactor: split large files, drop health_checks, add failure observability`](/pull/47). PR #47's `server/lib/handler-error-log.ts` imports from `server/lib/logger.ts` shipped in #48 — wrong order (or parallel merge on local clones) breaks the build. PR #47's base is `feat/logger`, so the GitHub UI already blocks the order for the current pair. **Automated fail-safes layered on top of this note** (do not remove without re-papering the chain):
+> 1. **CODEOWNERS review gate** — `.github/CODEOWNERS` requires `@jellydn` review on `server/lib/logger.ts`, `server/lib/handler-error-log.ts`, and this doc. Activate by enabling branch protection on `main` with "Require review from Code Owners".
+> 2. **Status check** — `.github/workflows/stack-merge-order.yml` fails any PR into `main` that touches the helper when `feat/logger` is not an ancestor of the PR head (auto-disables once `feat/logger` is merged and the branch deleted). Activate by enabling branch protection on `main` with the "Stack merge order" check marked required.
+>
+> Reintroduce the chain in lockstep if you split the pair again: keep CODEOWNERS, the workflow, the path filter, and this paragraph pointing at the same PR pair.
 
 # PRD: HermesHub MVP
 

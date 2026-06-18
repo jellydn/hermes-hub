@@ -1,0 +1,86 @@
+# Stack merge order — fails any PR that lands `server/lib/handler-error-log.ts`
+# (or its test) into `main` before `feat/logger` (PR #48) is an ancestor of the
+# PR head. The breadcrumb in tasks/prd-hermes-hub-mvp.md points here for
+# automated enforcement; CODEOWNERS in .github/CODEOWNERS provides the
+# review-time companion gate.
+#
+# Order this guard runs alongside PR #47:
+#   1. PR #48 (feat/logger → main) is opened and reviewed.
+#   2. PR #47 (feat/cleanup-and-refactor → feat/logger) is opened against
+#      PR #48's branch. baseRefName already blocks order at the GitHub UI.
+#   3. This workflow does not fire on PR #47 itself because its base is
+#      not `main`; it is the fail-safe for future PRs that retarget `main`
+#      and touch the helper directly.
+#
+# Self-disable: once feat/logger is merged into main and the branch is
+# deleted on origin, this check no-ops (`git ls-remote` returns nothing).
+# That means future changes to handler-error-log.ts go through the normal
+# review gate without needing to remember the historical stack.
+
+name: Stack merge order
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - server/lib/handler-error-log.ts
+      - server/lib/handler-error-log.test.ts
+
+# Cancels in-flight re-runs on the same PR so we only ever look at HEAD.
+concurrency:
+  group: stack-merge-order-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-stack-order:
+    name: Verify feat/logger is ancestor of PR head
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v6
+        with:
+          # fetch-depth: 0 required for `git merge-base --is-ancestor`.
+          fetch-depth: 0
+
+      - name: Verify feat/logger is ancestor of PR head
+        env:
+          LOGGER_BRANCH: feat/logger
+          LOGGER_PR: "48"
+        run: |
+          set -euo pipefail
+
+          # Step 1 — does the logger-introducer branch still live on origin?
+          # If it has been merged into main and deleted, the stack has
+          # collapsed into main and the order is satisfied by definition.
+          if ! remote_refs="$(git ls-remote --heads origin "$LOGGER_BRANCH")"; then
+            echo "::error title=git ls-remote failed::Could not contact origin."
+            exit 1
+          fi
+
+          if [ -z "$remote_refs" ]; then
+            echo "::notice title=Logger branch absent::$LOGGER_BRANCH no longer exists on origin. Logger has been merged into main; the stack has collapsed and the order check no longer applies."
+            exit 0
+          fi
+
+          # Step 2 — fetch the branch head so we have a real ref to compare.
+          git fetch --no-tags origin "$LOGGER_BRANCH"
+
+          # Step 3 — is the logger branch an ancestor of PR HEAD?
+          if git merge-base --is-ancestor "origin/$LOGGER_BRANCH" HEAD; then
+            echo "::notice title=Stack order OK::$LOGGER_BRANCH is an ancestor of PR head $(git rev-parse --short HEAD). Safe to merge into main."
+            exit 0
+          fi
+
+          # Order is violated — fail with a clear remediation message.
+          {
+            echo "::error title=Stack merge order violated::"
+            echo "::error::This PR modifies server/lib/handler-error-log.ts, which imports from server/lib/logger.ts."
+            echo "::error::$LOGGER_BRANCH (PR #${LOGGER_PR}) introduces server/lib/logger.ts and must be merged into main BEFORE this PR can land."
+            echo "::error::To fix: merge PR #${LOGGER_PR} (${LOGGER_BRANCH} -> main) first, then rebase this branch onto the new main. The companion breadcrumb in tasks/prd-hermes-hub-mvp.md explains why this contract is not negotiable."
+          } >&2
+          exit 1

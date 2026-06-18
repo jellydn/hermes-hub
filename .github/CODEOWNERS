@@ -1,0 +1,28 @@
+# CODEOWNERS — review assignments for this repository.
+#
+# Format: <path-glob>    <github-handle>
+# Last matching rule wins.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Logger API surface — owner approved PR #48 (introduce pino structured
+# logger). Combined with branch protection on `main` requiring code-owner
+# approval, this is one of two stacked-merge guards (the other is the
+# status check in .github/workflows/stack-merge-order.yml).
+# Pras are paired: do not retarget this owner without updating the
+# paired rules in ./stack-merge-order.yml and the breadcrumb in
+# tasks/prd-hermes-hub-mvp.md.
+# @jellydn
+/server/lib/logger.ts                 @jellydn
+/server/lib/logger.test.ts            @jellydn
+
+# Failure-observability helper introduced in PR #47, stacks on the
+# logger above. Required-reviewer gate when combined with branch
+# protection on `main` — the maintainer is expected to spot the
+# stack-order context before approving.
+/server/lib/handler-error-log.ts      @jellydn
+/server/lib/handler-error-log.test.ts @jellydn
+
+# Stacked-merge breadcrumb and reference doc — owner keeps the
+# tracker accurate when new stacked PR pairs land or existing ones
+# collapse into main.
+/tasks/prd-hermes-hub-mvp.md          @jellydn
