@@ -1,52 +1,29 @@
 // @vitest-environment happy-dom
 
-import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ServerListSummary } from "#/lib/servers";
 
-vi.mock("@tanstack/react-start", () => ({
-	createServerFn: () => ({
-		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
-		handler: (fn: Function) => fn,
-	}),
-}));
+vi.mock("@tanstack/react-start", async () => {
+	const { createStartMock } = await import("#/test-helpers/route-mocks");
+	return createStartMock();
+});
 
-vi.mock("@tanstack/react-router", () => ({
-	createFileRoute: () => (config: Record<string, unknown>) => ({
-		options: { beforeLoad: config.beforeLoad },
-		component: config.component,
-	}),
-	getRouteApi: () => ({
-		useRouteContext: () => ({}),
-		useSearch: () => ({}),
-		useParams: () => ({}),
-		useLoaderData: () => ({}),
-	}),
-	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement(
-			"a",
-			{ href: to as string, ...props },
-			children as React.ReactNode,
-		),
-	useNavigate: () => vi.fn(),
-}));
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	return createRouterMock();
+});
 
-vi.mock("#/lib/session", () => ({
-	requireSession: vi.fn(() =>
-		Promise.resolve({
-			user: {
-				id: "user_1",
-				email: "test@example.com",
-				image: null,
-			} as never,
-			session: { id: "session_1" } as never,
-		}),
-	),
-}));
+vi.mock("#/lib/session", async () => {
+	const { createSessionResolverMock } = await import(
+		"#/test-helpers/route-mocks"
+	);
+	return createSessionResolverMock();
+});
 
-vi.mock("@tanstack/react-start/server", () => ({
-	getRequestHeaders: vi.fn(() => ({})),
-}));
+vi.mock("@tanstack/react-start/server", async () => {
+	const { createStartServerMock } = await import("#/test-helpers/route-mocks");
+	return createStartServerMock();
+});
 
 vi.mock("#server/auth", () => ({
 	getAuthSession: vi.fn(),
@@ -56,15 +33,17 @@ vi.mock("#server/servers", () => ({
 	getServerListSnapshot: vi.fn(),
 }));
 
+import {
+	assertRouteComponent,
+	createMockSession,
+} from "#/test-helpers/route-mocks";
 import { getAuthSession } from "#server/auth";
 import { getServerListSnapshot } from "#server/servers";
 import { Route } from "./servers.index";
 
 describe("/servers/ route", () => {
 	it("renders ServersIndexPage component", () => {
-		expect(
-			(Route as unknown as { component?: { name: string } }).component?.name,
-		).toBe("ServersIndexPage");
+		assertRouteComponent(Route, "ServersIndexPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -88,10 +67,7 @@ describe("/servers/ route", () => {
 			} satisfies ServerListSummary,
 		];
 
-		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as never,
-			session: { id: "session_1" } as never,
-		});
+		vi.mocked(getAuthSession).mockResolvedValue(createMockSession());
 		vi.mocked(getServerListSnapshot).mockResolvedValue(
 			mockServers as unknown as Awaited<
 				ReturnType<typeof getServerListSnapshot>

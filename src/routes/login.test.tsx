@@ -1,17 +1,12 @@
 // @vitest-environment happy-dom
 
-import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement(
-			"a",
-			{ href: to as string, ...props },
-			children as React.ReactNode,
-		);
-
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	const base = createRouterMock();
 	return {
+		...base,
 		createFileRoute: () => (config: Record<string, unknown>) => ({
 			options: {
 				beforeLoad: config.beforeLoad,
@@ -26,14 +21,6 @@ vi.mock("@tanstack/react-router", () => {
 				this.to = opts.to as string;
 			}
 		},
-		getRouteApi: () => ({
-			useRouteContext: () => ({}),
-			useSearch: () => ({}),
-			useParams: () => ({}),
-			useLoaderData: () => ({}),
-		}),
-		Link: MockLink,
-		useNavigate: () => vi.fn(),
 	};
 });
 
@@ -42,13 +29,12 @@ vi.mock("#/lib/session", () => ({
 }));
 
 import { getCurrentSession } from "#/lib/session";
+import { assertRouteComponent } from "#/test-helpers/route-mocks";
 import { Route } from "./login";
 
 describe("/login route", () => {
 	it("renders LoginPage component", () => {
-		expect(
-			(Route as unknown as { component?: { name: string } }).component?.name,
-		).toBe("LoginPage");
+		assertRouteComponent(Route, "LoginPage");
 	});
 
 	it("has beforeLoad defined", () => {

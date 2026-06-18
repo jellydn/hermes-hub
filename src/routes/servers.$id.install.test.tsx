@@ -1,52 +1,25 @@
 // @vitest-environment happy-dom
 
-import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement(
-			"a",
-			{ href: to as string, ...props },
-			children as React.ReactNode,
-		);
-
-	return {
-		createFileRoute: () => (config: Record<string, unknown>) => ({
-			options: { beforeLoad: config.beforeLoad },
-			component: config.component,
-		}),
-		getRouteApi: () => ({
-			useRouteContext: () => ({}),
-			useSearch: () => ({}),
-			useParams: () => ({}),
-			useLoaderData: () => ({}),
-		}),
-		Link: MockLink,
-		useNavigate: () => vi.fn(),
-	};
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	return createRouterMock();
 });
 
-vi.mock("#/lib/session", () => ({
-	requireSession: vi.fn(() =>
-		Promise.resolve({
-			user: {
-				id: "user_1",
-				email: "test@example.com",
-				image: null,
-			} as never,
-			session: { id: "session_1" } as never,
-		}),
-	),
-}));
+vi.mock("#/lib/session", async () => {
+	const { createSessionResolverMock } = await import(
+		"#/test-helpers/route-mocks"
+	);
+	return createSessionResolverMock();
+});
 
+import { assertRouteComponent } from "#/test-helpers/route-mocks";
 import { Route } from "./servers.$id.install";
 
 describe("/servers/$id/install route", () => {
 	it("renders ServerInstallPage component", () => {
-		expect(
-			(Route as unknown as { component?: { name: string } }).component?.name,
-		).toBe("ServerInstallPage");
+		assertRouteComponent(Route, "ServerInstallPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
