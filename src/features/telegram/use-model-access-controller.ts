@@ -210,7 +210,10 @@ export function useModelAccessController({
 				return;
 			}
 			dispatch({ type: "switchSucceeded" });
-			void fetchOptions();
+			// Refresh the dropdown before invalidating the route loader so the
+			// sidebar can't briefly observe the new active backend while the
+			// dropdown is still showing stale options.
+			await fetchOptions();
 			onSwitched?.();
 		} catch {
 			dispatch({ type: "switchFailed", error: "Network error during switch" });
