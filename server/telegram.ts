@@ -333,7 +333,20 @@ export async function testTelegramBot(context: Context) {
 		);
 	}
 
-	const decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+	let decryptedApiServerKey: string;
+	try {
+		decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+	} catch (error) {
+		// Surface the actionable decrypt error to the operator as a 502
+		// matching the host-key / SSH failure contract of the same handler.
+		// (Plan 005: `decryptApiServerKey` throws on plaintext / malformed
+		// payloads instead of silently substituting.)
+		const message =
+			error instanceof Error
+				? error.message
+				: "Unable to decrypt API server key";
+		return context.json({ error: message }, 502);
+	}
 	let providerConfig: Awaited<ReturnType<typeof getProviderDeployConfig>> =
 		null;
 	try {

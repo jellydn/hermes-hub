@@ -45,7 +45,17 @@ export function buildManagedComposeContentFromSecrets(input: {
 				input.apiServerKey ?? decryptApiServerKey(telegramInfo.apiServerKey);
 			telegramBotToken =
 				input.telegramBotToken ?? decryptSecret(telegramInfo.botToken);
-		} catch {
+		} catch (error) {
+			// Preserve any actionable message from the underlying decryption
+			// (notably plan 005's legacy-plaintext hint: "...the operator must
+			// re-save the provider via /api/providers."). Without this, a
+			// catch-all "Failed to decrypt." would down-grade what is the
+			// most useful error for the operator.
+			if (error instanceof Error) {
+				throw new Error(
+					`Failed to decrypt Telegram deploy secrets: ${error.message}`,
+				);
+			}
 			throw new Error("Failed to decrypt Telegram deploy secrets.");
 		}
 	}

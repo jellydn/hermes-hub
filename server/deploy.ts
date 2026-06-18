@@ -108,7 +108,20 @@ export async function deployProviderToHermes(context: Context) {
 		deployProviderLabel = deployable.deployLabel;
 	}
 
-	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
+	let decryptedApiServerKey: string;
+	try {
+		decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
+	} catch (error) {
+		// Surface the actionable decrypt error to the operator as a 502
+		// matching the host-key / SSH failure contract of the same handler.
+		// (Plan 005: `decryptApiServerKey` throws on plaintext / malformed
+		// payloads instead of silently substituting.)
+		const message =
+			error instanceof Error
+				? error.message
+				: "Unable to decrypt API server key";
+		return context.json({ error: message }, 502);
+	}
 
 	try {
 		await deployManagedCompose({

@@ -72,20 +72,25 @@ describe("crypto", () => {
 			expect(decryptApiServerKey("")).toBe("");
 		});
 
-		it("returns legacy plaintext verbatim when no dot is present", () => {
-			expect(decryptApiServerKey("legacy-plaintext-key")).toBe(
-				"legacy-plaintext-key",
-			);
-		});
-
 		it("round-trips an encrypted value", () => {
 			expect(decryptApiServerKey(encryptSecret("k"))).toBe("k");
 		});
 
-		it("throws for malformed value containing a dot", () => {
-			expect(() => decryptApiServerKey("a.b.c")).toThrow(
-				/could not be decrypted/,
+		// Plan 005: the silent "decrypt to plaintext when no dot is present"
+		// fallback was removed. Legacy plaintext columns now surface as a
+		// thrown error so operators see the read fail rather than have an
+		// attacker-controlled string stand in for a credential.
+		it("throws for legacy plaintext input without a dot", () => {
+			expect(() => decryptApiServerKey("legacy-plaintext-key")).toThrow(
+				/API server key is in legacy plaintext format/,
 			);
+		});
+
+		// Plan 005: malformed AES-GCM payloads now propagate the original
+		// decrypt error rather than the (now removed) friendly wrapper, so
+		// debugging points at the real failure mode.
+		it("rethrows the underlying error for malformed AES-GCM payloads", () => {
+			expect(() => decryptApiServerKey("a.b.c")).toThrow();
 		});
 	});
 });
