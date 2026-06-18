@@ -1,3 +1,4 @@
+import { maskHost } from "#/lib/utils";
 import { ReviewCard } from "./connection-wizard-review-card";
 import {
 	type ConnectionDraft,
@@ -14,7 +15,7 @@ export function ConnectionWizardReviewStep({
 		<div className="space-y-6">
 			<div className="grid gap-4 md:grid-cols-2">
 				<ReviewCard label="Server label" value={draft.label} />
-				<ReviewCard label="Host" value={draft.host} />
+				<ReviewCard label="Host" value={maskHost(draft.host)} />
 				<ReviewCard label="Port" value={draft.port} />
 				<ReviewCard label="Username" value={draft.username} />
 				<ReviewCard

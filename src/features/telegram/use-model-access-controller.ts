@@ -118,7 +118,20 @@ const initialState: FormState = {
 	hostKeyError: null,
 };
 
-export function useModelAccessController(isDeployed: boolean) {
+export type UseModelAccessControllerParams = {
+	isDeployed: boolean;
+	/**
+	 * Called after a successful switch so the parent can refetch any server-side
+	 * state that should reflect the new active backend (e.g. the route loader's
+	 * model access snapshot that drives the sidebar).
+	 */
+	onSwitched?: () => void;
+};
+
+export function useModelAccessController({
+	isDeployed,
+	onSwitched,
+}: UseModelAccessControllerParams) {
 	const [state, dispatch] = useReducer(formReducer, initialState);
 	const stateRef = useRef(state);
 	stateRef.current = state;
@@ -196,13 +209,16 @@ export function useModelAccessController(isDeployed: boolean) {
 				});
 				return;
 			}
-
 			dispatch({ type: "switchSucceeded" });
-			void fetchOptions();
+			// Refresh the dropdown before invalidating the route loader so the
+			// sidebar can't briefly observe the new active backend while the
+			// dropdown is still showing stale options.
+			await fetchOptions();
+			onSwitched?.();
 		} catch {
 			dispatch({ type: "switchFailed", error: "Network error during switch" });
 		}
-	}, [fetchOptions]);
+	}, [fetchOptions, onSwitched]);
 
 	const handleTrustAndRetrySwitch = useCallback(async () => {
 		const { hostKeyError } = stateRef.current;

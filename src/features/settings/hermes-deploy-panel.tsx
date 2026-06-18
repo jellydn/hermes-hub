@@ -1,9 +1,9 @@
 import { CloudUpload, LoaderCircle } from "lucide-react";
 import { useState } from "react";
-
 import { Button } from "#/components/ui/button";
 import { FormFeedback } from "#/components/ui/form-feedback";
 import type { HermesDeploymentTarget } from "#/lib/load-hermes-deployment-targets";
+import { maskHost } from "#/lib/utils";
 
 export type DeployResponsePayload = {
 	error?: string;
@@ -85,9 +85,9 @@ export function HermesDeployPanel({
 				return;
 			}
 
-			const serverHost = payload?.serverHost ?? selectedTarget.host;
+			const displayHost = maskHost(payload?.serverHost ?? selectedTarget.host);
 			const resolvedPayload = payload ?? {};
-			setDeployResult(formatSuccess(resolvedPayload, serverHost));
+			setDeployResult(formatSuccess(resolvedPayload, displayHost));
 			onDeploySuccess?.(resolvedPayload);
 		} catch {
 			setDeployError(
@@ -130,7 +130,7 @@ export function HermesDeployPanel({
 						>
 							{deploymentTargets.map((target) => (
 								<option key={target.serverId} value={target.serverId}>
-									{target.label} ({target.host})
+									{target.label} ({maskHost(target.host)})
 								</option>
 							))}
 						</select>

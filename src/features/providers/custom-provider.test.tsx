@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	within,
+} from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +17,7 @@ vi.mock("lucide-react", () => {
 		CheckCircle2: MockIcon,
 		Circle: MockIcon,
 		CloudUpload: MockIcon,
+		Cpu: MockIcon,
 		Info: MockIcon,
 		TriangleAlert: MockIcon,
 		KeyRound: MockIcon,
@@ -18,6 +25,7 @@ vi.mock("lucide-react", () => {
 		Radio: MockIcon,
 		Server: MockIcon,
 		ShieldCheck: MockIcon,
+		Sparkles: MockIcon,
 	};
 });
 
@@ -41,16 +49,28 @@ afterEach(() => {
 	cleanup();
 });
 
+function getApiSection() {
+	const apiSection = screen
+		.getByRole("heading", { name: /api keys/i })
+		.closest("section");
+	if (!apiSection) {
+		throw new Error("Expected API provider section to render.");
+	}
+	return apiSection;
+}
+
 describe("ProviderSettings - custom provider", () => {
 	it("selects custom provider without crashing", () => {
 		render(<ProviderSettings initialAccess={null} />);
-		fireEvent.click(screen.getByRole("tab", { name: /api providers/i }));
+		const apiSection = getApiSection();
 
-		fireEvent.click(screen.getByRole("radio", { name: /custom \/ byo/i }));
+		fireEvent.click(
+			within(apiSection).getByRole("radio", { name: /custom \/ byo/i }),
+		);
 
-		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
 	});
 
 	it("loads saved custom config without crashing", () => {
@@ -70,11 +90,12 @@ describe("ProviderSettings - custom provider", () => {
 				}}
 			/>,
 		);
+		const apiSection = getApiSection();
 
-		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
-		expect(screen.getByDisplayValue("deepseek-chat")).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByDisplayValue("deepseek-chat")).toBeTruthy();
 	});
 
 	it("loads saved custom config with empty model without crashing", () => {
@@ -94,10 +115,11 @@ describe("ProviderSettings - custom provider", () => {
 				}}
 			/>,
 		);
+		const apiSection = getApiSection();
 
-		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
 	});
 
 	it("loads saved custom config with baseUrl undefined without crashing", () => {
@@ -116,9 +138,10 @@ describe("ProviderSettings - custom provider", () => {
 				}}
 			/>,
 		);
+		const apiSection = getApiSection();
 
-		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
 	});
 });

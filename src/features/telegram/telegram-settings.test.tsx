@@ -10,12 +10,24 @@ import {
 import type { ComponentPropsWithoutRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Hoisted so we can wire it into the @tanstack/react-router mock below
+// and assert against it from individual tests.
+const routerSpies = vi.hoisted(() => ({
+	invalidate: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+	useRouter: () => ({ invalidate: routerSpies.invalidate }),
+}));
+
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
 	return {
 		AlertCircle: MockIcon,
 		ArrowRight: MockIcon,
 		CheckCircle2: MockIcon,
+		CloudUpload: MockIcon,
+		Cpu: MockIcon,
 		Circle: MockIcon,
 		ExternalLink: MockIcon,
 		Info: MockIcon,
@@ -25,6 +37,8 @@ vi.mock("lucide-react", () => {
 		RefreshCw: MockIcon,
 		Rocket: MockIcon,
 		Send: MockIcon,
+		Server: MockIcon,
+		Sparkles: MockIcon,
 		Unplug: MockIcon,
 		UserCheck: MockIcon,
 		Users: MockIcon,
@@ -79,6 +93,7 @@ describe("TelegramSettings", () => {
 	it("shows the current connected bot summary", () => {
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -94,7 +109,7 @@ describe("TelegramSettings", () => {
 	});
 
 	it("connects a Telegram bot and shows the success state", async () => {
-		render(<TelegramSettings initialConfig={null} />);
+		render(<TelegramSettings initialAccess={null} initialConfig={null} />);
 
 		fireEvent.change(screen.getByLabelText(/bot token/i), {
 			target: { value: "123456:secret-token" },
@@ -138,6 +153,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -227,6 +243,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -313,6 +330,7 @@ describe("TelegramSettings", () => {
 
 		render(
 			<TelegramSettings
+				initialAccess={null}
 				initialConfig={{
 					botUsername: "hermes_helper_bot",
 					botTokenLast4: "1234",
@@ -336,6 +354,92 @@ describe("TelegramSettings", () => {
 			expect.objectContaining({
 				method: "POST",
 				body: JSON.stringify({ code: "RGTS8S2R" }),
+			}),
+		);
+	});
+
+	it("refetches the route loader after a successful model switch", async () => {
+		fetchMock
+			// mount fetch: model-access-options
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						options: [
+							{
+								optionId: "opt-openai",
+								kind: "api-provider",
+								label: "OpenAI",
+								model: "gpt-4o-mini",
+								isActive: false,
+							},
+						],
+						activeOptionId: null,
+					}),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				),
+			)
+			// POST model-switch
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ status: "switched" }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			)
+			// post-switch refresh of model-access-options
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						options: [
+							{
+								optionId: "opt-openai",
+								kind: "api-provider",
+								label: "OpenAI",
+								model: "gpt-4o-mini",
+								isActive: true,
+							},
+						],
+						activeOptionId: "opt-openai",
+					}),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				),
+			);
+
+		routerSpies.invalidate.mockClear();
+
+		render(
+			<TelegramSettings
+				initialAccess={null}
+				initialConfig={{
+					botUsername: "hermes_helper_bot",
+					botTokenLast4: "1234",
+					isActive: true,
+					deployedServerHost: "95.111.232.131",
+				}}
+			/>,
+		);
+
+		await flushAsyncWork();
+
+		// Pick the saved OpenAI option and switch.
+		fireEvent.change(screen.getByLabelText(/provider \/ subscription/i), {
+			target: { value: "opt-openai" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^switch$/i }));
+
+		await flushAsyncWork();
+
+		// The fix for the sidebar staying stale after a switch: TelegramSettings
+		// must invalidate the route loader so `initialAccess?.activeBackend`
+		// re-reads the new active backend and the deploy button enables.
+		expect(routerSpies.invalidate).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/model-switch",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({
+					optionId: "opt-openai",
+					model: "gpt-4o-mini",
+				}),
 			}),
 		);
 	});

@@ -2,47 +2,27 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-start", () => ({
-	createServerFn: () => ({
-		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
-		handler: (fn: Function) => fn,
-	}),
-}));
-
-vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children);
-
-	return {
-		createFileRoute: () => (config: Record<string, unknown>) => ({
-			options: { beforeLoad: config.beforeLoad },
-			component: config.component,
-		}),
-		getRouteApi: () => ({
-			useRouteContext: () => ({}),
-			useSearch: () => ({}),
-			useParams: () => ({}),
-			useLoaderData: () => ({}),
-		}),
-		Link: MockLink,
-		useNavigate: () => vi.fn(),
-	};
+vi.mock("@tanstack/react-start", async () => {
+	const { createStartMock } = await import("#/test-helpers/route-mocks");
+	return createStartMock();
 });
 
-import React from "react";
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	return createRouterMock();
+});
 
-vi.mock("#/lib/session", () => ({
-	requireSession: vi.fn(() =>
-		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as any,
-			session: { id: "session_1" } as any,
-		}),
-	),
-}));
+vi.mock("#/lib/session", async () => {
+	const { createSessionResolverMock } = await import(
+		"#/test-helpers/route-mocks"
+	);
+	return createSessionResolverMock();
+});
 
-vi.mock("@tanstack/react-start/server", () => ({
-	getRequestHeaders: vi.fn(() => ({})),
-}));
+vi.mock("@tanstack/react-start/server", async () => {
+	const { createStartServerMock } = await import("#/test-helpers/route-mocks");
+	return createStartServerMock();
+});
 
 vi.mock("#server/auth", () => ({
 	getAuthSession: vi.fn(),
@@ -52,13 +32,22 @@ vi.mock("#server/telegram", () => ({
 	getCurrentTelegramConfig: vi.fn(),
 }));
 
+vi.mock("#server/providers", () => ({
+	getModelAccessSnapshot: vi.fn(),
+}));
+
+import {
+	assertRouteComponent,
+	createMockSession,
+} from "#/test-helpers/route-mocks";
 import { getAuthSession } from "#server/auth";
+import { getModelAccessSnapshot } from "#server/providers";
 import { getCurrentTelegramConfig } from "#server/telegram";
 import { Route } from "./telegram";
 
 describe("/telegram route", () => {
 	it("renders TelegramPage component", () => {
-		expect((Route as any).component?.name).toBe("TelegramPage");
+		assertRouteComponent(Route, "TelegramPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -73,11 +62,17 @@ describe("/telegram route", () => {
 			deployedServerHost: "1.2.3.4",
 		};
 
-		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+		vi.mocked(getAuthSession).mockResolvedValue(createMockSession());
+		vi.mocked(getCurrentTelegramConfig).mockResolvedValue(
+			mockConfig as unknown as NonNullable<
+				Awaited<ReturnType<typeof getCurrentTelegramConfig>>
+			>,
+		);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue({
+			activeBackend: null,
+			apiProvider: null,
+			subscription: null,
 		});
-		vi.mocked(getCurrentTelegramConfig).mockResolvedValue(mockConfig as any);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
@@ -86,12 +81,14 @@ describe("/telegram route", () => {
 
 		expect(result).toHaveProperty("session");
 		expect(result).toHaveProperty("telegramConfig");
+		expect(result).toHaveProperty("modelAccess");
 		expect(result.telegramConfig).toEqual(mockConfig);
 	});
 
 	it("returns null telegram config when unauthenticated", async () => {
 		vi.mocked(getAuthSession).mockResolvedValue(null);
 		vi.mocked(getCurrentTelegramConfig).mockResolvedValue(null as never);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue(null as never);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({

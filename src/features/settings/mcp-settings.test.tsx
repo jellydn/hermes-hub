@@ -368,7 +368,9 @@ describe("McpSettings", () => {
 			}),
 		);
 		expect(
-			screen.getByText(/deployed 1 mcp server to 5\.6\.7\.8/i),
+			screen.getByText((content) =>
+				content.startsWith("Deployed 1 MCP server to "),
+			),
 		).toBeTruthy();
 	});
 

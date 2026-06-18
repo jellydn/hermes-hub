@@ -1,4 +1,7 @@
+import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+
+import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 
 import { TelegramConnectSection } from "./telegram-connect-section";
 import { TelegramDeploySection } from "./telegram-deploy-section";
@@ -16,9 +19,14 @@ export type TelegramSettingsSummary = {
 
 type TelegramSettingsProps = {
 	initialConfig: TelegramSettingsSummary | null;
+	initialAccess: ModelAccessSnapshot | null;
 };
 
-export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
+export function TelegramSettings({
+	initialConfig,
+	initialAccess,
+}: TelegramSettingsProps) {
+	const router = useRouter();
 	const [savedConfig, setSavedConfig] =
 		useState<TelegramSettingsSummary | null>(initialConfig);
 
@@ -32,6 +40,12 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 
 	function handleConfigUpdate(config: TelegramSettingsSummary) {
 		setSavedConfig(config);
+	}
+
+	// After a successful model switch, refetch the route loader so the sidebar's
+	// model-access deployment panel reflects the new active backend.
+	function handleModelSwitched() {
+		void router.invalidate();
 	}
 
 	const isDeployed = Boolean(savedConfig?.deployedServerHost);
@@ -53,7 +67,10 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 								onConfigChange={handleConfigUpdate}
 							/>
 
-							<TelegramModelAccessSection isDeployed={isDeployed} />
+							<TelegramModelAccessSection
+								isDeployed={isDeployed}
+								onSwitched={handleModelSwitched}
+							/>
 
 							<TelegramPairingSection
 								key={savedConfig.deployedServerHost ?? "not-deployed"}
@@ -65,7 +82,12 @@ export function TelegramSettings({ initialConfig }: TelegramSettingsProps) {
 					) : null}
 				</div>
 
-				<TelegramSidebar savedConfig={savedConfig} />
+				<TelegramSidebar
+					savedConfig={savedConfig}
+					activeBackend={initialAccess?.activeBackend ?? null}
+					savedApiConfig={initialAccess?.apiProvider ?? null}
+					savedSubscription={initialAccess?.subscription ?? null}
+				/>
 			</div>
 		</section>
 	);

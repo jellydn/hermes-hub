@@ -6,7 +6,8 @@ import { TelegramSettings } from "#/features/telegram/telegram-settings";
 const telegramRouteApi = getRouteApi("/telegram");
 
 export function TelegramPage() {
-	const { session, telegramConfig } = telegramRouteApi.useRouteContext();
+	const { session, telegramConfig, modelAccess } =
+		telegramRouteApi.useRouteContext();
 
 	return (
 		<AppShell
@@ -15,7 +16,10 @@ export function TelegramPage() {
 			description="Connect your Telegram bot, deploy it to Hermes, and test the integration."
 			kicker="Chat Channels"
 		>
-			<TelegramSettings initialConfig={telegramConfig ?? null} />
+			<TelegramSettings
+				initialConfig={telegramConfig ?? null}
+				initialAccess={modelAccess ?? null}
+			/>
 		</AppShell>
 	);
 }

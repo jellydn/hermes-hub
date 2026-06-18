@@ -2,11 +2,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children);
-
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	const base = createRouterMock();
 	return {
+		...base,
 		createFileRoute: () => (config: Record<string, unknown>) => ({
 			options: {
 				beforeLoad: config.beforeLoad,
@@ -21,29 +21,20 @@ vi.mock("@tanstack/react-router", () => {
 				this.to = opts.to as string;
 			}
 		},
-		getRouteApi: () => ({
-			useRouteContext: () => ({}),
-			useSearch: () => ({}),
-			useParams: () => ({}),
-			useLoaderData: () => ({}),
-		}),
-		Link: MockLink,
-		useNavigate: () => vi.fn(),
 	};
 });
-
-import React from "react";
 
 vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
 }));
 
 import { getCurrentSession } from "#/lib/session";
+import { assertRouteComponent } from "#/test-helpers/route-mocks";
 import { Route } from "./index";
 
 describe("/ (landing) route", () => {
 	it("renders LandingPage component", () => {
-		expect((Route as any).component?.name).toBe("LandingPage");
+		assertRouteComponent(Route, "LandingPage");
 	});
 
 	it("has beforeLoad defined", () => {
@@ -52,8 +43,8 @@ describe("/ (landing) route", () => {
 
 	it("redirects to dashboard when authenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1" } as never,
+			session: { id: "session_1" } as never,
 		});
 
 		await expect(
@@ -74,9 +65,9 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page description", () => {
-		const head = (Route as any).options?.head?.() as
-			| { meta?: Array<Record<string, string>> }
-			| undefined;
+		const head = (
+			Route as unknown as { options?: { head?: () => unknown } }
+		).options?.head?.() as { meta?: Array<Record<string, string>> } | undefined;
 		const meta = head?.meta ?? [];
 		expect(meta).toEqual(
 			expect.arrayContaining([
@@ -88,9 +79,9 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page title", () => {
-		const head = (Route as any).options?.head?.() as
-			| { meta?: Array<Record<string, string>> }
-			| undefined;
+		const head = (
+			Route as unknown as { options?: { head?: () => unknown } }
+		).options?.head?.() as { meta?: Array<Record<string, string>> } | undefined;
 		const meta = head?.meta ?? [];
 		expect(meta).toEqual(
 			expect.arrayContaining([

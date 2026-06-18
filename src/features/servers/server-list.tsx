@@ -5,6 +5,7 @@ import { Button } from "#/components/ui/button";
 import { StatusIcon } from "#/components/ui/status-icon";
 import type { ServerListSummary } from "#/lib/servers";
 import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
+import { maskHost } from "#/lib/utils";
 
 import { formatInstallStatus, formatTimestamp } from "./server-detail-helpers";
 
@@ -48,7 +49,7 @@ export function ServerList({ servers }: ServerListProps) {
 								{server.label}
 							</h3>
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)] sm:text-base">
-								{server.host}
+								{maskHost(server.host)}
 								{formatOsSummary(server) ? ` · ${formatOsSummary(server)}` : ""}
 							</p>
 						</div>

@@ -1,14 +1,8 @@
-import { CloudUpload, LoaderCircle, Server } from "lucide-react";
-import { Button } from "#/components/ui/button";
-import { FormFeedback } from "#/components/ui/form-feedback";
-import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
-import type { HostKeyErrorPayload } from "#/features/servers/host-key-recovery";
-import { formatAiProviderLabel } from "#/lib/ai-providers";
+import { Server } from "lucide-react";
+import { ActiveRuntimeCard } from "#/features/providers/active-runtime-card";
+import { ModelAccessDeployPanel } from "#/features/providers/model-access-deploy-panel";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
-import {
-	formatUserSubscriptionLabel,
-	subscriptionSupportsConnectionTest,
-} from "#/lib/user-subscriptions";
+import { subscriptionSupportsConnectionTest } from "#/lib/user-subscriptions";
 import type { CodexAuthStatus } from "#shared/contracts/codex-auth";
 import type {
 	ApiProviderConfigSummary,
@@ -23,14 +17,6 @@ type ProviderSettingsAsideProps = {
 	telegramDeploy?: TelegramDeployInfo | null;
 	codexAuthStatus: CodexAuthStatus | null;
 	isLoadingCodexAuth: boolean;
-	isDeploying: boolean;
-	deployError: string | null;
-	deployResult: string | null;
-	hostKeyError: HostKeyErrorPayload | null;
-	isAcceptingKey: boolean;
-	onDeploy: () => void;
-	onTrustAndRetry: () => void;
-	onDismissHostKey: () => void;
 };
 
 export function ProviderSettingsAside({
@@ -40,25 +26,11 @@ export function ProviderSettingsAside({
 	telegramDeploy,
 	codexAuthStatus,
 	isLoadingCodexAuth,
-	isDeploying,
-	deployError,
-	deployResult,
-	hostKeyError,
-	isAcceptingKey,
-	onDeploy,
-	onTrustAndRetry,
-	onDismissHostKey,
 }: ProviderSettingsAsideProps) {
 	const activeModel =
 		activeBackend === "subscription"
 			? savedSubscription?.model
 			: savedApiConfig?.model;
-	const activeLabel =
-		activeBackend === "subscription" && savedSubscription
-			? formatUserSubscriptionLabel(savedSubscription.subscriptionProvider)
-			: savedApiConfig
-				? formatAiProviderLabel(savedApiConfig.provider)
-				: null;
 	const requiresCodexAuth =
 		activeBackend === "subscription" &&
 		savedSubscription &&
@@ -71,100 +43,17 @@ export function ProviderSettingsAside({
 
 	return (
 		<aside className="space-y-4">
-			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Active model access</p>
-				<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
-					{activeLabel ?? "No model access configured"}
-				</h3>
-				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-					{activeModel
-						? `Model: ${activeModel}`
-						: "Save an API provider or subscription to power Hermes responses."}
-				</p>
-				{savedApiConfig?.baseUrl ? (
-					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-						Base URL: {savedApiConfig.baseUrl}
-					</p>
-				) : null}
-				{savedApiConfig?.keyLast4 ? (
-					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						Stored key ending in {savedApiConfig.keyLast4}
-					</p>
-				) : null}
-				{savedSubscription?.baseUrl ? (
-					<p className="mt-3 mb-0 text-xs text-[var(--sea-ink-soft)] truncate">
-						Base URL: {savedSubscription.baseUrl}
-					</p>
-				) : null}
-				{savedSubscription?.keyLast4 ? (
-					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-						Stored key ending in {savedSubscription.keyLast4}
-					</p>
-				) : null}
-			</section>
+			<ActiveRuntimeCard
+				activeBackend={activeBackend}
+				savedApiConfig={savedApiConfig}
+				savedSubscription={savedSubscription}
+			/>
 
-			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Hermes deployment</p>
-				{telegramDeploy ? (
-					<>
-						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-							Push your active model access config to the Hermes server.
-						</p>
-						{activeModel ? (
-							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								Model:{" "}
-								<span className="font-semibold text-[var(--sea-ink)]">
-									{activeModel}
-								</span>
-							</p>
-						) : null}
-						{requiresCodexAuth && !codexReadyForDeploy ? (
-							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								{isLoadingCodexAuth
-									? "Checking remote Codex auth status..."
-									: "Complete ChatGPT device-code login before deploying to Hermes."}
-							</p>
-						) : null}
-						<div className="mt-4">
-							<Button
-								type="button"
-								onClick={onDeploy}
-								disabled={isDeploying || !canDeploy}
-							>
-								{isDeploying ? (
-									<LoaderCircle className="h-4 w-4 animate-spin" />
-								) : (
-									<CloudUpload className="h-4 w-4" />
-								)}
-								<span>
-									{isDeploying ? "Deploying..." : "Deploy to Hermes Server"}
-								</span>
-							</Button>
-						</div>
-
-						{hostKeyError ? (
-							<div className="mt-3">
-								<HostKeyTrustPanel
-									hostKeyError={hostKeyError}
-									isAcceptingKey={isAcceptingKey}
-									onTrustAndRetry={onTrustAndRetry}
-									onDismiss={onDismissHostKey}
-								/>
-							</div>
-						) : null}
-
-						{deployError ? (
-							<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
-								{deployError}
-							</FormFeedback>
-						) : null}
-						{deployResult ? (
-							<FormFeedback className="mt-3 mb-0 text-sm" tone="success">
-								{deployResult}
-							</FormFeedback>
-						) : null}
-					</>
-				) : (
+			<ModelAccessDeployPanel
+				title="Hermes deployment"
+				isDeployed={Boolean(telegramDeploy)}
+				disabled={!canDeploy}
+				emptyMessage={
 					<>
 						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 							Deploy a Telegram bot to a VPS first to enable Hermes deployment.
@@ -174,24 +63,58 @@ export function ProviderSettingsAside({
 							<span>Not deployed</span>
 						</div>
 					</>
-				)}
-			</section>
+				}
+			>
+				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+					Push your active model access config to the Hermes server.
+				</p>
+				{activeBackend && activeModel ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						Model:{" "}
+						<span className="font-semibold text-[var(--sea-ink)]">
+							{activeModel}
+						</span>
+					</p>
+				) : null}
+				{requiresCodexAuth && !codexReadyForDeploy ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						{isLoadingCodexAuth
+							? "Checking remote Codex auth status..."
+							: "Complete ChatGPT device-code login before deploying to Hermes."}
+					</p>
+				) : null}
+			</ModelAccessDeployPanel>
 
 			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Model notes</p>
+				<p className="island-kicker mb-2">Supported providers</p>
 				<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
-					<li>OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo.</li>
-					<li>Anthropic: Sonnet and Haiku variants.</li>
-					<li>OpenRouter accepts any model ID.</li>
-					<li>Ollama: Run local open-weight models (e.g. llama3).</li>
-					<li>Custom: Connect to custom OpenAI-compatible endpoints.</li>
 					<li>
-						ChatGPT: Subscription models via device-code OAuth on the deployed
-						Hermes server.
+						<strong className="text-[var(--sea-ink)]">OpenAI</strong> — gpt-4o,
+						gpt-4o-mini, gpt-4-turbo
 					</li>
 					<li>
-						Xiaomi MiMo Token Plan: mimo-v2.5-pro and mimo-v2.5 via tp-* API key
-						and the MiMo base URL.
+						<strong className="text-[var(--sea-ink)]">Anthropic</strong> —
+						Sonnet and Haiku variants
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">OpenRouter</strong> — any
+						model ID
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">Ollama</strong> — local
+						open-weight models (e.g. llama3)
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">Custom</strong> — any
+						OpenAI-compatible endpoint
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">ChatGPT</strong> —
+						subscription models via device-code OAuth
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">MiMo</strong> —
+						mimo-v2.5-pro and mimo-v2.5 via tp-* API key
 					</li>
 				</ul>
 			</section>

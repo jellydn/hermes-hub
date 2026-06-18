@@ -18,6 +18,7 @@ vi.mock("lucide-react", () => {
 		CheckCircle2: MockIcon,
 		Circle: MockIcon,
 		CloudUpload: MockIcon,
+		Cpu: MockIcon,
 		Info: MockIcon,
 		TriangleAlert: MockIcon,
 		KeyRound: MockIcon,
@@ -25,6 +26,7 @@ vi.mock("lucide-react", () => {
 		Radio: MockIcon,
 		Server: MockIcon,
 		ShieldCheck: MockIcon,
+		Sparkles: MockIcon,
 	};
 });
 
@@ -62,6 +64,34 @@ beforeEach(() => {
 	);
 });
 
+function getApiSection() {
+	const apiSection = screen
+		.getByRole("heading", { name: /api keys/i })
+		.closest("section");
+	if (!apiSection) {
+		throw new Error("Expected API provider section to render.");
+	}
+	return apiSection;
+}
+
+function getSubSection() {
+	const subSection = screen
+		.getByRole("heading", { name: /subscriptions/i })
+		.closest("section");
+	if (!subSection) {
+		throw new Error("Expected subscriptions section to render.");
+	}
+	return subSection;
+}
+
+function getAside() {
+	const aside = document.querySelector("aside");
+	if (!aside) {
+		throw new Error("Expected sidebar aside to render.");
+	}
+	return aside;
+}
+
 describe("ProviderSettings", () => {
 	it("shows a masked stored key and keeps the saved API provider visible", () => {
 		render(
@@ -80,41 +110,44 @@ describe("ProviderSettings", () => {
 			/>,
 		);
 
-		expect(screen.getByText(/^stored key ending in 1234$/i)).toBeTruthy();
-		expect(screen.getByText(/^active model access$/i)).toBeTruthy();
-		expect(screen.getByDisplayValue("gpt-4o-mini")).toBeTruthy();
+		const apiSection = getApiSection();
+
+		expect(
+			within(apiSection).getByText(/stored key ending in 1234/i),
+		).toBeTruthy();
+		expect(screen.getByText(/^active runtime$/i)).toBeTruthy();
+		expect(within(apiSection).getByDisplayValue("gpt-4o-mini")).toBeTruthy();
 	});
 
 	it("switches to a custom model field for OpenRouter", () => {
 		render(<ProviderSettings initialAccess={null} />);
-		selectApiProvidersTab();
+		const apiSection = getApiSection();
 
-		const apiSection = screen
-			.getByRole("heading", { name: /connect with an api key/i })
-			.closest("section");
-		if (!apiSection) {
-			throw new Error("Expected API provider section to render.");
-		}
-
-		fireEvent.click(screen.getByRole("radio", { name: /openrouter/i }));
+		fireEvent.click(
+			within(apiSection).getByRole("radio", { name: /openrouter/i }),
+		);
 
 		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
 		expect(within(apiSection).queryByRole("combobox")).toBeNull();
-		expect(screen.getByDisplayValue("openai/gpt-4o-mini")).toBeTruthy();
+		expect(
+			within(apiSection).getByDisplayValue("openai/gpt-4o-mini"),
+		).toBeTruthy();
 	});
 
 	it("tests the provider connection and shows the connected state", async () => {
 		render(<ProviderSettings initialAccess={null} />);
-		selectApiProvidersTab();
+		const apiSection = getApiSection();
 
-		fireEvent.change(screen.getByLabelText(/api key/i), {
+		fireEvent.change(within(apiSection).getByLabelText(/api key/i), {
 			target: { value: "sk-live-secret" },
 		});
-		fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+		fireEvent.click(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		);
 
 		await flushAsyncWork();
 
-		expect(screen.getByText(/^provider connected$/i)).toBeTruthy();
+		expect(within(apiSection).getByText(/^provider connected$/i)).toBeTruthy();
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/providers/test",
@@ -126,50 +159,61 @@ describe("ProviderSettings", () => {
 
 	it("shows Base URL and Custom Model fields when Ollama is selected", () => {
 		render(<ProviderSettings initialAccess={null} />);
-		selectApiProvidersTab();
+		const apiSection = getApiSection();
 
-		fireEvent.click(screen.getByRole("radio", { name: /ollama \/ local/i }));
+		fireEvent.click(
+			within(apiSection).getByRole("radio", { name: /ollama \/ local/i }),
+		);
 
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByLabelText(/custom model id/i)).toBeTruthy();
-		expect(screen.getByDisplayValue("http://localhost:11434/v1")).toBeTruthy();
-		expect(screen.getByDisplayValue("llama3")).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(
+			within(apiSection).getByDisplayValue("http://localhost:11434/v1"),
+		).toBeTruthy();
+		expect(within(apiSection).getByDisplayValue("llama3")).toBeTruthy();
 	});
 
 	it("does not show ChatGPT or MiMo in the API provider grid", () => {
 		render(<ProviderSettings initialAccess={null} />);
-		selectApiProvidersTab();
+		const apiSection = getApiSection();
 
 		expect(
-			screen.queryByRole("radio", { name: /openai codex \/ chatgpt/i }),
+			within(apiSection).queryByRole("radio", {
+				name: /openai codex \/ chatgpt/i,
+			}),
 		).toBeNull();
 		expect(
-			screen.queryByRole("radio", { name: /xiaomi mimo token plan/i }),
+			within(apiSection).queryByRole("radio", {
+				name: /xiaomi mimo token plan/i,
+			}),
 		).toBeNull();
-		expect(
-			screen.getByRole("tab", { name: /user subscriptions/i }),
-		).toBeTruthy();
+		expect(screen.getByRole("heading", { name: /api keys/i })).toBeTruthy();
 	});
 
-	it("shows MiMo Token Plan controls in the User subscriptions tab", () => {
+	it("shows MiMo Token Plan controls in the subscriptions section", () => {
 		render(<ProviderSettings initialAccess={null} />);
+		const subSection = getSubSection();
 
 		fireEvent.click(
-			screen.getByRole("radio", { name: /xiaomi mimo token plan/i }),
+			within(subSection).getByRole("radio", {
+				name: /xiaomi mimo token plan/i,
+			}),
 		);
 
-		expect(screen.getByLabelText(/api key/i)).toBeTruthy();
-		expect(screen.getByLabelText(/base url/i)).toBeTruthy();
-		expect(screen.getByDisplayValue("mimo-v2.5-pro")).toBeTruthy();
+		expect(within(subSection).getByLabelText(/api key/i)).toBeTruthy();
+		expect(within(subSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(subSection).getByDisplayValue("mimo-v2.5-pro")).toBeTruthy();
 		expect(
-			screen.getByDisplayValue("https://token-plan-cn.xiaomimimo.com/v1"),
+			within(subSection).getByDisplayValue(
+				"https://token-plan-cn.xiaomimimo.com/v1",
+			),
 		).toBeTruthy();
 		expect(
-			screen.getByRole("button", { name: /test connection/i }),
+			within(subSection).getByRole("button", { name: /test connection/i }),
 		).toBeTruthy();
 	});
 
-	it("keeps the User subscriptions tab active for saved MiMo config", () => {
+	it("shows saved MiMo config in the subscription panel and sidebar", () => {
 		render(
 			<ProviderSettings
 				initialAccess={{
@@ -188,14 +232,17 @@ describe("ProviderSettings", () => {
 			/>,
 		);
 
-		const subscriptionTab = screen.getByRole("tab", {
-			name: /user subscriptions/i,
-		});
-		expect(within(subscriptionTab).getByText(/^active$/i)).toBeTruthy();
-		expect(screen.getByText(/^stored key ending in 1234$/i)).toBeTruthy();
+		const subSection = getSubSection();
+		const aside = getAside();
+
+		expect(
+			within(subSection).getByText(/stored key ending in 1234/i),
+		).toBeTruthy();
+		expect(screen.getByText(/^active runtime$/i)).toBeTruthy();
+		expect(within(aside).getByRole("heading", { name: /mimo/i })).toBeTruthy();
 	});
 
-	it("marks the active backend on the matching tab", () => {
+	it("marks the active backend in the sidebar", () => {
 		render(
 			<ProviderSettings
 				initialAccess={{
@@ -212,11 +259,15 @@ describe("ProviderSettings", () => {
 			/>,
 		);
 
-		const apiTab = screen.getByRole("tab", { name: /api providers/i });
-		expect(within(apiTab).getByText(/^active$/i)).toBeTruthy();
+		const aside = getAside();
+
+		expect(screen.getByText(/^active runtime$/i)).toBeTruthy();
+		expect(
+			within(aside).getByRole("heading", { name: /openai/i }),
+		).toBeTruthy();
 	});
 
-	it("hides the API key field in the subscription section", async () => {
+	it("hides the API key field in the subscription section for ChatGPT", async () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response(
 				JSON.stringify({
@@ -248,11 +299,7 @@ describe("ProviderSettings", () => {
 		expect(document.getElementById("subscription-api-key")).toBeNull();
 		expect(
 			screen.getAllByText(/chatgpt device-code login/i).length,
-		).toBeGreaterThan(0);
-
-		selectApiProvidersTab();
-
-		expect(screen.getAllByLabelText(/api key/i)).toHaveLength(1);
+		).toBeGreaterThanOrEqual(2);
 	});
 
 	it("enables ChatGPT deploy when remote auth is already authenticated", async () => {
@@ -349,10 +396,6 @@ describe("ProviderSettings", () => {
 		).toBeTruthy();
 	});
 });
-
-function selectApiProvidersTab() {
-	fireEvent.click(screen.getByRole("tab", { name: /api providers/i }));
-}
 
 async function flushAsyncWork() {
 	await act(async () => {

@@ -2,43 +2,27 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-start", () => ({
-	createServerFn: () => ({
-		// biome-ignore lint/complexity/noBannedTypes: Function type used in mock handler
-		handler: (fn: Function) => fn,
-	}),
-}));
+vi.mock("@tanstack/react-start", async () => {
+	const { createStartMock } = await import("#/test-helpers/route-mocks");
+	return createStartMock();
+});
 
-vi.mock("@tanstack/react-router", () => ({
-	createFileRoute: () => (config: Record<string, unknown>) => ({
-		options: { beforeLoad: config.beforeLoad },
-		component: config.component,
-	}),
-	getRouteApi: () => ({
-		useRouteContext: () => ({}),
-		useSearch: () => ({}),
-		useParams: () => ({}),
-		useLoaderData: () => ({}),
-	}),
-	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children),
-	useNavigate: () => vi.fn(),
-}));
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	return createRouterMock();
+});
 
-import React from "react";
+vi.mock("#/lib/session", async () => {
+	const { createSessionResolverMock } = await import(
+		"#/test-helpers/route-mocks"
+	);
+	return createSessionResolverMock();
+});
 
-vi.mock("#/lib/session", () => ({
-	requireSession: vi.fn(() =>
-		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as any,
-			session: { id: "session_1" } as any,
-		}),
-	),
-}));
-
-vi.mock("@tanstack/react-start/server", () => ({
-	getRequestHeaders: vi.fn(() => ({})),
-}));
+vi.mock("@tanstack/react-start/server", async () => {
+	const { createStartServerMock } = await import("#/test-helpers/route-mocks");
+	return createStartServerMock();
+});
 
 vi.mock("#server/auth", () => ({
 	getAuthSession: vi.fn(),
@@ -60,6 +44,10 @@ vi.mock("#/lib/load-hermes-deployment-targets", () => ({
 	loadHermesDeploymentTargets: vi.fn(() => Promise.resolve([])),
 }));
 
+import {
+	assertRouteComponent,
+	createMockSession,
+} from "#/test-helpers/route-mocks";
 import { getAuthSession } from "#server/auth";
 import { getCurrentPersonaSettings } from "#server/settings";
 import { getCurrentAgentSkills } from "#server/settings/agent-skills/records";
@@ -68,7 +56,7 @@ import { Route } from "./settings";
 
 describe("/settings route", () => {
 	it("renders SettingsPage component", () => {
-		expect((Route as any).component?.name).toBe("SettingsPage");
+		assertRouteComponent(Route, "SettingsPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -76,10 +64,7 @@ describe("/settings route", () => {
 	});
 
 	it("loads all settings data in beforeLoad", async () => {
-		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
-		});
+		vi.mocked(getAuthSession).mockResolvedValue(createMockSession());
 		vi.mocked(getCurrentPersonaSettings).mockResolvedValue({
 			agentPersona: "You are Hermes.",
 			updatedAt: "2026-06-16T00:00:00.000Z",
@@ -101,10 +86,7 @@ describe("/settings route", () => {
 	});
 
 	it("returns null persona settings when none saved", async () => {
-		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
-		});
+		vi.mocked(getAuthSession).mockResolvedValue(createMockSession());
 		vi.mocked(getCurrentPersonaSettings).mockResolvedValue(null);
 		vi.mocked(getCurrentMcpServers).mockResolvedValue([]);
 		vi.mocked(getCurrentAgentSkills).mockResolvedValue([]);

@@ -7,6 +7,7 @@ import { alertPanelClass } from "#/components/ui/alert-panel-class";
 import { Button } from "#/components/ui/button";
 import { AppShell } from "#/features/dashboard/app-shell";
 import { ConnectionWizard } from "#/features/servers/connection-wizard";
+import { maskHost } from "#/lib/utils";
 
 import {
 	type ConnectedServer,
@@ -180,7 +181,10 @@ export function NewServerPage() {
 						</p>
 
 						<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-							<SummaryCard label="Host" value={state.connectedServer.host} />
+							<SummaryCard
+								label="Host"
+								value={maskHost(state.connectedServer.host)}
+							/>
 							<SummaryCard
 								label="User"
 								value={state.connectedServer.username}

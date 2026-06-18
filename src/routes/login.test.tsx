@@ -2,11 +2,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-router", () => {
-	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children);
-
+vi.mock("@tanstack/react-router", async () => {
+	const { createRouterMock } = await import("#/test-helpers/route-mocks");
+	const base = createRouterMock();
 	return {
+		...base,
 		createFileRoute: () => (config: Record<string, unknown>) => ({
 			options: {
 				beforeLoad: config.beforeLoad,
@@ -21,29 +21,20 @@ vi.mock("@tanstack/react-router", () => {
 				this.to = opts.to as string;
 			}
 		},
-		getRouteApi: () => ({
-			useRouteContext: () => ({}),
-			useSearch: () => ({}),
-			useParams: () => ({}),
-			useLoaderData: () => ({}),
-		}),
-		Link: MockLink,
-		useNavigate: () => vi.fn(),
 	};
 });
-
-import React from "react";
 
 vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
 }));
 
 import { getCurrentSession } from "#/lib/session";
+import { assertRouteComponent } from "#/test-helpers/route-mocks";
 import { Route } from "./login";
 
 describe("/login route", () => {
 	it("renders LoginPage component", () => {
-		expect((Route as any).component?.name).toBe("LoginPage");
+		assertRouteComponent(Route, "LoginPage");
 	});
 
 	it("has beforeLoad defined", () => {
@@ -52,8 +43,8 @@ describe("/login route", () => {
 
 	it("redirects to dashboard when authenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1" } as never,
+			session: { id: "session_1" } as never,
 		});
 
 		await expect(
@@ -79,7 +70,11 @@ describe("/login route", () => {
 
 	it("validateSearch extracts redirect from search params", () => {
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
-		const result = (Route as any).options.validateSearch!({
+		const result = (
+			Route as unknown as {
+				options: { validateSearch?: (...args: unknown[]) => unknown };
+			}
+		).options.validateSearch!({
 			redirect: "/dashboard",
 		} as Record<string, unknown>);
 
@@ -88,16 +83,22 @@ describe("/login route", () => {
 
 	it("validateSearch returns undefined for missing redirect", () => {
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
-		const result = (Route as any).options.validateSearch!(
-			{} as Record<string, unknown>,
-		);
+		const result = (
+			Route as unknown as {
+				options: { validateSearch?: (...args: unknown[]) => unknown };
+			}
+		).options.validateSearch!({} as Record<string, unknown>);
 
 		expect(result).toEqual({ redirect: undefined });
 	});
 
 	it("validateSearch ignores non-string redirect", () => {
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
-		const result = (Route as any).options.validateSearch!({
+		const result = (
+			Route as unknown as {
+				options: { validateSearch?: (...args: unknown[]) => unknown };
+			}
+		).options.validateSearch!({
 			redirect: 123,
 		} as Record<string, unknown>);
 

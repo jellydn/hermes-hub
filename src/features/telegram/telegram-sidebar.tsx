@@ -1,14 +1,30 @@
 import { CheckCircle2 } from "lucide-react";
+import { ActiveRuntimeCard } from "#/features/providers/active-runtime-card";
+import { ModelAccessDeployPanel } from "#/features/providers/model-access-deploy-panel";
+import type {
+	ApiProviderConfigSummary,
+	ModelAccessSnapshot,
+	UserSubscriptionConfigSummary,
+} from "#shared/contracts/model-access";
 
 import type { TelegramSettingsSummary } from "./telegram-settings";
 
 type TelegramSidebarProps = {
 	savedConfig: TelegramSettingsSummary | null;
+	activeBackend: ModelAccessSnapshot["activeBackend"];
+	savedApiConfig: ApiProviderConfigSummary | null;
+	savedSubscription: UserSubscriptionConfigSummary | null;
 };
 
-export function TelegramSidebar({ savedConfig }: TelegramSidebarProps) {
+export function TelegramSidebar({
+	savedConfig,
+	activeBackend,
+	savedApiConfig,
+	savedSubscription,
+}: TelegramSidebarProps) {
 	const isDeployed = Boolean(savedConfig?.deployedServerHost);
 	const deployedHost = savedConfig?.deployedServerHost ?? null;
+	const hasModelAccess = Boolean(activeBackend);
 
 	return (
 		<aside className="space-y-4">
@@ -34,6 +50,36 @@ export function TelegramSidebar({ savedConfig }: TelegramSidebarProps) {
 					</p>
 				) : null}
 			</section>
+
+			<ActiveRuntimeCard
+				activeBackend={activeBackend}
+				savedApiConfig={savedApiConfig}
+				savedSubscription={savedSubscription}
+				emptyMessage="Save an API provider or subscription to power Hermes responses."
+			/>
+
+			<ModelAccessDeployPanel
+				title="Model Access Deployment"
+				isDeployed={isDeployed}
+				disabled={!hasModelAccess}
+				emptyMessage={
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						Deploy your Telegram bot to a VPS first to enable model access
+						deployment.
+					</p>
+				}
+			>
+				{hasModelAccess ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+						Push your active model access config to the Hermes server.
+					</p>
+				) : (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						No model access config found. Save an API provider or subscription
+						first.
+					</p>
+				)}
+			</ModelAccessDeployPanel>
 
 			<section className="island-shell rounded-[2rem] p-6">
 				<p className="island-kicker mb-2">Why this matters</p>
