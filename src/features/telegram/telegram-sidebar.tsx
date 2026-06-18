@@ -1,8 +1,6 @@
-import { CheckCircle2, Cpu, Server, Sparkles } from "lucide-react";
-
+import { CheckCircle2 } from "lucide-react";
+import { ActiveRuntimeCard } from "#/features/providers/active-runtime-card";
 import { ModelAccessDeployPanel } from "#/features/providers/model-access-deploy-panel";
-import { formatAiProviderLabel } from "#/lib/ai-providers";
-import { formatUserSubscriptionLabel } from "#/lib/user-subscriptions";
 import type {
 	ApiProviderConfigSummary,
 	ModelAccessSnapshot,
@@ -27,20 +25,6 @@ export function TelegramSidebar({
 	const isDeployed = Boolean(savedConfig?.deployedServerHost);
 	const deployedHost = savedConfig?.deployedServerHost ?? null;
 	const hasModelAccess = Boolean(activeBackend);
-
-	const activeModel =
-		activeBackend === "subscription"
-			? savedSubscription?.model
-			: savedApiConfig?.model;
-	const activeLabel = activeBackend
-		? activeBackend === "subscription" && savedSubscription
-			? formatUserSubscriptionLabel(savedSubscription.subscriptionProvider)
-			: savedApiConfig
-				? formatAiProviderLabel(savedApiConfig.provider)
-				: null
-		: null;
-	const currentConfig =
-		activeBackend === "subscription" ? savedSubscription : savedApiConfig;
 
 	return (
 		<aside className="space-y-4">
@@ -67,60 +51,12 @@ export function TelegramSidebar({
 				) : null}
 			</section>
 
-			<section className="island-shell rounded-[2rem] p-6">
-				<div className="mb-3 flex items-center gap-2">
-					<div className="inline-flex rounded-xl border border-[var(--chip-line)] bg-[var(--chip-bg)] p-2 text-[var(--lagoon-deep)]">
-						{activeBackend ? (
-							activeBackend === "subscription" ? (
-								<Sparkles className="h-5 w-5" />
-							) : (
-								<Cpu className="h-5 w-5" />
-							)
-						) : (
-							<Server className="h-5 w-5" />
-						)}
-					</div>
-					<div>
-						<p className="island-kicker m-1">Active Runtime</p>
-						<h3 className="m-0 text-lg font-semibold text-[var(--sea-ink)]">
-							{activeLabel ?? "Not configured"}
-						</h3>
-					</div>
-				</div>
-
-				{activeBackend && activeModel ? (
-					<div className="space-y-3 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4">
-						<div className="flex items-center justify-between gap-3">
-							<span className="text-sm text-[var(--sea-ink-soft)]">Model</span>
-							<span className="text-sm font-semibold text-[var(--sea-ink)]">
-								{activeModel}
-							</span>
-						</div>
-						{currentConfig?.baseUrl ? (
-							<div className="flex items-center justify-between gap-3">
-								<span className="text-sm text-[var(--sea-ink-soft)]">
-									Endpoint
-								</span>
-								<span className="max-w-[180px] truncate text-xs text-[var(--sea-ink)]">
-									{currentConfig.baseUrl}
-								</span>
-							</div>
-						) : null}
-						{currentConfig?.keyLast4 ? (
-							<div className="flex items-center justify-between gap-3">
-								<span className="text-sm text-[var(--sea-ink-soft)]">Key</span>
-								<span className="text-xs text-[var(--sea-ink)]">
-									···{currentConfig.keyLast4}
-								</span>
-							</div>
-						) : null}
-					</div>
-				) : (
-					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-						Save an API provider or subscription to power Hermes responses.
-					</p>
-				)}
-			</section>
+			<ActiveRuntimeCard
+				activeBackend={activeBackend}
+				savedApiConfig={savedApiConfig}
+				savedSubscription={savedSubscription}
+				emptyMessage="Save an API provider or subscription to power Hermes responses."
+			/>
 
 			<ModelAccessDeployPanel
 				title="Model Access Deployment"
