@@ -45,7 +45,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: millionco/react-doctor@547e1e4ecdb70315d81a91ec3605701d58616ee2 # v2
+      - uses: millionco/react-doctor@80574975084d71741b69340acb6be1e03f045f1b # v2
         # Common configuration knobs — uncomment any to override the default.
         # Full reference: https://www.react.doctor/ci
         # with:
