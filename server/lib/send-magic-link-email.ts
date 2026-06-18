@@ -1,8 +1,10 @@
+import { logger } from "./logger";
+
 /**
  * Send a magic-link email to the given address.
  *
  * Uses the Resend HTTP API when `RESEND_API_KEY` is set. When unset, falls
- * back to `console.log` in non-production environments so developers can
+ * back to logging in non-production environments so developers can
  * click the link from terminal output. In production we refuse to log the
  * token-bearing URL and instead throw, so a misconfiguration causes a loud
  * 500 rather than silently leaking single-use login links into application
@@ -23,7 +25,10 @@ export async function sendMagicLinkEmail(input: {
 			);
 		}
 
-		console.log(`Magic link for ${input.email}: ${input.url}`);
+		logger.info(
+			{ email: input.email, url: input.url },
+			"Dev magic link URL logged for terminal use",
+		);
 		return;
 	}
 
@@ -44,8 +49,10 @@ export async function sendMagicLinkEmail(input: {
 
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
-		const detail = `${response.status} ${body}`.trim();
-		console.error(`Failed to send magic link email via Resend: ${detail}`);
+		logger.error(
+			{ status: response.status, body },
+			"Failed to send magic link email via Resend",
+		);
 		// Bubble up so Better Auth treats the send as failed and the auth
 		// endpoint returns an error instead of telling the user to check
 		// their inbox for a message that never arrived.
