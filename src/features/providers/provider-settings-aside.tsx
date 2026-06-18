@@ -53,12 +53,15 @@ export function ProviderSettingsAside({
 		activeBackend === "subscription"
 			? savedSubscription?.model
 			: savedApiConfig?.model;
-	const activeLabel =
-		activeBackend === "subscription" && savedSubscription
+	const activeLabel = activeBackend
+		? activeBackend === "subscription" && savedSubscription
 			? formatUserSubscriptionLabel(savedSubscription.subscriptionProvider)
 			: savedApiConfig
 				? formatAiProviderLabel(savedApiConfig.provider)
-				: null;
+				: null
+		: null;
+	const currentConfig =
+		activeBackend === "subscription" ? savedSubscription : savedApiConfig;
 	const requiresCodexAuth =
 		activeBackend === "subscription" &&
 		savedSubscription &&
@@ -100,39 +103,21 @@ export function ProviderSettingsAside({
 								{activeModel}
 							</span>
 						</div>
-						{activeBackend === "api-provider" && savedApiConfig?.baseUrl ? (
+						{currentConfig?.baseUrl ? (
 							<div className="flex items-center justify-between gap-3">
 								<span className="text-sm text-[var(--sea-ink-soft)]">
 									Endpoint
 								</span>
 								<span className="max-w-[180px] truncate text-xs text-[var(--sea-ink)]">
-									{savedApiConfig.baseUrl}
+									{currentConfig.baseUrl}
 								</span>
 							</div>
 						) : null}
-						{activeBackend === "subscription" && savedSubscription?.baseUrl ? (
-							<div className="flex items-center justify-between gap-3">
-								<span className="text-sm text-[var(--sea-ink-soft)]">
-									Endpoint
-								</span>
-								<span className="max-w-[180px] truncate text-xs text-[var(--sea-ink)]">
-									{savedSubscription.baseUrl}
-								</span>
-							</div>
-						) : null}
-						{activeBackend === "api-provider" && savedApiConfig?.keyLast4 ? (
+						{currentConfig?.keyLast4 ? (
 							<div className="flex items-center justify-between gap-3">
 								<span className="text-sm text-[var(--sea-ink-soft)]">Key</span>
 								<span className="text-xs text-[var(--sea-ink)]">
-									···{savedApiConfig.keyLast4}
-								</span>
-							</div>
-						) : null}
-						{activeBackend === "subscription" && savedSubscription?.keyLast4 ? (
-							<div className="flex items-center justify-between gap-3">
-								<span className="text-sm text-[var(--sea-ink-soft)]">Key</span>
-								<span className="text-xs text-[var(--sea-ink)]">
-									···{savedSubscription.keyLast4}
+									···{currentConfig.keyLast4}
 								</span>
 							</div>
 						) : null}

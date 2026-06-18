@@ -50,7 +50,7 @@ export function ProviderSettings({
 							telegramDeployed={Boolean(telegramDeploy)}
 							onSubscriptionChange={controller.updateSubscription}
 							onCodexAuthStatusChange={(change) =>
-								controller.dispatchUiAction({
+								controller.dispatch({
 									type: "codex_auth_status_changed",
 									status: change.status,
 									isLoading: change.isLoading,
@@ -103,7 +103,7 @@ export function ProviderSettings({
 					onDeploy={() => void controller.handleDeployToHermes()}
 					onTrustAndRetry={() => void controller.handleTrustAndRetryDeploy()}
 					onDismissHostKey={() =>
-						controller.dispatchUiAction({ type: "deploy_trust_cancelled" })
+						controller.dispatch({ type: "deploy_trust_cancelled" })
 					}
 				/>
 			</div>

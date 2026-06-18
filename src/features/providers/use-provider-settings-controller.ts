@@ -34,7 +34,6 @@ import {
 } from "./provider-settings-forms";
 import {
 	createInitialProviderSettingsUiState,
-	type ProviderSettingsUiAction,
 	type ProviderSettingsUiState,
 	providerSettingsUiReducer,
 } from "./provider-settings-state";
@@ -175,17 +174,14 @@ export function useProviderSettingsController(
 				return;
 			}
 
-			if (
-				subscriptionSupportsConnectionTest(
-					subscriptionFormValues.subscriptionProvider,
-				)
-			) {
+			const supportsTest = subscriptionSupportsConnectionTest(
+				subscriptionFormValues.subscriptionProvider,
+			);
+			if (supportsTest) {
 				subscriptionForm.setValue("apiKey", "");
 			}
 
-			const savedFingerprint = subscriptionSupportsConnectionTest(
-				subscriptionFormValues.subscriptionProvider,
-			)
+			const savedFingerprint = supportsTest
 				? subscriptionConnectionFingerprint(
 						subscriptionFormValues.subscriptionProvider,
 						{
@@ -227,19 +223,7 @@ export function useProviderSettingsController(
 
 			dispatch({
 				type: "subscription_test_succeeded",
-				fingerprint: subscriptionConnectionFingerprint(
-					subscriptionFormValues.subscriptionProvider,
-					{
-						model: subscriptionFormValues.model,
-						apiKey: subscriptionFormValues.apiKey,
-						baseUrl: subscriptionFormValues.baseUrl,
-						storedKeyLast4:
-							uiState.savedSubscription?.subscriptionProvider ===
-							subscriptionFormValues.subscriptionProvider
-								? uiState.savedSubscription.keyLast4
-								: null,
-					},
-				),
+				fingerprint: subscriptionConnectionFp,
 			});
 		} finally {
 			dispatch({ type: "subscription_test_finished" });
@@ -262,15 +246,7 @@ export function useProviderSettingsController(
 
 			dispatch({
 				type: "api_test_succeeded",
-				fingerprint: providerConnectionFingerprint(apiForm.provider, {
-					model: apiForm.model,
-					apiKey: apiForm.apiKey,
-					baseUrl: apiForm.baseUrl,
-					storedKeyLast4:
-						uiState.savedApiConfig?.provider === apiForm.provider
-							? uiState.savedApiConfig.keyLast4
-							: null,
-				}),
+				fingerprint: apiConnectionFingerprint,
 			});
 		} finally {
 			dispatch({ type: "api_test_finished" });
@@ -335,10 +311,6 @@ export function useProviderSettingsController(
 		}
 	}
 
-	function dispatchUiAction(action: ProviderSettingsUiAction) {
-		dispatch(action);
-	}
-
 	return {
 		uiState,
 		providerForm,
@@ -355,7 +327,7 @@ export function useProviderSettingsController(
 		handleTestConnection,
 		handleDeployToHermes,
 		handleTrustAndRetryDeploy,
-		dispatchUiAction,
+		dispatch,
 	};
 }
 
