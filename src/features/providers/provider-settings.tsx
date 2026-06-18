@@ -22,15 +22,35 @@ export function ProviderSettings({
 	telegramDeploy,
 }: ProviderSettingsProps) {
 	const controller = useProviderSettingsController(initialAccess);
+	const { activeBackend } = controller.uiState;
+
+	const subscriptionActive = activeBackend === "subscription";
+	const subscriptionInactive = activeBackend !== null && !subscriptionActive;
+	const apiActive = activeBackend === "api-provider";
+	const apiInactive = activeBackend !== null && !apiActive;
 
 	return (
 		<div className="space-y-6">
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 				<div className="space-y-6">
-					<section className="space-y-4">
+					<section
+						className={`space-y-4 transition-opacity${
+							subscriptionInactive ? " opacity-60" : ""
+						}`}
+					>
 						<div className="mb-2 flex flex-col gap-1">
-							<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
+							<h3 className="m-0 flex items-center gap-3 text-xl font-semibold text-[var(--sea-ink)]">
 								Subscriptions
+								{subscriptionActive ? (
+									<span className="rounded-full bg-[rgba(79,184,178,0.2)] px-2.5 py-0.5 text-xs font-semibold text-[var(--lagoon-deep)]">
+										Active
+									</span>
+								) : null}
+								{subscriptionInactive ? (
+									<span className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-2.5 py-0.5 text-xs font-medium text-[var(--sea-ink-soft)]">
+										Inactive
+									</span>
+								) : null}
 							</h3>
 							<p className="m-1 max-w-2xl text-sm text-[var(--sea-ink-soft)]">
 								Use your existing subscription access to power Hermes on your
@@ -62,10 +82,24 @@ export function ProviderSettings({
 						/>
 					</section>
 
-					<section className="space-y-4">
+					<section
+						className={`space-y-4 transition-opacity${
+							apiInactive ? " opacity-60" : ""
+						}`}
+					>
 						<div className="mb-2 flex flex-col gap-1">
-							<h3 className="m-0 text-xl font-semibold text-[var(--sea-ink)]">
+							<h3 className="m-0 flex items-center gap-3 text-xl font-semibold text-[var(--sea-ink)]">
 								API Keys
+								{apiActive ? (
+									<span className="rounded-full bg-[rgba(79,184,178,0.2)] px-2.5 py-0.5 text-xs font-semibold text-[var(--lagoon-deep)]">
+										Active
+									</span>
+								) : null}
+								{apiInactive ? (
+									<span className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-2.5 py-0.5 text-xs font-medium text-[var(--sea-ink-soft)]">
+										Inactive
+									</span>
+								) : null}
 							</h3>
 							<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)]">
 								Bring your own API key from any supported provider.

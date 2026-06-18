@@ -31,6 +31,7 @@ vi.mock("#/components/ui/button", () => ({
 	),
 }));
 
+import { maskHost } from "#/lib/utils";
 import { ConnectionWizard } from "./connection-wizard";
 
 afterEach(() => {
@@ -73,10 +74,11 @@ describe("ConnectionWizard", () => {
 		fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
 		expect(screen.getByText(/step 3 of 3/i)).toBeTruthy();
-		expect(screen.getByText("···.com")).toBeTruthy();
+		expect(screen.getByText(maskHost("demo-vps.example.com"))).toBeTruthy();
 
 		fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
+		// submit handler receives raw host value; UI shows masked version
 		expect(handleSubmit).toHaveBeenCalledWith({
 			label: "Primary VPS",
 			host: "demo-vps.example.com",
