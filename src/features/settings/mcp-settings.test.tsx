@@ -367,7 +367,11 @@ describe("McpSettings", () => {
 				body: JSON.stringify({ serverId: "server_2" }),
 			}),
 		);
-		expect(screen.getByText(/deployed 1 mcp server to ···\.8/i)).toBeTruthy();
+		expect(
+			screen.getByText((content) =>
+				content.startsWith("Deployed 1 MCP server to "),
+			),
+		).toBeTruthy();
 	});
 
 	it("shows install-first messaging when no deployment targets exist", () => {

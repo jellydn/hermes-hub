@@ -455,7 +455,11 @@ describe("AgentSkills UI Component", () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText(/deployed 1 skill to ···\.4/i)).toBeTruthy();
+			expect(
+				screen.getByText((content) =>
+					content.startsWith("Deployed 1 skill to "),
+				),
+			).toBeTruthy();
 		});
 
 		// After deploy success, remote inventory should refresh

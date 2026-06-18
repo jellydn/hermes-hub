@@ -85,9 +85,9 @@ export function HermesDeployPanel({
 				return;
 			}
 
-			const serverHost = maskHost(payload?.serverHost ?? selectedTarget.host);
+			const displayHost = maskHost(payload?.serverHost ?? selectedTarget.host);
 			const resolvedPayload = payload ?? {};
-			setDeployResult(formatSuccess(resolvedPayload, serverHost));
+			setDeployResult(formatSuccess(resolvedPayload, displayHost));
 			onDeploySuccess?.(resolvedPayload);
 		} catch {
 			setDeployError(
