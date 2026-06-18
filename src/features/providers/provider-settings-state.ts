@@ -183,7 +183,6 @@ export function providerSettingsUiReducer(
 				savedSubscription: action.config,
 				activeBackend: "subscription",
 				subscriptionSaveMessage: "Subscription settings saved.",
-				savedApiConfig: null,
 				verifiedSubscriptionConnectionFingerprint:
 					action.connectionFingerprint ??
 					state.verifiedSubscriptionConnectionFingerprint,

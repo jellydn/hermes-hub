@@ -92,7 +92,7 @@ export function ProviderSettingsAside({
 					</div>
 				</div>
 
-				{activeModel ? (
+				{activeBackend && activeModel ? (
 					<div className="space-y-3 rounded-[1.5rem] border border-[var(--chip-line)] bg-[var(--chip-bg)] p-4">
 						<div className="flex items-center justify-between gap-3">
 							<span className="text-sm text-[var(--sea-ink-soft)]">Model</span>
@@ -151,7 +151,7 @@ export function ProviderSettingsAside({
 						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
 							Push your active model access config to the Hermes server.
 						</p>
-						{activeModel ? (
+						{activeBackend && activeModel ? (
 							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 								Model:{" "}
 								<span className="font-semibold text-[var(--sea-ink)]">
