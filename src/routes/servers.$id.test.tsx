@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from "vitest";
 import React from "react";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		React.createElement(
+			"a",
+			{ href: to as string, ...props },
+			children as React.ReactNode,
+		);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -23,12 +27,15 @@ vi.mock("@tanstack/react-router", () => {
 	};
 });
 
-
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as any,
-			session: { id: "session_1" } as any,
+			user: {
+				id: "user_1",
+				email: "test@example.com",
+				image: null,
+			} as never,
+			session: { id: "session_1" } as never,
 		}),
 	),
 }));
@@ -37,7 +44,9 @@ import { Route } from "./servers.$id";
 
 describe("/servers/$id route", () => {
 	it("renders ServerDetailPage component", () => {
-		expect((Route as any).component?.name).toBe("ServerDetailPage");
+		expect(
+			(Route as unknown as { component?: { name: string } }).component?.name,
+		).toBe("ServerDetailPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {

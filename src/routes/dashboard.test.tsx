@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from "vitest";
 import React from "react";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -22,16 +22,23 @@ vi.mock("@tanstack/react-router", () => ({
 		useLoaderData: () => ({}),
 	}),
 	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children),
+		React.createElement(
+			"a",
+			{ href: to as string, ...props },
+			children as React.ReactNode,
+		),
 	useNavigate: () => vi.fn(),
 }));
-
 
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as unknown as Record<string, unknown>,
-			session: { id: "session_1" } as unknown as Record<string, unknown>,
+			user: {
+				id: "user_1",
+				email: "test@example.com",
+				image: null,
+			} as never,
+			session: { id: "session_1" } as never,
 		}),
 	),
 }));
@@ -54,7 +61,9 @@ import { Route } from "./dashboard";
 
 describe("/dashboard route", () => {
 	it("renders DashboardPage component", () => {
-		expect((Route as any).component?.name).toBe("DashboardPage");
+		expect(
+			(Route as unknown as { component?: { name: string } }).component?.name,
+		).toBe("DashboardPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -73,11 +82,11 @@ describe("/dashboard route", () => {
 		};
 
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1" } as never,
+			session: { id: "session_1" } as never,
 		});
 		vi.mocked(getDashboardStatusSnapshot).mockResolvedValue(
-			mockSnapshot as any,
+			mockSnapshot as never,
 		);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability

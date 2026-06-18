@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from "vitest";
 import React from "react";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		React.createElement(
+			"a",
+			{ href: to as string, ...props },
+			children as React.ReactNode,
+		);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -33,7 +37,6 @@ vi.mock("@tanstack/react-router", () => {
 	};
 });
 
-
 vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
 }));
@@ -43,7 +46,9 @@ import { Route } from "./index";
 
 describe("/ (landing) route", () => {
 	it("renders LandingPage component", () => {
-		expect((Route as any).component?.name).toBe("LandingPage");
+		expect(
+			(Route as unknown as { component?: { name: string } }).component?.name,
+		).toBe("LandingPage");
 	});
 
 	it("has beforeLoad defined", () => {
@@ -52,8 +57,8 @@ describe("/ (landing) route", () => {
 
 	it("redirects to dashboard when authenticated", async () => {
 		vi.mocked(getCurrentSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1" } as never,
+			session: { id: "session_1" } as never,
 		});
 
 		await expect(
@@ -74,9 +79,9 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page description", () => {
-		const head = (Route as any).options?.head?.() as
-			| { meta?: Array<Record<string, string>> }
-			| undefined;
+		const head = (
+			Route as unknown as { options?: { head?: () => unknown } }
+		).options?.head?.() as { meta?: Array<Record<string, string>> } | undefined;
 		const meta = head?.meta ?? [];
 		expect(meta).toEqual(
 			expect.arrayContaining([
@@ -88,9 +93,9 @@ describe("/ (landing) route", () => {
 	});
 
 	it("sets head metadata with landing page title", () => {
-		const head = (Route as any).options?.head?.() as
-			| { meta?: Array<Record<string, string>> }
-			| undefined;
+		const head = (
+			Route as unknown as { options?: { head?: () => unknown } }
+		).options?.head?.() as { meta?: Array<Record<string, string>> } | undefined;
 		const meta = head?.meta ?? [];
 		expect(meta).toEqual(
 			expect.arrayContaining([

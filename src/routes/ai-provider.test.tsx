@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from "vitest";
 import React from "react";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -12,7 +12,11 @@ vi.mock("@tanstack/react-start", () => ({
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		React.createElement("a", { href: to, ...props }, children);
+		React.createElement(
+			"a",
+			{ href: to as string, ...props },
+			children as React.ReactNode,
+		);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -30,12 +34,15 @@ vi.mock("@tanstack/react-router", () => {
 	};
 });
 
-
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as unknown as Record<string, unknown>,
-			session: { id: "session_1" } as unknown as Record<string, unknown>,
+			user: {
+				id: "user_1",
+				email: "test@example.com",
+				image: null,
+			} as never,
+			session: { id: "session_1" } as never,
 		}),
 	),
 }));
@@ -62,7 +69,9 @@ import { Route } from "./ai-provider";
 
 describe("/ai-provider route", () => {
 	it("renders AiProviderPage component", () => {
-		expect((Route as any).component?.name).toBe("AiProviderPage");
+		expect(
+			(Route as unknown as { component?: { name: string } }).component?.name,
+		).toBe("AiProviderPage");
 	});
 
 	it("has beforeLoad defined for auth guard", () => {
@@ -77,10 +86,14 @@ describe("/ai-provider route", () => {
 		};
 
 		vi.mocked(getAuthSession).mockResolvedValue({
-			user: { id: "user_1" } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1" } as never,
+			session: { id: "session_1" } as never,
 		});
-		vi.mocked(getModelAccessSnapshot).mockResolvedValue(mockAccess as any);
+		vi.mocked(getModelAccessSnapshot).mockResolvedValue(
+			mockAccess as unknown as NonNullable<
+				Awaited<ReturnType<typeof getModelAccessSnapshot>>
+			>,
+		);
 
 		// biome-ignore lint/style/noNonNullAssertion: mock requires non-null for callability
 		const result = await Route.options.beforeLoad!({
