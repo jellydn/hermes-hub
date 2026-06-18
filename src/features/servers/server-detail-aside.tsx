@@ -4,6 +4,7 @@ import type {
 	ServerDetailChangeHandler,
 	ServerDetailSnapshot,
 } from "#/lib/server-detail";
+import { maskHost } from "#/lib/utils";
 import { HermesWebUiCard } from "./hermes-web-ui-card";
 import {
 	badgeClassName,
@@ -31,7 +32,7 @@ export function ServerDetailAside({
 			<section className="island-shell rounded-[2rem] p-6">
 				<p className="island-kicker mb-2">Connection summary</p>
 				<dl className="space-y-4 text-sm text-[var(--sea-ink)]">
-					<SummaryEntry label="Host" value={detail.server.host} />
+					<SummaryEntry label="Host" value={maskHost(detail.server.host)} />
 					<SummaryEntry label="User" value={detail.server.username} />
 					<SummaryEntry
 						label="Status"

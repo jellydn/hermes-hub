@@ -25,6 +25,7 @@ import type {
 import { formatModelAccessProviderLabel } from "#/lib/provider-labels";
 import { getStatusPillClassName, getStatusPillType } from "#/lib/status-pill";
 import { useMountEffect } from "#/lib/use-mount-effect";
+import { maskHost } from "#/lib/utils";
 
 type FetchState = "idle" | "loading" | "refreshing" | "error";
 
@@ -204,7 +205,7 @@ export function DashboardStatusOverview({
 						</h3>
 						<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
 							{snapshot?.server
-								? `${snapshot.server.host}${
+								? `${maskHost(snapshot.server.host)}${
 										snapshot.server.osName
 											? ` · ${snapshot.server.osName}${
 													snapshot.server.osVersion
@@ -405,7 +406,7 @@ function ServerInventoryCard({
 			</div>
 			<p className="mt-3 text-sm text-[var(--sea-ink-soft)]">
 				{server
-					? `Latest server: ${server.label} · ${server.host}`
+					? `Latest server: ${server.label} · ${maskHost(server.host)}`
 					: "Add your first VPS to unlock installs, health checks, and recovery actions."}
 			</p>
 			<Button asChild variant="secondary" className="mt-4">
