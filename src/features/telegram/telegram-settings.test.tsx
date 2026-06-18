@@ -16,6 +16,7 @@ vi.mock("lucide-react", () => {
 		AlertCircle: MockIcon,
 		ArrowRight: MockIcon,
 		CheckCircle2: MockIcon,
+		CloudUpload: MockIcon,
 		Circle: MockIcon,
 		ExternalLink: MockIcon,
 		Info: MockIcon,
