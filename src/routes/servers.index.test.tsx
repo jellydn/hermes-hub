@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it, vi } from "vitest";
+import React from "react";
 import type { ServerListSummary } from "#/lib/servers";
 
 vi.mock("@tanstack/react-start", () => ({
@@ -22,17 +23,16 @@ vi.mock("@tanstack/react-router", () => ({
 		useLoaderData: () => ({}),
 	}),
 	Link: ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children),
+		React.createElement("a", { href: to, ...props }, children),
 	useNavigate: () => vi.fn(),
 }));
 
-import React from "react";
 
 vi.mock("#/lib/session", () => ({
 	requireSession: vi.fn(() =>
 		Promise.resolve({
-			user: { id: "user_1", email: "test@example.com", image: null } as any,
-			session: { id: "session_1" } as any,
+			user: { id: "user_1", email: "test@example.com", image: null } as unknown as Record<string, unknown>,
+			session: { id: "session_1" } as unknown as Record<string, unknown>,
 		}),
 	),
 }));

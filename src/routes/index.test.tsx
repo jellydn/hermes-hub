@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it, vi } from "vitest";
+import React from "react";
 
 vi.mock("@tanstack/react-router", () => {
 	const MockLink = ({ children, to, ...props }: Record<string, unknown>) =>
-		(React as any).createElement("a", { href: to, ...props }, children);
+		React.createElement("a", { href: to, ...props }, children);
 
 	return {
 		createFileRoute: () => (config: Record<string, unknown>) => ({
@@ -32,7 +33,6 @@ vi.mock("@tanstack/react-router", () => {
 	};
 });
 
-import React from "react";
 
 vi.mock("#/lib/session", () => ({
 	getCurrentSession: vi.fn(),
