@@ -1,10 +1,9 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 
 import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
-import { useMountEffect } from "#/lib/use-mount-effect";
 import type { HostKeyErrorCode } from "#shared/contracts/host-key-error";
 import type { ModelAccessOptionsResponse } from "#shared/contracts/telegram-model-access";
 
@@ -37,7 +36,12 @@ export type FormAction =
 export function formReducer(state: FormState, action: FormAction): FormState {
 	switch (action.type) {
 		case "fetchStarted":
-			return { ...state, isLoading: true, message: null };
+			// NOTE: intentionally does NOT reset `message`. `fetchStarted`
+			// represents the controller initiating a refresh of the options
+			// list; it's not a user-initiated action that should dismiss an
+			// existing success/error banner. User-action clears live in
+			// `optionSelected` / `modelChanged` / `switchStarted` etc.
+			return { ...state, isLoading: true };
 		case "fetchSucceeded": {
 			const { data } = action;
 			return {
@@ -156,12 +160,22 @@ export function useModelAccessController({
 		}
 	}, []);
 
-	useMountEffect(() => {
+	// Refetch the option list whenever `isDeployed` flips false -> true.
+	// `TelegramSettings` snapshots `initialConfig.deployedServerHost` into
+	// local useState on first render, so this flip is driven by user actions
+	// that call `setSavedConfig` (connect / deploy / disconnect), NOT by
+	// `initialConfig` prop rerenders. The previous one-shot `useMountEffect`
+	// captured the initial value and never refetched.
+	//
+	// `fetchOptions` is included in deps solely to satisfy biome's
+	// `useExhaustiveDependencies` rule; the callback identity is stable
+	// via the upstream `useCallback([])`.
+	useEffect(() => {
 		if (!isDeployed) {
 			return;
 		}
 		void fetchOptions();
-	});
+	}, [isDeployed, fetchOptions]);
 
 	const handleSwitch = useCallback(async () => {
 		const { selectedOptionId, selectedModel } = stateRef.current;
