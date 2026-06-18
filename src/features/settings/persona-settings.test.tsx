@@ -165,7 +165,7 @@ describe("PersonaSettings", () => {
 				body: JSON.stringify({ serverId: "server_2" }),
 			}),
 		);
-		expect(screen.getByText(/persona deployed to 5\.6\.7\.8/i)).toBeTruthy();
+		expect(screen.getByText(/persona deployed to ···\.8/i)).toBeTruthy();
 	});
 
 	it("shows install-first messaging when no deployment targets exist", () => {

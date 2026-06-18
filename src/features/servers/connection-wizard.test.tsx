@@ -73,7 +73,7 @@ describe("ConnectionWizard", () => {
 		fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
 		expect(screen.getByText(/step 3 of 3/i)).toBeTruthy();
-		expect(screen.getByText("demo-vps.example.com")).toBeTruthy();
+		expect(screen.getByText("···.com")).toBeTruthy();
 
 		fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
