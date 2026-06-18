@@ -129,16 +129,6 @@ export function ProviderSettings({
 					telegramDeploy={telegramDeploy}
 					codexAuthStatus={controller.uiState.codexAuthStatus}
 					isLoadingCodexAuth={controller.uiState.isLoadingCodexAuth}
-					isDeploying={controller.uiState.isDeploying}
-					deployError={controller.uiState.deployError}
-					deployResult={controller.uiState.deployResult}
-					hostKeyError={controller.uiState.hostKeyError}
-					isAcceptingKey={controller.uiState.isAcceptingKey}
-					onDeploy={() => void controller.handleDeployToHermes()}
-					onTrustAndRetry={() => void controller.handleTrustAndRetryDeploy()}
-					onDismissHostKey={() =>
-						controller.dispatch({ type: "deploy_trust_cancelled" })
-					}
 				/>
 			</div>
 		</div>

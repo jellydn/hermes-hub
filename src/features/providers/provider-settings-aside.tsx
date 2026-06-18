@@ -1,8 +1,5 @@
-import { CloudUpload, Cpu, LoaderCircle, Server, Sparkles } from "lucide-react";
-import { Button } from "#/components/ui/button";
-import { FormFeedback } from "#/components/ui/form-feedback";
-import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
-import type { HostKeyErrorPayload } from "#/features/servers/host-key-recovery";
+import { Cpu, Server, Sparkles } from "lucide-react";
+import { ModelAccessDeployPanel } from "#/features/providers/model-access-deploy-panel";
 import { formatAiProviderLabel } from "#/lib/ai-providers";
 import type { TelegramDeployInfo } from "#/lib/load-telegram-deploy";
 import {
@@ -23,14 +20,6 @@ type ProviderSettingsAsideProps = {
 	telegramDeploy?: TelegramDeployInfo | null;
 	codexAuthStatus: CodexAuthStatus | null;
 	isLoadingCodexAuth: boolean;
-	isDeploying: boolean;
-	deployError: string | null;
-	deployResult: string | null;
-	hostKeyError: HostKeyErrorPayload | null;
-	isAcceptingKey: boolean;
-	onDeploy: () => void;
-	onTrustAndRetry: () => void;
-	onDismissHostKey: () => void;
 };
 
 export function ProviderSettingsAside({
@@ -40,14 +29,6 @@ export function ProviderSettingsAside({
 	telegramDeploy,
 	codexAuthStatus,
 	isLoadingCodexAuth,
-	isDeploying,
-	deployError,
-	deployResult,
-	hostKeyError,
-	isAcceptingKey,
-	onDeploy,
-	onTrustAndRetry,
-	onDismissHostKey,
 }: ProviderSettingsAsideProps) {
 	const activeModel =
 		activeBackend === "subscription"
@@ -129,68 +110,11 @@ export function ProviderSettingsAside({
 				)}
 			</section>
 
-			<section className="island-shell rounded-[2rem] p-6">
-				<p className="island-kicker mb-2">Hermes deployment</p>
-				{telegramDeploy ? (
-					<>
-						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
-							Push your active model access config to the Hermes server.
-						</p>
-						{activeBackend && activeModel ? (
-							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								Model:{" "}
-								<span className="font-semibold text-[var(--sea-ink)]">
-									{activeModel}
-								</span>
-							</p>
-						) : null}
-						{requiresCodexAuth && !codexReadyForDeploy ? (
-							<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
-								{isLoadingCodexAuth
-									? "Checking remote Codex auth status..."
-									: "Complete ChatGPT device-code login before deploying to Hermes."}
-							</p>
-						) : null}
-						<div className="mt-4">
-							<Button
-								type="button"
-								onClick={onDeploy}
-								disabled={isDeploying || !canDeploy}
-							>
-								{isDeploying ? (
-									<LoaderCircle className="h-4 w-4 animate-spin" />
-								) : (
-									<CloudUpload className="h-4 w-4" />
-								)}
-								<span>
-									{isDeploying ? "Deploying..." : "Deploy to Hermes Server"}
-								</span>
-							</Button>
-						</div>
-
-						{hostKeyError ? (
-							<div className="mt-3">
-								<HostKeyTrustPanel
-									hostKeyError={hostKeyError}
-									isAcceptingKey={isAcceptingKey}
-									onTrustAndRetry={onTrustAndRetry}
-									onDismiss={onDismissHostKey}
-								/>
-							</div>
-						) : null}
-
-						{deployError ? (
-							<FormFeedback className="mt-3 mb-0 text-sm" tone="error">
-								{deployError}
-							</FormFeedback>
-						) : null}
-						{deployResult ? (
-							<FormFeedback className="mt-3 mb-0 text-sm" tone="success">
-								{deployResult}
-							</FormFeedback>
-						) : null}
-					</>
-				) : (
+			<ModelAccessDeployPanel
+				title="Hermes deployment"
+				isDeployed={Boolean(telegramDeploy)}
+				disabled={!canDeploy}
+				emptyMessage={
 					<>
 						<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
 							Deploy a Telegram bot to a VPS first to enable Hermes deployment.
@@ -200,8 +124,27 @@ export function ProviderSettingsAside({
 							<span>Not deployed</span>
 						</div>
 					</>
-				)}
-			</section>
+				}
+			>
+				<p className="mt-3 mb-0 text-sm text-[var(--sea-ink)]">
+					Push your active model access config to the Hermes server.
+				</p>
+				{activeBackend && activeModel ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						Model:{" "}
+						<span className="font-semibold text-[var(--sea-ink)]">
+							{activeModel}
+						</span>
+					</p>
+				) : null}
+				{requiresCodexAuth && !codexReadyForDeploy ? (
+					<p className="mt-3 mb-0 text-sm text-[var(--sea-ink-soft)]">
+						{isLoadingCodexAuth
+							? "Checking remote Codex auth status..."
+							: "Complete ChatGPT device-code login before deploying to Hermes."}
+					</p>
+				) : null}
+			</ModelAccessDeployPanel>
 
 			<section className="island-shell rounded-[2rem] p-6">
 				<p className="island-kicker mb-2">Supported providers</p>

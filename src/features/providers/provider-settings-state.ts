@@ -4,7 +4,6 @@ import type {
 	ModelAccessSnapshot,
 	UserSubscriptionConfigSummary,
 } from "#shared/contracts/model-access";
-import type { HostKeyErrorPayload } from "./provider-access-actions";
 
 export type ProviderSettingsUiState = {
 	savedApiConfig: ApiProviderConfigSummary | null;
@@ -22,11 +21,6 @@ export type ProviderSettingsUiState = {
 	subscriptionTestError: string | null;
 	verifiedApiConnectionFingerprint: string | null;
 	verifiedSubscriptionConnectionFingerprint: string | null;
-	isDeploying: boolean;
-	deployError: string | null;
-	deployResult: string | null;
-	hostKeyError: HostKeyErrorPayload | null;
-	isAcceptingKey: boolean;
 	codexAuthStatus: CodexAuthStatus | null;
 	isLoadingCodexAuth: boolean;
 	codexAuthError: string | null;
@@ -55,17 +49,6 @@ export type ProviderSettingsUiAction =
 	| { type: "subscription_test_failed"; error: string }
 	| { type: "subscription_test_succeeded"; fingerprint: string }
 	| { type: "subscription_test_finished" }
-	| { type: "deploy_started" }
-	| {
-			type: "deploy_failed";
-			error: string;
-			hostKeyError?: HostKeyErrorPayload | null;
-	  }
-	| { type: "deploy_succeeded"; message: string }
-	| { type: "deploy_finished" }
-	| { type: "deploy_trust_starting" }
-	| { type: "deploy_trust_failed"; error: string }
-	| { type: "deploy_trust_cancelled" }
 	| { type: "codex_auth_status_load_started" }
 	| {
 			type: "codex_auth_status_changed";
@@ -93,11 +76,6 @@ export function createInitialProviderSettingsUiState(
 		subscriptionTestError: null,
 		verifiedApiConnectionFingerprint: null,
 		verifiedSubscriptionConnectionFingerprint: null,
-		isDeploying: false,
-		deployError: null,
-		deployResult: null,
-		hostKeyError: null,
-		isAcceptingKey: false,
 		codexAuthStatus: null,
 		isLoadingCodexAuth: false,
 		codexAuthError: null,
@@ -237,48 +215,6 @@ export function providerSettingsUiReducer(
 			return {
 				...state,
 				isTestingSubscription: false,
-			};
-		case "deploy_started":
-			return {
-				...state,
-				isDeploying: true,
-				deployError: null,
-				deployResult: null,
-				hostKeyError: null,
-			};
-		case "deploy_failed":
-			return {
-				...state,
-				deployError: action.hostKeyError ? null : action.error,
-				hostKeyError: action.hostKeyError ?? null,
-			};
-		case "deploy_succeeded":
-			return {
-				...state,
-				deployResult: action.message,
-				hostKeyError: null,
-			};
-		case "deploy_finished":
-			return {
-				...state,
-				isDeploying: false,
-			};
-		case "deploy_trust_starting":
-			return {
-				...state,
-				isAcceptingKey: true,
-				deployError: null,
-			};
-		case "deploy_trust_failed":
-			return {
-				...state,
-				isAcceptingKey: false,
-				deployError: action.error,
-			};
-		case "deploy_trust_cancelled":
-			return {
-				...state,
-				hostKeyError: null,
 			};
 		default:
 			return state;
