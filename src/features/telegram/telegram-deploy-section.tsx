@@ -1,6 +1,5 @@
 import { CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
 import { useReducer, useRef } from "react";
-
 import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
@@ -8,6 +7,7 @@ import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
+import { maskHost } from "#/lib/utils";
 import type { TelegramSettingsSummary } from "./telegram-settings";
 
 type DeployState = {
@@ -127,7 +127,7 @@ export function TelegramDeploySection({
 			dispatch({
 				type: "deploySucceeded",
 				serverHost: `Bot token deployed to ${
-					serverHost ?? "server"
+					serverHost ? maskHost(serverHost) : "server"
 				}. Hermes is restarting...`,
 			});
 		} catch {
@@ -195,7 +195,7 @@ export function TelegramDeploySection({
 					LeadingIcon={CheckCircle2}
 					leadingIconClassName="h-5 w-5 text-[var(--alert-success-fg)]"
 				>
-					Deployed to <strong>{deployedHost}</strong>
+					Deployed to <strong>{maskHost(deployedHost)}</strong>
 				</AlertPanel>
 			) : null}
 

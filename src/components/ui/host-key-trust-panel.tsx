@@ -1,4 +1,5 @@
 import { CheckCircle2, LoaderCircle, TriangleAlert } from "lucide-react";
+import { maskHost } from "#/lib/utils";
 import { Button } from "./button";
 
 export type HostKeyError = {
@@ -34,11 +35,12 @@ export function HostKeyTrustPanel({
 							: "Host key mismatch"}
 					</p>
 					<p className="mb-3 mt-1 text-sm text-[var(--sea-ink-soft)]">
+						{" "}
 						{hostKeyError.code === "host_key_missing" ? (
 							<>
 								The server{" "}
 								<code className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-xs">
-									{hostKeyError.serverHost}
+									{maskHost(hostKeyError.serverHost)}
 								</code>{" "}
 								has no stored host key. Review the fingerprint below and trust
 								it to continue.
@@ -47,7 +49,7 @@ export function HostKeyTrustPanel({
 							<>
 								The fingerprint for{" "}
 								<code className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-xs">
-									{hostKeyError.serverHost}
+									{maskHost(hostKeyError.serverHost)}
 								</code>{" "}
 								does not match the stored key.
 							</>
