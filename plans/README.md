@@ -11,18 +11,18 @@ capture drift before executing.
 
 ## Status table
 
-| Status | Plan | Finding | Category | Effort |
-|---|---|---|---|---|
-| pending | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S |
-| pending | [002 — model-switch success message race](002-model-switch-message-race.md) | #2 | correctness | S |
-| pending | [003 — mount-effect re-fire on isDeployed flip](003-mount-effect-refire-on-isdeployed.md) | #3 | correctness | S |
-| pending | [004 — ENCRYPTION_KEY rotation migration path](004-encryption-key-rotation.md) | #4 | security / tech-debt | L |
-| pending | [005 — drop plaintext fallback in decryptApiServerKey](005-decrypt-plaintext-fallback.md) | #5 | security / tech-debt | S |
-| pending | [006 — extend httpsMiddleware to credential-bearing GETs](006-https-guard-on-credential-gets.md) | #6 | security | S |
-| pending | [007 — extract useStaleRef helper](007-controller-state-stale-ref.md) | #7 | tech-debt | S |
-| pending | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S |
-| pending | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S |
-| pending | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M |
+| Status | Plan | Finding | Category | Effort | Issue |
+|---|---|---|---|---|---|
+| pending | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S | [#53](https://github.com/jellydn/hermes-hub/issues/53) |
+| done | [002 — model-switch success message race](002-model-switch-message-race.md) | #2 | correctness | S | [#54](https://github.com/jellydn/hermes-hub/issues/54) |
+| done | [003 — mount-effect re-fire on isDeployed flip](003-mount-effect-refire-on-isdeployed.md) | #3 | correctness | S | [#55](https://github.com/jellydn/hermes-hub/issues/55) |
+| pending | [004 — ENCRYPTION_KEY rotation migration path](004-encryption-key-rotation.md) | #4 | security / tech-debt | L | [#56](https://github.com/jellydn/hermes-hub/issues/56) |
+| pending | [005 — drop plaintext fallback in decryptApiServerKey](005-decrypt-plaintext-fallback.md) | #5 | security / tech-debt | S | [#57](https://github.com/jellydn/hermes-hub/issues/57) |
+| pending | [006 — extend httpsMiddleware to credential-bearing GETs](006-https-guard-on-credential-gets.md) | #6 | security | S | [#58](https://github.com/jellydn/hermes-hub/issues/58) |
+| pending | [007 — extract useStaleRef helper](007-controller-state-stale-ref.md) | #7 | tech-debt | S | [#59](https://github.com/jellydn/hermes-hub/issues/59) |
+| done | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S | [#60](https://github.com/jellydn/hermes-hub/issues/60) |
+| done | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S | [#61](https://github.com/jellydn/hermes-hub/issues/61) |
+| pending | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M | [#62](https://github.com/jellydn/hermes-hub/issues/62) |
 
 ## Execution order
 
@@ -102,3 +102,18 @@ Any subset can be promoted via a follow-up `improve next` invocation.
 Findings 6–10 were added to this index in a second pass after the
 Top 5 batch landed in `plans/001-005`. The two batches together
 cover the full set of 10 audit findings surfaced at HEAD `8ff4b72`.
+
+## Issues published
+
+All 10 plans were opened as draft-tracking issues against
+`jellydn/hermes-hub` (the public mirror) labeled `improve-plan`.
+The Issue column above links each plan to its issue. Note that the
+issues are visible on the public repository; plans 001, 004, 005,
+and 006 describe security findings — keep that in mind when
+drafting the public-facing issue bodies further.
+
+> The fork listed as the upstream remote in this README is private;
+> the issue tracker on `github.com/jellydn/hermes-hub` is the
+> mirror's public tracker. If the maintainer prefers to track these
+> in the private fork, re-open against that repo and update the
+> links in the Issue column.

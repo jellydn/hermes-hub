@@ -5,6 +5,7 @@ import {
 	cleanup,
 	fireEvent,
 	render,
+	renderHook,
 	screen,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
@@ -16,9 +17,15 @@ const routerSpies = vi.hoisted(() => ({
 	invalidate: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-	useRouter: () => ({ invalidate: routerSpies.invalidate }),
-}));
+vi.mock("@tanstack/react-router", async () => {
+	const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
+		"@tanstack/react-router",
+	);
+	return {
+		...actual,
+		useRouter: () => ({ invalidate: routerSpies.invalidate }),
+	};
+});
 
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
@@ -62,6 +69,7 @@ vi.mock("#/components/ui/button", () => ({
 }));
 
 import { TelegramSettings } from "./telegram-settings";
+import { useModelAccessController } from "./use-model-access-controller";
 
 const fetchMock = vi.fn();
 
@@ -428,9 +436,15 @@ describe("TelegramSettings", () => {
 
 		await flushAsyncWork();
 
-		// The fix for the sidebar staying stale after a switch: TelegramSettings
-		// must invalidate the route loader so `initialAccess?.activeBackend`
-		// re-reads the new active backend and the deploy button enables.
+		// After a successful switch the banner must remain visible
+		// after the post-switch refresh of the options list finishes.
+		expect(
+			screen.getByText(/model access switched successfully/i),
+		).toBeTruthy();
+
+		// The sidebar reads `initialAccess?.activeBackend` from the route
+		// loader so the deploy button enables after a switch. The page
+		// triggers the refresh via `useRouter().invalidate()`.
 		expect(routerSpies.invalidate).toHaveBeenCalledTimes(1);
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/telegram/model-switch",
@@ -441,6 +455,120 @@ describe("TelegramSettings", () => {
 					model: "gpt-4o-mini",
 				}),
 			}),
+		);
+	});
+
+	it("refetches model-access-options when isDeployed flips false to true", async () => {
+		// Regression: the previous one-shot `useMountEffect` captured `isDeployed`
+		// at mount. When the property was false on the first render, the option
+		// list was never fetched, even after a subsequent `isDeployed` -> true
+		// change (e.g. the user deploying the Hermes runtime). The fix wires
+		// the controller to `useEffect([isDeployed, fetchOptions])`.
+		const { rerender } = renderHook(
+			({ isDeployed }: { isDeployed: boolean }) =>
+				useModelAccessController({ isDeployed }),
+			{ initialProps: { isDeployed: false } },
+		);
+		await flushAsyncWork();
+
+		expect(
+			fetchMock.mock.calls.every(
+				(args) => args[0] !== "/api/telegram/model-access-options",
+			),
+		).toBe(true);
+
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ options: [], activeOptionId: null }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		rerender({ isDeployed: true });
+		await flushAsyncWork();
+
+		expect(
+			fetchMock.mock.calls.some(
+				(args) => args[0] === "/api/telegram/model-access-options",
+			),
+		).toBe(true);
+	});
+
+	it("does not invalidate the route loader when model switch fails", async () => {
+		// URL-based implementation: sibling sections (e.g. the pairings
+		// panel) auto-fetch on mount too, which would steal an ordered
+		// `.mockResolvedValueOnce(x).mockResolvedValueOnce(y)` chain by
+		// accident. Routing by URL keeps the targeted mocks stable.
+		fetchMock.mockImplementation((url) => {
+			if (url === "/api/telegram/model-access-options") {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							options: [
+								{
+									optionId: "opt-openai",
+									kind: "api-provider",
+									label: "OpenAI",
+									model: "gpt-4o-mini",
+									isActive: false,
+								},
+							],
+							activeOptionId: null,
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+			}
+			if (url === "/api/telegram/model-switch") {
+				return Promise.resolve(
+					new Response(JSON.stringify({ error: "Server unreachable" }), {
+						status: 502,
+						headers: { "content-type": "application/json" },
+					}),
+				);
+			}
+			// Other concurrent fetches on TelegramSettings mount (e.g.
+			// `TelegramPairingSection`'s `/api/telegram/pairings` GET):
+			// return an empty pairings shape so the section renders
+			// without consuming the targeted mocks above.
+			return Promise.resolve(
+				new Response(
+					JSON.stringify({ pairings: { pending: [], approved: [] } }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				),
+			);
+		});
+
+		routerSpies.invalidate.mockClear();
+
+		render(
+			<TelegramSettings
+				initialAccess={null}
+				initialConfig={{
+					botUsername: "hermes_helper_bot",
+					botTokenLast4: "1234",
+					isActive: true,
+					deployedServerHost: "95.111.232.131",
+				}}
+			/>,
+		);
+
+		await flushAsyncWork();
+
+		fireEvent.change(screen.getByLabelText(/provider \/ subscription/i), {
+			target: { value: "opt-openai" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^switch$/i }));
+		await flushAsyncWork();
+
+		// Contract: only the success path is allowed to invalidate the
+		// route loader. A 502 here must NOT trigger reload.
+		expect(routerSpies.invalidate).toHaveBeenCalledTimes(0);
+		expect(
+			screen.queryByText(/model access switched successfully/i),
+		).toBeNull();
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/model-switch",
+			expect.objectContaining({ method: "POST" }),
 		);
 	});
 });
