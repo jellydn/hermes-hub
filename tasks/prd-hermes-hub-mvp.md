@@ -1,3 +1,5 @@
+> **Stacked PRs — merge in order:** [#48 `feat: introduce pino structured logger`](/pull/48) first, then [#47 `refactor: split large files, drop health_checks, add failure observability`](/pull/47). PR #47 adds `server/lib/handler-error-log.ts` which imports from `server/lib/logger.ts` shipped in #48 — merging them in the wrong order (or in parallel) breaks the build. PR #47's base is `feat/logger` (PR #48's branch), so the GitHub UI blocks the order; this note covers local merges, which GitHub can't catch.
+
 # PRD: HermesHub MVP
 
 ## Introduction
