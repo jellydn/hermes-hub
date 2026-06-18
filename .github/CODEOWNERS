@@ -8,10 +8,9 @@
 # logger). Combined with branch protection on `main` requiring code-owner
 # approval, this is one of two stacked-merge guards (the other is the
 # status check in .github/workflows/stack-merge-order.yml).
-# Pras are paired: do not retarget this owner without updating the
+# PRs are paired: do not retarget this owner without updating the
 # paired rules in ./stack-merge-order.yml and the breadcrumb in
 # tasks/prd-hermes-hub-mvp.md.
-# @jellydn
 /server/lib/logger.ts                 @jellydn
 /server/lib/logger.test.ts            @jellydn
 

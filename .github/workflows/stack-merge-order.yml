@@ -1,21 +1,24 @@
-# Stack merge order — fails any PR that lands `server/lib/handler-error-log.ts`
-# (or its test) into `main` before `feat/logger` (PR #48) is an ancestor of the
-# PR head. The breadcrumb in tasks/prd-hermes-hub-mvp.md points here for
-# automated enforcement; CODEOWNERS in .github/CODEOWNERS provides the
-# review-time companion gate.
+# Stack merge order — fails any PR into `main` that lands
+# `server/lib/handler-error-log.ts` (or related files) without the
+# matching `server/lib/logger.ts` reference. The breadcrumb in
+# tasks/prd-hermes-hub-mvp.md points here for automated enforcement;
+# CODEOWNERS in .github/CODEOWNERS provides the review-time companion
+# gate.
 #
-# Order this guard runs alongside PR #47:
-#   1. PR #48 (feat/logger → main) is opened and reviewed.
-#   2. PR #47 (feat/cleanup-and-refactor → feat/logger) is opened against
-#      PR #48's branch. baseRefName already blocks order at the GitHub UI.
-#   3. This workflow does not fire on PR #47 itself because its base is
-#      not `main`; it is the fail-safe for future PRs that retarget `main`
-#      and touch the helper directly.
+# Order this guard runs alongside PR #47 / PR #48:
+#   1. PR #48 (`feat/logger` -> main) introduces server/lib/logger.ts.
+#   2. PR #47 (`feat/cleanup-and-refactor` -> main) introduces
+#      server/lib/handler-error-log.ts, which imports logger.ts.
+#      PR #47 targets `main` directly, so a merge before PR #48 breaks
+#      the build — this workflow is the machine guard against that.
+#   3. This workflow does not fire when feat/logger is the PR's target
+#      because the `:branches: [main]` filter excludes those.
 #
 # Self-disable: once feat/logger is merged into main and the branch is
-# deleted on origin, this check no-ops (`git ls-remote` returns nothing).
-# That means future changes to handler-error-log.ts go through the normal
-# review gate without needing to remember the historical stack.
+# deleted on origin, the "logger module in PR head" check still gates —
+# the contract is "logger.ts must be in the tree" not "feat/logger must
+# exist." That means future changes to handler-error-log.ts go through
+# the same review gate without needing to remember the historical stack.
 
 name: Stack merge order
 
@@ -25,62 +28,84 @@ on:
     paths:
       - server/lib/handler-error-log.ts
       - server/lib/handler-error-log.test.ts
+      # Watch the logger file too: any change to the API surface or its
+      # tests is by definition part of the stack contract, and adding
+      # new paths here keeps the guard ring-shaped as new logger
+      # consumers land.
+      - server/lib/logger.ts
+      - server/lib/logger.test.ts
 
 # Cancels in-flight re-runs on the same PR so we only ever look at HEAD.
 concurrency:
   group: stack-merge-order-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   verify-stack-order:
-    name: Verify feat/logger is ancestor of PR head
+    name: Verify stack contract (logger.ts present + ancestor)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      # Deliberately scoped to read-only: this check does not post
+      # comments, and it does not need write access to anything.
+      contents: read
 
     steps:
       - name: Checkout PR head with full history
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # fetch-depth: 0 required for `git merge-base --is-ancestor`.
           fetch-depth: 0
 
-      - name: Verify feat/logger is ancestor of PR head
+      - name: Verify stack contract
         env:
           LOGGER_BRANCH: feat/logger
+          # Hardcoded intentionally — feat/logger references are stable
+          # once PR #48 is merged-and-deleted, and templating this from
+          # `gh pr view` would add a dependency on the GitHub CLI plus
+          # a network round-trip per run. Bump this number if PR #48
+          # ever gets renumbered before merge.
           LOGGER_PR: "48"
         run: |
           set -euo pipefail
 
-          # Step 1 — does the logger-introducer branch still live on origin?
-          # If it has been merged into main and deleted, the stack has
-          # collapsed into main and the order is satisfied by definition.
-          if ! remote_refs="$(git ls-remote --heads origin "$LOGGER_BRANCH")"; then
+          # ─── Step 1: contract check ───────────────────────────────
+          # The actual contract is "logger.ts is in the tree", not
+          # "feat/logger exists on origin." A contributor could delete
+          # or skip the branch on origin; the tree presence test is the
+          # durable invariant.
+          if ! git cat-file -e "HEAD:server/lib/logger.ts"; then
+            {
+              echo "::error title=Logger module missing from PR::"
+              echo "::error::PR head ($(git rev-parse --short HEAD)) does not contain server/lib/logger.ts."
+              echo "::error::server/lib/handler-error-log.ts depends on it. Merge PR #${LOGGER_PR} (${LOGGER_BRANCH}) first, then rebase this branch."
+            } >&2
+            exit 1
+          fi
+
+          # ─── Step 2: order check (only if branch still exists) ─────
+          # If feat/logger has already been merged into main and the
+          # branch cleaned up on origin, logger.ts is in main and the
+          # ancestor check is moot — pass through.
+          if ! remote_refs="$(git ls-remote --heads origin "$LOGGER_BRANCH" 2>/dev/null)"; then
             echo "::error title=git ls-remote failed::Could not contact origin."
             exit 1
           fi
 
           if [ -z "$remote_refs" ]; then
-            echo "::notice title=Logger branch absent::$LOGGER_BRANCH no longer exists on origin. Logger has been merged into main; the stack has collapsed and the order check no longer applies."
+            echo "::notice title=Logger branch absent on origin::$LOGGER_BRANCH not on origin. Stack contract satisfied via inline logger.ts in PR head."
             exit 0
           fi
 
-          # Step 2 — fetch the branch head so we have a real ref to compare.
           git fetch --no-tags origin "$LOGGER_BRANCH"
 
-          # Step 3 — is the logger branch an ancestor of PR HEAD?
-          if git merge-base --is-ancestor "origin/$LOGGER_BRANCH" HEAD; then
-            echo "::notice title=Stack order OK::$LOGGER_BRANCH is an ancestor of PR head $(git rev-parse --short HEAD). Safe to merge into main."
-            exit 0
+          if ! git merge-base --is-ancestor "origin/$LOGGER_BRANCH" HEAD; then
+            {
+              echo "::error title=Stack merge order violated::"
+              echo "::error::server/lib/logger.ts is in PR head but ${LOGGER_BRANCH} (PR #${LOGGER_PR}) is not an ancestor of PR head ($(git rev-parse --short HEAD))."
+              echo "::error::Rebase this branch onto origin/${LOGGER_BRANCH} so logger.ts is introduced through the canonical path."
+            } >&2
+            exit 1
           fi
 
-          # Order is violated — fail with a clear remediation message.
-          {
-            echo "::error title=Stack merge order violated::"
-            echo "::error::This PR modifies server/lib/handler-error-log.ts, which imports from server/lib/logger.ts."
-            echo "::error::$LOGGER_BRANCH (PR #${LOGGER_PR}) introduces server/lib/logger.ts and must be merged into main BEFORE this PR can land."
-            echo "::error::To fix: merge PR #${LOGGER_PR} (${LOGGER_BRANCH} -> main) first, then rebase this branch onto the new main. The companion breadcrumb in tasks/prd-hermes-hub-mvp.md explains why this contract is not negotiable."
-          } >&2
-          exit 1
+          echo "::notice title=Stack order OK::logger.ts is in PR head and ${LOGGER_BRANCH} is an ancestor. Safe to merge into main."
