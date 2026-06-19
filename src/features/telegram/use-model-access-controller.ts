@@ -37,7 +37,17 @@ export type FormAction =
 export function formReducer(state: FormState, action: FormAction): FormState {
 	switch (action.type) {
 		case "fetchStarted":
-			return { ...state, isLoading: true, message: null };
+			// Plan 002: do NOT clear `message` here. `fetchStarted` represents
+			// the controller initiating a refresh of the options list, not a
+			// user-initiated action. After a successful model switch we
+			// `await fetchOptions()` to refresh the dropdown right before
+			// `onSwitched?.()` invalidates the route loader; clearing the
+			// success banner on that internal refresh was a UX regression
+			// because React 19 batches `switchSucceeded` + `fetchStarted`
+			// into a single commit, leaving the banner invisible.
+			// The user-action clears still live on `optionSelected` and
+			// `modelChanged` (explicit "user changed their mind" semantics).
+			return { ...state, isLoading: true };
 		case "fetchSucceeded": {
 			const { data } = action;
 			return {

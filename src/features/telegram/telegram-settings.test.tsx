@@ -442,6 +442,18 @@ describe("TelegramSettings", () => {
 				}),
 			}),
 		);
+
+		// Plan 002: the success banner must still be visible AFTER the
+		// post-switch refresh has resolved (so the previous-rendering
+		// bug is genuinely fixed, not just observed during the
+		// suspicious one-frame window between `switchSucceeded` and
+		// the subsequent `fetchStarted` dispatches). Before plan 002
+		// the `fetchStarted` reducer cleared `state.message`, so this
+		// assertion fails at the end of the test even though the
+		// banner briefly existed mid-flush.
+		expect(
+			screen.getByText(/model access switched successfully/i),
+		).toBeTruthy();
 	});
 });
 
