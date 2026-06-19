@@ -132,7 +132,6 @@ export async function loadModelAccessRecords(userId: string) {
 		)
 		.map((o) => o.storageProviderId);
 
-	// Fetch active provider record
 	const activeApiPromise = getDb()
 		.select({
 			provider: aiProviders.provider,
@@ -143,10 +142,10 @@ export async function loadModelAccessRecords(userId: string) {
 		})
 		.from(aiProviders)
 		.where(and(eq(aiProviders.userId, userId), eq(aiProviders.isActive, true)))
+		.orderBy(desc(aiProviders.createdAt))
 		.limit(1)
 		.then((rows) => rows[0] || null);
 
-	// Fetch active subscription record
 	const activeSubPromise = getDb()
 		.select({
 			subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
@@ -161,6 +160,7 @@ export async function loadModelAccessRecords(userId: string) {
 				eq(aiUserSubscriptions.isActive, true),
 			),
 		)
+		.orderBy(desc(aiUserSubscriptions.createdAt))
 		.limit(1)
 		.then((rows) => {
 			const record = rows[0];
@@ -175,7 +175,6 @@ export async function loadModelAccessRecords(userId: string) {
 			};
 		});
 
-	// Fetch latest API provider record
 	const latestApiPromise = getDb()
 		.select({
 			provider: aiProviders.provider,
@@ -201,7 +200,6 @@ export async function loadModelAccessRecords(userId: string) {
 		.limit(1)
 		.then((rows) => rows[0] || null);
 
-	// Fetch latest credential subscription record
 	const latestCredSubPromise =
 		credentialStorageIds.length > 0
 			? getDb()
@@ -224,7 +222,6 @@ export async function loadModelAccessRecords(userId: string) {
 					.then((rows) => rows[0] || null)
 			: Promise.resolve(null);
 
-	// Fetch latest OAuth subscription record
 	const latestOAuthSubPromise = getDb()
 		.select({
 			subscriptionProvider: aiUserSubscriptions.subscriptionProvider,

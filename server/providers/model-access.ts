@@ -1,4 +1,4 @@
-import type { ApiProviderId } from "#/lib/ai-providers";
+import { isApiProviderId } from "#/lib/ai-providers";
 import { getSubscriptionByStorageProviderId } from "#/lib/user-subscriptions";
 import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import type { loadModelAccessRecords } from "./active-backend";
@@ -14,10 +14,13 @@ type ActiveAccessSummary = {
 function buildApiProviderSummary(
 	record: NonNullable<ModelAccessRecords["apiRecord"]>,
 ): NonNullable<ModelAccessSnapshot["apiProvider"]> {
+	if (!isApiProviderId(record.provider)) {
+		throw new Error(`Invalid API provider ID: ${record.provider}`);
+	}
 	const decryptedApiKey = decryptStoredApiKey(record.encryptedApiKey);
 	return {
 		kind: "api-provider",
-		provider: record.provider as ApiProviderId,
+		provider: record.provider,
 		model: record.model,
 		keyLast4: decryptedApiKey.ok
 			? getApiKeyLast4(decryptedApiKey.apiKey)
@@ -97,6 +100,7 @@ function resolveActiveAccessSummary(
 	let apiProvider: ModelAccessSnapshot["apiProvider"] = null;
 	if (
 		activeApiRec &&
+		isApiProviderId(activeApiRec.provider) &&
 		!getSubscriptionByStorageProviderId(activeApiRec.provider)
 	) {
 		apiProvider = buildApiProviderSummary(activeApiRec);
@@ -110,7 +114,9 @@ function resolveActiveAccessSummary(
 	const latestApiRec =
 		latestApiRecord !== undefined
 			? latestApiRecord
-			: apiRecord && !getSubscriptionByStorageProviderId(apiRecord.provider)
+			: apiRecord &&
+					isApiProviderId(apiRecord.provider) &&
+					!getSubscriptionByStorageProviderId(apiRecord.provider)
 				? apiRecord
 				: null;
 
