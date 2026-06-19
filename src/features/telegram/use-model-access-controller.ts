@@ -41,7 +41,21 @@ export function formReducer(state: FormState, action: FormAction): FormState {
 			// list; it's not a user-initiated action that should dismiss an
 			// existing success/error banner. User-action clears live in
 			// `optionSelected` / `modelChanged` / `switchStarted` etc.
-			return { ...state, isLoading: true };
+			//
+			// Conditional clear for STALE *errors* only: if a prior fetch or
+			// switch failed, `state.message` was `{type: "error", ...}` and
+			// would otherwise persist through subsequent `fetchStarted`'s
+			// loading state AND through `fetchSucceeded` (which doesn't
+			// clear at all) — gemini-code-assist thread
+			// PRRT_kwDOSp7CXM6Ksxy5 (PR #63, 2026-06-18). Success banners
+			// still pass through untouched; we only suppress stale errors
+			// so the user is not misled into seeing a prior failure labelled
+			// as the current operation's outcome.
+			return {
+				...state,
+				isLoading: true,
+				message: state.message?.type === "error" ? null : state.message,
+			};
 		case "fetchSucceeded": {
 			const { data } = action;
 			return {
