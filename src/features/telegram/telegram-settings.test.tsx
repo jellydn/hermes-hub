@@ -471,18 +471,12 @@ describe("TelegramSettings", () => {
 		);
 		await flushAsyncWork();
 
-		expect(
-			fetchMock.mock.calls.every(
-				(args) => args[0] !== "/api/telegram/model-access-options",
-			),
-		).toBe(true);
+		// No fetch should have been issued while isDeployed is false.
+		// The default beforeEach mock returns the empty options payload,
+		// which is what the post-flip rerender below expects — so no
+		// targeted `mockResolvedValueOnce` slot is required here.
+		expect(fetchMock).not.toHaveBeenCalled();
 
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ options: [], activeOptionId: null }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
 		rerender({ isDeployed: true });
 		await flushAsyncWork();
 
@@ -526,16 +520,21 @@ describe("TelegramSettings", () => {
 					}),
 				);
 			}
-			// Other concurrent fetches on TelegramSettings mount (e.g.
-			// `TelegramPairingSection`'s `/api/telegram/pairings` GET):
-			// return an empty pairings shape so the section renders
-			// without consuming the targeted mocks above.
-			return Promise.resolve(
-				new Response(
-					JSON.stringify({ pairings: { pending: [], approved: [] } }),
-					{ status: 200, headers: { "content-type": "application/json" } },
-				),
-			);
+			// Trim any concurrent mount-time fetch (e.g. the pairings
+			// panel's GET) to the URL we actually expect, so the targeted
+			// mocks above are not silently consumed by an unrelated fetch.
+			if (url === "/api/telegram/pairings") {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({ pairings: { pending: [], approved: [] } }),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+			}
+			// Surface any unmocked URL as a test failure rather than
+			// silently masking it as the pairings response (gemini-thread
+			// PRRT_kwDOSp7CXM6KsyFy hardening on PR #64).
+			return Promise.reject(new Error(`Unexpected unmocked fetch: ${url}`));
 		});
 
 		routerSpies.invalidate.mockClear();
