@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "@tanstack/react-router";
 import { useReducer } from "react";
 import { useForm } from "react-hook-form";
 import {
@@ -39,6 +40,7 @@ import {
 export function useProviderSettingsController(
 	initialAccess: ModelAccessSnapshot | null,
 ) {
+	const router = useRouter();
 	const [uiState, dispatch] = useReducer(
 		providerSettingsUiReducer,
 		initialAccess,
@@ -140,6 +142,7 @@ export function useProviderSettingsController(
 
 			providerForm.setValue("apiKey", "");
 			dispatch({ type: "provider_save_succeeded", config: result.provider });
+			void router.invalidate();
 		} finally {
 			dispatch({ type: "provider_save_finished" });
 		}
@@ -200,6 +203,7 @@ export function useProviderSettingsController(
 						? savedFingerprint
 						: null,
 			});
+			void router.invalidate();
 		} finally {
 			dispatch({ type: "subscription_save_finished" });
 		}

@@ -1,9 +1,8 @@
-import { type ApiProviderId, isApiProviderId } from "#/lib/ai-providers";
+import { isApiProviderId } from "#/lib/ai-providers";
 import { getSubscriptionByStorageProviderId } from "#/lib/user-subscriptions";
 import type { ModelAccessSnapshot } from "#shared/contracts/model-access";
 import type { loadModelAccessRecords } from "./active-backend";
 import { decryptStoredApiKey, getApiKeyLast4 } from "./records";
-import { buildStoredCredentialSubscriptionSummary } from "./subscription-credentials";
 
 type ModelAccessRecords = Awaited<ReturnType<typeof loadModelAccessRecords>>;
 
@@ -14,19 +13,39 @@ type ActiveAccessSummary = {
 
 function buildApiProviderSummary(
 	record: NonNullable<ModelAccessRecords["apiRecord"]>,
-) {
-	const decryptResult = record.encryptedApiKey
-		? decryptStoredApiKey(record.encryptedApiKey)
-		: { ok: false as const };
-	const storedApiKey =
-		decryptResult.ok && decryptResult.apiKey ? decryptResult.apiKey : null;
-
+): NonNullable<ModelAccessSnapshot["apiProvider"]> {
+	if (!isApiProviderId(record.provider)) {
+		throw new Error(`Invalid API provider ID: ${record.provider}`);
+	}
+	const decryptedApiKey = decryptStoredApiKey(record.encryptedApiKey);
 	return {
-		kind: "api-provider" as const,
-		provider: record.provider as ApiProviderId,
+		kind: "api-provider",
+		provider: record.provider,
 		model: record.model,
-		keyLast4: storedApiKey ? getApiKeyLast4(storedApiKey) : null,
-		hasStoredKey: Boolean(storedApiKey),
+		keyLast4: decryptedApiKey.ok
+			? getApiKeyLast4(decryptedApiKey.apiKey)
+			: null,
+		hasStoredKey: decryptedApiKey.ok,
+		baseUrl: record.baseUrl ?? undefined,
+	};
+}
+
+function buildStoredCredentialSubscriptionSummary(
+	option: Parameters<
+		typeof import("./subscription-credentials").buildStoredCredentialSubscriptionSummary
+	>[0],
+	record: NonNullable<ModelAccessRecords["apiRecord"]>,
+): NonNullable<ModelAccessSnapshot["subscription"]> {
+	const decryptedApiKey = decryptStoredApiKey(record.encryptedApiKey);
+	return {
+		kind: "subscription",
+		subscriptionProvider: option.id,
+		model: record.model,
+		authMode: option.authMode,
+		keyLast4: decryptedApiKey.ok
+			? getApiKeyLast4(decryptedApiKey.apiKey)
+			: null,
+		hasStoredKey: decryptedApiKey.ok,
 		baseUrl: record.baseUrl ?? undefined,
 	};
 }
@@ -34,46 +53,106 @@ function buildApiProviderSummary(
 function resolveActiveAccessSummary(
 	records: ModelAccessRecords,
 ): ActiveAccessSummary {
-	const { apiRecord, subscriptionRecord } = records;
+	const {
+		activeApiRecord,
+		latestApiRecord,
+		activeSubscriptionRecord,
+		latestOAuthSubscriptionRecord,
+		latestCredentialSubscriptionRecord,
+		apiRecord,
+		subscriptionRecord,
+	} = records;
 
-	if (subscriptionRecord) {
-		return {
-			apiProvider: null,
-			subscription: {
-				kind: "subscription",
-				subscriptionProvider: subscriptionRecord.subscriptionProvider,
-				model: subscriptionRecord.model,
-				authMode: subscriptionRecord.authMode,
-			},
+	const activeSubRec =
+		activeSubscriptionRecord !== undefined
+			? activeSubscriptionRecord
+			: subscriptionRecord?.isActive
+				? subscriptionRecord
+				: null;
+
+	const activeApiRec =
+		activeApiRecord !== undefined
+			? activeApiRecord
+			: apiRecord?.isActive
+				? apiRecord
+				: null;
+
+	let subscription: ModelAccessSnapshot["subscription"] = null;
+	if (activeSubRec) {
+		subscription = {
+			kind: "subscription",
+			subscriptionProvider: activeSubRec.subscriptionProvider,
+			model: activeSubRec.model,
+			authMode: activeSubRec.authMode,
 		};
-	}
-
-	const credentialOption =
-		apiRecord?.isActive && apiRecord.provider
-			? getSubscriptionByStorageProviderId(apiRecord.provider)
-			: null;
-
-	if (credentialOption && apiRecord) {
-		return {
-			apiProvider: null,
-			subscription: buildStoredCredentialSubscriptionSummary(
+	} else if (activeApiRec) {
+		const credentialOption = getSubscriptionByStorageProviderId(
+			activeApiRec.provider,
+		);
+		if (credentialOption) {
+			subscription = buildStoredCredentialSubscriptionSummary(
 				credentialOption,
-				apiRecord,
-			),
-		};
+				activeApiRec,
+			);
+		}
 	}
 
-	if (apiRecord?.isActive && isApiProviderId(apiRecord.provider)) {
-		return {
-			apiProvider: buildApiProviderSummary(apiRecord),
-			subscription: null,
-		};
+	let apiProvider: ModelAccessSnapshot["apiProvider"] = null;
+	if (
+		activeApiRec &&
+		isApiProviderId(activeApiRec.provider) &&
+		!getSubscriptionByStorageProviderId(activeApiRec.provider)
+	) {
+		apiProvider = buildApiProviderSummary(activeApiRec);
 	}
 
-	return {
-		apiProvider: null,
-		subscription: null,
-	};
+	const latestSubRec =
+		latestOAuthSubscriptionRecord !== undefined
+			? latestOAuthSubscriptionRecord
+			: subscriptionRecord;
+
+	const latestApiRec =
+		latestApiRecord !== undefined
+			? latestApiRecord
+			: apiRecord &&
+					isApiProviderId(apiRecord.provider) &&
+					!getSubscriptionByStorageProviderId(apiRecord.provider)
+				? apiRecord
+				: null;
+
+	const latestCredSubRec =
+		latestCredentialSubscriptionRecord !== undefined
+			? latestCredentialSubscriptionRecord
+			: apiRecord && getSubscriptionByStorageProviderId(apiRecord.provider)
+				? apiRecord
+				: null;
+
+	if (!subscription) {
+		if (latestSubRec) {
+			subscription = {
+				kind: "subscription",
+				subscriptionProvider: latestSubRec.subscriptionProvider,
+				model: latestSubRec.model,
+				authMode: latestSubRec.authMode,
+			};
+		} else if (latestCredSubRec) {
+			const credentialOption = getSubscriptionByStorageProviderId(
+				latestCredSubRec.provider,
+			);
+			if (credentialOption) {
+				subscription = buildStoredCredentialSubscriptionSummary(
+					credentialOption,
+					latestCredSubRec,
+				);
+			}
+		}
+	}
+
+	if (!apiProvider && latestApiRec) {
+		apiProvider = buildApiProviderSummary(latestApiRec);
+	}
+
+	return { apiProvider, subscription };
 }
 
 export function buildModelAccessSnapshot(

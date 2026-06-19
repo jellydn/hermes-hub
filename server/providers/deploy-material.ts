@@ -17,12 +17,16 @@ export type ApiBackendKeyMaterial =
 export function readApiBackendKey(
 	backend: ActiveApiProviderBackend,
 ): ApiBackendKeyMaterial {
+	const credentialPolicy = getProviderCredentialPolicy(backend.provider);
 	if (!backend.encryptedApiKey) {
 		return { ok: true, apiKey: "" };
 	}
 
 	const decryptResult = decryptStoredApiKey(backend.encryptedApiKey);
 	if (!decryptResult.ok) {
+		if (!credentialPolicy.requiresApiKey) {
+			return { ok: true, apiKey: "" };
+		}
 		return { ok: false, error: UNREADABLE_API_KEY_ERROR };
 	}
 

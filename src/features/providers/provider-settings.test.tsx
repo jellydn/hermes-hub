@@ -44,6 +44,14 @@ vi.mock("#/components/ui/button", () => ({
 	),
 }));
 
+const invalidateMock = vi.fn();
+
+vi.mock("@tanstack/react-router", () => ({
+	useRouter: () => ({
+		invalidate: invalidateMock,
+	}),
+}));
+
 import { ProviderSettings } from "./provider-settings";
 
 const fetchMock = vi.fn();
