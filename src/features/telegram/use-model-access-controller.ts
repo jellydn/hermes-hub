@@ -1,10 +1,9 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 
 import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
-import { useMountEffect } from "#/lib/use-mount-effect";
 import type { HostKeyErrorCode } from "#shared/contracts/host-key-error";
 import type { ModelAccessOptionsResponse } from "#shared/contracts/telegram-model-access";
 
@@ -166,12 +165,24 @@ export function useModelAccessController({
 		}
 	}, []);
 
-	useMountEffect(() => {
+	// Plan 003: replaced a misuse of `useMountEffect` (a documented
+	// one-shot mount escaper per AGENTS.md) with `useEffect([isDeployed])`.
+	// The previous code captured `isDeployed` at mount and never re-fired,
+	// so when a user arrived at /telegram with no deployed server and
+	// subsequently connected+deployed, the model-access dropdown stayed
+	// empty until the user clicked Refresh. `useEffect` keyed on
+	// `isDeployed` re-runs the options fetch on every flip false → true.
+	//
+	// `fetchOptions` is included in deps to satisfy biome's
+	// `useExhaustiveDependencies` (the per-file override on
+	// `src/lib/use-mount-effect.ts` does NOT apply here). It's a stable
+	// `useCallback([])` so behavior is identical regardless.
+	useEffect(() => {
 		if (!isDeployed) {
 			return;
 		}
 		void fetchOptions();
-	});
+	}, [isDeployed, fetchOptions]);
 
 	const handleSwitch = useCallback(async () => {
 		const { selectedOptionId, selectedModel } = stateRef.current;

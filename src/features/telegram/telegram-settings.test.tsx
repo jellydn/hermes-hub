@@ -5,6 +5,7 @@ import {
 	cleanup,
 	fireEvent,
 	render,
+	renderHook,
 	screen,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
@@ -62,6 +63,7 @@ vi.mock("#/components/ui/button", () => ({
 }));
 
 import { TelegramSettings } from "./telegram-settings";
+import { useModelAccessController } from "./use-model-access-controller";
 
 const fetchMock = vi.fn();
 
@@ -454,6 +456,42 @@ describe("TelegramSettings", () => {
 		expect(
 			screen.getByText(/model access switched successfully/i),
 		).toBeTruthy();
+	});
+
+	// Plan 003 regression: pre-fix, the controller used a one-shot
+	// `useMountEffect` that captured `isDeployed` at mount. A user who
+	// arrived at /telegram with no deployed server and then connected
+	//+ deployed never re-triggered `fetchOptions`, so the model-access
+	// dropdown stayed empty until they clicked Refresh. The fix is
+	// `useEffect([isDeployed])`; this test asserts the fetch re-fires
+	// when the prop flips.
+	it("refetches model-access options when isDeployed flips true", async () => {
+		const { rerender } = renderHook(
+			({ isDeployed }: { isDeployed: boolean }) =>
+				useModelAccessController({ isDeployed }),
+			{ initialProps: { isDeployed: false } },
+		);
+
+		await flushAsyncWork();
+
+		// Pre-flip: controller early-returned because `!isDeployed`.
+		// No `model-access-options` fetch should have fired.
+		expect(fetchMock).not.toHaveBeenCalledWith(
+			"/api/telegram/model-access-options",
+		);
+
+		// Flip isDeployed from false to true. With plan 003's
+		// `useEffect([isDeployed, fetchOptions])`, the effect re-fires.
+		// Pre-fix, `useMountEffect` would have been one-shot and the
+		// fetch would still not have happened.
+		rerender({ isDeployed: true });
+		await flushAsyncWork();
+
+		// `fetchOptions` calls `fetch(url)` with a single argument
+		// (no RequestInit), so assert exactly the single-argument form.
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/model-access-options",
+		);
 	});
 });
 
