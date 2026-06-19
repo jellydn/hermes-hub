@@ -45,7 +45,15 @@ export function getApiKeyLast4(apiKey: string) {
 	return getLast4(apiKey);
 }
 
-export async function getLatestProviderRecord(userId: string) {
+export async function getLatestProviderRecord(
+	userId: string,
+	provider?: string,
+) {
+	const conditions = [eq(aiProviders.userId, userId)];
+	if (provider) {
+		conditions.push(eq(aiProviders.provider, provider));
+	}
+
 	const [record] = await getDb()
 		.select({
 			provider: aiProviders.provider,
@@ -55,7 +63,7 @@ export async function getLatestProviderRecord(userId: string) {
 			isActive: aiProviders.isActive,
 		})
 		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
+		.where(and(...conditions))
 		.orderBy(desc(aiProviders.createdAt))
 		.limit(1);
 

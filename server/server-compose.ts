@@ -31,6 +31,10 @@ export function buildManagedComposeContentFromSecrets(input: {
 	telegramBotToken?: string;
 	webUiPassword?: string;
 	webUiPort?: number;
+	providerConfigOverride?: {
+		envVars: Record<string, string>;
+		model: string;
+	} | null;
 }) {
 	const { telegramInfo, providerConfig, webUiRecord } = input.secrets;
 
@@ -50,9 +54,14 @@ export function buildManagedComposeContentFromSecrets(input: {
 		}
 	}
 
-	if (providerConfig) {
-		providerEnvVars = providerConfig.envVars;
-		hermesModel = providerConfig.model;
+	const resolvedProviderConfig =
+		input.providerConfigOverride !== undefined
+			? input.providerConfigOverride
+			: providerConfig;
+
+	if (resolvedProviderConfig) {
+		providerEnvVars = resolvedProviderConfig.envVars;
+		hermesModel = resolvedProviderConfig.model;
 	}
 
 	const resolvedWebUiPassword = resolveWebUiPasswordForCompose({
@@ -82,6 +91,10 @@ export async function buildManagedComposeContent(input: {
 	telegramBotToken?: string;
 	webUiPassword?: string;
 	webUiPort?: number;
+	providerConfigOverride?: {
+		envVars: Record<string, string>;
+		model: string;
+	} | null;
 }) {
 	const secrets = await resolveManagedComposeSecrets({
 		userId: input.userId,
@@ -93,6 +106,7 @@ export async function buildManagedComposeContent(input: {
 		telegramBotToken: input.telegramBotToken,
 		webUiPassword: input.webUiPassword,
 		webUiPort: input.webUiPort,
+		providerConfigOverride: input.providerConfigOverride,
 		secrets,
 	});
 }

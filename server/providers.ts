@@ -78,12 +78,15 @@ export async function saveProviderConfig(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	const existingRecord = await getLatestProviderRecord(session.user.id);
 	const parsed = parseProviderRequest(payload);
 	if ("error" in parsed) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
+	const existingRecord = await getLatestProviderRecord(
+		session.user.id,
+		parsed.provider,
+	);
 	const resolvedApiKey = resolveProviderApiKey(parsed, existingRecord);
 	if ("error" in resolvedApiKey) {
 		return context.json({ error: resolvedApiKey.error }, 400);
@@ -245,12 +248,15 @@ export async function testProviderConfig(context: Context) {
 		return context.json({ error: "Invalid JSON body" }, 400);
 	}
 
-	const existingRecord = await getLatestProviderRecord(session.user.id);
 	const parsed = parseProviderRequest(payload);
 	if ("error" in parsed) {
 		return context.json({ error: parsed.error }, 400);
 	}
 
+	const existingRecord = await getLatestProviderRecord(
+		session.user.id,
+		parsed.provider,
+	);
 	const resolvedApiKey = resolveProviderApiKey(parsed, existingRecord);
 	if ("error" in resolvedApiKey) {
 		return context.json({ error: resolvedApiKey.error }, 400);

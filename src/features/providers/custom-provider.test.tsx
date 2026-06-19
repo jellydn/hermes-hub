@@ -43,6 +43,12 @@ vi.mock("#/components/ui/button", () => ({
 	),
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+	useRouter: () => ({
+		invalidate: vi.fn(),
+	}),
+}));
+
 import { ProviderSettings } from "./provider-settings";
 
 afterEach(() => {

@@ -36,43 +36,32 @@ function resolveActiveAccessSummary(
 ): ActiveAccessSummary {
 	const { apiRecord, subscriptionRecord } = records;
 
-	if (subscriptionRecord) {
-		return {
-			apiProvider: null,
-			subscription: {
-				kind: "subscription",
+	const apiProvider =
+		apiRecord && isApiProviderId(apiRecord.provider)
+			? buildApiProviderSummary(apiRecord)
+			: null;
+
+	const credentialOption = apiRecord?.provider
+		? getSubscriptionByStorageProviderId(apiRecord.provider)
+		: null;
+
+	const subscription = subscriptionRecord
+		? {
+				kind: "subscription" as const,
 				subscriptionProvider: subscriptionRecord.subscriptionProvider,
 				model: subscriptionRecord.model,
 				authMode: subscriptionRecord.authMode,
-			},
-		};
-	}
-
-	const credentialOption =
-		apiRecord?.isActive && apiRecord.provider
-			? getSubscriptionByStorageProviderId(apiRecord.provider)
+			}
+		: credentialOption && apiRecord
+			? buildStoredCredentialSubscriptionSummary(credentialOption, apiRecord)
 			: null;
 
-	if (credentialOption && apiRecord) {
-		return {
-			apiProvider: null,
-			subscription: buildStoredCredentialSubscriptionSummary(
-				credentialOption,
-				apiRecord,
-			),
-		};
-	}
-
-	if (apiRecord?.isActive && isApiProviderId(apiRecord.provider)) {
-		return {
-			apiProvider: buildApiProviderSummary(apiRecord),
-			subscription: null,
-		};
-	}
-
 	return {
-		apiProvider: null,
-		subscription: null,
+		apiProvider:
+			subscription?.kind === "subscription" && credentialOption
+				? null
+				: apiProvider,
+		subscription,
 	};
 }
 

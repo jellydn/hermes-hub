@@ -27,7 +27,10 @@ export async function loadCredentialSubscriptionCredentials(
 		return { error: "Choose a valid credential-backed subscription." };
 	}
 
-	const existingRecord = await getLatestProviderRecord(userId);
+	const existingRecord = await getLatestProviderRecord(
+		userId,
+		option.storageProviderId,
+	);
 	const resolved = resolveSubscriptionCredentials(
 		{ apiKey: parsed.apiKey, baseUrl: parsed.baseUrl },
 		existingRecord,

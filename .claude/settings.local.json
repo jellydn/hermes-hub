@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(bun run *)",
+      "Bash(bunx *)",
+      "Bash(PATH=\"./node_modules/.bin:$PATH\" bun run *)",
+      "Bash(bun install *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}
