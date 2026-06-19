@@ -76,7 +76,7 @@ describe("decryptApiServerKeyOrRespond", () => {
 	it("returns a 502 response carrying the actionable decrypt error AND logs a structured warn", async () => {
 		vi.mocked(decryptApiServerKey).mockImplementation(() => {
 			throw new Error(
-				"API server key is in legacy plaintext format and cannot be decrypted",
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 			);
 		});
 		const ctx = createMockContext();
@@ -86,16 +86,14 @@ describe("decryptApiServerKeyOrRespond", () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) {
 			throw new Error("expected !ok");
-		}
-
-		// The response is a real Response with status 502 carrying the
+		} // The response is a real Response with status 502 carrying the
 		// operator-facing actionable message verbatim.
 		const response = result.response;
 		expect(response).toBeInstanceOf(Response);
 		expect(response.status).toBe(502);
 		const body = (await response.json()) as { error: string };
 		expect(body.error).toBe(
-			"API server key is in legacy plaintext format and cannot be decrypted",
+			"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 		);
 
 		// The structured warn MUST carry the actionable message verbatim
@@ -104,7 +102,7 @@ describe("decryptApiServerKeyOrRespond", () => {
 		expect(logger.warn).toHaveBeenCalledWith(
 			{
 				error:
-					"API server key is in legacy plaintext format and cannot be decrypted",
+					"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 			},
 			"decryptApiServerKey failed in HTTP handler",
 		);

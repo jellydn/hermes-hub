@@ -841,7 +841,7 @@ describe("telegram handlers", () => {
 		]);
 		decryptApiServerKey.mockImplementationOnce(() => {
 			throw new Error(
-				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 			);
 		});
 
@@ -853,7 +853,7 @@ describe("telegram handlers", () => {
 
 		expect(response.status).toBe(502);
 		expect(payload.error).toBe(
-			"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+			"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 		);
 		// We must not fall through to the deploy / curl path on a decrypt
 		// failure; the SSH connection layer is unreachable from this point.

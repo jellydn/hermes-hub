@@ -87,10 +87,10 @@ export function decryptApiServerKey(payload: string): string {
 					kind: "decrypt",
 					payloadLength: payload.length,
 				},
-				"decryptApiServerKey received a legacy plaintext API server key — refusing to use as credential; the operator must re-save the provider via /api/providers.",
+				"decryptApiServerKey received a legacy plaintext API server key (telegram_configs.api_server_key, auto-generated during Telegram bot deploy) — refusing to use as credential; the operator must redeploy the Telegram bot to regenerate this key.",
 			);
 			throw new Error(
-				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save it via /api/providers.",
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 			);
 		}
 		throw err;

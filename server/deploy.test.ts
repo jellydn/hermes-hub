@@ -417,7 +417,7 @@ describe("deployProviderToHermes", () => {
 		// the helper still calls decryptApiServerKey, which now throws.
 		decryptApiServerKey.mockImplementationOnce(() => {
 			throw new Error(
-				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 			);
 		});
 
@@ -429,7 +429,7 @@ describe("deployProviderToHermes", () => {
 
 		expect(response.status).toBe(502);
 		expect(payload.error).toBe(
-			"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+			"API server key is in legacy plaintext format and cannot be decrypted; the operator must redeploy the Telegram bot to regenerate this key.",
 		);
 		// The handler must short-circuit before reaching the SSH deploy.
 		expect(deployManagedCompose).not.toHaveBeenCalled();
