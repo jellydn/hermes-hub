@@ -404,6 +404,36 @@ describe("deployProviderToHermes", () => {
 			}),
 		);
 	});
+
+	// Plan 005 follow-up: the new strict-decrypt contract throws an
+	// actionable Error on legacy-plaintext / malformed payloads. The
+	// 502 must surface that exact message so the operator sees the
+	// same string in the response body, in the logs (via logger.warn),
+	// and in `CONTEXT.md` (operator runbook).
+	it("returns 502 with the actionable decrypt message when apiServerKey decryption fails", async () => {
+		resolveActiveModelBackend.mockResolvedValueOnce(apiBackend);
+		// telegramRecord.apiServerKey defaults to "encrypted-api-server-key"
+		// in the `beforeEach`, but that's now untrusted post-plan-005:
+		// the helper still calls decryptApiServerKey, which now throws.
+		decryptApiServerKey.mockImplementationOnce(() => {
+			throw new Error(
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+			);
+		});
+
+		const { deployProviderToHermes } = await import("./deploy");
+		const response = await deployProviderToHermes(
+			createContext("http://localhost/api/providers/deploy", {}),
+		);
+		const payload = (await response.json()) as { error: string };
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toBe(
+			"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+		);
+		// The handler must short-circuit before reaching the SSH deploy.
+		expect(deployManagedCompose).not.toHaveBeenCalled();
+	});
 });
 
 function createContext(url: string, body: unknown) {

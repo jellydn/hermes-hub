@@ -814,6 +814,51 @@ describe("telegram handlers", () => {
 		});
 		expect(payload.error).toContain("Host key fingerprint not stored");
 	});
+
+	// Plan 005 follow-up: the new strict-decrypt contract throws an
+	// actionable Error on legacy-plaintext / malformed payloads. The
+	// 502 must surface that exact message so the operator sees the
+	// same string in the response body, in the logs (via logger.warn),
+	// and in `CONTEXT.md` (operator runbook).
+	it("returns 502 with the actionable decrypt message when apiServerKey decryption fails", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		// Non-empty payload passes the upstream 400 early-return; the
+		// decrypt mock throws the exact legacy-plaintext message that's
+		// in `CONTEXT.md` as the canonical operator remediation.
+		selectLimit.mockResolvedValueOnce([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "legacy-plaintext-key",
+			},
+		]);
+		decryptApiServerKey.mockImplementationOnce(() => {
+			throw new Error(
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+			);
+		});
+
+		const { testTelegramBot } = await import("./telegram");
+		const response = await testTelegramBot(
+			createContext({ message: "Hello" }) as unknown as Context,
+		);
+		const payload = (await response.json()) as { error: string };
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toBe(
+			"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save the provider via /api/providers.",
+		);
+		// We must not fall through to the deploy / curl path on a decrypt
+		// failure; the SSH connection layer is unreachable from this point.
+		expect(withSshConnection).not.toHaveBeenCalled();
+	});
 });
 
 describe("switchModelProvider", () => {

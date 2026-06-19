@@ -1,6 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+
+// Plan 005 follow-up: `decryptApiServerKey` now emits a structured pino
+// `warn` whenever it rejects a plaintext or malformed payload. Silence
+// this in the unit test (and in any test that exercises a "throws" path)
+// so the suite output stays readable.
+vi.mock("./lib/logger", () => ({
+	logger: {
+		warn: vi.fn(),
+		info: vi.fn(),
+		error: vi.fn(),
+		debug: vi.fn(),
+	},
+}));
 
 describe("crypto", () => {
 	const originalEnv = process.env.ENCRYPTION_KEY;
