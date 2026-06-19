@@ -62,6 +62,7 @@ vi.mock("#/components/ui/button", () => ({
 }));
 
 import { TelegramSettings } from "./telegram-settings";
+import { type FormState, formReducer } from "./use-model-access-controller";
 
 const fetchMock = vi.fn();
 
@@ -454,6 +455,70 @@ describe("TelegramSettings", () => {
 		expect(
 			screen.getByText(/model access switched successfully/i),
 		).toBeTruthy();
+	});
+});
+
+describe("formReducer conditional message clearing", () => {
+	// Build a fresh base state. Only the `message` field is varied across
+	// these tests, so a small `Partial<FormState>` override keeps the
+	// bodies focused on the reducer's conditional-clear behavior — the
+	// fix for gemini-code-assist thread
+	// PRRT_kwDOSp7CXM6Ksxy5 on PR #63.
+	const base = (overrides: Partial<FormState> = {}): FormState => ({
+		optionsState: null,
+		selectedOptionId: "",
+		selectedModel: "",
+		isLoading: false,
+		isSwitching: false,
+		isAcceptingKey: false,
+		message: null,
+		hostKeyError: null,
+		...overrides,
+	});
+
+	it("clears a stale error message on fetchStarted", () => {
+		const result = formReducer(
+			base({ message: { type: "error", text: "stale error" } }),
+			{ type: "fetchStarted" },
+		);
+		expect(result.message).toBeNull();
+		expect(result.isLoading).toBe(true);
+	});
+
+	it("preserves the success banner across a post-switch fetchStarted", () => {
+		const banner = {
+			type: "success" as const,
+			text: "Model access switched successfully.",
+		};
+		const result = formReducer(base({ message: banner }), {
+			type: "fetchStarted",
+		});
+		expect(result.message).toEqual(banner);
+		expect(result.isLoading).toBe(true);
+	});
+
+	it("keeps a null message null on fetchStarted", () => {
+		const result = formReducer(base(), { type: "fetchStarted" });
+		expect(result.message).toBeNull();
+		expect(result.isLoading).toBe(true);
+	});
+
+	it("drops the error after fetchFailed → fetchStarted → fetchSucceeded chain", () => {
+		let state = base();
+		state = formReducer(state, {
+			type: "fetchFailed",
+			error: "first fail",
+		});
+		expect(state.message?.text).toBe("first fail");
+
+		state = formReducer(state, { type: "fetchStarted" });
+		expect(state.message).toBeNull();
+
+		state = formReducer(state, {
+			type: "fetchSucceeded",
+			data: { options: [], activeOptionId: null },
+		});
+		expect(state.message).toBeNull();
 	});
 });
 

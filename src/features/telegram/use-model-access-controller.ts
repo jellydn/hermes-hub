@@ -37,7 +37,7 @@ export type FormAction =
 export function formReducer(state: FormState, action: FormAction): FormState {
 	switch (action.type) {
 		case "fetchStarted":
-			// Plan 002: do NOT clear `message` here. `fetchStarted` represents
+			// Plan 002: do NOT clear `message` here — `fetchStarted` represents
 			// the controller initiating a refresh of the options list, not a
 			// user-initiated action. After a successful model switch we
 			// `await fetchOptions()` to refresh the dropdown right before
@@ -45,9 +45,22 @@ export function formReducer(state: FormState, action: FormAction): FormState {
 			// success banner on that internal refresh was a UX regression
 			// because React 19 batches `switchSucceeded` + `fetchStarted`
 			// into a single commit, leaving the banner invisible.
+			//
+			// However, conditionally clear a stale *error* message: if a prior
+			// fetch or switch failed, `state.message` is `{type: "error", ...}`
+			// and would otherwise persist through the new fetch's loading
+			// state AND survive `fetchSucceeded` (which doesn't clear the
+			// message at all). The success banner still passes through; we
+			// only suppress stale errors so the user isn't misled into seeing
+			// a prior failure labelled as the current operation's outcome.
+			//
 			// The user-action clears still live on `optionSelected` and
 			// `modelChanged` (explicit "user changed their mind" semantics).
-			return { ...state, isLoading: true };
+			return {
+				...state,
+				isLoading: true,
+				message: state.message?.type === "error" ? null : state.message,
+			};
 		case "fetchSucceeded": {
 			const { data } = action;
 			return {
