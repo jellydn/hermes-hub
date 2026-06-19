@@ -1,9 +1,6 @@
-<!--
-  Run this prompt in a fresh codebuff session as the ONLY task — the agent
-  should not have other context interfering with the closeout flow. This file
-  is the canonical persist of the babysit-pr closeout prompt drafted in the
-  session that produced ADR 0013 (docs/adr/0013-...).
--->
+<!-- Run in fresh codebuff session as the ONLY task. -->
+
+> **Operator note:** Run this prompt in a fresh codebuff session as the **only** task. The agent should not have other context interfering with the closeout flow. This file is the canonical persist of the babysit-pr closeout prompt drafted in the session that produced ADR 0013 (`docs/adr/0013-stacked-pr-merge-order-with-predicted-conflict-preflight.md`).
 
 # Babysit PRs #63, #64, #65, #66 — final closeout
 
@@ -21,13 +18,18 @@ Topology (2 stacks):
 - Stack A: `trunk → #63 → #64`
 - Stack B: `trunk → #65 → #66`
 
-Before doing anything, run `gh pr view N --json headRefName,headRefOid` for EACH of the four PRs to confirm:
+Before doing anything, run these checks for EACH of the four PRs to confirm:
 
-1. The branches listed in the table above are still the head + base.
-2. The mergeable flag is still as listed.
-3. The open-thread count is still as listed.
+1. **Branch SHAs match the table.** `gh pr view N --json headRefName,headRefOid` then `git fetch origin <headRefName>` + `git log origin/<headRefName> --oneline -1` — local origin SHA must equal `headRefOid`. Mismatch → STOP. (This is the check that would have caught the PR #63 wrong-branch reconciliation mistake — see "Lessons learned" below.)
+2. **Per-PR file diff matches the predicted surface.** `git diff --name-only origin/<baseRefName>..origin/<headRefName>` — every file must appear in the canonical predicted conflict list defined in Steps 3 and 4 below (do not duplicate the list here; it may drift). Unexpected files → STOP.
+3. **mergeable flag unchanged** (table column 5).
+4. **open-thread count unchanged** (table column 4).
 
 If any of these have changed since this prompt was last refreshed, STOP and surface the new state before proceeding. The Steps below assume the table is current.
+
+**Lessons learned (real failure modes this prompt prevents):**
+- **PR #63 wrong-branch mistake** (a follow-up commit landed on `telegram/fix-switch-message-race` instead of the actual PR head `telegram/fix-switch-banner`) — would have been caught by **check #2 above**: the wrong branch's actual file surface (plan-002 original) differed from the predicted surface (which included the conditional-clear). The executor would say "the conditional-clear is missing from this PR's diff" → STOP. Check #1 alone would NOT have caught it (the wrong branch had a valid remote SHA; GH just pointed at a different branch).
+- **PR #64 `CONFLICTING` state** — surfaced via check #2 (predicted surface = `src/features/telegram/telegram-settings.test.tsx` only) AND via `gh pr view 64 --json mergeable` returning `CONFLICTING` (check #3). Either would have stopped the merge.
 
 ## Goals (in order)
 
@@ -119,7 +121,7 @@ gh pr merge 64 --squash --delete-branch
 ## Step 5 — Final health check (post all 4 merges)
 
 ```bash
-git checkout refactor/provider-ui-nified-layout && \
+git checkout refactor/provider-ui-unified-layout && \
     git pull --ff-only origin refactor/provider-ui-unified-layout
 # Verify all 4 stacked branches are now empty relative to trunk:
 for b in telegram/test-switch-banner telegram/fix-magic-link-normalize \
