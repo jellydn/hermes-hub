@@ -1,7 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { ApiProviderId } from "#/lib/ai-providers";
-import { getSubscriptionByStorageProviderId } from "#/lib/user-subscriptions";
+import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 import { getDb } from "../db";
 import { aiProviders, aiUserSubscriptions } from "../db/schema";
 import {
@@ -11,12 +10,13 @@ import {
 	writeComposeFile,
 } from "../hermes/runtime";
 import { insertAuditLog } from "../lib/insert-audit-log";
+import { buildDeployConfig } from "../providers";
 import {
-	buildProviderEnvMap,
-	buildSubscriptionEnvMap,
-} from "../providers/config";
-import { decryptStoredApiKey } from "../providers/records";
-import { buildSubscriptionCredentialEnvMap } from "../providers/subscription-credentials";
+	type ActiveModelBackend,
+	deriveActiveModelBackend,
+	type StoredProviderRecordInput,
+} from "../providers/active-backend";
+import type { UserSubscriptionRecord } from "../providers/subscription-records";
 import { buildManagedComposeContent } from "../server-compose";
 import { withSshConnection } from "../ssh";
 import type { SshConnectionInput } from "../ssh/connection";
@@ -45,18 +45,37 @@ export async function executeModelSwitch(
 		ipAddress,
 	} = input;
 	const db = getDb();
+	const recordId = parseOptionId(optionId)?.recordId ?? "";
 
-	let providerConfigOverride: {
-		envVars: Record<string, string>;
-		model: string;
-	} | null = null;
+	let activeBackend: ActiveModelBackend | null = null;
+
 	if (resolved.kind === "oauth-subscription") {
-		providerConfigOverride = {
-			envVars: buildSubscriptionEnvMap(resolved.hermesProviderId),
+		const [record] = await db
+			.select({
+				subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
+				authMode: aiUserSubscriptions.authMode,
+			})
+			.from(aiUserSubscriptions)
+			.where(
+				and(
+					eq(aiUserSubscriptions.id, recordId),
+					eq(aiUserSubscriptions.userId, userId),
+				),
+			)
+			.limit(1);
+
+		if (!record) {
+			throw new Error("Resolved model access option record not found.");
+		}
+
+		const subscriptionRecord: UserSubscriptionRecord = {
+			subscriptionProvider: record.subscriptionProvider as UserSubscriptionId,
 			model,
+			authMode: record.authMode,
+			isActive: true,
 		};
+		activeBackend = deriveActiveModelBackend(subscriptionRecord, null);
 	} else {
-		const recordId = parseOptionId(optionId)?.recordId ?? "";
 		const [record] = await db
 			.select({
 				provider: aiProviders.provider,
@@ -71,44 +90,21 @@ export async function executeModelSwitch(
 			throw new Error("Resolved model access option record not found.");
 		}
 
-		if (resolved.kind === "credential-subscription") {
-			const credentialOption = getSubscriptionByStorageProviderId(
-				record.provider,
-			);
-			if (!credentialOption) {
-				throw new Error("Invalid credential-backed subscription option.");
-			}
-			const decryptResult = decryptStoredApiKey(record.encryptedApiKey);
-			if (!decryptResult.ok) {
-				throw new Error(
-					"Stored API key could not be read. Save the subscription again.",
-				);
-			}
-			providerConfigOverride = {
-				envVars: buildSubscriptionCredentialEnvMap(
-					credentialOption,
-					decryptResult.apiKey,
-					record.baseUrl,
-				),
-				model,
-			};
-		} else {
-			const decryptResult = decryptStoredApiKey(record.encryptedApiKey);
-			if (!decryptResult.ok) {
-				throw new Error(
-					"Stored API key could not be read. Save the provider again.",
-				);
-			}
-			providerConfigOverride = {
-				envVars: buildProviderEnvMap(
-					record.provider as ApiProviderId,
-					decryptResult.apiKey,
-					record.baseUrl,
-				),
-				model,
-			};
-		}
+		const providerRecord: StoredProviderRecordInput = {
+			provider: record.provider,
+			model,
+			encryptedApiKey: record.encryptedApiKey,
+			baseUrl: record.baseUrl,
+			isActive: true,
+		};
+		activeBackend = deriveActiveModelBackend(null, providerRecord);
 	}
+
+	if (!activeBackend) {
+		throw new Error("Could not derive active model backend for switch.");
+	}
+
+	const providerConfigOverride = buildDeployConfig(activeBackend);
 
 	await withSshConnection(sshConfig, async (ssh) => {
 		await setProviderInferenceProvider(ssh, resolved.hermesProviderId);

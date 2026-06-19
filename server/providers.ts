@@ -18,7 +18,10 @@ import { getAuthSession } from "./auth";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { getClientIp } from "./lib/get-client-ip";
-import { loadModelAccessRecords } from "./providers/active-backend";
+import {
+	type ActiveModelBackend,
+	loadModelAccessRecords,
+} from "./providers/active-backend";
 import {
 	buildProviderEnvMap,
 	buildSubscriptionEnvMap,
@@ -391,14 +394,10 @@ function resolveProviderApiKey(
 	);
 }
 
-export async function getProviderDeployConfig(
-	userId: string,
-): Promise<{ envVars: Record<string, string>; model: string } | null> {
-	const { activeBackend } = await loadModelAccessRecords(userId);
-	if (!activeBackend) {
-		return null;
-	}
-
+export function buildDeployConfig(activeBackend: ActiveModelBackend): {
+	envVars: Record<string, string>;
+	model: string;
+} {
 	if (activeBackend.kind === "subscription") {
 		if (activeBackend.access === "credential") {
 			const credentialOption = getCredentialSubscriptionOption(
@@ -439,6 +438,17 @@ export async function getProviderDeployConfig(
 		),
 		model: activeBackend.model,
 	};
+}
+
+export async function getProviderDeployConfig(
+	userId: string,
+): Promise<{ envVars: Record<string, string>; model: string } | null> {
+	const { activeBackend } = await loadModelAccessRecords(userId);
+	if (!activeBackend) {
+		return null;
+	}
+
+	return buildDeployConfig(activeBackend);
 }
 
 export { resolveActiveModelBackend } from "./providers/active-backend";
