@@ -167,13 +167,33 @@ async function applyMagicLinkRateLimit(request: Request) {
 	// ` a@x.com ` all share the same limiter slot. Without normalization
 	// each permutation would reset the 3-per-5-minute budget and an
 	// attacker could ship unbounded magic-link emails.
-	//
-	// Also enforce the RFC 5321 practical limit (320 chars: 64 local +
-	// 1 `@` + 255 domain) — overlong inputs are unambiguously hostile and
-	// we don't want them contributing to the limiter's key space.
 	const normalizedEmail = email.trim().toLowerCase();
-	if (normalizedEmail.length === 0 || normalizedEmail.length > 320) {
+
+	// Empty body — pass through to Better Auth. Better Auth rejects
+	// non-string or empty emails upstream before any SMTP work, so
+	// consuming a limiter point here would only penalize legitimate
+	// callers that don't carry an `email` field at all.
+	if (normalizedEmail.length === 0) {
 		return null;
+	}
+
+	// RFC 5321 practical limit (320 chars: 64 local + 1 `@` + 255
+	// domain). Overlong inputs are unambiguously hostile — fail-fast
+	// with 400 before consuming an SMTP slot, a Better Auth cycle, or
+	// a rate-limiter point.
+	//
+	// This replaces plan 001's "ignored like today" pass-through: gemini
+	// flagged that silently dropping the request still let Better Auth
+	// process a 400-char email. The empty-email branch above preserves
+	// plan 001's pass-through behavior for legitimate non-magic-link
+	// callers; only unambiguous-input-attack inputs fail closed here.
+	if (normalizedEmail.length > 320) {
+		return Response.json(
+			{
+				error: "Invalid email address.",
+			},
+			{ status: 400 },
+		);
 	}
 
 	try {

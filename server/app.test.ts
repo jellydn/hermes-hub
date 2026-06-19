@@ -819,20 +819,35 @@ describe("magic-link rate limiter normalization", () => {
 		).toEqual(["a@x.com", "a@x.com", "a@x.com"]);
 	});
 
-	it("does not consume for emails longer than 320 chars", async () => {
-		authHandler.mockResolvedValue(
-			new Response(JSON.stringify({ status: "ok" }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			}),
-		);
-
+	it("rejects overlong emails with 400 without consuming or calling auth", async () => {
 		const longEmail = `${"a".repeat(400)}@x.com`;
 		const response = await postMagicLink(longEmail);
 
-		expect(response.status).toBe(200);
-		expect(authHandler).toHaveBeenCalledTimes(1);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Invalid email address.",
+		});
 		expect(consumeSpy).not.toHaveBeenCalled();
+		expect(authHandler).not.toHaveBeenCalled();
+	});
+
+	it("catch-all auth route also rejects overlong emails with 400", async () => {
+		const longEmail = `${"a".repeat(400)}@x.com`;
+		const response = (await apiApp.request(
+			"http://localhost/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				body: JSON.stringify({ email: longEmail }),
+				headers: { "content-type": "application/json" },
+			},
+		)) as Response;
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Invalid email address.",
+		});
+		expect(consumeSpy).not.toHaveBeenCalled();
+		expect(authHandler).not.toHaveBeenCalled();
 	});
 
 	it("rejects the 4th request after 3 normalized consumes", async () => {
