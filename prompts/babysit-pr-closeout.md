@@ -20,10 +20,10 @@ Topology (2 stacks):
 
 Before doing anything, run these checks for EACH of the four PRs to confirm:
 
-1. **Branch SHAs match the table.** `gh pr view N --json headRefName,headRefOid` then `git fetch origin <headRefName>` + `git log origin/<headRefName> --oneline -1` — local origin SHA must equal `headRefOid`. Mismatch → STOP. (This is the check that would have caught the PR #63 wrong-branch reconciliation mistake — see "Lessons learned" below.)
-2. **Per-PR file diff matches the predicted surface.** `git diff --name-only origin/<baseRefName>..origin/<headRefName>` — every file must appear in the canonical predicted conflict list defined in Steps 3 and 4 below (do not duplicate the list here; it may drift). Unexpected files → STOP.
-3. **mergeable flag unchanged** (table column 5).
-4. **open-thread count unchanged** (table column 4).
+1. **mergeable flag** — `gh pr view N --json mergeable` returns `MERGEABLE`. A `CONFLICTING`/`false` reply → STOP.
+2. **Branch SHAs match the table.** `gh pr view N --json headRefName,headRefOid` then `git fetch origin <headRefName>` + `git log origin/<headRefName> --oneline -1` — local origin SHA must equal `headRefOid`. Mismatch → STOP. (This is the check that would have caught the PR #63 wrong-branch reconciliation mistake — see "Lessons learned" below.)
+3. **Per-PR file diff matches the predicted surface.** `git diff --name-only origin/<baseRefName>..origin/<headRefName>` — every file must appear in the canonical predicted conflict list defined in Steps 3 and 4 below (do not duplicate the list here; it may drift). Unexpected files → STOP.
+4. **dirty-tree guard** — `git status --short` is empty (also enforced by the Pre-conditions block). Local drift → STOP.
 
 If any of these have changed since this prompt was last refreshed, STOP and surface the new state before proceeding. The Steps below assume the table is current.
 

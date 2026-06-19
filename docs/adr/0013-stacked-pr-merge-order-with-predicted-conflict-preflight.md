@@ -40,12 +40,17 @@ Six operational rules for stacked-PR merge cycles:
    branch the stack flows toward and which branch must merge first.
 
 2. **Pre-flight gate** runs four sub-checks before any merge:
-   - **Branch SHA match** — `git log origin/<headRefName> --oneline -1` =
-     GH-reported `headRefOid`. Mismatch aborts.
-   - **Per-PR file diff** matches the predicted file-surface list defined
-     in Steps 3-4 below. Unexpected files abort.
-   - **mergeable flag** unchanged (`gh pr view <n> --json mergeable`).
-   - **open-thread count** unchanged (`gh pr view <n>` review threads).
+   - **mergeable flag** — `gh pr view <n> --json mergeable` returns
+     `MERGEABLE`. A `CONFLICTING` or `false` reply aborts.
+   - **Branch SHA match** — `git log origin/<headRefName> --oneline -1`
+     equals the GH-reported `headRefOid`. Mismatch aborts.
+   - **Per-PR file diff matches predicted surface** — the
+     `git diff --name-only origin/<baseRefName>..origin/<headRefName>`
+     output equals the predicted file list (see
+     `prompts/babysit-pr-closeout.md` Steps 3-4 for per-PR predictions).
+     Unexpected files abort.
+   - **dirty-tree guard** — `git status --short` is empty before any
+     `git pull` or `git fetch --ff-only`. A dirty local tree aborts.
 
 3. **Squash-merge + delete-branch** via `gh pr merge --squash --delete-branch`
    after each PR clears step 2's gate. This:
