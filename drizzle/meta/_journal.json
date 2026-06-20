@@ -134,6 +134,15 @@
       "when": 1781101200000,
       "tag": "0018_agent_skills_accept_scanner_risk",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781927977647,
+      "tag": "0019_active_model_access_unique_indexes",
+      "breakpoints": {
+        "custom": true
+      }
     }
   ]
 }

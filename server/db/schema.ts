@@ -196,7 +196,12 @@ export const aiProviders = pgTable(
 			.defaultNow()
 			.notNull(),
 	},
-	(table) => [index("ai_providers_user_id_idx").on(table.userId)],
+	(table) => [
+		index("ai_providers_user_id_idx").on(table.userId),
+		uniqueIndex("ai_providers_active_user_id_idx")
+			.on(table.userId)
+			.where(sql`${table.isActive} = true`),
+	],
 );
 
 export const aiUserSubscriptions = pgTable(
@@ -218,7 +223,12 @@ export const aiUserSubscriptions = pgTable(
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(table) => [index("ai_user_subscriptions_user_id_idx").on(table.userId)],
+	(table) => [
+		index("ai_user_subscriptions_user_id_idx").on(table.userId),
+		uniqueIndex("ai_user_subscriptions_active_user_id_idx")
+			.on(table.userId)
+			.where(sql`${table.isActive} = true`),
+	],
 );
 
 export const telegramConfigs = pgTable(
