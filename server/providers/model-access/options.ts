@@ -1,44 +1,50 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+// ── Switch Options ─────────────────────────────────────────────────
 
-import { apiProviderOptions, isApiProviderId } from "#/lib/ai-providers";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import type {
+	ModelAccessOption,
+	ModelAccessOptionKind,
+	ModelAccessOptionsResponse,
+} from "../../../shared/contracts/telegram-model-access";
+import {
+	apiProviderOptions,
+	isApiProviderId,
+} from "../../../src/lib/ai-providers";
 import {
 	getSubscriptionByStorageProviderId,
 	getUserSubscriptionOption,
 	isUserSubscriptionId,
-} from "#/lib/user-subscriptions";
+} from "../../../src/lib/user-subscriptions";
+import { getDb } from "../../db";
+import { aiProviders, aiUserSubscriptions } from "../../db/schema";
+import { PROVIDER_ENV_CONFIGS } from "../config";
+import { decryptStoredApiKey } from "../records";
+import { decryptAndGetLast4 } from "./helpers";
 import type {
-	ModelAccessOption,
-	ModelAccessOptionsResponse,
-} from "#shared/contracts/telegram-model-access";
-import { getDb } from "../db";
-import { aiProviders, aiUserSubscriptions } from "../db/schema";
-import { PROVIDER_ENV_CONFIGS } from "../providers/config";
-import { decryptStoredApiKey, getApiKeyLast4 } from "../providers/records";
+	ActiveOptionIds,
+	AiProviderRow,
+	AiUserSubscriptionRow,
+	ProviderRecordForOption,
+	ResolvedOption,
+} from "./types";
 
-type AiProviderRow = {
-	id: string;
-	provider: string;
-	model: string;
-	encryptedApiKey: string;
-	baseUrl: string | null;
-	isActive: boolean;
-};
+async function fetchProviderRecord(
+	userId: string,
+	recordId: string,
+): Promise<ProviderRecordForOption | null> {
+	const [record] = await getDb()
+		.select({
+			id: aiProviders.id,
+			provider: aiProviders.provider,
+			model: aiProviders.model,
+			encryptedApiKey: aiProviders.encryptedApiKey,
+			baseUrl: aiProviders.baseUrl,
+		})
+		.from(aiProviders)
+		.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
+		.limit(1);
 
-type AiUserSubscriptionRow = {
-	id: string;
-	subscriptionProvider: string;
-	model: string;
-	authMode: string;
-	isActive: boolean;
-};
-
-function decryptAndGetLast4(
-	encrypted: string,
-): { ok: true; keyLast4: string | null } | { ok: false } {
-	if (!encrypted) return { ok: false };
-	const decrypted = decryptStoredApiKey(encrypted);
-	if (!decrypted.ok || !decrypted.apiKey) return { ok: false };
-	return { ok: true, keyLast4: getApiKeyLast4(decrypted.apiKey) };
+	return record ?? null;
 }
 
 function buildApiProviderOption(
@@ -170,81 +176,68 @@ export async function getModelAccessOptions(
 	userId: string,
 ): Promise<ModelAccessOptionsResponse> {
 	const options: ModelAccessOption[] = [];
-	let activeOptionId: string | null = null;
 
 	const collect = (option: ModelAccessOption | null) => {
 		if (!option) return;
-		if (option.isActive) activeOptionId = option.optionId;
 		options.push(option);
 	};
 
-	// 1. Fetch all ai_providers rows in one query, partition by kind
-	const allProviderTypes = await getDb()
-		.select({ provider: aiProviders.provider })
-		.from(aiProviders)
-		.where(eq(aiProviders.userId, userId))
-		.groupBy(aiProviders.provider);
-	const allTypes = allProviderTypes.map((r) => r.provider);
+	// 1. Fetch distinct provider and subscription types in parallel
+	const [allProviderTypes, subProviderTypes] = await Promise.all([
+		getDb()
+			.select({ provider: aiProviders.provider })
+			.from(aiProviders)
+			.where(eq(aiProviders.userId, userId))
+			.groupBy(aiProviders.provider),
+		getDb()
+			.select({
+				subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
+			})
+			.from(aiUserSubscriptions)
+			.where(eq(aiUserSubscriptions.userId, userId))
+			.groupBy(aiUserSubscriptions.subscriptionProvider),
+	]);
 
+	const allTypes = allProviderTypes.map((r) => r.provider);
 	const apiTypes = allTypes.filter(isApiProviderId);
 	const storageTypes = allTypes.filter((t) => !isApiProviderId(t));
-
-	// 2. Batch-fetch latest rows per group (2 queries instead of N+M)
-	const apiRows = keepLatestBy(
-		await getLatestProviderRows(userId, apiTypes),
-		(r) => r.provider,
-	);
-	for (const record of apiRows) collect(buildApiProviderOption(record));
-
-	const storageRows = keepLatestBy(
-		await getLatestProviderRows(userId, storageTypes),
-		(r) => r.provider,
-	);
-	for (const record of storageRows)
-		collect(buildCredentialSubscriptionOption(record));
-
-	// 3. OAuth subscriptions (1 query)
-	const subProviderTypes = await getDb()
-		.select({ subscriptionProvider: aiUserSubscriptions.subscriptionProvider })
-		.from(aiUserSubscriptions)
-		.where(eq(aiUserSubscriptions.userId, userId))
-		.groupBy(aiUserSubscriptions.subscriptionProvider);
 	const subTypes = subProviderTypes
 		.map((r) => r.subscriptionProvider)
 		.filter(isUserSubscriptionId);
 
-	const subRows = keepLatestBy(
-		await getLatestSubscriptionRows(userId, subTypes),
-		(r) => r.subscriptionProvider,
-	);
+	// 2. Batch-fetch latest rows per group in parallel
+	const [apiRowsRaw, storageRowsRaw, subRowsRaw] = await Promise.all([
+		getLatestProviderRows(userId, apiTypes),
+		getLatestProviderRows(userId, storageTypes),
+		getLatestSubscriptionRows(userId, subTypes),
+	]);
+
+	const apiRows = keepLatestBy(apiRowsRaw, (r) => r.provider);
+	for (const record of apiRows) collect(buildApiProviderOption(record));
+
+	const storageRows = keepLatestBy(storageRowsRaw, (r) => r.provider);
+	for (const record of storageRows)
+		collect(buildCredentialSubscriptionOption(record));
+
+	const subRows = keepLatestBy(subRowsRaw, (r) => r.subscriptionProvider);
 	for (const record of subRows) collect(buildOAuthSubscriptionOption(record));
 
-	return { options, activeOptionId };
+	const activeOption = options.find((o) => o.isActive);
+	return { options, activeOptionId: activeOption?.optionId ?? null };
 }
-
-export type ResolvedOption =
-	| {
-			ok: true;
-			kind: "api-provider" | "credential-subscription" | "oauth-subscription";
-			provider: string;
-			hermesProviderId: string;
-			model: string;
-			allowsCustomModel: boolean;
-			fixedModels: string[];
-			activeOptionIds: ActiveOptionIds;
-	  }
-	| { ok: false; error: string };
-
-export type ActiveOptionIds = {
-	providerIds: string[];
-	subscriptionIds: string[];
-};
 
 export function parseOptionId(
 	optionId: string,
-): { kind: string; recordId: string } | null {
+): { kind: ModelAccessOptionKind; recordId: string } | null {
 	const parts = optionId.split(":");
 	if (parts.length !== 2) return null;
+	if (
+		parts[0] !== "api-provider" &&
+		parts[0] !== "credential-subscription" &&
+		parts[0] !== "oauth-subscription"
+	) {
+		return null;
+	}
 	return { kind: parts[0], recordId: parts[1] };
 }
 
@@ -252,18 +245,7 @@ async function resolveApiProviderOption(
 	userId: string,
 	recordId: string,
 ): Promise<ResolvedOption> {
-	const [record] = await getDb()
-		.select({
-			id: aiProviders.id,
-			provider: aiProviders.provider,
-			model: aiProviders.model,
-			encryptedApiKey: aiProviders.encryptedApiKey,
-			baseUrl: aiProviders.baseUrl,
-		})
-		.from(aiProviders)
-		.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
-		.limit(1);
-
+	const record = await fetchProviderRecord(userId, recordId);
 	if (!record) return { ok: false, error: "Option not found." };
 	if (!isApiProviderId(record.provider)) {
 		return { ok: false, error: "Invalid provider option." };
@@ -299,18 +281,7 @@ async function resolveCredentialSubscriptionOption(
 	userId: string,
 	recordId: string,
 ): Promise<ResolvedOption> {
-	const [record] = await getDb()
-		.select({
-			id: aiProviders.id,
-			provider: aiProviders.provider,
-			model: aiProviders.model,
-			encryptedApiKey: aiProviders.encryptedApiKey,
-			baseUrl: aiProviders.baseUrl,
-		})
-		.from(aiProviders)
-		.where(and(eq(aiProviders.id, recordId), eq(aiProviders.userId, userId)))
-		.limit(1);
-
+	const record = await fetchProviderRecord(userId, recordId);
 	if (!record) return { ok: false, error: "Option not found." };
 
 	const credentialOption = getSubscriptionByStorageProviderId(record.provider);
@@ -414,10 +385,23 @@ export async function findActiveOptionIds(
 	const providerIds: string[] = [];
 	const subscriptionIds: string[] = [];
 
-	const apiRows = await getDb()
-		.select({ id: aiProviders.id })
-		.from(aiProviders)
-		.where(and(eq(aiProviders.userId, userId), eq(aiProviders.isActive, true)));
+	const [apiRows, subRows] = await Promise.all([
+		getDb()
+			.select({ id: aiProviders.id })
+			.from(aiProviders)
+			.where(
+				and(eq(aiProviders.userId, userId), eq(aiProviders.isActive, true)),
+			),
+		getDb()
+			.select({ id: aiUserSubscriptions.id })
+			.from(aiUserSubscriptions)
+			.where(
+				and(
+					eq(aiUserSubscriptions.userId, userId),
+					eq(aiUserSubscriptions.isActive, true),
+				),
+			),
+	]);
 
 	for (const row of apiRows) {
 		const apiOptId = `api-provider:${row.id}`;
@@ -426,16 +410,6 @@ export async function findActiveOptionIds(
 			providerIds.push(row.id);
 		}
 	}
-
-	const subRows = await getDb()
-		.select({ id: aiUserSubscriptions.id })
-		.from(aiUserSubscriptions)
-		.where(
-			and(
-				eq(aiUserSubscriptions.userId, userId),
-				eq(aiUserSubscriptions.isActive, true),
-			),
-		);
 
 	for (const row of subRows) {
 		const subOptId = `oauth-subscription:${row.id}`;

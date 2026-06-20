@@ -110,14 +110,11 @@ vi.mock("./managed-compose-deploy", () => ({
 	deployManagedCompose,
 }));
 
-vi.mock("./providers/active-backend", () => ({
-	loadModelAccessRecords,
-}));
-
 const resolveSwitchOptionMock = vi.fn();
 const executeModelSwitchMock = vi.fn();
 
-vi.mock("./telegram/model-access", () => ({
+vi.mock("./providers/model-access", () => ({
+	loadModelAccessRecords,
 	resolveSwitchOption: resolveSwitchOptionMock,
 	getModelAccessOptions: vi.fn(),
 	findActiveOptionIds: vi.fn(),

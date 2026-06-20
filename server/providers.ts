@@ -19,10 +19,6 @@ import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { getClientIp } from "./lib/get-client-ip";
 import {
-	type ActiveModelBackend,
-	loadModelAccessRecords,
-} from "./providers/active-backend";
-import {
 	buildProviderEnvMap,
 	buildSubscriptionEnvMap,
 	type ProviderRequest,
@@ -36,7 +32,12 @@ import {
 } from "./providers/connection";
 import { resolveStoredCredentials } from "./providers/credential-resolution";
 import { readApiBackendKeyForEnvMap } from "./providers/deploy-material";
-import { buildModelAccessSnapshot } from "./providers/model-access";
+import {
+	type ActiveModelBackend,
+	buildModelAccessSnapshot,
+	loadModelAccessRecords,
+} from "./providers/model-access";
+
 import {
 	activateApiProvider,
 	activateCredentialSubscription,
@@ -451,4 +452,4 @@ export async function getProviderDeployConfig(
 	return buildDeployConfig(activeBackend);
 }
 
-export { resolveActiveModelBackend } from "./providers/active-backend";
+export { resolveActiveModelBackend } from "./providers/model-access";

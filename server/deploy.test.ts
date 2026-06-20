@@ -44,9 +44,9 @@ vi.mock("./providers/codex-auth", () => ({
 	resolveRemoteCodexAuthStatus,
 }));
 
-vi.mock("./providers/active-backend", async (importOriginal) => {
+vi.mock("./providers/model-access", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("./providers/active-backend")>();
+		await importOriginal<typeof import("./providers/model-access")>();
 	return {
 		...actual,
 		resolveActiveModelBackend,

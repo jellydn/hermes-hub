@@ -16,6 +16,10 @@ import { insertAuditLog } from "./lib/insert-audit-log";
 import { isResponse } from "./lib/is-response";
 import { deployManagedCompose } from "./managed-compose-deploy";
 import { getProviderDeployConfig } from "./providers";
+import {
+	getModelAccessOptions,
+	resolveSwitchOption,
+} from "./providers/model-access";
 import { requireAuthSession } from "./request-guards";
 import { getServerById, resolveServerSshConfigOrError } from "./server-records";
 import { type SshAuthMethod, shellQuote, withSshConnection } from "./ssh";
@@ -24,10 +28,6 @@ import {
 	TelegramConnectionError,
 	verifyTelegramToken,
 } from "./telegram/config";
-import {
-	getModelAccessOptions,
-	resolveSwitchOption,
-} from "./telegram/model-access";
 import { executeModelSwitch } from "./telegram/model-switch";
 import {
 	approveTelegramPairing,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveActiveModelBackend } from "./active-backend";
+import { deriveActiveModelBackend } from "./model-access";
 
 describe("deriveActiveModelBackend", () => {
 	it("prefers an active subscription over an active API provider", () => {

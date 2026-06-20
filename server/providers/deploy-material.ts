@@ -1,10 +1,10 @@
 import { getProviderCredentialPolicy } from "#/lib/ai-providers";
+import { PROVIDER_ENV_CONFIGS } from "./config";
 import type {
 	ActiveApiProviderBackend,
 	ActiveModelBackend,
-} from "./active-backend";
-import { resolveDeployProviderLabel } from "./active-backend";
-import { PROVIDER_ENV_CONFIGS } from "./config";
+} from "./model-access";
+import { resolveDeployProviderLabel } from "./model-access";
 import { decryptStoredApiKey } from "./records";
 
 export const UNREADABLE_API_KEY_ERROR =

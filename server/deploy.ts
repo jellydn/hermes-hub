@@ -10,12 +10,12 @@ import {
 import { insertAuditLog } from "./lib/insert-audit-log";
 import { logger } from "./lib/logger";
 import { deployManagedCompose } from "./managed-compose-deploy";
-import { resolveActiveModelBackend } from "./providers/active-backend";
 import { resolveRemoteCodexAuthStatus } from "./providers/codex-auth";
 import {
 	assertApiBackendDeployable,
 	resolveSubscriptionDeployTarget,
 } from "./providers/deploy-material";
+import { resolveActiveModelBackend } from "./providers/model-access";
 import { requireAuthSession } from "./request-guards";
 
 export async function deployProviderToHermes(context: Context) {
