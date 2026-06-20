@@ -14,13 +14,14 @@ import { buildDeployConfig } from "../providers";
 import {
 	type ActiveModelBackend,
 	deriveActiveModelBackend,
+	parseOptionId,
+	type ResolvedOption,
 	type StoredProviderRecordInput,
-} from "../providers/active-backend";
+} from "../providers/model-access";
 import type { UserSubscriptionRecord } from "../providers/subscription-records";
 import { buildManagedComposeContent } from "../server-compose";
 import { withSshConnection } from "../ssh";
 import type { SshConnectionInput } from "../ssh/connection";
-import { parseOptionId, type ResolvedOption } from "./model-access";
 
 export type ModelSwitchInput = {
 	userId: string;

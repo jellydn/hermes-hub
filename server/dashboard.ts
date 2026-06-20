@@ -18,7 +18,7 @@ import {
 	toServerSummary,
 	toTelegramSummary,
 } from "./dashboard/summaries";
-import type { ActiveModelBackend } from "./providers/active-backend";
+import type { ActiveModelBackend } from "./providers/model-access";
 
 // Re-exports for tests and route files
 export {

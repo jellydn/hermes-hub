@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { installs, servers, telegramConfigs } from "../db/schema";
-import { resolveActiveModelBackend } from "../providers/active-backend";
+import { resolveActiveModelBackend } from "../providers/model-access";
 import type { ServerRecord } from "./summaries";
 
 export async function getLatestServer(userId: string) {

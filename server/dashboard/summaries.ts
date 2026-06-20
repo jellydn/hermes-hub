@@ -7,7 +7,7 @@ import type {
 import {
 	type ActiveModelBackend,
 	formatActiveBackendLabel,
-} from "../providers/active-backend";
+} from "../providers/model-access";
 import { readOsInfoValue } from "../server-records";
 
 export type ServerRecord = {
