@@ -777,9 +777,9 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 | Field      | Type   | Description                                                                                      |
 | ---------- | ------ | ------------------------------------------------------------------------------------------------ |
-| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"custom"`, or `"openai-codex"`           |
+| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, or `"custom"`                        |
 | `model`    | string | Model ID (defaults to provider's default if omitted)                                             |
-| `apiKey`   | string | API key. Optional if re-saving the same provider (uses stored key). Not used for `openai-codex`. |
+| `apiKey`   | string | API key. Optional if re-saving the same provider (uses stored key).                              |
 | `baseUrl`  | string | Required for `ollama` and `custom`. Optional for other API-key providers.                        |
 
 **Supported models:**
@@ -791,8 +791,6 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 | openrouter   | Any model ID (custom text input)                                             | `openai/gpt-4o-mini`       |
 | ollama       | Any model ID (custom text input)                                             | `llama3`                   |
 | custom       | Any model ID (custom text input)                                             | _(empty)_                  |
-| openai-codex | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5`                  |
-
 **Response (200):**
 
 ```json
@@ -814,13 +812,11 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 | 401    | Unauthorized                                                                        |
 | 500    | Failed to save provider settings                                                    |
 
-For `openai-codex`, HermesHub stores an empty encrypted API key and never persists OAuth tokens. Credential status comes from remote Hermes auth checks.
-
 ---
 
 ### POST `/api/providers/test`
 
-Tests an AI provider connection by calling the provider's models list endpoint. Does not persist any data. `openai-codex` skips API-key testing and returns a connected status with guidance to use device-code login instead.
+Tests an AI provider connection by calling the provider's models list endpoint. Does not persist any data.
 
 **Auth required:** Yes
 
@@ -848,7 +844,7 @@ Tests an AI provider connection by calling the provider's models list endpoint. 
 
 Deploys the current AI provider configuration to a Hermes VPS. Requires a Telegram bot to already be deployed to a server. Over SSH, writes a new `docker-compose.yml` with provider env vars, restarts the Hermes container (with `--force-recreate`), and runs `hermes config set model.provider` plus `hermes config set model` inside the container.
 
-For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVIDER=openai-codex` and `API_SERVER_MODEL_NAME`, and requires ChatGPT OAuth to already be present in remote `/root/.hermes/auth.json`.
+When a ChatGPT subscription is active (saved via `POST /api/providers/subscriptions`), the deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVIDER=openai-codex` and `API_SERVER_MODEL_NAME`, and requires ChatGPT OAuth to already be present in remote `/root/.hermes/auth.json`.
 
 **Auth required:** Yes
 
@@ -877,6 +873,98 @@ For `openai-codex`, deploy omits API-key env vars, sets `HERMES_INFERENCE_PROVID
 | 404    | Deployed server not found                                |
 | 409    | Host key missing or mismatch (see Host Key Recovery)     |
 | 502    | SSH connect or deploy command failed                     |
+
+---
+
+## Subscriptions
+
+### POST `/api/providers/subscriptions`
+
+Saves a subscription configuration (ChatGPT OAuth or MiMo credential). Deactivates any existing subscription or provider config first, then inserts a new active record. API keys are encrypted with AES-256-GCM.
+
+**Auth required:** Yes (HTTPS enforced in production)
+
+**Request body (ChatGPT — OAuth):**
+
+```json
+{
+	"subscriptionProvider": "chatgpt",
+	"model": "gpt-5.5"
+}
+```
+
+**Request body (MiMo — credential/api-key):**
+
+```json
+{
+	"subscriptionProvider": "mimo",
+	"model": "mimo-v2.5-pro",
+	"apiKey": "tp-...",
+	"baseUrl": "https://token-plan-cn.xiaomimimo.com/v1"
+}
+```
+
+**Fields:**
+
+| Field                 | Type   | Description                                                                 |
+| --------------------- | ------ | --------------------------------------------------------------------------- |
+| `subscriptionProvider` | string | `"chatgpt"` or `"mimo"`                                                    |
+| `model`               | string | Required. Must be a valid model for the subscription.                       |
+| `apiKey`              | string | Required for `mimo`. Not used for `chatgpt`.                                |
+| `baseUrl`             | string | Optional for `mimo` (defaults to MiMo Token Plan URL). Not used for `chatgpt`. |
+
+**Supported models:**
+
+| Subscription          | Models                                                                       | Default          |
+| --------------------- | ---------------------------------------------------------------------------- | ---------------- |
+| chatgpt               | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5`        |
+| mimo                  | `mimo-v2.5-pro`, `mimo-v2.5`                                                | `mimo-v2.5-pro`  |
+
+**Response (200):**
+
+```json
+{
+	"subscription": {
+		"subscriptionProvider": "mimo",
+		"model": "mimo-v2.5-pro",
+		"authMode": "mimo-token-plan"
+	}
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                                                |
+| ------ | ---------------------------------------------------------------------------------------- |
+| 400    | Invalid JSON body / invalid subscription provider / invalid model / API key required     |
+| 401    | Unauthorized                                                                             |
+| 500    | Failed to save subscription settings                                                     |
+
+---
+
+### POST `/api/providers/subscriptions/test`
+
+Tests a subscription connection. For MiMo, this calls the provider's models list endpoint. ChatGPT (OAuth) skips API-key testing and returns a connected status with guidance to use device-code login instead.
+
+**Auth required:** Yes
+
+**Request body:** Same shape as POST `/api/providers/subscriptions`.
+
+**Response (200 — connected):**
+
+```json
+{
+	"status": "connected"
+}
+```
+
+**Error responses:**
+
+| Status | Condition                                                                 |
+| ------ | ------------------------------------------------------------------------- |
+| 400    | Invalid JSON body / invalid subscription provider / API key required      |
+| 401    | Unauthorized                                                              |
+| 502    | Connection failed (provider unreachable)                                  |
 
 ---
 
