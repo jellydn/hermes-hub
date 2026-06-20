@@ -18,10 +18,7 @@ import {
 import { getDb } from "../../db";
 import { aiProviders, aiUserSubscriptions } from "../../db/schema";
 import type { UserSubscriptionRecord } from "../subscription-records";
-import type {
-	ActiveModelBackend,
-	StoredProviderRecordInput,
-} from "./types";
+import type { ActiveModelBackend, StoredProviderRecordInput } from "./types";
 
 export type ModelAccessRecords = Awaited<
 	ReturnType<typeof loadModelAccessRecords>

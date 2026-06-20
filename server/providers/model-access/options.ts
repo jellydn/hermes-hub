@@ -1,7 +1,11 @@
 // ── Switch Options ─────────────────────────────────────────────────
 
 import { and, desc, eq, inArray } from "drizzle-orm";
-
+import type {
+	ModelAccessOption,
+	ModelAccessOptionKind,
+	ModelAccessOptionsResponse,
+} from "../../../shared/contracts/telegram-model-access";
 import {
 	apiProviderOptions,
 	isApiProviderId,
@@ -23,11 +27,6 @@ import type {
 	ProviderRecordForOption,
 	ResolvedOption,
 } from "./types";
-import type {
-	ModelAccessOption,
-	ModelAccessOptionKind,
-	ModelAccessOptionsResponse,
-} from "../../../shared/contracts/telegram-model-access";
 
 async function fetchProviderRecord(
 	userId: string,
@@ -191,7 +190,9 @@ export async function getModelAccessOptions(
 			.where(eq(aiProviders.userId, userId))
 			.groupBy(aiProviders.provider),
 		getDb()
-			.select({ subscriptionProvider: aiUserSubscriptions.subscriptionProvider })
+			.select({
+				subscriptionProvider: aiUserSubscriptions.subscriptionProvider,
+			})
 			.from(aiUserSubscriptions)
 			.where(eq(aiUserSubscriptions.userId, userId))
 			.groupBy(aiUserSubscriptions.subscriptionProvider),
@@ -258,9 +259,7 @@ async function resolveApiProviderOption(
 		};
 	}
 
-	const option = apiProviderOptions.find(
-		(o) => o.id === record.provider,
-	);
+	const option = apiProviderOptions.find((o) => o.id === record.provider);
 	if (!option) return { ok: false, error: "Invalid provider option." };
 
 	return {
@@ -390,7 +389,9 @@ export async function findActiveOptionIds(
 		getDb()
 			.select({ id: aiProviders.id })
 			.from(aiProviders)
-			.where(and(eq(aiProviders.userId, userId), eq(aiProviders.isActive, true))),
+			.where(
+				and(eq(aiProviders.userId, userId), eq(aiProviders.isActive, true)),
+			),
 		getDb()
 			.select({ id: aiUserSubscriptions.id })
 			.from(aiUserSubscriptions)

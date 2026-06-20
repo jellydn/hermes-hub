@@ -1,12 +1,8 @@
 // ── Model Access Snapshot ─────────────────────────────────────────
 
 import type { ModelAccessSnapshot } from "../../../shared/contracts/model-access";
-import {
-	isApiProviderId,
-} from "../../../src/lib/ai-providers";
-import {
-	getSubscriptionByStorageProviderId,
-} from "../../../src/lib/user-subscriptions";
+import { isApiProviderId } from "../../../src/lib/ai-providers";
+import { getSubscriptionByStorageProviderId } from "../../../src/lib/user-subscriptions";
 import { buildStoredCredentialSubscriptionSummary } from "../subscription-credentials";
 import type { ModelAccessRecords } from "./backend";
 import { decryptAndGetLast4 } from "./helpers";

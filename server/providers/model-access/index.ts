@@ -1,11 +1,11 @@
 // ── Model Access package barrel ────────────────────────────────────
 
-export * from "./types";
 export * from "./backend";
-export { buildModelAccessSnapshot } from "./snapshot";
 export {
+	findActiveOptionIds,
 	getModelAccessOptions,
 	parseOptionId,
 	resolveSwitchOption,
-	findActiveOptionIds,
 } from "./options";
+export { buildModelAccessSnapshot } from "./snapshot";
+export * from "./types";
