@@ -141,10 +141,7 @@ export function rewriteLocationHeader(
 }
 
 export function rewriteSetCookieHeader(value: string, proxyBasePath: string) {
-	const segments = value.split(/,(?=\s*[^;=]+=)/);
-	return segments
-		.map((segment) => rewriteCookieSegment(segment.trim(), proxyBasePath))
-		.join(", ");
+	return rewriteCookieSegment(value, proxyBasePath);
 }
 
 export function rewriteProxyResponseHeaders(
@@ -156,7 +153,10 @@ export function rewriteProxyResponseHeaders(
 
 	for (const [name, value] of headers.entries()) {
 		const lowerName = name.toLowerCase();
-		if (HOP_BY_HOP_RESPONSE_HEADERS.has(lowerName)) {
+		if (
+			HOP_BY_HOP_RESPONSE_HEADERS.has(lowerName) ||
+			lowerName === "set-cookie"
+		) {
 			continue;
 		}
 
@@ -168,12 +168,15 @@ export function rewriteProxyResponseHeaders(
 			continue;
 		}
 
-		if (lowerName === "set-cookie") {
-			rewritten.append(name, rewriteSetCookieHeader(value, proxyBasePath));
-			continue;
-		}
-
 		rewritten.set(name, value);
+	}
+
+	const setCookies = headers.getSetCookie();
+	for (const cookie of setCookies) {
+		rewritten.append(
+			"set-cookie",
+			rewriteSetCookieHeader(cookie, proxyBasePath),
+		);
 	}
 
 	return rewritten;
@@ -201,6 +204,12 @@ export function getPublicRequestEndpoint(request: Request) {
 	return { host, proto };
 }
 
+const FORWARDED_HEADERS = new Set([
+	"x-forwarded-host",
+	"x-forwarded-proto",
+	"x-forwarded-for",
+]);
+
 export function buildUpstreamProxyHeaders(
 	request: Request,
 	upstreamHost: string,
@@ -225,7 +234,11 @@ export function buildUpstreamProxyHeaders(
 function filterRequestHeaders(headers: Headers) {
 	const filtered: Record<string, string> = {};
 	for (const [name, value] of headers.entries()) {
-		if (!HOP_BY_HOP_REQUEST_HEADERS.has(name.toLowerCase())) {
+		const lowerName = name.toLowerCase();
+		if (
+			!HOP_BY_HOP_REQUEST_HEADERS.has(lowerName) &&
+			!FORWARDED_HEADERS.has(lowerName)
+		) {
 			filtered[name] = value;
 		}
 	}

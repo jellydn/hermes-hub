@@ -6,6 +6,7 @@ import {
 	getUpstreamPath,
 	resolveProxyRequestTarget,
 	rewriteLocationHeader,
+	rewriteProxyResponseHeaders,
 	rewriteSetCookieHeader,
 } from "./rewriter";
 
@@ -151,5 +152,55 @@ describe("web-ui proxy helpers", () => {
 				"/api/servers/server_123/web-ui/proxy/",
 			),
 		).toBe("session=abc; Path=/api/servers/server_123/web-ui/proxy/; HttpOnly");
+	});
+
+	it("rewrites multiple Set-Cookie headers without folding them", () => {
+		const headers = new Headers();
+		headers.append("Set-Cookie", "session=abc; Path=/; HttpOnly");
+		headers.append("Set-Cookie", "theme=dark; Path=/settings; Secure");
+
+		const rewritten = rewriteProxyResponseHeaders(
+			headers,
+			"/api/servers/server_123/web-ui/proxy/",
+			"http://127.0.0.1:8787",
+		);
+
+		const cookies = rewritten.getSetCookie();
+		expect(cookies).toHaveLength(2);
+		expect(cookies[0]).toBe(
+			"session=abc; Path=/api/servers/server_123/web-ui/proxy/; HttpOnly",
+		);
+		expect(cookies[1]).toBe(
+			"theme=dark; Path=/api/servers/server_123/web-ui/proxy/settings; Secure",
+		);
+	});
+
+	it("filters out pre-existing forwarded headers to prevent casing duplicates", () => {
+		const incomingHeaders = new Headers({
+			"x-forwarded-host": "old-host.com",
+			"x-forwarded-proto": "http",
+			"x-forwarded-for": "1.1.1.1",
+			"Custom-Header": "value",
+		});
+
+		const req = new Request(
+			"http://localhost:3000/api/servers/server_123/web-ui/proxy/",
+			{
+				headers: incomingHeaders,
+			},
+		);
+
+		const headers = buildUpstreamProxyHeaders(req, "127.0.0.1:8787");
+
+		// verify target X-Forwarded headers exist with uppercase keys
+		expect(headers["X-Forwarded-Host"]).toBe("old-host.com");
+		expect(headers["X-Forwarded-Proto"]).toBe("http");
+		expect(headers["X-Forwarded-For"]).toBe("1.1.1.1");
+		expect(headers["custom-header"]).toBe("value");
+
+		// verify lower-cased versions do not exist as duplicates in key mapping
+		expect(headers["x-forwarded-host"]).toBeUndefined();
+		expect(headers["x-forwarded-proto"]).toBeUndefined();
+		expect(headers["x-forwarded-for"]).toBeUndefined();
 	});
 });
