@@ -269,6 +269,12 @@ hit baseline-divergence conflicts on every rebase attempt while `develop`
 was on `origin/main`. This Consequences subsection memorializes that
 pick as the standing rule for future cycles.
 
+PR #72 squash-merge + develop-reset cycle `fb9c279 → a68bf40`
+(2026-06-20): policy holds — staging commits absorbed harmlessly;
+develop reset to trunk tip via the just-formalized `just
+reset-develop-to-trunk` recipe (Decision rule 6's companion to
+`merge-pr`).
+
 ## Cross-References
 
 - `docs/adr/0009-single-instance-boundary-for-operational-state.md` — the
