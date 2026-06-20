@@ -73,28 +73,11 @@ function rewritePathLocationHeader(value: string, proxyBasePath: string) {
 }
 
 function rewriteCookieSegment(segment: string, proxyBasePath: string) {
-	const parts = segment.split(";").map((part) => part.trim());
-	if (parts.length === 0) {
-		return segment;
-	}
-
-	const rewritten = [parts[0] ?? ""];
-	for (const attribute of parts.slice(1)) {
-		const [namePart, ...valueParts] = attribute.split("=");
-		const name = namePart.trim();
-		const value = valueParts.join("=").trim();
-
-		if (name.toLowerCase() === "path") {
-			const nextPath =
-				value === "/" ? proxyBasePath : joinProxyPath(proxyBasePath, value);
-			rewritten.push(`Path=${nextPath}`);
-			continue;
-		}
-
-		rewritten.push(attribute);
-	}
-
-	return rewritten.join("; ");
+	return segment.replace(/;\s*path\s*=\s*([^;\s]+)/i, (_, pathVal) => {
+		const nextPath =
+			pathVal === "/" ? proxyBasePath : joinProxyPath(proxyBasePath, pathVal);
+		return `; Path=${nextPath}`;
+	});
 }
 
 function joinProxyPath(proxyBasePath: string, upstreamPath: string) {
@@ -123,15 +106,9 @@ function rewriteUpstreamPathForProxy(
 	upstreamPath: string,
 	proxyBasePath: string,
 ) {
-	if (upstreamPath === "/" || upstreamPath === "") {
-		return proxyBasePath;
-	}
-
-	if (upstreamPath.startsWith("/")) {
-		return joinProxyPath(proxyBasePath, upstreamPath);
-	}
-
-	return joinProxyPath(proxyBasePath, `/${upstreamPath}`);
+	return upstreamPath === "" || upstreamPath === "/"
+		? proxyBasePath
+		: joinProxyPath(proxyBasePath, upstreamPath);
 }
 
 export function rewriteLocationHeader(
