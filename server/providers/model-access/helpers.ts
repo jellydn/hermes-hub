@@ -7,6 +7,6 @@ export function decryptAndGetLast4(
 ): { ok: true; keyLast4: string | null } | { ok: false } {
 	if (!encrypted) return { ok: false };
 	const decrypted = decryptStoredApiKey(encrypted);
-	if (!decrypted.ok || !decrypted.apiKey) return { ok: false };
+	if (!decrypted.ok) return { ok: false };
 	return { ok: true, keyLast4: getApiKeyLast4(decrypted.apiKey) };
 }

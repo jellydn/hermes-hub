@@ -31,7 +31,7 @@ export function deriveActiveModelBackend(
 	subscription: UserSubscriptionRecord | null,
 	providerRecord: StoredProviderRecordInput | null,
 ): ActiveModelBackend | null {
-	if (subscription) {
+	if (subscription?.isActive) {
 		return {
 			kind: "subscription",
 			access: "oauth",
