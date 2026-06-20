@@ -103,3 +103,24 @@ merge-pr number:
 	wait $T1
 	wait $T2
 	echo "==> PR #$PR merged and verified: $(gh pr view "$PR" --json url --jq '.url')"
+
+# Reset develop to the trunk baseline. Companion to `just merge-pr <n>`
+# per ADR 0013 Decision rule 6 + Develop-baseline policy subsection.
+# Run once per merge cycle, after all PRs in the cycle have squash-landed.
+# Usage: just reset-develop-to-trunk [trunk=refactor/provider-ui-unified-layout]
+reset-develop-to-trunk trunk="refactor/provider-ui-unified-layout":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	TRUNK="{{trunk}}"
+	git fetch origin "$TRUNK"
+	TARGET_SHA=$(git rev-parse "origin/$TRUNK")
+	echo "==> Resetting develop to origin/$TRUNK @ ${TARGET_SHA:0:7}"
+	if [ -n "$(git status --short)" ]; then
+		echo "ERROR: Working tree dirty. Commit or stash before resetting." >&2
+		exit 1
+	fi
+	git fetch origin develop 2>&1 | tail -1                      # refresh --force-with-lease lease
+	git checkout "$TRUNK"                                        # 1. leave develop
+	git branch -f develop "$TARGET_SHA"                          # 2. branch -f develop <- trunk tip
+	git checkout develop                                          # 3. checkout develop
+	git push --force-with-lease origin develop                    # 4. push --force-with-lease to origin
