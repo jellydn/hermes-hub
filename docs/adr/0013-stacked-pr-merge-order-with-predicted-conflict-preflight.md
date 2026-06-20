@@ -282,13 +282,20 @@ reset-develop-to-trunk` recipe (Decision rule 6's companion to
   limiter, dashboard caches) apply during merge runs.
 - `justfile` recipe `merge-pr` — the per-PR workflow this ADR codifies.
 - `justfile` recipe `check` — the parallel typecheck + test convention
-  mirrored by Step 4.
-- `prompts/babysit-pr-closeout.md` — the persisted runbook following
-  this ADR's protocol when batch-closing PRs (#63–#66). As of
-  2026-06-20 the file is currently on
-  `origin/chore/stacked-pr-merge-order-adr-and-just-recipe` (it was
-  rolled back along with this ADR when develop was reset to trunk);
-  fetch the branch to inspect, or open a stand-alone PR to re-add the
-  file to develop.
+  mirrored by Step 4.- `prompts/babysit-pr-closeout.md` — the persisted runbook following
+  this ADR's protocol when batch-closing PRs (#63–#66). After PR #72's
+  squash-merge (see History above), the file is part of trunk at
+  commit `a68bf40…` and inherited by `develop` via the post-merge
+  reset; no stand-alone PR needed.
 - Prior session pick: `Reset develop to trunk @ fb9c279` after the
   merge orchestrator surfaced baseline-divergence conflicts.
+- Orphan staging commits (`765d986` ADR-addendum staging, amended
+  `4707fa` of `d915c74`) pinned at
+  `refs/tags/staging-2026-06-20-pre-merge-adr-addendum` and
+  `refs/tags/staging-2026-06-20-pre-merge-closeout-prompt` for
+  forensic reference. Inspect via `git show <tag>` or reflog
+  (`git reflog --all | grep -E '765d986|4707fa'`). The squash-merge
+  cycle documented in History above is the durable record; these
+  tags are intentionally redundant annotation only — if they go
+  missing (host ref-filter, manual `gc`), the trunk merge `95d8b43…`
+  still carries the content.
