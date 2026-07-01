@@ -49,7 +49,7 @@
 		"@changesets/cli": "^2.31.0",
 		"@tailwindcss/typography": "^0.5.16",
 		"@tailwindcss/vite": "^4.1.18",
-		"@tanstack/devtools-vite": "^0.7.0",
+		"@tanstack/devtools-vite": "^0.8.0",
 		"@tanstack/react-devtools": "^0.10.5",
 		"@tanstack/react-router-devtools": "^1.167.0",
 		"@testing-library/dom": "^10.4.1",
