@@ -104,3 +104,13 @@ Use `db.transaction()` when a write path touches multiple Drizzle statements tha
 
 - `CLAUDE.md` only points at this file. Keep repo-specific agent guidance here.
 - `opencode.json` configures the `chrome-devtools` MCP server for browser automation; no other agent config is checked in.
+
+## Cursor Cloud specific instructions
+
+- The startup update script only runs `bun install`. Bun and a local PostgreSQL server are provisioned into the VM image (not by the update script), and no services are auto-started.
+- Local Postgres is a native `apt` install (not Docker — Docker is not available here). Start it with `sudo pg_ctlcluster 16 main start` before running the app or migrations. The dev role/DB are `hermes` / `hermes` / `hermes_hub` (`DATABASE_URL=postgresql://hermes:hermes@localhost:5432/hermes_hub`). Docker Compose (`compose.yaml`) is not usable here; use the native Postgres instead of `docker compose up -d postgres`.
+- `.env` is required and gitignored. It must define `DATABASE_URL`, `ENCRYPTION_KEY` (`openssl rand -hex 32`), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=http://localhost:3000`. Create it from `.env.example` if missing.
+- `.env` is NOT auto-loaded by `bun run <script>` for child `node` processes (e.g. `bun run db:migrate` spawns `node scripts/db-migrate.mjs` and sees no `DATABASE_URL`). Export the env first in the shell: `set -a; . ./.env; set +a`. `bun run dev` (Vite) works either way, but exporting `.env` into the shell is the reliable pattern for every command.
+- Migration-from-scratch is broken: `drizzle/0009_same_jackal.sql` runs `DROP INDEX "server_web_ui_server_id_idx"`, but no `.sql` migration ever creates that index (it only exists in `drizzle/meta/*_snapshot.json`), so `bun run db:migrate` fails on a fresh DB and (via the single-transaction postgres-js migrator) rolls the whole chain back — leaving zero tables. To materialize the schema locally, run `bunx drizzle-kit push` (with `.env` exported) instead; it syncs `server/db/schema.ts` directly. CI never runs migrations from scratch, which is why this is not caught upstream.
+- In dev (`NODE_ENV` != production) with `RESEND_API_KEY` unset, magic-link login URLs are logged to stdout by `server/lib/send-magic-link-email.ts` — grab the link from the dev server output to complete login without any email server. Mailpit/Resend are not needed for local login.
+- `bun run dev` serves both the frontend and the Hono `/api/*` on port 3000. Health check: `curl http://localhost:3000/api/health` returns `{"status":"ok","database":"connected"}` once Postgres is up and the schema is present.
