@@ -21,6 +21,8 @@ HermesHub focuses on the VPS setup path: connect your server, install Hermes wit
 
 After setup, the **Hermes Web UI** is the browser interface for using Hermes day to day — sessions, chat, workspace files, and tool calls. The community Hermes site at [get-hermes.ai](https://get-hermes.ai/) describes that Web UI and the broader Hermes ecosystem.
 
+For iPhone users, **[Hermex](https://github.com/uzairansaruzi/hermex)** is a free, native SwiftUI iOS app built by the community that connects to your self-hosted Hermes Web UI — chat with your agent, browse sessions, manage tasks, and more. Available on the [App Store](https://apps.apple.com/app/hermex/id6767006319).
+
 HermesHub is a separate product and is not affiliated with [get-hermes.ai](https://get-hermes.ai/).
 
 ## ✨ Features

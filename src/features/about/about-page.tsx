@@ -2,7 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
-import { hermesCommunitySiteUrl } from "#/lib/hermes-community";
+import {
+	hermesCommunitySiteUrl,
+	hermexAppStoreUrl,
+	hermexGithubUrl,
+} from "#/lib/hermes-community";
 
 export function AboutPage() {
 	return (
@@ -32,6 +36,30 @@ export function AboutPage() {
 					</a>
 					. HermesHub is not affiliated with that site and does not replace it.
 				</p>
+				<p className="mt-4 max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
+					Want to use your Hermes agent from your iPhone?{" "}
+					<a
+						href={hermexGithubUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-semibold text-[var(--sea-ink)] underline decoration-[var(--chip-line)] underline-offset-4"
+					>
+						Hermex
+					</a>{" "}
+					is a free, native SwiftUI iOS app built by the community that connects
+					to your self-hosted Hermes Web UI — chat with your agent, browse
+					sessions, manage tasks, and more from your phone. No subscriptions, no
+					tracking.{" "}
+					<a
+						href={hermexAppStoreUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-semibold text-[var(--sea-ink)] underline decoration-[var(--chip-line)] underline-offset-4"
+					>
+						Download on the App Store
+					</a>
+					.
+				</p>
 
 				<div className="mt-8 flex flex-wrap gap-3">
 					<Button asChild>
@@ -47,6 +75,12 @@ export function AboutPage() {
 							rel="noopener noreferrer"
 						>
 							Visit the Hermes community site
+							<ExternalLink />
+						</a>
+					</Button>
+					<Button asChild variant="secondary">
+						<a href={hermexGithubUrl} target="_blank" rel="noopener noreferrer">
+							Hermex iOS app
 							<ExternalLink />
 						</a>
 					</Button>
