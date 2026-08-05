@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | in-progress |
+| Status | done |
 | Category | security |
 | Audit finding | #1 (priority) |
 | Audit SHA | `8ff4b72` |

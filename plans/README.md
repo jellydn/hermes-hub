@@ -13,7 +13,7 @@ capture drift before executing.
 
 | Status | Plan | Finding | Category | Effort |
 |---|---|---|---|---|
-| pending | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S |
+| done | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S |
 | pending | [002 — model-switch success message race](002-model-switch-message-race.md) | #2 | correctness | S |
 | pending | [003 — mount-effect re-fire on isDeployed flip](003-mount-effect-refire-on-isdeployed.md) | #3 | correctness | S |
 | pending | [004 — ENCRYPTION_KEY rotation migration path](004-encryption-key-rotation.md) | #4 | security / tech-debt | L |
@@ -23,6 +23,23 @@ capture drift before executing.
 | pending | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S |
 | pending | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S |
 | pending | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M |
+
+## Recon verification (2026-08-06, HEAD `20b038c`)
+
+All ten plan recons were diffed against the audit SHA `8ff4b72` on
+2026-08-06 (that SHA is not an ancestor of `main`). Every target file is
+still present and unchanged except the providers refactor
+(`server/providers/active-backend.ts` → `server/providers/model-access/`),
+which only affects plan 010's test-mock module paths. Corrected line
+references (plan → reality on HEAD):
+
+| Plan | Reference | On HEAD |
+| --- | --- | --- |
+| 003 | `useMountEffect` block in `use-model-access-controller.ts` | `:159` (plan said `:74-82`) |
+| 005 | `decryptStoredApiKey` / `decryptApiKey` in `server/providers/records.ts` | `:28` / `:39` (plan said `:55-71`) |
+| 007 | `stateRef.current = state` in `use-model-access-controller.ts` | `:137` (plan said `:54-57`) |
+
+Plan 001 implemented and merged via #89 (2026-08-05).
 
 ## Execution order
 
