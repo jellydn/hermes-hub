@@ -206,6 +206,8 @@ describe("apiApp", () => {
 	});
 
 	it("normalizes the magic-link limiter key across case/whitespace variants", async () => {
+		// Uses keys unique to this file: the module-level in-memory limiter
+		// persists across tests, so shared keys would couple test outcomes.
 		authHandler.mockResolvedValue(
 			new Response(JSON.stringify({ status: true }), {
 				status: 200,

@@ -155,7 +155,7 @@ async function applyMagicLinkRateLimit(request: Request) {
 		email = null;
 	}
 
-	if (typeof email !== "string" || email.length === 0) {
+	if (typeof email !== "string") {
 		return null;
 	}
 
