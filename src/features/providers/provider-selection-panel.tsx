@@ -174,7 +174,7 @@ export function ProviderSelectionPanel({
 							type="text"
 							{...register("model")}
 							className={inputClassName}
-							placeholder={providerOption?.defaultModel || "deepseek-chat"}
+							placeholder={providerOption?.defaultModel || "model-id"}
 						/>
 					</ProviderSettingsField>
 				) : (

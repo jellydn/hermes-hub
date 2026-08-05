@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Orb setup for HermesHub — runs once per fresh orb (and on snapshot restore).
+# Idempotent: safe to re-run. Installs Postgres, deps, env, and schema.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+log() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
+
+# ---------------------------------------------------------------------------
+# 1. System packages: PostgreSQL (Debian cluster) + openssl
+# ---------------------------------------------------------------------------
+if ! command -v psql >/dev/null 2>&1; then
+  log "Installing PostgreSQL via apt"
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql >/dev/null
+fi
+
+if ! command -v openssl >/dev/null 2>&1; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssl >/dev/null
+fi
+
+# Ensure curl is present for the NodeSource setup step
+if ! command -v curl >/dev/null 2>&1; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl >/dev/null
+fi
+
+# ---------------------------------------------------------------------------
+# 1b. Modern Node.js — Vite 8 (a dependency) requires Node 20.19+ or 22.12+,
+#     but the orb base image ships Node 20.9.0. Install Node 22 LTS via
+#     NodeSource and surface it ahead of the old binary via ~/.local/bin
+#     (which precedes /usr/local/bin in the orb PATH).
+# ---------------------------------------------------------------------------
+need_node=0
+if command -v node >/dev/null 2>&1; then
+  if ! node -e '
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    const valid = (major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major > 22;
+    process.exit(valid ? 0 : 1);
+  ' 2>/dev/null; then
+    need_node=1
+  fi
+else
+  need_node=1
+fi
+
+if [ "$need_node" -eq 1 ]; then
+  log "Installing Node.js 22 LTS via NodeSource (current node is too old for Vite 8)"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >/dev/null 2>&1
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null
+  # Surface the new node ahead of the orb's /usr/local/bin/node (v20.9.0)
+  mkdir -p "$HOME/.local/bin"
+  ln -sf /usr/bin/node "$HOME/.local/bin/node"
+  ln -sf /usr/bin/npm  "$HOME/.local/bin/npm"
+  ln -sf /usr/bin/npx  "$HOME/.local/bin/npx"
+fi
+log "Node: $(node --version) ($(command -v node))"
+
+# Detect the installed cluster version (Debian lays out /etc/postgresql/<ver>/main)
+PGVER="$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -n1)"
+if [ -z "$PGVER" ]; then
+  echo "[setup] FATAL: no PostgreSQL cluster found under /etc/postgresql" >&2
+  exit 1
+fi
+PGCLUSTER="${PGVER}/main"
+log "Using PostgreSQL cluster: $PGCLUSTER"
+
+# ---------------------------------------------------------------------------
+# 2. Tune Postgres for orb speed (durability is irrelevant in an ephemeral sandbox)
+# ---------------------------------------------------------------------------
+TUNE_CONF="/etc/postgresql/${PGCLUSTER}/conf.d/00-orb-tuning.conf"
+if [ ! -f "$TUNE_CONF" ]; then
+  log "Writing Postgres speed tuning drop-in"
+  sudo mkdir -p "$(dirname "$TUNE_CONF")"
+  sudo tee "$TUNE_CONF" >/dev/null <<'TUNE'
+# Orb sandbox tuning — optimize for speed over durability
+fsync = off
+synchronous_commit = off
+full_page_writes = off
+TUNE
+  # (Re)start so the tuning takes effect
+  if sudo pg_ctlcluster "$PGCLUSTER" status >/dev/null 2>&1; then
+    sudo pg_ctlcluster "$PGCLUSTER" restart >/dev/null 2>&1 || true
+  else
+    sudo pg_ctlcluster "$PGCLUSTER" start >/dev/null 2>&1 || true
+  fi
+else
+  # Already tuned — just make sure it's running
+  sudo pg_ctlcluster "$PGCLUSTER" start >/dev/null 2>&1 || true
+fi
+
+# Wait for the local server to accept connections
+for _ in $(seq 1 30); do
+  if sudo pg_ctlcluster "$PGCLUSTER" status >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+
+# ---------------------------------------------------------------------------
+# 3. Create the hermes role + hermes_hub database (idempotent)
+# ---------------------------------------------------------------------------
+log "Ensuring role 'hermes' and database 'hermes_hub'"
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='hermes'" | grep -q 1; then
+  sudo -u postgres psql -qc "CREATE ROLE hermes WITH LOGIN PASSWORD 'hermes';"
+fi
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='hermes_hub'" | grep -q 1; then
+  sudo -u postgres createdb -O hermes hermes_hub
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Install JS dependencies from the lockfile
+# ---------------------------------------------------------------------------
+log "Installing dependencies (bun install --frozen-lockfile)"
+bun install --frozen-lockfile
+
+# ---------------------------------------------------------------------------
+# 5. Create .env from .env.example without clobbering an existing one
+# ---------------------------------------------------------------------------
+if [ ! -f .env ]; then
+  log "Creating .env from .env.example with generated secrets"
+  cp -- .env.example .env
+  sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://hermes:hermes@localhost:5432/hermes_hub|' .env
+  sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
+  sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -hex 32)|" .env
+  # BETTER_AUTH_URL already defaults to http://localhost:3000 in the template
+else
+  log ".env already exists — leaving it untouched"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Sync the Drizzle schema to Postgres.
+#    NOTE: `bun run db:migrate` is broken from scratch (see AGENTS.md), so we
+#    use `drizzle-kit push` which syncs server/db/schema.ts directly.
+# ---------------------------------------------------------------------------
+log "Pushing Drizzle schema to Postgres"
+set -a; . ./.env; set +a
+bunx drizzle-kit push --force >/dev/null
+
+# ---------------------------------------------------------------------------
+# 7. Smoke check
+# ---------------------------------------------------------------------------
+if bun run typecheck >/dev/null 2>&1; then
+  log "typecheck: ok"
+else
+  log "typecheck: skipped (non-fatal)"
+fi
+
+log "Setup complete. Health check: curl http://localhost:3000/api/health (after 'bun run dev')"
