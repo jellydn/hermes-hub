@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | pending |
+| Status | in-progress |
 | Category | test-gap |
 | Audit finding | #8 (priority) |
 | Audit SHA | `8ff4b72` |
