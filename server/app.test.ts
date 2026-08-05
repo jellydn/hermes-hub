@@ -205,6 +205,89 @@ describe("apiApp", () => {
 		);
 	});
 
+	it("normalizes the magic-link limiter key across case/whitespace variants", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		// All four variants normalize to the same key: without normalization
+		// each would get its own bucket and all four would pass.
+		const variants = ["A@x.com", "a@X.COM", " a@x.com ", "A@X.com"];
+
+		for (const [index, email] of variants.entries()) {
+			const response = await apiApp.request(
+				"http://localhost/api/auth/send-magic-link",
+				{
+					method: "POST",
+					body: JSON.stringify({ email }),
+					headers: { "content-type": "application/json" },
+				},
+			);
+
+			// First three consumes fit the 3-per-5-min budget; the fourth
+			// consumes beyond it and must be blocked with 429.
+			expect(response.status).toBe(index < 3 ? 200 : 429);
+		}
+
+		expect(authHandler).toHaveBeenCalledTimes(3);
+	});
+
+	it("does not consume the limiter for emails longer than 320 chars", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		const overlongEmail = `${"a".repeat(400)}@x.com`;
+
+		for (let index = 0; index < 4; index++) {
+			const response = await apiApp.request(
+				"http://localhost/api/auth/send-magic-link",
+				{
+					method: "POST",
+					body: JSON.stringify({ email: overlongEmail }),
+					headers: { "content-type": "application/json" },
+				},
+			);
+
+			// If the overlong email consumed the limiter, the 4th request on
+			// the same key would 429; pass-through proves no consume happened.
+			expect(response.status).toBe(200);
+		}
+
+		expect(authHandler).toHaveBeenCalledTimes(4);
+	});
+
+	it("does not consume the limiter for whitespace-only emails", async () => {
+		authHandler.mockResolvedValue(
+			new Response(JSON.stringify({ status: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		for (let index = 0; index < 4; index++) {
+			const response = await apiApp.request(
+				"http://localhost/api/auth/send-magic-link",
+				{
+					method: "POST",
+					body: JSON.stringify({ email: "   " }),
+					headers: { "content-type": "application/json" },
+				},
+			);
+
+			// Trimming turns "   " into an empty key, which must not consume.
+			expect(response.status).toBe(200);
+		}
+
+		expect(authHandler).toHaveBeenCalledTimes(4);
+	});
+
 	it("catch-all auth route handles verify magic link requests", async () => {
 		authHandler.mockResolvedValueOnce(
 			new Response(JSON.stringify({ session: {}, user: {} }), {
