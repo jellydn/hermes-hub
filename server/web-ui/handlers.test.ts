@@ -248,40 +248,43 @@ describe("web-ui handlers", () => {
 		it.each([
 			["without trailing slash", "/api/servers/server_123/web-ui/proxy"],
 			["with trailing slash", "/api/servers/server_123/web-ui/proxy/"],
-		])("forwards proxy root %s to upstream /", async (_label, proxyRootPath) => {
-			getAuthSession.mockResolvedValue({
-				user: { id: "user_123" },
-				session: { id: "session_123" },
-			});
-			getResolvedServerWebUiRecord.mockResolvedValue({
-				enabled: true,
-				encryptedPassword: "enc:generated-password",
-				port: 8787,
-				deployStatus: "succeeded",
-				deployError: null,
-				deployStartedAt: null,
-				updatedAt: new Date("2026-05-26T04:00:00.000Z"),
-			});
-			proxyRequestOverSsh.mockResolvedValue(
-				new Response("<html>ok</html>", {
-					status: 200,
-					headers: { "content-type": "text/html" },
-				}),
-			);
+		])(
+			"forwards proxy root %s to upstream /",
+			async (_label, proxyRootPath) => {
+				getAuthSession.mockResolvedValue({
+					user: { id: "user_123" },
+					session: { id: "session_123" },
+				});
+				getResolvedServerWebUiRecord.mockResolvedValue({
+					enabled: true,
+					encryptedPassword: "enc:generated-password",
+					port: 8787,
+					deployStatus: "succeeded",
+					deployError: null,
+					deployStartedAt: null,
+					updatedAt: new Date("2026-05-26T04:00:00.000Z"),
+				});
+				proxyRequestOverSsh.mockResolvedValue(
+					new Response("<html>ok</html>", {
+						status: 200,
+						headers: { "content-type": "text/html" },
+					}),
+				);
 
-			const response = await proxyServerWebUi(
-				createContext({
-					url: `http://localhost:3000${proxyRootPath}`,
-				}),
-			);
+				const response = await proxyServerWebUi(
+					createContext({
+						url: `http://localhost:3000${proxyRootPath}`,
+					}),
+				);
 
-			expect(response.status).toBe(200);
-			expect(proxyRequestOverSsh).toHaveBeenCalledWith(
-				expect.objectContaining({
-					upstreamPath: "/",
-				}),
-			);
-		});
+				expect(response.status).toBe(200);
+				expect(proxyRequestOverSsh).toHaveBeenCalledWith(
+					expect.objectContaining({
+						upstreamPath: "/",
+					}),
+				);
+			},
+		);
 
 		it("returns actionable errors when the upstream port is closed", async () => {
 			getAuthSession.mockResolvedValue({

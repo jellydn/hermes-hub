@@ -777,10 +777,10 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 | Field      | Type   | Description                                                                                      |
 | ---------- | ------ | ------------------------------------------------------------------------------------------------ |
-| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, or `"custom"`                        |
+| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"deepseek"`, or `"custom"`              |
 | `model`    | string | Model ID (defaults to provider's default if omitted)                                             |
-| `apiKey`   | string | API key. Optional if re-saving the same provider (uses stored key).                              |
-| `baseUrl`  | string | Required for `ollama` and `custom`. Optional for other API-key providers.                        |
+| `apiKey`   | string | API key. Required for `openai`, `anthropic`, `openrouter`, `deepseek`, and `custom` (unless re-saving existing credentials). Optional for `ollama`. |
+| `baseUrl`  | string | Required for `ollama`, `deepseek`, and `custom`. Optional for other API-key providers.          |
 
 **Supported models:**
 
@@ -790,6 +790,7 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 | anthropic    | `claude-sonnet-4-20250514`, `claude-haiku-3-5`                               | `claude-sonnet-4-20250514` |
 | openrouter   | Any model ID (custom text input)                                             | `openai/gpt-4o-mini`       |
 | ollama       | Any model ID (custom text input)                                             | `llama3`                   |
+| deepseek     | `deepseek-v4-flash`, `deepseek-v4-pro`                                       | `deepseek-v4-flash`        |
 | custom       | Any model ID (custom text input)                                             | _(empty)_                  |
 **Response (200):**
 

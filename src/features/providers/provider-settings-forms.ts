@@ -31,7 +31,14 @@ export type SubscriptionFormState = {
 const initialProvider = "openai" as ApiProviderId;
 
 export const providerSchema = z.object({
-	provider: z.enum(["openai", "anthropic", "openrouter", "ollama", "custom"]),
+	provider: z.enum([
+		"openai",
+		"anthropic",
+		"openrouter",
+		"ollama",
+		"deepseek",
+		"custom",
+	]),
 	model: z.string(),
 	apiKey: z.string(),
 	baseUrl: z.string(),
