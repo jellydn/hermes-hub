@@ -155,12 +155,23 @@ async function applyMagicLinkRateLimit(request: Request) {
 		email = null;
 	}
 
-	if (typeof email !== "string" || email.length === 0) {
+	if (typeof email !== "string") {
+		return null;
+	}
+
+	// Normalize the limiter key so case/whitespace permutations of the same
+	// delivery target share one budget (email-as-cache-key antipattern).
+	const normalizedEmail = email.trim().toLowerCase();
+
+	// RFC 5321 hard cap: anything past 320 chars after trimming is
+	// unambiguously hostile. Ignore it without consuming — matching the
+	// non-string/empty behavior above.
+	if (normalizedEmail.length === 0 || normalizedEmail.length > 320) {
 		return null;
 	}
 
 	try {
-		await magicLinkRateLimiter.consume(email);
+		await magicLinkRateLimiter.consume(normalizedEmail);
 		return null;
 	} catch {
 		return Response.json(
