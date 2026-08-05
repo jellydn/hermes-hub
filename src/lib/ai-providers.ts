@@ -3,6 +3,7 @@ export type ApiProviderId =
 	| "anthropic"
 	| "openrouter"
 	| "ollama"
+	| "deepseek"
 	| "custom";
 
 /** @deprecated Use ApiProviderId for API-key providers. */
@@ -67,10 +68,20 @@ export const apiProviderOptions: readonly AiProviderOption[] = [
 		defaultBaseUrl: "http://localhost:11434/v1",
 	},
 	{
+		id: "deepseek",
+		label: "DeepSeek",
+		description:
+			"Cost-effective reasoning and chat models via the DeepSeek OpenAI-compatible API.",
+		models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+		defaultModel: "deepseek-v4-flash",
+		requiresBaseUrl: true,
+		defaultBaseUrl: "https://api.deepseek.com/v1",
+	},
+	{
 		id: "custom",
 		label: "Custom / BYO",
 		description:
-			"Connect to any OpenAI-compatible API endpoint (e.g. OllamaCloud, DeepSeek, Together, etc.).",
+			"Connect to any OpenAI-compatible API endpoint (e.g. OllamaCloud, Together, etc.).",
 		models: [],
 		defaultModel: "",
 		requiresCustomModel: true,
