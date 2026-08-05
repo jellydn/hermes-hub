@@ -113,8 +113,8 @@ describe("api provider metadata", () => {
 		expect(isValidAiModel("deepseek", "deepseek-chat")).toBe(false);
 	});
 
-	it("requires a base URL for DeepSeek", () => {
+	it("requires a base URL and API key for DeepSeek", () => {
 		expect(getProviderCredentialPolicy("deepseek").requiresBaseUrl).toBe(true);
-		expect(providerRequiresApiKey("deepseek")).toBe(false);
+		expect(providerRequiresApiKey("deepseek")).toBe(true);
 	});
 });

@@ -159,41 +159,44 @@ describe("deploySkillsToHermes — policy", () => {
 	it.each([
 		{ name: "../etc/passwd", sourceType: "hub" },
 		{ name: "foo/bar", sourceType: "custom" },
-	])("throws when manifest contains unsafe name '$name'", async ({
-		name,
-		sourceType,
-	}) => {
-		selectOrderBy.mockResolvedValueOnce([]);
+	])(
+		"throws when manifest contains unsafe name '$name'",
+		async ({ name, sourceType }) => {
+			selectOrderBy.mockResolvedValueOnce([]);
 
-		const mockExec = vi.fn().mockImplementation((cmd: string) => {
-			if (cmd.includes("cat") && cmd.includes("hermeshub-agent-skills.json")) {
-				return Promise.resolve({
-					code: 0,
-					stdout: JSON.stringify([{ name, sourceType }]),
-				});
-			}
-			return Promise.resolve({ code: 0, stdout: "" });
-		});
+			const mockExec = vi.fn().mockImplementation((cmd: string) => {
+				if (
+					cmd.includes("cat") &&
+					cmd.includes("hermeshub-agent-skills.json")
+				) {
+					return Promise.resolve({
+						code: 0,
+						stdout: JSON.stringify([{ name, sourceType }]),
+					});
+				}
+				return Promise.resolve({ code: 0, stdout: "" });
+			});
 
-		withSshConnection.mockImplementation(
-			async (
-				_config: unknown,
-				callback: (ssh: unknown) => Promise<unknown>,
-			) => {
-				return callback({ execCommand: mockExec });
-			},
-		);
+			withSshConnection.mockImplementation(
+				async (
+					_config: unknown,
+					callback: (ssh: unknown) => Promise<unknown>,
+				) => {
+					return callback({ execCommand: mockExec });
+				},
+			);
 
-		const { deploySkillsToHermes } = await import("../../agent-skills");
-		const response = await deploySkillsToHermes(
-			createContext({ serverId: "srv_123" }, "POST"),
-		);
+			const { deploySkillsToHermes } = await import("../../agent-skills");
+			const response = await deploySkillsToHermes(
+				createContext({ serverId: "srv_123" }, "POST"),
+			);
 
-		expect(response.status).toBe(502);
-		const payload = await response.json();
-		expect(payload.error).toContain("Unsafe manifest name");
-		expect(payload.error).toContain(name);
-	});
+			expect(response.status).toBe(502);
+			const payload = await response.json();
+			expect(payload.error).toContain("Unsafe manifest name");
+			expect(payload.error).toContain(name);
+		},
+	);
 
 	it("uses direct SKILL.md write when acceptScannerRisk is enabled for a URL skill", async () => {
 		const record = {

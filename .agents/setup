@@ -36,8 +36,13 @@ fi
 # ---------------------------------------------------------------------------
 need_node=0
 if command -v node >/dev/null 2>&1; then
-  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-  [ "${node_major:-0}" -lt 22 ] && need_node=1
+  if ! node -e '
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    const valid = (major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major > 22;
+    process.exit(valid ? 0 : 1);
+  ' 2>/dev/null; then
+    need_node=1
+  fi
 else
   need_node=1
 fi

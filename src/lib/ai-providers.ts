@@ -26,6 +26,7 @@ type AiProviderOption = {
 	models: readonly string[];
 	defaultModel: string;
 	requiresCustomModel?: boolean;
+	requiresApiKey?: boolean;
 	requiresBaseUrl?: boolean;
 	defaultBaseUrl?: string;
 };
@@ -74,6 +75,7 @@ export const apiProviderOptions: readonly AiProviderOption[] = [
 			"Cost-effective reasoning and chat models via the DeepSeek OpenAI-compatible API.",
 		models: ["deepseek-v4-flash", "deepseek-v4-pro"],
 		defaultModel: "deepseek-v4-flash",
+		requiresApiKey: true,
 		requiresBaseUrl: true,
 		defaultBaseUrl: "https://api.deepseek.com/v1",
 	},
@@ -153,10 +155,11 @@ export function getProviderCredentialPolicy(
 ): ProviderCredentialPolicy {
 	const option = getAiProviderOption(provider);
 	const requiresBaseUrl = Boolean(option?.requiresBaseUrl);
+	const requiresApiKey = option?.requiresApiKey ?? !requiresBaseUrl;
 
 	return {
 		kind: "api-key",
-		requiresApiKey: !requiresBaseUrl,
+		requiresApiKey,
 		requiresBaseUrl,
 		requiresRemoteOAuth: false,
 		reportsStoredKeyWithoutApiKey: false,

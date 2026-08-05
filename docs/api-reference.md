@@ -779,7 +779,7 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 | ---------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"deepseek"`, or `"custom"`              |
 | `model`    | string | Model ID (defaults to provider's default if omitted)                                             |
-| `apiKey`   | string | API key. Optional if re-saving the same provider (uses stored key).                              |
+| `apiKey`   | string | API key. Required for `openai`, `anthropic`, `openrouter`, `deepseek`, and `custom` (unless re-saving existing credentials). Optional for `ollama`. |
 | `baseUrl`  | string | Required for `ollama`, `deepseek`, and `custom`. Optional for other API-key providers.          |
 
 **Supported models:**
