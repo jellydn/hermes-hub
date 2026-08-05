@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | pending |
+| Status | in-progress |
 | Category | security / tech-debt |
 | Audit finding | #5 (priority) |
 | Audit SHA | `8ff4b72` |
