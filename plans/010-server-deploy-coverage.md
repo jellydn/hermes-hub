@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | pending |
+| Status | in-progress |
 | Category | coverage |
 | Audit finding | #10 (priority) |
 | Audit SHA | `8ff4b72` |
