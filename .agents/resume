@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Orb resume for HermesHub — runs every time an existing orb wakes.
+# Fast and idempotent: only ensures Postgres is back up. No installs here.
+set -euo pipefail
+
+PGVER="$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -n1 || true)"
+if [ -n "$PGVER" ]; then
+  if ! sudo pg_ctlcluster "$PGVER" main status >/dev/null 2>&1; then
+    sudo pg_ctlcluster "$PGVER" main start >/dev/null 2>&1
+  fi
+fi
+
+if pg_isready -q -h localhost -p 5432 -U hermes -d hermes_hub 2>/dev/null; then
+  echo "resume: postgres ready"
+else
+  echo "resume: postgres not ready on localhost:5432" >&2
+  exit 1
+fi
