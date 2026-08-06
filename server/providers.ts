@@ -27,6 +27,7 @@ import {
 } from "./providers/config";
 import {
 	ProviderConnectionError,
+	verifyCommandCodeConnection,
 	verifyOpenAiCompatibleConnection,
 	verifyProviderConnection,
 } from "./providers/connection";
@@ -314,10 +315,17 @@ export async function testSubscriptionConfig(context: Context) {
 	}
 
 	try {
-		await verifyOpenAiCompatibleConnection({
-			apiKey: credentialContext.credentials.apiKey,
-			baseUrl: credentialContext.credentials.baseUrl,
-		});
+		if (credentialContext.option.id === "commandcode") {
+			await verifyCommandCodeConnection({
+				apiKey: credentialContext.credentials.apiKey,
+				model: parsed.model,
+			});
+		} else {
+			await verifyOpenAiCompatibleConnection({
+				apiKey: credentialContext.credentials.apiKey,
+				baseUrl: credentialContext.credentials.baseUrl,
+			});
+		}
 
 		return context.json({ status: "connected" });
 	} catch (error) {

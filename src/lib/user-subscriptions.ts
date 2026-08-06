@@ -84,7 +84,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		id: "commandcode",
 		label: "Command Code Coding Plan",
 		description:
-			"Use your Command Code subscription (Go $1/mo, Pro $15/mo) with a user_* API key. Access DeepSeek, MiMo, MiniMax, and more.",
+			"Use a Go plan user_* key through Hermes Hub's CLI translation proxy. Provider plan keys can instead use the direct Command Code API provider.",
 		hermesProviderId: "custom",
 		authMode: "coding-plan",
 		credentialKind: "api-key",

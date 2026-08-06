@@ -15,6 +15,8 @@ const {
 	getDashboardStatus,
 	getLogs,
 	clearLogs,
+	handleCommandCodeProxy,
+	handleCommandCodeProxyModels,
 	deployProviderToHermes,
 	saveProviderConfig,
 	saveSubscriptionConfig,
@@ -53,6 +55,8 @@ const {
 	getDashboardStatus: vi.fn(),
 	getLogs: vi.fn(),
 	clearLogs: vi.fn(),
+	handleCommandCodeProxy: vi.fn(),
+	handleCommandCodeProxyModels: vi.fn(),
 	deployProviderToHermes: vi.fn(),
 	saveProviderConfig: vi.fn(),
 	saveSubscriptionConfig: vi.fn(),
@@ -112,6 +116,11 @@ vi.mock("./dashboard", () => ({
 vi.mock("./logs", () => ({
 	getLogs,
 	clearLogs,
+}));
+
+vi.mock("./commandcode/proxy", () => ({
+	handleCommandCodeProxy,
+	handleCommandCodeProxyModels,
 }));
 
 vi.mock("./providers", () => ({
@@ -176,6 +185,30 @@ describe("apiApp", () => {
 			database: "connected",
 		});
 		expect(payload.timestamp).toEqual(expect.any(String));
+	});
+
+	it("routes unauthenticated Command Code proxy requests", async () => {
+		handleCommandCodeProxy.mockResolvedValueOnce(
+			new Response("data: [DONE]\n\n", {
+				headers: { "content-type": "text/event-stream" },
+			}),
+		);
+		handleCommandCodeProxyModels.mockResolvedValueOnce(
+			Response.json({ data: [] }),
+		);
+
+		const completionResponse = await apiApp.request(
+			"http://localhost/api/commandcode-proxy/v1/chat/completions",
+			{ method: "POST" },
+		);
+		const modelsResponse = await apiApp.request(
+			"http://localhost/api/commandcode-proxy/v1/models",
+		);
+
+		expect(completionResponse.status).toBe(200);
+		expect(modelsResponse.status).toBe(200);
+		expect(handleCommandCodeProxy).toHaveBeenCalledTimes(1);
+		expect(handleCommandCodeProxyModels).toHaveBeenCalledTimes(1);
 	});
 
 	it("routes send magic link requests through Better Auth", async () => {

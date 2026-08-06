@@ -582,6 +582,74 @@ describe("provider settings", () => {
 		);
 	});
 
+	it("tests Command Code Coding Plan credentials with a real CLI generation", async () => {
+		const previousAuthUrl = process.env.BETTER_AUTH_URL;
+		process.env.BETTER_AUTH_URL = "https://hub.example.com";
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				`${JSON.stringify({ type: "text-delta", text: "O" })}\n${JSON.stringify(
+					{ type: "finish", finishReason: "length" },
+				)}\n`,
+				{ status: 200 },
+			),
+		);
+
+		try {
+			const { saveSubscriptionConfig, testSubscriptionConfig } = await import(
+				"./providers"
+			);
+			const saveResponse = await saveSubscriptionConfig(
+				createContext("http://localhost/api/providers/subscriptions", {
+					subscriptionProvider: "commandcode",
+					model: "deepseek/deepseek-v4-flash",
+					apiKey: "user_live_secret",
+					baseUrl: "https://api.commandcode.ai/provider/v1",
+				}),
+			);
+			const response = await testSubscriptionConfig(
+				createContext("http://localhost/api/providers/subscriptions/test", {
+					subscriptionProvider: "commandcode",
+					model: "deepseek/deepseek-v4-flash",
+					apiKey: "user_live_secret",
+					baseUrl: "https://api.commandcode.ai/provider/v1",
+				}),
+			);
+
+			expect(saveResponse.status).toBe(200);
+			expect(insertProviderValues).toHaveBeenCalledWith(
+				expect.objectContaining({
+					provider: "commandcode",
+					baseUrl: "https://hub.example.com/api/commandcode-proxy/v1",
+				}),
+			);
+			expect(response.status).toBe(200);
+			expect(fetchMock).toHaveBeenCalledWith(
+				"https://api.commandcode.ai/alpha/generate",
+				expect.objectContaining({
+					method: "POST",
+					headers: expect.objectContaining({
+						Authorization: "Bearer user_live_secret",
+						"x-command-code-version": "0.29.0",
+					}),
+				}),
+			);
+			const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+			expect(JSON.parse(String(init.body))).toMatchObject({
+				params: {
+					model: "deepseek/deepseek-v4-flash",
+					max_tokens: 1,
+					stream: true,
+				},
+			});
+		} finally {
+			if (previousAuthUrl === undefined) {
+				delete process.env.BETTER_AUTH_URL;
+			} else {
+				process.env.BETTER_AUTH_URL = previousAuthUrl;
+			}
+		}
+	});
+
 	it("builds Hermes deploy env for MiMo Token Plan", async () => {
 		loadModelAccessRecords.mockResolvedValueOnce({
 			apiRecord: {
@@ -619,6 +687,8 @@ describe("provider settings", () => {
 	});
 
 	it("builds Hermes deploy env for Command Code Coding Plan", async () => {
+		const previousAuthUrl = process.env.BETTER_AUTH_URL;
+		process.env.BETTER_AUTH_URL = "https://hub.example.com";
 		loadModelAccessRecords.mockResolvedValueOnce({
 			apiRecord: null,
 			subscriptionRecord: {
@@ -643,20 +713,29 @@ describe("provider settings", () => {
 			},
 		});
 
-		const { getProviderDeployConfig } = await import("./providers");
-		const config = await getProviderDeployConfig("user_123");
+		try {
+			const { getProviderDeployConfig } = await import("./providers");
+			const config = await getProviderDeployConfig("user_123");
 
-		expect(config).toEqual({
-			model: "deepseek/deepseek-v4-flash",
-			envVars: {
-				HERMES_INFERENCE_PROVIDER: "custom",
-				COMMANDCODE_API_KEY: "stored-api-key",
-				COMMANDCODE_BASE_URL: "https://api.commandcode.ai/provider/v1",
-				OPENAI_API_KEY: "stored-api-key",
-				CUSTOM_BASE_URL: "https://api.commandcode.ai/provider/v1",
-				OPENAI_BASE_URL: "https://api.commandcode.ai/provider/v1",
-			},
-		});
+			expect(config).toEqual({
+				model: "deepseek/deepseek-v4-flash",
+				envVars: {
+					HERMES_INFERENCE_PROVIDER: "custom",
+					COMMANDCODE_API_KEY: "stored-api-key",
+					COMMANDCODE_BASE_URL:
+						"https://hub.example.com/api/commandcode-proxy/v1",
+					OPENAI_API_KEY: "stored-api-key",
+					CUSTOM_BASE_URL: "https://hub.example.com/api/commandcode-proxy/v1",
+					OPENAI_BASE_URL: "https://hub.example.com/api/commandcode-proxy/v1",
+				},
+			});
+		} finally {
+			if (previousAuthUrl === undefined) {
+				delete process.env.BETTER_AUTH_URL;
+			} else {
+				process.env.BETTER_AUTH_URL = previousAuthUrl;
+			}
+		}
 	});
 
 	it("rejects deploy config when stored API-key ciphertext is unreadable", async () => {

@@ -755,11 +755,37 @@ Deletes the user's persisted `install_events` rows and finished action audit ent
 
 ---
 
+## Command Code Translation Proxy
+
+The Coding Plan integration uses an OpenAI-compatible translation proxy because Command Code Go-plan keys cannot call the direct Provider API. These routes do not require a Hermes Hub session; the Command Code `user_*` key in the bearer header authenticates generation upstream. HTTPS is enforced in production.
+
+### POST `/api/commandcode-proxy/v1/chat/completions`
+
+Accepts an OpenAI chat-completions request and forwards it to `https://api.commandcode.ai/alpha/generate` using Command Code's CLI protocol.
+
+**Auth required:** `Authorization: Bearer user_...` (Command Code key)
+
+**Protocol translation:**
+
+- System/developer messages become the Command Code `params.system` prompt; user, assistant, paired tool-call, and tool-result messages become Command Code content blocks.
+- OpenAI function tools become Command Code `{ type: "function", name, description, input_schema }` tools.
+- The upstream NDJSON stream is returned as OpenAI `text/event-stream` chunks. Command Code `text-delta`, `tool-call`, `finish`, and `error` events map to OpenAI content/tool chunks, finish reasons, usage, and error events. Reasoning deltas are omitted.
+- When the request uses `"stream": false` or omits `stream`, the proxy collects the upstream event stream and returns one OpenAI chat completion JSON object.
+- Upstream non-2xx statuses and bodies are preserved. Generation requests time out after 120 seconds.
+
+### GET `/api/commandcode-proxy/v1/models`
+
+Proxies unauthenticated model discovery to the Command Code Provider API models endpoint so Hermes can use the same proxy base URL for model lookup and generation.
+
+---
+
 ## AI Providers
 
 ### POST `/api/providers`
 
 Saves an AI provider configuration. Deactivates any existing provider config first, then inserts a new active record. API keys are encrypted with AES-256-GCM.
+
+The `commandcode` API-provider entry connects directly to `https://api.commandcode.ai/provider/v1` and requires a Command Code Provider plan ($15/month) or higher. Go-plan users should select the Command Code Coding Plan subscription instead; Hermes Hub routes that subscription through the translation proxy.
 
 **Auth required:** Yes
 
@@ -914,10 +940,11 @@ Saves a subscription configuration (ChatGPT OAuth, MiMo credential, or Command C
 {
 	"subscriptionProvider": "commandcode",
 	"model": "deepseek/deepseek-v4-flash",
-	"apiKey": "user_...",
-	"baseUrl": "https://api.commandcode.ai/provider/v1"
+	"apiKey": "user_..."
 }
 ```
+
+Command Code Coding Plan credentials are stored and deployed with `${BETTER_AUTH_URL}/api/commandcode-proxy/v1` as their effective base URL. Any client-supplied Command Code subscription base URL is replaced with that canonical proxy URL. Existing saved subscriptions are also overridden at deploy time, so they do not need to be re-saved.
 
 **Fields:**
 
@@ -926,7 +953,7 @@ Saves a subscription configuration (ChatGPT OAuth, MiMo credential, or Command C
 | `subscriptionProvider` | string | `"chatgpt"`, `"mimo"`, or `"commandcode"`                                  |
 | `model`               | string | Required. Must be a valid model for the subscription.                       |
 | `apiKey`              | string | Required for `mimo` and `commandcode`. Not used for `chatgpt`.             |
-| `baseUrl`             | string | Optional for `mimo` and `commandcode` (defaults to provider URL). Not used for `chatgpt`. |
+| `baseUrl`             | string | Optional for `mimo` (defaults to its token-plan URL). Ignored for `commandcode`, which uses the Hermes Hub proxy. Not used for `chatgpt`. |
 
 **Supported models:**
 
@@ -960,7 +987,7 @@ Saves a subscription configuration (ChatGPT OAuth, MiMo credential, or Command C
 
 ### POST `/api/providers/subscriptions/test`
 
-Tests a subscription connection. For MiMo and Command Code, this calls the provider's models list endpoint. ChatGPT (OAuth) skips API-key testing and returns a connected status with guidance to use device-code login instead.
+Tests a subscription connection. MiMo calls its models list endpoint. Command Code performs a one-token generation against `https://api.commandcode.ai/alpha/generate`, which verifies actual Coding Plan inference access rather than the less restrictive models endpoint. ChatGPT (OAuth) skips API-key testing and returns a connected status with guidance to use device-code login instead.
 
 **Auth required:** Yes
 

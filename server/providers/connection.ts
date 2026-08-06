@@ -1,5 +1,11 @@
 import type { ApiProviderId } from "#/lib/ai-providers";
 import { getAiProviderOption } from "#/lib/ai-providers";
+import {
+	COMMAND_CODE_GENERATE_URL,
+	collectCommandCodeCompletion,
+	getCommandCodeRequestHeaders,
+	transformOpenAIToCommandCode,
+} from "../commandcode/proxy";
 
 export class ProviderConnectionError extends Error {
 	constructor(
@@ -68,6 +74,46 @@ export async function verifyOpenAiCompatibleConnection(input: {
 	}
 
 	throw new ProviderConnectionError("Connection failed", "connection_failed");
+}
+
+export async function verifyCommandCodeConnection(input: {
+	apiKey: string;
+	model: string;
+}) {
+	const body = transformOpenAIToCommandCode({
+		model: input.model,
+		messages: [{ role: "user", content: "Reply with OK." }],
+		max_tokens: 1,
+		stream: true,
+	});
+
+	let response: Response;
+	try {
+		response = await fetch(COMMAND_CODE_GENERATE_URL, {
+			method: "POST",
+			headers: getCommandCodeRequestHeaders(`Bearer ${input.apiKey}`),
+			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(30_000),
+		});
+	} catch {
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
+
+	if (!response.ok) {
+		if (response.status === 401 || response.status === 403) {
+			throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
+		}
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
+	if (!response.body) {
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
+
+	try {
+		await collectCommandCodeCompletion(response.body, { model: input.model });
+	} catch {
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
 }
 
 function createProviderTestRequest(input: {

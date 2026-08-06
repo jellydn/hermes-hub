@@ -117,6 +117,8 @@ describe("commandcode subscription metadata", () => {
 				"mimo/mimo-v2.5",
 			]),
 		});
+		expect(option?.description).toContain("CLI translation proxy");
+		expect(option?.description).toContain("direct Command Code API provider");
 	});
 
 	it("accepts suggested and custom Command Code models", () => {

@@ -100,7 +100,7 @@ export const apiProviderOptions: readonly AiProviderOption[] = [
 		id: "commandcode",
 		label: "Command Code",
 		description:
-			"Every top model via the Command Code Provider API (OpenAI-compatible). Coding plans from $1/mo.",
+			"Every top model via the OpenAI-compatible Command Code Provider API. Requires the Provider plan ($15/mo) or higher.",
 		models: [],
 		defaultModel: "deepseek/deepseek-v4-flash",
 		requiresCustomModel: true,

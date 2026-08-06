@@ -1,5 +1,6 @@
 import type { CredentialSubscriptionOption } from "#/lib/user-subscriptions";
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
+import { getCommandCodeProxyBaseUrl } from "../commandcode/proxy";
 import type { StoredProviderRecord } from "./config";
 import { resolveStoredCredentials } from "./credential-resolution";
 import { decryptStoredApiKey, getApiKeyLast4 } from "./records";
@@ -9,6 +10,8 @@ export function buildSubscriptionCredentialEnvMap(
 	apiKey: string,
 	baseUrl: string | null | undefined,
 ) {
+	const deployBaseUrl =
+		option.id === "commandcode" ? getCommandCodeProxyBaseUrl() : baseUrl;
 	const envVars: Record<string, string> = {
 		HERMES_INFERENCE_PROVIDER: option.hermesProviderId,
 	};
@@ -17,8 +20,8 @@ export function buildSubscriptionCredentialEnvMap(
 		envVars[option.deployEnv.apiKeyEnvVar] = apiKey;
 	}
 
-	if (baseUrl) {
-		envVars[option.deployEnv.baseUrlEnvVar] = baseUrl;
+	if (deployBaseUrl) {
+		envVars[option.deployEnv.baseUrlEnvVar] = deployBaseUrl;
 	}
 
 	// When the Hermes provider is "custom" (OpenAI-compatible mode), the
@@ -30,9 +33,9 @@ export function buildSubscriptionCredentialEnvMap(
 		if (apiKey) {
 			envVars.OPENAI_API_KEY = apiKey;
 		}
-		if (baseUrl) {
-			envVars.CUSTOM_BASE_URL = baseUrl;
-			envVars.OPENAI_BASE_URL = baseUrl;
+		if (deployBaseUrl) {
+			envVars.CUSTOM_BASE_URL = deployBaseUrl;
+			envVars.OPENAI_BASE_URL = deployBaseUrl;
 		}
 	}
 
@@ -83,11 +86,29 @@ export function resolveSubscriptionCredentials(
 	existingRecord: StoredProviderRecord | null,
 	option: CredentialSubscriptionOption,
 ): { error: string } | { apiKey: string; baseUrl: string } {
-	const resolved = resolveStoredCredentials(input, existingRecord, {
-		storageId: option.storageProviderId,
-		requiresApiKey: true,
-		requiresBaseUrl: true,
-	});
+	let baseUrl = input.baseUrl;
+	if (option.id === "commandcode") {
+		try {
+			baseUrl = getCommandCodeProxyBaseUrl();
+		} catch (error) {
+			return {
+				error:
+					error instanceof Error
+						? error.message
+						: "Unable to resolve the Command Code proxy URL.",
+			};
+		}
+	}
+
+	const resolved = resolveStoredCredentials(
+		{ ...input, baseUrl },
+		existingRecord,
+		{
+			storageId: option.storageProviderId,
+			requiresApiKey: true,
+			requiresBaseUrl: true,
+		},
+	);
 
 	if ("error" in resolved) {
 		return { error: resolved.error };

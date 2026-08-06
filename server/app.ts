@@ -2,6 +2,10 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { getAuth, hasDatabaseUrl } from "./auth";
+import {
+	handleCommandCodeProxy,
+	handleCommandCodeProxyModels,
+} from "./commandcode/proxy";
 import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
 import { deployProviderToHermes } from "./deploy";
@@ -243,6 +247,16 @@ apiApp.get("/health", async (context) => {
 	}
 });
 
+apiApp.post(
+	"/commandcode-proxy/v1/chat/completions",
+	httpsMiddleware,
+	handleCommandCodeProxy,
+);
+apiApp.get(
+	"/commandcode-proxy/v1/models",
+	httpsMiddleware,
+	handleCommandCodeProxyModels,
+);
 apiApp.get("/servers", listServers);
 apiApp.post("/servers/connect", httpsMiddleware, connectServer);
 apiApp.get("/servers/:id", getServerDetail);
