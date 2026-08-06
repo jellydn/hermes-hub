@@ -1,5 +1,5 @@
 import { LoaderCircle, Send, XCircle } from "lucide-react";
-import { useReducer, useRef, useState } from "react";
+import { useReducer, useState } from "react";
 
 import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
@@ -9,6 +9,7 @@ import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
+import { useStaleRef } from "#/lib/use-stale-ref";
 
 type TestState = {
 	isTesting: boolean;
@@ -72,8 +73,7 @@ type TelegramTestSectionProps = {
 export function TelegramTestSection({ isDeployed }: TelegramTestSectionProps) {
 	const [testMessage, setTestMessage] = useState("");
 	const [state, dispatch] = useReducer(testReducer, initialTestState);
-	const stateRef = useRef(state);
-	stateRef.current = state;
+	const stateRef = useStaleRef(state);
 
 	async function handleTest() {
 		const message = testMessage.trim();
