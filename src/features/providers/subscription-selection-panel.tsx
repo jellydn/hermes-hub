@@ -77,8 +77,8 @@ export function SubscriptionSelectionPanel({
 					Use your subscription access
 				</h3>
 				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					Choose ChatGPT device-code login or MiMo Token Plan credentials to
-					power Hermes on your deployed server.
+					Choose ChatGPT device-code login, MiMo Token Plan, or Command Code
+					Coding Plan credentials to power Hermes on your deployed server.
 				</p>
 			</div>
 
@@ -150,18 +150,26 @@ export function SubscriptionSelectionPanel({
 					<>
 						<ProviderSettingsField
 							label="API key"
-							name="apiKey"
+							name="subscription-api-key"
 							hint={
 								existingKeyLast4
 									? `Stored key ending in ${existingKeyLast4}. Leave blank to keep it.`
-									: "Paste your tp-* MiMo Token Plan API key."
+									: credentialOption
+										? `Paste your ${credentialOption.label} API key.`
+										: "Paste your API key."
 							}
 						>
 							<input
 								id="subscription-api-key"
 								type="password"
 								autoComplete="off"
-								placeholder={existingKeyLast4 ? "••••••••••••" : "tp-..."}
+								placeholder={
+									existingKeyLast4
+										? "••••••••••••"
+										: credentialOption?.id === "commandcode"
+											? "user_..."
+											: "tp-..."
+								}
 								{...register("apiKey")}
 								className={inputClassName}
 							/>
@@ -169,8 +177,8 @@ export function SubscriptionSelectionPanel({
 
 						<ProviderSettingsField
 							label="Base URL"
-							name="baseUrl"
-							hint="MiMo Token Plan uses a dedicated OpenAI-compatible endpoint."
+							name="subscription-base-url"
+							hint={`${formatUserSubscriptionLabel(form.subscriptionProvider)} uses a dedicated OpenAI-compatible endpoint.`}
 						>
 							<input
 								id="subscription-base-url"

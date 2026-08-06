@@ -82,11 +82,64 @@ describe("mimo subscription metadata", () => {
 	});
 });
 
+describe("commandcode subscription metadata", () => {
+	it("exposes Command Code Coding Plan models and deploy metadata", () => {
+		const option = getUserSubscriptionOption("commandcode");
+
+		expect(option).toMatchObject({
+			label: "Command Code Coding Plan",
+			hermesProviderId: "custom",
+			authMode: "coding-plan",
+			credentialKind: "api-key",
+			storageProviderId: "commandcode",
+			defaultModel: "deepseek/deepseek-v4-flash",
+			defaultBaseUrl: "https://api.commandcode.ai/provider/v1",
+			deployEnv: {
+				apiKeyEnvVar: "COMMANDCODE_API_KEY",
+				baseUrlEnvVar: "COMMANDCODE_BASE_URL",
+			},
+			models: expect.arrayContaining([
+				"taste-1",
+				"deepseek/deepseek-v4-flash",
+				"deepseek/deepseek-v4-pro",
+				"minimax/minimax-m3",
+				"mimo/mimo-v2.5-pro",
+				"mimo/mimo-v2.5",
+			]),
+		});
+	});
+
+	it("accepts only whitelisted Command Code models", () => {
+		expect(isValidSubscriptionModel("commandcode", "taste-1")).toBe(true);
+		expect(
+			isValidSubscriptionModel("commandcode", "deepseek/deepseek-v4-flash"),
+		).toBe(true);
+		expect(
+			isValidSubscriptionModel("commandcode", "deepseek/deepseek-v4-pro"),
+		).toBe(true);
+		expect(isValidSubscriptionModel("commandcode", "gpt-4o")).toBe(false);
+	});
+
+	it("maps storage provider id back to subscription option", () => {
+		expect(getSubscriptionByStorageProviderId("commandcode")?.id).toBe(
+			"commandcode",
+		);
+		expect(getSubscriptionStorageProviderId("commandcode")).toBe("commandcode");
+		expect(getSubscriptionDefaultBaseUrl("commandcode")).toBe(
+			"https://api.commandcode.ai/provider/v1",
+		);
+		expect(
+			getUserSubscriptionOption("commandcode")?.supportsConnectionTest,
+		).toBe(true);
+	});
+});
+
 describe("user subscription options", () => {
-	it("lists ChatGPT and MiMo in user subscription options", () => {
+	it("lists ChatGPT, MiMo, and Command Code in user subscription options", () => {
 		expect(userSubscriptionOptions.map((option) => option.id)).toEqual([
 			"chatgpt",
 			"mimo",
+			"commandcode",
 		]);
 	});
 });
