@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -373,6 +374,14 @@ export const agentSkills = pgTable(
 	(table) => [
 		index("agent_skills_user_id_idx").on(table.userId),
 		uniqueIndex("agent_skills_user_name_unique").on(table.userId, table.name),
+		// Mirrors migration 0017 (agent_skills_source_type_check): a custom
+		// skill must carry inline content, a hub/url skill must carry an
+		// install ref — and never both. Modeling it in the schema keeps the
+		// migration meta chain in sync with DB reality.
+		check(
+			"agent_skills_source_type_check",
+			sql`(source_type = 'custom' AND content IS NOT NULL AND install_ref IS NULL) OR ((source_type = 'hub' OR source_type = 'url') AND install_ref IS NOT NULL AND content IS NULL)`,
+		),
 	],
 );
 
