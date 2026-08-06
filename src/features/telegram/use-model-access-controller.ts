@@ -1,10 +1,11 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useReducer } from "react";
 
 import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
 import { useMountEffect } from "#/lib/use-mount-effect";
+import { useStaleRef } from "#/lib/use-stale-ref";
 import type { HostKeyErrorCode } from "#shared/contracts/host-key-error";
 import type { ModelAccessOptionsResponse } from "#shared/contracts/telegram-model-access";
 
@@ -133,8 +134,7 @@ export function useModelAccessController({
 	onSwitched,
 }: UseModelAccessControllerParams) {
 	const [state, dispatch] = useReducer(formReducer, initialState);
-	const stateRef = useRef(state);
-	stateRef.current = state;
+	const stateRef = useStaleRef(state);
 
 	const fetchOptions = useCallback(async () => {
 		dispatch({ type: "fetchStarted" });

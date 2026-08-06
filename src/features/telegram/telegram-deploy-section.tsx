@@ -1,5 +1,5 @@
 import { CheckCircle2, LoaderCircle, Rocket } from "lucide-react";
-import { useReducer, useRef } from "react";
+import { useReducer } from "react";
 import { AlertPanel } from "#/components/ui/alert-panel";
 import { Button } from "#/components/ui/button";
 import { HostKeyTrustPanel } from "#/components/ui/host-key-trust-panel";
@@ -7,6 +7,7 @@ import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
+import { useStaleRef } from "#/lib/use-stale-ref";
 import { maskHost } from "#/lib/utils";
 import type { TelegramSettingsSummary } from "./telegram-settings";
 
@@ -83,8 +84,7 @@ export function TelegramDeploySection({
 	onConfigChange,
 }: TelegramDeploySectionProps) {
 	const [state, dispatch] = useReducer(deployReducer, initialDeployState);
-	const stateRef = useRef(state);
-	stateRef.current = state;
+	const stateRef = useStaleRef(state);
 
 	const isDeployed = Boolean(savedConfig.deployedServerHost);
 	const deployedHost = savedConfig.deployedServerHost;

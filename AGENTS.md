@@ -68,6 +68,7 @@
 - Prefer the shared `cn()` helper (`src/lib/utils.ts`) and existing UI primitives in `src/components/ui/`.
 - Keep helper text and validation text outside `<label>` elements so Testing Library queries and browser automation keep stable accessible names.
 - The repo has a deliberate mount-only escape hatch in `src/lib/use-mount-effect.ts`; use it for stable external subscriptions like polling or SSE when that pattern already exists. Biome's `useExhaustiveDependencies` rule is disabled for that file — do not enable it.
+- For "read the latest reducer state inside an async handler" (e.g. trust-and-retry flows that started on an older commit), import `useStaleRef` from `src/lib/use-stale-ref.ts` instead of rolling a local `useRef(state); ref.current = state;` pair — that pattern is easy to get wrong and is now the established helper.
 - Forms use `react-hook-form` + `zod` (via `@hookform/resolvers`) per ADR 0008. Resolvers and validators live alongside the form in `src/features/<domain>/`.
 
 ## Database Conventions
