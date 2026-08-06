@@ -188,6 +188,9 @@ export const aiProviders = pgTable(
 			.references(() => users.id, { onDelete: "cascade" }),
 		provider: text("provider").notNull(),
 		encryptedApiKey: text("encrypted_api_key").notNull(),
+		encryptionKeyVersion: text("encryption_key_version")
+			.default("v1")
+			.notNull(),
 		baseUrl: text("base_url"),
 		model: text("model").notNull(),
 		label: text("label"),
@@ -244,6 +247,9 @@ export const telegramConfigs = pgTable(
 		deployedServerId: text("deployed_server_id"),
 		deployedServerHost: text("deployed_server_host"),
 		apiServerKey: text("api_server_key"),
+		encryptionKeyVersion: text("encryption_key_version")
+			.default("v1")
+			.notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

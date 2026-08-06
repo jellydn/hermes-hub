@@ -143,6 +143,13 @@
       "breakpoints": {
         "custom": true
       }
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785991811370,
+      "tag": "0020_encryption_key_version",
+      "breakpoints": true
     }
   ]
 }

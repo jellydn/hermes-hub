@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+import {
+	decryptApiServerKey,
+	decryptSecret,
+	encryptSecret,
+	getActiveEncryptionKeyVersion,
+} from "./crypto";
 import { logger } from "./lib/logger";
 
 vi.mock("./lib/logger", () => ({
@@ -15,14 +20,21 @@ describe("crypto", () => {
 	});
 
 	afterEach(() => {
+		vi.unstubAllEnvs();
 		if (originalEnv === undefined) {
 			delete process.env.ENCRYPTION_KEY;
 		} else {
 			process.env.ENCRYPTION_KEY = originalEnv;
 		}
 	});
-
 	describe("encryptSecret / decryptSecret", () => {
+		it("decrypts a legacy unversioned payload with the v1 key", () => {
+			// Payloads written before key versioning have no vN prefix; they
+			// must still decrypt as v1 for full backward compatibility.
+			// Strip the v1. prefix from a fresh payload to simulate one.
+			expect(decryptSecret(encryptSecret("x").slice(3))).toBe("x");
+		});
+
 		it("round-trips a simple value", () => {
 			expect(decryptSecret(encryptSecret("hunter2"))).toBe("hunter2");
 		});
@@ -37,10 +49,13 @@ describe("crypto", () => {
 			expect(decryptSecret(encryptSecret(unicode))).toBe(unicode);
 		});
 
-		it("produces three dot-separated base64url parts", () => {
+		it("produces a versioned, four dot-separated payload", () => {
 			const parts = encryptSecret("x").split(".");
-			expect(parts).toHaveLength(3);
-			for (const part of parts) {
+			expect(parts).toHaveLength(4);
+			// The first segment is the literal key version; the rest are the
+			// iv, authTag, and cipher as base64url.
+			expect(parts[0]).toBe("v1");
+			for (const part of parts.slice(1)) {
 				expect(part.length).toBeGreaterThan(0);
 			}
 		});
@@ -54,9 +69,11 @@ describe("crypto", () => {
 		it("rejects a tampered auth tag", () => {
 			const payload = encryptSecret("secret");
 			const parts = payload.split(".");
-			const tag = parts[1];
+			const tag = parts[2];
 			const tampered = tag === "A" ? "B" : "A";
-			const tamperedPayload = [parts[0], tampered, parts[2]].join(".");
+			const tamperedPayload = [parts[0], parts[1], tampered, parts[3]].join(
+				".",
+			);
 			expect(() => decryptSecret(tamperedPayload)).toThrow();
 		});
 
@@ -66,12 +83,56 @@ describe("crypto", () => {
 			);
 		});
 
+		it("rejects a truncated versioned payload instead of falling back to legacy", () => {
+			// A 3-part payload whose first segment is a version prefix is a
+			// truncated vN payload, not a legacy iv.tag.cipher payload.
+			expect(() => decryptSecret("v1.a.b")).toThrow(
+				/Encrypted payload is invalid/,
+			);
+		});
+
 		it("throws when ENCRYPTION_KEY is unset", () => {
 			delete process.env.ENCRYPTION_KEY;
 			expect(() => encryptSecret("x")).toThrow(/ENCRYPTION_KEY is required/);
 		});
-	});
 
+		it("still decrypts v1 payloads when ENCRYPTION_KEY_V2 is added", () => {
+			const legacyPayload = encryptSecret("before-rotation");
+
+			vi.stubEnv("ENCRYPTION_KEY_V2", "new-encryption-key");
+
+			// The v1 key remains in the ring, so old rows keep decrypting.
+			expect(decryptSecret(legacyPayload)).toBe("before-rotation");
+		});
+
+		it("uses v2 for new writes when ENCRYPTION_KEY_V2 is set", () => {
+			vi.stubEnv("ENCRYPTION_KEY_V2", "new-encryption-key");
+
+			const payload = encryptSecret("after-rotation");
+			expect(payload.startsWith("v2.")).toBe(true);
+			expect(decryptSecret(payload)).toBe("after-rotation");
+		});
+
+		it("decrypts a v1 payload written before rotation while v2 is active", () => {
+			const v1Payload = encryptSecret("old-row");
+
+			vi.stubEnv("ENCRYPTION_KEY_V2", "new-encryption-key");
+
+			// v1 prefix explicitly selects the legacy key from the ring.
+			expect(v1Payload.startsWith("v1.")).toBe(true);
+			expect(decryptSecret(v1Payload)).toBe("old-row");
+		});
+
+		it("throws when a payload references an unknown key version", () => {
+			const payload = encryptSecret("x");
+			const parts = payload.split(".");
+			const unknownVersion = ["v9", ...parts.slice(1)].join(".");
+
+			expect(() => decryptSecret(unknownVersion)).toThrow(
+				/No encryption key registered for version v9/,
+			);
+		});
+	});
 	describe("decryptApiServerKey", () => {
 		beforeEach(() => {
 			vi.mocked(logger.warn).mockClear();
@@ -79,6 +140,13 @@ describe("crypto", () => {
 
 		it("returns empty string for empty input", () => {
 			expect(decryptApiServerKey("")).toBe("");
+		});
+
+		it("returns the active encryption key version from the keyring", () => {
+			expect(getActiveEncryptionKeyVersion()).toBe("v1");
+
+			vi.stubEnv("ENCRYPTION_KEY_V2", "new-encryption-key");
+			expect(getActiveEncryptionKeyVersion()).toBe("v2");
 		});
 
 		it("throws for legacy plaintext without a dot instead of returning it", () => {
