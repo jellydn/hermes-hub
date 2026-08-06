@@ -1,6 +1,6 @@
 {
-  "id": "7aa83b09-2571-47b6-90d3-258b417e8fc4",
-  "prevId": "a3b40162-f171-41cf-ab43-9a54ec3efd2e",
+  "id": "7b71d846-3681-4b2e-9202-11ee5f469f30",
+  "prevId": "7aa83b09-2571-47b6-90d3-258b417e8fc4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -241,8 +241,7 @@
       "checkConstraints": {
         "agent_skills_source_type_check": {
           "name": "agent_skills_source_type_check",
-          "columns": ["source_type", "content", "install_ref"],
-          "definition": "CHECK ((source_type = 'custom'::text) AND (content IS NOT NULL) AND (install_ref IS NULL) OR ((source_type = 'hub'::text) OR (source_type = 'url'::text)) AND (install_ref IS NOT NULL) AND (content IS NULL))"
+          "value": "source_type = 'custom'::text) AND (content IS NOT NULL) AND (install_ref IS NULL) OR ((source_type = 'hub'::text) OR (source_type = 'url'::text)) AND (install_ref IS NOT NULL) AND (content IS NULL)"
         }
       },
       "isRLSEnabled": false

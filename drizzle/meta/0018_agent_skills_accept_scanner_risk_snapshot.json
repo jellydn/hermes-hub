@@ -1,6 +1,6 @@
 {
-  "id": "7aa83b09-2571-47b6-90d3-258b417e8fc4",
-  "prevId": "381c2bd0-52b6-407c-9d87-505e6aa76ca6",
+  "id": "97ca570a-3d03-44ef-a32d-4d85161aa2ab",
+  "prevId": "7b71d846-3681-4b2e-9202-11ee5f469f30",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -111,8 +111,12 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -184,6 +188,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "accept_scanner_risk": {
+          "name": "accept_scanner_risk",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -229,8 +240,12 @@
           "name": "agent_skills_user_id_user_id_fk",
           "tableFrom": "agent_skills",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -238,7 +253,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "agent_skills_source_type_check": {
+          "name": "agent_skills_source_type_check",
+          "value": "source_type = 'custom'::text) AND (content IS NOT NULL) AND (install_ref IS NULL) OR ((source_type = 'hub'::text) OR (source_type = 'url'::text)) AND (install_ref IS NOT NULL) AND (content IS NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ai_providers": {
@@ -325,8 +345,12 @@
           "name": "ai_providers_user_id_user_id_fk",
           "tableFrom": "ai_providers",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -416,8 +440,12 @@
           "name": "ai_user_subscriptions_user_id_user_id_fk",
           "tableFrom": "ai_user_subscriptions",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -547,8 +575,12 @@
           "name": "audit_logs_user_id_user_id_fk",
           "tableFrom": "audit_logs",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -645,8 +677,12 @@
           "name": "hermes_settings_user_id_user_id_fk",
           "tableFrom": "hermes_settings",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -656,7 +692,9 @@
         "hermes_settings_user_id_unique": {
           "name": "hermes_settings_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["user_id"]
+          "columns": [
+            "user_id"
+          ]
         }
       },
       "policies": {},
@@ -746,8 +784,12 @@
           "name": "install_events_install_id_installs_id_fk",
           "tableFrom": "install_events",
           "tableTo": "installs",
-          "columnsFrom": ["install_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "install_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -830,8 +872,12 @@
           "name": "installs_server_id_servers_id_fk",
           "tableFrom": "installs",
           "tableTo": "servers",
-          "columnsFrom": ["server_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1016,8 +1062,12 @@
           "name": "mcp_servers_user_id_user_id_fk",
           "tableFrom": "mcp_servers",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1098,8 +1148,12 @@
           "name": "server_web_ui_server_id_servers_id_fk",
           "tableFrom": "server_web_ui",
           "tableTo": "servers",
-          "columnsFrom": ["server_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1109,7 +1163,9 @@
         "server_web_ui_server_id_unique": {
           "name": "server_web_ui_server_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["server_id"]
+          "columns": [
+            "server_id"
+          ]
         }
       },
       "policies": {},
@@ -1237,8 +1293,12 @@
           "name": "servers_user_id_user_id_fk",
           "tableFrom": "servers",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1326,8 +1386,12 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1337,7 +1401,9 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": ["token"]
+          "columns": [
+            "token"
+          ]
         }
       },
       "policies": {},
@@ -1428,8 +1494,12 @@
           "name": "telegram_configs_user_id_user_id_fk",
           "tableFrom": "telegram_configs",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1497,7 +1567,9 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
