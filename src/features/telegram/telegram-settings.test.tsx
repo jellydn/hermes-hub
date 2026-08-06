@@ -483,6 +483,83 @@ describe("TelegramSettings", () => {
 			"/api/telegram/model-access-options",
 		);
 	});
+
+	it("does not invalidate the route loader when model switch fails", async () => {
+		// NOTE: with isDeployed=true the mount fires TWO fetches — model-access-
+		// options (controller) and pairings (pairing section) — so the 502 must be
+		// the THIRD queued response; a mis-placed 502 would be consumed by a mount
+		// fetch and the switch would then succeed against the default 200 mock.
+		fetchMock
+			// mount fetch 1: model-access-options
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						options: [
+							{
+								optionId: "opt-openai",
+								kind: "api-provider",
+								label: "OpenAI",
+								model: "gpt-4o-mini",
+								isActive: false,
+							},
+						],
+						activeOptionId: null,
+					}),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				),
+			)
+			// mount fetch 2: pairings
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						pairings: { pending: [], approved: [] },
+					}),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				),
+			)
+			// POST model-switch -> 502
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: "Server unreachable" }), {
+					status: 502,
+					headers: { "content-type": "application/json" },
+				}),
+			);
+
+		routerSpies.invalidate.mockClear();
+
+		render(
+			<TelegramSettings
+				initialAccess={null}
+				initialConfig={{
+					botUsername: "hermes_helper_bot",
+					botTokenLast4: "1234",
+					isActive: true,
+					deployedServerHost: "95.111.232.131",
+				}}
+			/>,
+		);
+
+		await flushAsyncWork();
+
+		fireEvent.change(screen.getByLabelText(/provider \/ subscription/i), {
+			target: { value: "opt-openai" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^switch$/i }));
+		await flushAsyncWork();
+
+		// Failure paths must NOT trigger the route-loader invalidation.
+		// A successful switch would; a 502 (above) must not.
+		expect(routerSpies.invalidate).not.toHaveBeenCalled();
+		expect(
+			screen.queryByText(/model access switched successfully/i),
+		).toBeNull();
+		// Positively confirm the failure path rendered (not silently swallowed).
+		expect(screen.getByText(/server unreachable/i)).toBeTruthy();
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/model-switch",
+			expect.objectContaining({ method: "POST" }),
+		);
+	});
 });
 
 async function flushAsyncWork() {
