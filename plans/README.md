@@ -11,18 +11,18 @@ capture drift before executing.
 
 ## Status table
 
-| Status | Plan | Finding | Category | Effort |
-|---|---|---|---|---|
-| done | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S |
-| pending | [002 — model-switch success message race](002-model-switch-message-race.md) | #2 | correctness | S |
-| pending | [003 — mount-effect re-fire on isDeployed flip](003-mount-effect-refire-on-isdeployed.md) | #3 | correctness | S |
-| pending | [004 — ENCRYPTION_KEY rotation migration path](004-encryption-key-rotation.md) | #4 | security / tech-debt | L |
-| pending | [005 — drop plaintext fallback in decryptApiServerKey](005-decrypt-plaintext-fallback.md) | #5 | security / tech-debt | S |
-| pending | [006 — extend httpsMiddleware to credential-bearing GETs](006-https-guard-on-credential-gets.md) | #6 | security | S |
-| pending | [007 — extract useStaleRef helper](007-controller-state-stale-ref.md) | #7 | tech-debt | S |
-| pending | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S |
-| pending | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S |
-| pending | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M |
+| Status | Plan | Finding | Category | Effort | Landed |
+|---|---|---|---|---|---|
+| done | [001 — magic-link limiter normalize](001-magic-link-limiter-normalize.md) | #1 | security | S | PR #89 · `20b038c` · 2026-08-05 |
+| done | [002 — model-switch success message race](002-model-switch-message-race.md) | #2 | correctness | S | PR #93 · `8f9096a` · 2026-08-06 |
+| done | [003 — mount-effect re-fire on isDeployed flip](003-mount-effect-refire-on-isdeployed.md) | #3 | correctness | S | PR #94 · `3c6123a` · 2026-08-06 |
+| done | [004 — ENCRYPTION_KEY rotation migration path](004-encryption-key-rotation.md) | #4 | security / tech-debt | L | PR #98 · `4958060` · 2026-08-06 |
+| done | [005 — drop plaintext fallback in decryptApiServerKey](005-decrypt-plaintext-fallback.md) | #5 | security / tech-debt | S | PR #91 · `1fca331` · 2026-08-06 |
+| done | [006 — extend httpsMiddleware to credential-bearing GETs](006-https-guard-on-credential-gets.md) | #6 | security | S | PR #90 · `031ea70` · 2026-08-06 |
+| done | [007 — extract useStaleRef helper](007-controller-state-stale-ref.md) | #7 | tech-debt | S | PR #92 · `f2c94dd` · 2026-08-06 |
+| done | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S | PR #95 · `1486a8b` · 2026-08-06 |
+| done | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S | PR #96 · `b70700b` · 2026-08-06 |
+| done | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M | PR #97 · `218d193` · 2026-08-06 |
 
 ## Recon verification (2026-08-06, HEAD `20b038c`)
 
