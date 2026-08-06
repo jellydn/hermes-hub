@@ -360,7 +360,7 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 | Field           | Type   | Description                                                                 |
 | --------------- | ------ | --------------------------------------------------------------------------- |
 | `action`        | string | `"restart"`, `"update"`, or `"rollback"`                                    |
-| `targetVersion` | string | Required for rollback; defaults to previous install version then `"latest"` |
+| `targetVersion` | string | Optional for `update` (a sha256 digest or an image tag); required for `rollback` (defaults to previous install version then `"latest"`) |
 
 **Commands executed:**
 
@@ -400,6 +400,58 @@ Runs a destructive action (restart, update, or rollback) on the Hermes agent.
 | 400    | SSH action failed            |
 | 401    | Unauthorized                 |
 | 404    | Server not found             |
+
+For `update`, the response's `imageRef` records the image reference the remote actually pulled (default `"latest"` when no `targetVersion` is given).
+
+---
+
+### GET `/api/servers/:id/hermes-update-info`
+
+Returns the currently running Hermes image, the latest published image, and the latest GitHub release — powering the version/changelog display and the **Update Hermes** button on the server detail page. Each lookup degrades to `null` independently, so a single failure does not break the response.
+
+**Auth required:** Yes (same ownership/SSH guards as other server routes)
+
+**Response (200):**
+
+```json
+{
+  "current": {
+    "image": "nousresearch/hermes-agent@sha256:...",
+    "imageId": "sha256:...",
+    "repoDigests": ["sha256:..."]
+  },
+  "latest": {
+    "tag": "v1.0.0",
+    "digest": "sha256:...",
+    "pushedAt": "2026-08-01T00:00:00Z"
+  },
+  "release": {
+    "tagName": "v1.0.0",
+    "name": "Hermes v1.0.0",
+    "publishedAt": "2026-08-01T00:00:00Z",
+    "body": "Release notes...",
+    "htmlUrl": "https://github.com/..."
+  },
+  "updateAvailable": true
+}
+```
+
+**Fields:**
+
+| Field             | Type    | Description                                                            |
+| ----------------- | ------- | ---------------------------------------------------------------------- |
+| `current`         | object? | Running image ref from `docker inspect` on the server (or `null`)      |
+| `latest`          | object? | Latest published image ref + manifest digest from the registry          |
+| `release`         | object? | Latest GitHub release (tag, title, notes, published date, URL)          |
+| `updateAvailable` | boolean | True when the running digest differs from the latest manifest digest    |
+
+**Error responses:**
+
+| Status | Condition                                                         |
+| ------ | ----------------------------------------------------------------- |
+| 400    | SSH or registry/release lookup failed (body `{ "error": "..." }`) |
+| 401    | Unauthorized                                                      |
+| 404    | Server not found                                                  |
 
 ---
 

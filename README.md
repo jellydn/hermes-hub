@@ -30,7 +30,7 @@ HermesHub is a separate product and is not affiliated with [get-hermes.ai](https
 - 🔑 **Passwordless login** — Sign in with a magic link, no passwords to manage
 - 🖥️ **Guided VPS setup** — Step-by-step server connection wizard for non-technical users
 - 🚀 **One-click Hermes deployment** — Install Docker, Compose, and Hermes from the dashboard with live progress
-- 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, custom endpoints, and OpenAI Codex / ChatGPT OAuth without editing env files
+- 🤖 **AI provider configuration** — Set up OpenAI, Anthropic, OpenRouter, Ollama, DeepSeek, Command Code, custom endpoints, and OpenAI Codex / ChatGPT OAuth without editing env files (custom model IDs supported for every provider)
 - 💬 **Telegram onboarding** — Connect your bot, verify the token, and approve pairing codes from one screen
 - 🎭 **Agent persona editor** — Define how Hermes speaks via `SOUL.md` on the Settings page, then deploy to a chosen VPS
 - 🔌 **MCP server manager** — Add stdio or HTTP MCP servers (including recommended presets) on the Settings page, then deploy them to Hermes `config.yaml`
