@@ -233,6 +233,42 @@ describe("deployProviderToHermes", () => {
 		});
 	});
 
+	it("returns 409 with hostKey details when managed compose deploy throws host_key_missing", async () => {
+		resolveActiveModelBackend.mockResolvedValueOnce(apiBackend);
+
+		const { SshConnectError } = await import("./ssh");
+		deployManagedCompose.mockRejectedValueOnce(
+			new SshConnectError(
+				"host key pin required but not stored",
+				"host_key_missing",
+				{ fingerprint: "SHA256:abc123", algorithm: "ssh-ed25519" },
+			),
+		);
+
+		const { deployProviderToHermes } = await import("./deploy");
+		const response = await deployProviderToHermes(
+			createContext("http://localhost/api/providers/deploy", {}),
+		);
+		const payload = await response.json();
+
+		// Recoverable host-key errors respond with the typed 409 shape (not a
+		// plain 502) so the UI can show the trust-this-key recovery flow.
+		expect(response.status).toBe(409);
+		expect(payload).toMatchObject({
+			code: "host_key_missing",
+			serverId: "server_1",
+			serverHost: "1.2.3.4",
+			hostKey: {
+				observedFingerprint: "SHA256:abc123",
+				observedAlgorithm: "ssh-ed25519",
+			},
+		});
+		expect(payload.error).toContain("Host key fingerprint not stored");
+
+		// Recoverable host-key errors are not audit-logged — no failed-deploy row.
+		expect(insertAuditValues).not.toHaveBeenCalled();
+	});
+
 	it("returns 200 when deploy succeeds but success audit logging fails", async () => {
 		insertAuditValues.mockRejectedValueOnce(new Error("audit db down"));
 		resolveActiveModelBackend.mockResolvedValueOnce(apiBackend);
