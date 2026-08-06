@@ -37,8 +37,12 @@ export type FormAction =
 
 export function formReducer(state: FormState, action: FormAction): FormState {
 	switch (action.type) {
+		// Deliberately does NOT clear `state.message`: a programmatic refresh of the
+		// options list (e.g. right after a successful switch) must not dismiss the
+		// success banner. Only user-initiated actions (optionSelected, modelChanged,
+		// switchStarted, hostKeyTrustStarting) clear feedback.
 		case "fetchStarted":
-			return { ...state, isLoading: true, message: null };
+			return { ...state, isLoading: true };
 		case "fetchSucceeded": {
 			const { data } = action;
 			return {

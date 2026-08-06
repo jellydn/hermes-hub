@@ -442,6 +442,18 @@ describe("TelegramSettings", () => {
 				}),
 			}),
 		);
+		// Plan 002: the success banner must survive the post-switch options refresh.
+		// fetchStarted must not clear state.message, or React 19 batching collapses
+		// both dispatches into one commit and the banner never visibly renders.
+		expect(
+			screen.getByText(/model access switched successfully/i),
+		).toBeTruthy();
+		// Re-assert after another tick to confirm the banner is stable (not a
+		// one-frame flash observed before the refresh lands).
+		await flushAsyncWork();
+		expect(
+			screen.getByText(/model access switched successfully/i),
+		).toBeTruthy();
 	});
 });
 
