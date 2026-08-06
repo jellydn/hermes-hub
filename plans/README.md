@@ -23,6 +23,18 @@ capture drift before executing.
 | done | [008 — negative model-switch test](008-negative-model-switch-test.md) | #8 | test-gap | S | PR #95 · `1486a8b` · 2026-08-06 |
 | done | [009 — narrow @tanstack/react-router test mock](009-narrow-router-mock.md) | #9 | tech-debt | S | PR #96 · `b70700b` · 2026-08-06 |
 | done | [010 — server deploy / telegram handler coverage](010-server-deploy-coverage.md) | #10 | coverage | M | PR #97 · `218d193` · 2026-08-06 |
+| pending | [011 — re-encryption runner](011-re-encryption-runner.md) | #4 (phase 2) | security / ops | M | — |
+
+## Future work
+
+Plan 004's maintenance note promises a re-encryption runner as the
+next plan after the keyring lands. [Plan 011](011-re-encryption-runner.md)
+writes it: a fail-fast CLI (`bun run re-encrypt`, `--dry-run` default,
+`--apply` to write) plus a `workflow_dispatch` job that rewrites every
+stale (non-active) encrypted payload — `ai_providers`, `telegram_configs`,
+`servers`, `server_web_ui`, and `mcp_servers` maps — once
+`ENCRYPTION_KEY_V2` is set. Baseline is plan 004's merge (`df998f3`).
+
 
 ## Recon verification (2026-08-06, HEAD `20b038c`)
 
