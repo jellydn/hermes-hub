@@ -198,6 +198,26 @@ describe("deployProviderToHermes", () => {
 		});
 	});
 
+	it("returns 500 when the API server key is legacy plaintext", async () => {
+		resolveActiveModelBackend.mockResolvedValueOnce(apiBackend);
+		decryptApiServerKey.mockImplementationOnce(() => {
+			throw new Error(
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save it via /api/providers.",
+			);
+		});
+
+		const { deployProviderToHermes } = await import("./deploy");
+		const response = await deployProviderToHermes(
+			createContext("http://localhost/api/providers/deploy", {}),
+		);
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("legacy plaintext format"),
+		});
+		expect(deployManagedCompose).not.toHaveBeenCalled();
+	});
+
 	it("returns 502 when managed compose deploy fails", async () => {
 		deployManagedCompose.mockRejectedValueOnce(new Error("Write failed"));
 		resolveActiveModelBackend.mockResolvedValueOnce(apiBackend);

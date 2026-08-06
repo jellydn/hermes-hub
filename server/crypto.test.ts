@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+import { logger } from "./lib/logger";
+
+vi.mock("./lib/logger", () => ({
+	logger: { warn: vi.fn() },
+}));
 
 describe("crypto", () => {
 	const originalEnv = process.env.ENCRYPTION_KEY;
@@ -68,13 +73,21 @@ describe("crypto", () => {
 	});
 
 	describe("decryptApiServerKey", () => {
+		beforeEach(() => {
+			vi.mocked(logger.warn).mockClear();
+		});
+
 		it("returns empty string for empty input", () => {
 			expect(decryptApiServerKey("")).toBe("");
 		});
 
-		it("returns legacy plaintext verbatim when no dot is present", () => {
-			expect(decryptApiServerKey("legacy-plaintext-key")).toBe(
-				"legacy-plaintext-key",
+		it("throws for legacy plaintext without a dot instead of returning it", () => {
+			expect(() => decryptApiServerKey("legacy-plaintext-key")).toThrow(
+				/legacy plaintext/,
+			);
+			expect(logger.warn).toHaveBeenCalledWith(
+				expect.objectContaining({ kind: "decrypt" }),
+				expect.stringContaining("legacy plaintext"),
 			);
 		});
 
@@ -83,9 +96,13 @@ describe("crypto", () => {
 		});
 
 		it("throws for malformed value containing a dot", () => {
-			expect(() => decryptApiServerKey("a.b.c")).toThrow(
-				/could not be decrypted/,
+			// Two-part payloads are rejected by decryptSecret's shape check.
+			expect(() => decryptApiServerKey("only.two")).toThrow(
+				/Encrypted payload is invalid/,
 			);
+
+			// Three-part garbage decodes to invalid ciphertext material.
+			expect(() => decryptApiServerKey("a.b.c")).toThrow();
 		});
 	});
 });
