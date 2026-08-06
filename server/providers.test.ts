@@ -590,6 +590,47 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("builds Hermes deploy env for Command Code Coding Plan", async () => {
+		loadModelAccessRecords.mockResolvedValueOnce({
+			apiRecord: null,
+			subscriptionRecord: {
+				subscriptionProvider: "commandcode",
+				model: "deepseek/deepseek-v4-flash",
+				authMode: "coding-plan",
+				hermesProviderId: "custom",
+				storageProviderId: "commandcode",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: "https://api.commandcode.ai/provider/v1",
+			},
+			activeBackend: {
+				kind: "subscription",
+				access: "credential",
+				subscriptionProvider: "commandcode",
+				model: "deepseek/deepseek-v4-flash",
+				authMode: "coding-plan",
+				hermesProviderId: "custom",
+				storageProviderId: "commandcode",
+				encryptedApiKey: "encrypted-existing-key",
+				baseUrl: "https://api.commandcode.ai/provider/v1",
+			},
+		});
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		expect(config).toEqual({
+			model: "deepseek/deepseek-v4-flash",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "custom",
+				COMMANDCODE_API_KEY: "stored-api-key",
+				COMMANDCODE_BASE_URL: "https://api.commandcode.ai/provider/v1",
+				OPENAI_API_KEY: "stored-api-key",
+				CUSTOM_BASE_URL: "https://api.commandcode.ai/provider/v1",
+				OPENAI_BASE_URL: "https://api.commandcode.ai/provider/v1",
+			},
+		});
+	});
+
 	it("rejects deploy config when stored API-key ciphertext is unreadable", async () => {
 		decryptSecret.mockImplementation((value: string) => {
 			if (value === "corrupt-ciphertext") {

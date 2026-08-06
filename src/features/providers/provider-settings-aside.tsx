@@ -105,6 +105,15 @@ export function ProviderSettingsAside({
 						open-weight models (e.g. llama3)
 					</li>
 					<li>
+						<strong className="text-[var(--sea-ink)]">DeepSeek</strong> —
+						deepseek-v4-flash and deepseek-v4-pro
+					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">Command Code</strong> —
+						taste-1, DeepSeek, MiniMax, and MiMo models via user_* API key
+						(coding plans from $1/mo)
+					</li>
+					<li>
 						<strong className="text-[var(--sea-ink)]">Custom</strong> — any
 						OpenAI-compatible endpoint
 					</li>
