@@ -134,6 +134,38 @@ docker compose down
 docker compose down -v
 ```
 
+## 🚀 Production Deployment
+
+The `compose.yaml` stack runs the app with `NODE_ENV=production` and publishes the app on `:3000`. In production, HermesHub must sit **behind a single TLS-terminating reverse proxy** (Caddy, nginx, …) that owns the public hostname — the app process must **not** be exposed directly to the Internet.
+
+The HTTPS guard on credential-bearing endpoints (`httpsMiddleware` → `requireHttps`) rejects plain-HTTP requests with **HTTP 426** unless the request URL is `https://` **or** the proxy forwards `x-forwarded-proto: https`. Without a correctly configured proxy, install progress polling (SSE), credential saves, and all mutating routes fail in production.
+
+Minimal Caddy setup (Caddy sets `X-Forwarded-Proto` automatically):
+
+```caddyfile
+hermes-hub.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+Minimal nginx setup:
+
+```nginx
+server {
+    server_name hermes-hub.example.com;
+    listen 443 ssl;
+    # ... TLS certificates ...
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Keep `TRUSTED_PROXY_COUNT` at its default of `1` (the app reads the rightmost `x-forwarded-for` entry from the single proxy in front of it), and set `BETTER_AUTH_URL` to the public HTTPS origin so magic links point at the proxy.
+
 ## 🧪 Running Tests
 
 ```bash
