@@ -248,8 +248,16 @@ apiApp.get("/servers/:id", getServerDetail);
 apiApp.patch("/servers/:id", httpsMiddleware, updateServer);
 apiApp.delete("/servers/:id", httpsMiddleware, deleteServer);
 apiApp.post("/servers/:id/install", httpsMiddleware, startServerInstall);
-apiApp.get("/servers/:id/install/events", streamServerInstallEvents);
-apiApp.get("/servers/:id/install/log", getLatestServerInstallLog);
+apiApp.get(
+	"/servers/:id/install/events",
+	httpsMiddleware,
+	streamServerInstallEvents,
+);
+apiApp.get(
+	"/servers/:id/install/log",
+	httpsMiddleware,
+	getLatestServerInstallLog,
+);
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
 apiApp.post("/servers/:id/health-check", httpsMiddleware, runServerHealthCheck);
 apiApp.get("/servers/:id/web-ui", httpsMiddleware, getServerWebUiStatus);

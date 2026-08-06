@@ -527,6 +527,27 @@ describe("apiApp", () => {
 		expect(streamServerInstallEvents).toHaveBeenCalledTimes(1);
 	});
 
+	it("rejects install event and log GETs over plain HTTP in production", async () => {
+		const previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+
+		try {
+			const eventsResponse = await apiApp.request(
+				"http://localhost/api/servers/server_123/install/events",
+			);
+			const logResponse = await apiApp.request(
+				"http://localhost/api/servers/server_123/install/log",
+			);
+
+			expect(eventsResponse.status).toBe(426);
+			expect(logResponse.status).toBe(426);
+			expect(streamServerInstallEvents).not.toHaveBeenCalled();
+			expect(getLatestServerInstallLog).not.toHaveBeenCalled();
+		} finally {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
+	});
+
 	it("routes dashboard status requests through the dashboard handler", async () => {
 		getDashboardStatus.mockResolvedValueOnce(
 			new Response(JSON.stringify({ dashboard: { generatedAt: "now" } }), {
