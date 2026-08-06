@@ -166,6 +166,22 @@ server {
 
 Keep `TRUSTED_PROXY_COUNT` at its default of `1` (the app reads the rightmost `x-forwarded-for` entry from the single proxy in front of it), and set `BETTER_AUTH_URL` to the public HTTPS origin so magic links point at the proxy.
 
+### Dokku targets
+
+Dokku's built-in nginx proxy already forwards `x-forwarded-proto` correctly (it sets it from `$scheme`), but TLS termination only happens once the app has a **certificate installed**. Enable Let's Encrypt on the Dokku host once — the `deploy-dokku` CI job fails the deploy when no certificate is present (except the bootstrap deploy of a newly created app, which the HTTP-01 challenge needs to exist first):
+
+```bash
+# On the Dokku host — one-time setup
+dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git
+dokku letsencrypt:cron-job --add
+dokku letsencrypt:set --global email you@example.com
+
+# After the app is deployed and reachable on :80 (HTTP-01 challenge)
+dokku letsencrypt:enable <app>
+```
+
+Custom certificates work too: `dokku certs:add <app>` (passing the cert and key). Without a certificate, Dokku serves plain HTTP, the app receives `x-forwarded-proto: http`, and the HTTPS guard returns **HTTP 426** for every credential-bearing route.
+
 ## 🧪 Running Tests
 
 ```bash
