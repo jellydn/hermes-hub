@@ -148,8 +148,8 @@ vi.mock("./server-compose", () => ({
 vi.mock("#/lib/ai-providers", () => ({
 	getDefaultAiModel: (provider: string) => {
 		const defaults: Record<string, string> = {
-			openai: "gpt-4o",
-			anthropic: "claude-sonnet-4-20250514",
+			openai: "gpt-5.6-terra",
+			anthropic: "claude-sonnet-5",
 			openrouter: "gpt-4o",
 			ollama: "llama3",
 			custom: "gpt-4o",
@@ -158,23 +158,19 @@ vi.mock("#/lib/ai-providers", () => ({
 	},
 	isApiProviderId: (value: string) =>
 		["openai", "anthropic", "openrouter", "ollama", "custom"].includes(value),
-	isValidAiModel: (provider: string, model: string) => {
-		if (provider === "openai") {
-			return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"].includes(model);
-		}
-		return true;
-	},
+	isValidAiModel: (_provider: string, model: string) =>
+		/^[A-Za-z0-9._:/-]{1,120}$/.test(model),
 	isValidModelString: (model: string) =>
 		/^[A-Za-z0-9._:/-]{1,120}$/.test(model),
 	apiProviderOptions: [
 		{
 			id: "openai",
-			models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			requiresCustomModel: false,
 		},
 		{
 			id: "anthropic",
-			models: ["claude-sonnet-4-20250514"],
+			models: ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
 			requiresCustomModel: false,
 		},
 		{ id: "openrouter", models: [], requiresCustomModel: true },
@@ -982,7 +978,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: false,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		const { switchModelProvider } = await import("./telegram");
@@ -1010,7 +1006,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		// resolveTelegramSshContext -> getLatestTelegramRecord
@@ -1068,7 +1064,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
 		});
 		// resolveTelegramSshContext -> getLatestTelegramRecord
@@ -1228,7 +1224,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([
@@ -1279,7 +1275,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([
@@ -1345,7 +1341,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([
@@ -1412,7 +1408,7 @@ describe("switchModelProvider", () => {
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
 			allowsCustomModel: true,
-			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
 		selectLimit.mockResolvedValueOnce([

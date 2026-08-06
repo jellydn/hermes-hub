@@ -38,16 +38,32 @@ export const apiProviderOptions: readonly AiProviderOption[] = [
 		label: "OpenAI",
 		description:
 			"Best-fit defaults for Hermes agents running on OpenAI models.",
-		models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-		defaultModel: "gpt-4o-mini",
+		models: [
+			"gpt-5.6-sol",
+			"gpt-5.6-terra",
+			"gpt-5.6-luna",
+			"gpt-5.5",
+			"gpt-5.5-pro",
+			"gpt-5.4",
+			"gpt-5.4-mini",
+			"gpt-5.4-nano",
+		],
+		defaultModel: "gpt-5.6-terra",
 	},
 	{
 		id: "anthropic",
 		label: "Anthropic",
 		description:
 			"Claude models tuned for long-form, tool-friendly conversations.",
-		models: ["claude-sonnet-4-20250514", "claude-haiku-3-5"],
-		defaultModel: "claude-sonnet-4-20250514",
+		models: [
+			"claude-fable-5",
+			"claude-opus-5",
+			"claude-sonnet-5",
+			"claude-haiku-4-5",
+			"claude-opus-4-8",
+			"claude-sonnet-4-6",
+		],
+		defaultModel: "claude-sonnet-5",
 	},
 	{
 		id: "openrouter",

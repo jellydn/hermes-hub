@@ -12,11 +12,11 @@ import {
 
 describe("MODEL_VALIDATION_REGEX", () => {
 	it("matches common production model IDs", () => {
-		expect(MODEL_VALIDATION_REGEX.test("gpt-4o")).toBe(true);
-		expect(MODEL_VALIDATION_REGEX.test("gpt-4o-mini")).toBe(true);
-		expect(MODEL_VALIDATION_REGEX.test("gpt-4-turbo")).toBe(true);
-		expect(MODEL_VALIDATION_REGEX.test("claude-sonnet-4-20250514")).toBe(true);
-		expect(MODEL_VALIDATION_REGEX.test("claude-haiku-3-5")).toBe(true);
+		expect(MODEL_VALIDATION_REGEX.test("gpt-5.6-sol")).toBe(true);
+		expect(MODEL_VALIDATION_REGEX.test("gpt-5.6-terra")).toBe(true);
+		expect(MODEL_VALIDATION_REGEX.test("gpt-5.6-luna")).toBe(true);
+		expect(MODEL_VALIDATION_REGEX.test("claude-fable-5")).toBe(true);
+		expect(MODEL_VALIDATION_REGEX.test("claude-haiku-4-5")).toBe(true);
 		expect(MODEL_VALIDATION_REGEX.test("openai/gpt-4o-mini")).toBe(true);
 		expect(MODEL_VALIDATION_REGEX.test("llama3")).toBe(true);
 		expect(MODEL_VALIDATION_REGEX.test("deepseek-chat")).toBe(true);
@@ -97,9 +97,38 @@ describe("api provider metadata", () => {
 		expect(providerRequiresApiKey("openai")).toBe(true);
 	});
 
-	it("accepts whitelisted and custom OpenAI models", () => {
-		expect(isValidAiModel("openai", "gpt-4o-mini")).toBe(true);
-		expect(isValidAiModel("openai", "gpt-5.5")).toBe(true);
+	it("exposes current OpenAI and Anthropic model suggestions", () => {
+		expect(apiProviderOptions.find(({ id }) => id === "openai")).toMatchObject({
+			models: [
+				"gpt-5.6-sol",
+				"gpt-5.6-terra",
+				"gpt-5.6-luna",
+				"gpt-5.5",
+				"gpt-5.5-pro",
+				"gpt-5.4",
+				"gpt-5.4-mini",
+				"gpt-5.4-nano",
+			],
+			defaultModel: "gpt-5.6-terra",
+		});
+		expect(
+			apiProviderOptions.find(({ id }) => id === "anthropic"),
+		).toMatchObject({
+			models: [
+				"claude-fable-5",
+				"claude-opus-5",
+				"claude-sonnet-5",
+				"claude-haiku-4-5",
+				"claude-opus-4-8",
+				"claude-sonnet-4-6",
+			],
+			defaultModel: "claude-sonnet-5",
+		});
+	});
+
+	it("accepts suggested and custom OpenAI models", () => {
+		expect(isValidAiModel("openai", "gpt-5.6-terra")).toBe(true);
+		expect(isValidAiModel("openai", "gpt-6-preview")).toBe(true);
 	});
 
 	it("includes deepseek as a first-class API provider", () => {
@@ -107,7 +136,7 @@ describe("api provider metadata", () => {
 		expect(isApiProviderId("deepseek")).toBe(true);
 	});
 
-	it("accepts whitelisted and custom DeepSeek models", () => {
+	it("accepts suggested and custom DeepSeek models", () => {
 		expect(isValidAiModel("deepseek", "deepseek-v4-flash")).toBe(true);
 		expect(isValidAiModel("deepseek", "deepseek-v4-pro")).toBe(true);
 		expect(isValidAiModel("deepseek", "deepseek-chat")).toBe(true);

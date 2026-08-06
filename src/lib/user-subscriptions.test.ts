@@ -19,7 +19,7 @@ describe("api provider options", () => {
 });
 
 describe("chatgpt subscription metadata", () => {
-	it("exposes ChatGPT models including gpt-5.4-mini", () => {
+	it("exposes current ChatGPT model suggestions", () => {
 		const option = getUserSubscriptionOption("chatgpt");
 
 		expect(option).toMatchObject({
@@ -27,17 +27,27 @@ describe("chatgpt subscription metadata", () => {
 			hermesProviderId: "openai-codex",
 			authMode: "chatgpt",
 			credentialKind: "oauth",
-			defaultModel: "gpt-5.5",
-			models: expect.arrayContaining(["gpt-5.4-mini", "gpt-5.5"]),
+			defaultModel: "gpt-5.6-terra",
+			models: [
+				"gpt-5.6-sol",
+				"gpt-5.6-terra",
+				"gpt-5.6-luna",
+				"gpt-5.5",
+				"gpt-5.5-pro",
+				"gpt-5.4-mini",
+				"gpt-5.4",
+				"gpt-5.3-codex",
+				"gpt-5.3-codex-spark",
+			],
 		});
 	});
 
-	it("accepts whitelisted and custom ChatGPT models", () => {
-		expect(isValidSubscriptionModel("chatgpt", "gpt-5.4-mini")).toBe(true);
+	it("accepts suggested and custom ChatGPT models", () => {
+		expect(isValidSubscriptionModel("chatgpt", "gpt-5.6-terra")).toBe(true);
 		expect(isValidSubscriptionModel("chatgpt", "gpt-5.3-codex-spark")).toBe(
 			true,
 		);
-		expect(isValidSubscriptionModel("chatgpt", "gpt-4o")).toBe(true);
+		expect(isValidSubscriptionModel("chatgpt", "gpt-6-preview")).toBe(true);
 	});
 });
 
@@ -61,7 +71,7 @@ describe("mimo subscription metadata", () => {
 		});
 	});
 
-	it("accepts whitelisted and custom MiMo models", () => {
+	it("accepts suggested and custom MiMo models", () => {
 		expect(isValidSubscriptionModel("mimo", "mimo-v2.5-pro")).toBe(true);
 		expect(isValidSubscriptionModel("mimo", "mimo-v2.5")).toBe(true);
 		expect(isValidSubscriptionModel("mimo", "gpt-4o")).toBe(true);
@@ -109,7 +119,7 @@ describe("commandcode subscription metadata", () => {
 		});
 	});
 
-	it("accepts whitelisted and custom Command Code models", () => {
+	it("accepts suggested and custom Command Code models", () => {
 		expect(isValidSubscriptionModel("commandcode", "taste-1")).toBe(true);
 		expect(
 			isValidSubscriptionModel("commandcode", "deepseek/deepseek-v4-flash"),

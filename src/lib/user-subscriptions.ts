@@ -50,13 +50,17 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "oauth",
 		supportsConnectionTest: false,
 		models: [
+			"gpt-5.6-sol",
+			"gpt-5.6-terra",
+			"gpt-5.6-luna",
 			"gpt-5.5",
+			"gpt-5.5-pro",
 			"gpt-5.4-mini",
 			"gpt-5.4",
 			"gpt-5.3-codex",
 			"gpt-5.3-codex-spark",
 		],
-		defaultModel: "gpt-5.5",
+		defaultModel: "gpt-5.6-terra",
 	},
 	{
 		id: "mimo",

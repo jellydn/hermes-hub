@@ -786,15 +786,15 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 All providers accept any valid model ID via free-text input — the listed models are quick-pick suggestions, not a strict allowlist. You can type any model ID your provider supports (alphanumerics, `.`, `_`, `:`, `/`, `-`; 1–120 chars).
 
-| Provider     | Suggested models                                                             | Default                    |
-| ------------ | ---------------------------------------------------------------------------- | -------------------------- |
-| openai       | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`                                       | `gpt-4o-mini`              |
-| anthropic    | `claude-sonnet-4-20250514`, `claude-haiku-3-5`                               | `claude-sonnet-4-20250514` |
-| openrouter   | _(no suggestions — enter any routed model ID)_                               | `openai/gpt-4o-mini`       |
-| ollama       | _(no suggestions — enter any local model ID)_                                | `llama3`                   |
-| deepseek     | `deepseek-v4-flash`, `deepseek-v4-pro`                                       | `deepseek-v4-flash`        |
-| commandcode  | _(no suggestions — enter any Command Code model ID)_                         | `deepseek/deepseek-v4-flash` |
-| custom       | _(no suggestions — enter any model ID)_                                      | _(empty)_                  |
+| Provider     | Suggested models                                                                                                                   | Default                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| openai       | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`                | `gpt-5.6-terra`                  |
+| anthropic    | `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-opus-4-8`, `claude-sonnet-4-6`                   | `claude-sonnet-5`                |
+| openrouter   | _(no suggestions — enter any routed model ID)_                                                                                     | `openai/gpt-4o-mini`             |
+| ollama       | _(no suggestions — enter any local model ID)_                                                                                      | `llama3`                         |
+| deepseek     | `deepseek-v4-flash`, `deepseek-v4-pro`                                                                                             | `deepseek-v4-flash`              |
+| commandcode  | _(no suggestions — enter any Command Code model ID)_                                                                               | `deepseek/deepseek-v4-flash`     |
+| custom       | _(no suggestions — enter any model ID)_                                                                                            | _(empty)_                        |
 **Response (200):**
 
 ```json
@@ -893,7 +893,7 @@ Saves a subscription configuration (ChatGPT OAuth, MiMo credential, or Command C
 ```json
 {
 	"subscriptionProvider": "chatgpt",
-	"model": "gpt-5.5"
+	"model": "gpt-5.6-terra"
 }
 ```
 

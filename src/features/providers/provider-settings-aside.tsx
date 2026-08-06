@@ -89,12 +89,12 @@ export function ProviderSettingsAside({
 				<p className="island-kicker mb-2">Supported providers</p>
 				<ul className="m-0 space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
 					<li>
-						<strong className="text-[var(--sea-ink)]">OpenAI</strong> — gpt-4o,
-						gpt-4o-mini, gpt-4-turbo
+						<strong className="text-[var(--sea-ink)]">OpenAI</strong> — GPT-5.6,
+						GPT-5.5, and GPT-5.4 variants
 					</li>
 					<li>
 						<strong className="text-[var(--sea-ink)]">Anthropic</strong> —
-						Sonnet and Haiku variants
+						Fable, Opus, Sonnet, and Haiku variants
 					</li>
 					<li>
 						<strong className="text-[var(--sea-ink)]">OpenRouter</strong> — any
