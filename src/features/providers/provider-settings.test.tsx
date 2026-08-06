@@ -208,8 +208,8 @@ describe("ProviderSettings", () => {
 			}),
 		);
 
-		expect(within(subSection).getByLabelText(/api key/i)).toBeTruthy();
-		expect(within(subSection).getByLabelText(/base url/i)).toBeTruthy();
+		expect(within(subSection).getByLabelText(/^api key$/i)).toBeTruthy();
+		expect(within(subSection).getByLabelText(/^base url$/i)).toBeTruthy();
 		expect(within(subSection).getByDisplayValue("mimo-v2.5-pro")).toBeTruthy();
 		expect(
 			within(subSection).getByDisplayValue(

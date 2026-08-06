@@ -1,4 +1,4 @@
-export type UserSubscriptionId = "chatgpt" | "mimo";
+export type UserSubscriptionId = "chatgpt" | "mimo" | "commandcode";
 
 export const FUTURE_USER_SUBSCRIPTION_IDS = ["github-copilot"] as const;
 export type FutureUserSubscriptionId =
@@ -73,6 +73,31 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		},
 		models: ["mimo-v2.5-pro", "mimo-v2.5"],
 		defaultModel: "mimo-v2.5-pro",
+	},
+	{
+		id: "commandcode",
+		label: "Command Code Coding Plan",
+		description:
+			"Use your Command Code subscription (Go $1/mo, Pro $15/mo) with a user_* API key. Access DeepSeek, MiMo, MiniMax, and more.",
+		hermesProviderId: "custom",
+		authMode: "coding-plan",
+		credentialKind: "api-key",
+		supportsConnectionTest: true,
+		storageProviderId: "commandcode",
+		defaultBaseUrl: "https://api.commandcode.ai/provider/v1",
+		deployEnv: {
+			apiKeyEnvVar: "COMMANDCODE_API_KEY",
+			baseUrlEnvVar: "COMMANDCODE_BASE_URL",
+		},
+		models: [
+			"taste-1",
+			"deepseek/deepseek-v4-flash",
+			"deepseek/deepseek-v4-pro",
+			"minimax/minimax-m3",
+			"mimo/mimo-v2.5-pro",
+			"mimo/mimo-v2.5",
+		],
+		defaultModel: "deepseek/deepseek-v4-flash",
 	},
 ] as const;
 

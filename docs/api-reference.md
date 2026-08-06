@@ -882,7 +882,7 @@ When a ChatGPT subscription is active (saved via `POST /api/providers/subscripti
 
 ### POST `/api/providers/subscriptions`
 
-Saves a subscription configuration (ChatGPT OAuth or MiMo credential). Deactivates any existing subscription or provider config first, then inserts a new active record. API keys are encrypted with AES-256-GCM.
+Saves a subscription configuration (ChatGPT OAuth, MiMo credential, or Command Code Coding Plan). Deactivates any existing subscription or provider config first, then inserts a new active record. API keys are encrypted with AES-256-GCM.
 
 **Auth required:** Yes (HTTPS enforced in production)
 
@@ -906,21 +906,33 @@ Saves a subscription configuration (ChatGPT OAuth or MiMo credential). Deactivat
 }
 ```
 
+**Request body (Command Code — credential/api-key):**
+
+```json
+{
+	"subscriptionProvider": "commandcode",
+	"model": "deepseek/deepseek-v4-flash",
+	"apiKey": "user_...",
+	"baseUrl": "https://api.commandcode.ai/provider/v1"
+}
+```
+
 **Fields:**
 
 | Field                 | Type   | Description                                                                 |
 | --------------------- | ------ | --------------------------------------------------------------------------- |
-| `subscriptionProvider` | string | `"chatgpt"` or `"mimo"`                                                    |
+| `subscriptionProvider` | string | `"chatgpt"`, `"mimo"`, or `"commandcode"`                                  |
 | `model`               | string | Required. Must be a valid model for the subscription.                       |
-| `apiKey`              | string | Required for `mimo`. Not used for `chatgpt`.                                |
-| `baseUrl`             | string | Optional for `mimo` (defaults to MiMo Token Plan URL). Not used for `chatgpt`. |
+| `apiKey`              | string | Required for `mimo` and `commandcode`. Not used for `chatgpt`.             |
+| `baseUrl`             | string | Optional for `mimo` and `commandcode` (defaults to provider URL). Not used for `chatgpt`. |
 
 **Supported models:**
 
-| Subscription          | Models                                                                       | Default          |
-| --------------------- | ---------------------------------------------------------------------------- | ---------------- |
-| chatgpt               | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5`        |
-| mimo                  | `mimo-v2.5-pro`, `mimo-v2.5`                                                | `mimo-v2.5-pro`  |
+| Subscription          | Models                                                                       | Default                    |
+| --------------------- | ---------------------------------------------------------------------------- | -------------------------- |
+| chatgpt               | `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.3-codex-spark` | `gpt-5.5`                  |
+| mimo                  | `mimo-v2.5-pro`, `mimo-v2.5`                                                | `mimo-v2.5-pro`            |
+| commandcode           | `taste-1`, `deepseek/deepseek-v4-flash`, `deepseek/deepseek-v4-pro`, `minimax/minimax-m3`, `mimo/mimo-v2.5-pro`, `mimo/mimo-v2.5` | `deepseek/deepseek-v4-flash` |
 
 **Response (200):**
 
@@ -946,7 +958,7 @@ Saves a subscription configuration (ChatGPT OAuth or MiMo credential). Deactivat
 
 ### POST `/api/providers/subscriptions/test`
 
-Tests a subscription connection. For MiMo, this calls the provider's models list endpoint. ChatGPT (OAuth) skips API-key testing and returns a connected status with guidance to use device-code login instead.
+Tests a subscription connection. For MiMo and Command Code, this calls the provider's models list endpoint. ChatGPT (OAuth) skips API-key testing and returns a connected status with guidance to use device-code login instead.
 
 **Auth required:** Yes
 
