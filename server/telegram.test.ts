@@ -292,6 +292,55 @@ describe("telegram handlers", () => {
 		expect(encryptSecret).toHaveBeenCalledWith("123456:secret-token");
 	});
 
+	it("returns 500 and writes no audit log when the connection insert fails mid-transaction", async () => {
+		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						ok: true,
+						result: { id: 42, username: "hermes_helper_bot" },
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			),
+		);
+
+		// The telegram config insert is the second statement inside the
+		// transaction (after the isActive:false flip). Reject it so the
+		// transaction aborts before the telegram.connected audit log runs.
+		insertValues.mockRejectedValueOnce(new Error("insert failed"));
+
+		const { connectTelegram } = await import("./telegram");
+		const response = await connectTelegram(
+			createContext({ botToken: "123456:secret-token" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(500);
+		expect(payload).toEqual({ error: "insert failed" });
+
+		// The deactivation flip was attempted inside the transaction...
+		expect(updateSet).toHaveBeenCalledWith({ isActive: false });
+		// ...but because the insert failed, the audit log was never written:
+		// insertValues ran exactly once (the failed config insert) and never
+		// for the telegram.connected audit row.
+		expect(insertValues).toHaveBeenCalledTimes(1);
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				botToken: "enc:123456:secret-token",
+				isActive: true,
+			}),
+		);
+		expect(insertValues).not.toHaveBeenCalledWith(
+			expect.objectContaining({ action: "telegram.connected" }),
+		);
+	});
+
 	it("returns a clear invalid token error", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
 		vi.stubGlobal(
@@ -1261,6 +1310,73 @@ describe("switchModelProvider", () => {
 
 		expect(response.status).toBe(502);
 		expect(payload.error).toContain("SSH connection refused");
+	});
+
+	it("writes a telegram.model.switch.failed audit log when the switch fails", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: true,
+			fixedModels: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		selectLimit.mockResolvedValueOnce([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		executeModelSwitchMock.mockRejectedValueOnce(
+			new Error("SSH connection refused"),
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({ optionId: "api-provider:abc123", model: "gpt-4o" }),
+		);
+		const payload = await response.json();
+
+		expect(response.status).toBe(502);
+		expect(payload.error).toContain("SSH connection refused");
+
+		// The failed switch is recorded to the audit log with the attempted
+		// target and the captured error — so rollback/retry investigations
+		// have a trail even when the switch itself failed.
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user_123",
+				action: "telegram.model.switch.failed",
+				serverId: "server_1",
+				details: expect.objectContaining({
+					optionId: "api-provider:abc123",
+					model: "gpt-4o",
+					error: expect.stringContaining("SSH connection refused"),
+				}),
+			}),
+		);
 	});
 
 	it("returns 409 with hostKey details when executeModelSwitch throws host_key_missing", async () => {
