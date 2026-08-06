@@ -3,7 +3,12 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { isValidModelString } from "#/lib/ai-providers";
-import { decryptApiServerKey, decryptSecret, encryptSecret } from "./crypto";
+import {
+	decryptApiServerKey,
+	decryptSecret,
+	encryptSecret,
+	getActiveEncryptionKeyVersion,
+} from "./crypto";
 import { clearDashboardCache } from "./dashboard";
 import { getDb } from "./db";
 import { telegramConfigs } from "./db/schema";
@@ -658,6 +663,7 @@ async function persistTelegramConnection(
 		deployedServerId: null,
 		deployedServerHost: null,
 		apiServerKey: null,
+		encryptionKeyVersion: getActiveEncryptionKeyVersion(),
 	});
 
 	await insertAuditLog(writer, {

@@ -6,7 +6,7 @@ import {
 	getCredentialSubscriptionOption,
 	type UserSubscriptionId,
 } from "#/lib/user-subscriptions";
-import { encryptSecret } from "../crypto";
+import { encryptSecret, getActiveEncryptionKeyVersion } from "../crypto";
 import type { getDb } from "../db";
 import { aiProviders } from "../db/schema";
 import { insertAuditLog } from "../lib/insert-audit-log";
@@ -45,6 +45,7 @@ export async function activateApiProvider(
 		userId: input.userId,
 		provider: input.provider,
 		encryptedApiKey: encryptSecret(input.apiKey),
+		encryptionKeyVersion: getActiveEncryptionKeyVersion(),
 		baseUrl: input.baseUrl || null,
 		model: input.model,
 		label: formatAiProviderLabel(input.provider),
@@ -85,6 +86,7 @@ export async function activateCredentialSubscription(
 		userId: input.userId,
 		provider: option.storageProviderId,
 		encryptedApiKey: encryptSecret(input.apiKey),
+		encryptionKeyVersion: getActiveEncryptionKeyVersion(),
 		baseUrl: input.baseUrl,
 		model: input.model,
 		label: formatUserSubscriptionLabel(option.id),

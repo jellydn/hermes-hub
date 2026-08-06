@@ -30,6 +30,7 @@ vi.mock("./crypto", () => ({
 	encryptSecret,
 	decryptSecret,
 	decryptApiServerKey,
+	getActiveEncryptionKeyVersion: () => "v1",
 }));
 
 vi.mock("./db", () => ({
