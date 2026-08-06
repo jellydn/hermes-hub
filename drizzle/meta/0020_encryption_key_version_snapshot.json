@@ -251,7 +251,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "agent_skills_source_type_check": {
+          "name": "agent_skills_source_type_check",
+          "value": "(source_type = 'custom' AND content IS NOT NULL AND install_ref IS NULL) OR ((source_type = 'hub' OR source_type = 'url') AND install_ref IS NOT NULL AND content IS NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ai_providers": {
