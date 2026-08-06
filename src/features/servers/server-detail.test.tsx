@@ -92,8 +92,44 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-	fetchMock.mockResolvedValue(
-		new Response(
+	fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+		if (
+			typeof url === "string" &&
+			url.endsWith("/hermes-update-info") &&
+			(!init || init.method === undefined || init.method === "GET")
+		) {
+			return new Response(
+				JSON.stringify({
+					current: {
+						image:
+							"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9",
+						imageId: "sha256:old",
+						repoDigests: [],
+					},
+					latest: {
+						tag: "latest",
+						digest:
+							"sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+						pushedAt: "2026-08-06T12:00:00.000Z",
+					},
+					release: {
+						tagName: "v2026.8.3",
+						name: "Hermes Agent v0.20.0 (2026.8.3)",
+						publishedAt: "2026-08-03T10:00:00.000Z",
+						body: "## Changes\n- Fixed bug",
+						htmlUrl:
+							"https://github.com/NousResearch/hermes-agent/releases/v2026.8.3",
+					},
+					updateAvailable: true,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		}
+
+		return new Response(
 			JSON.stringify({
 				status: "succeeded",
 				action: "restart",
@@ -103,8 +139,8 @@ beforeEach(() => {
 				status: 200,
 				headers: { "content-type": "application/json" },
 			},
-		),
-	);
+		);
+	});
 });
 
 describe("ServerDetail", () => {
@@ -391,15 +427,39 @@ describe("ServerDetail", () => {
 	});
 
 	it("shows a failed action message when the API returns an error", async () => {
-		fetchMock.mockResolvedValueOnce(
-			new Response(
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (
+				typeof url === "string" &&
+				url.endsWith("/hermes-update-info") &&
+				(!init || init.method === undefined || init.method === "GET")
+			) {
+				return new Response(
+					JSON.stringify({
+						current: null,
+						latest: {
+							tag: "latest",
+							digest:
+								"sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+							pushedAt: "2026-08-06T12:00:00.000Z",
+						},
+						release: null,
+						updateAvailable: true,
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				);
+			}
+
+			return new Response(
 				JSON.stringify({ error: "Action failed: host unreachable" }),
 				{
 					status: 400,
 					headers: { "content-type": "application/json" },
 				},
-			),
-		);
+			);
+		});
 
 		render(
 			<ServerDetail
@@ -411,7 +471,10 @@ describe("ServerDetail", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: /update hermes/i }));
-		fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+		await flushAsyncWork();
+
+		fireEvent.click(screen.getByRole("button", { name: /confirm update/i }));
 
 		await flushAsyncWork();
 

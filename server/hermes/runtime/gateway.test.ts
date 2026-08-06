@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
 	isValidDockerTag,
@@ -8,6 +8,15 @@ import {
 	updateGateway,
 } from "../runtime";
 import { mockSsh } from "./test-helpers";
+
+vi.mock("../version", () => ({
+	getLatestImageRef: vi.fn().mockResolvedValue({
+		tag: "latest",
+		digest:
+			"sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+		pushedAt: "2026-08-06T12:00:00.000Z",
+	}),
+}));
 
 describe("restartGateway", () => {
 	it("restarts the Hermes container via docker compose", async () => {
@@ -39,22 +48,96 @@ describe("restartGateway", () => {
 });
 
 describe("updateGateway", () => {
-	it("pulls and recreates the Hermes container", async () => {
+	it("rewrites compose to the latest digest, pulls, and recreates", async () => {
 		const { execCommand } = mockSsh(() => ({
 			code: 0,
 			stdout: "Updated\n",
 			stderr: "",
 		}));
 
-		const output = await updateGateway({ execCommand } as never);
+		const { imageRef, output } = await updateGateway({ execCommand } as never);
 
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining("sudo sed -i.bak"),
+		);
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("sudo docker compose pull hermes"),
 		);
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("--no-deps hermes"),
 		);
+		expect(imageRef).toBe(
+			"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+		);
 		expect(output).toBe("Updated");
+	});
+
+	it("uses an explicit digest target when provided", async () => {
+		const { execCommand } = mockSsh(() => ({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		}));
+
+		const { imageRef } = await updateGateway({ execCommand } as never, {
+			digest:
+				"sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		});
+
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"nousresearch/hermes-agent@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			),
+		);
+		expect(imageRef).toBe(
+			"nousresearch/hermes-agent@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		);
+	});
+
+	it("uses an explicit tag target when provided", async () => {
+		const { execCommand } = mockSsh(() => ({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		}));
+
+		const { imageRef } = await updateGateway({ execCommand } as never, {
+			tag: "v2026.8.3",
+		});
+
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining("nousresearch/hermes-agent:v2026.8.3"),
+		);
+		expect(imageRef).toBe("nousresearch/hermes-agent:v2026.8.3");
+	});
+
+	it("sed matches both @sha256 and :tag forms", async () => {
+		const { execCommand } = mockSsh(() => ({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		}));
+
+		await updateGateway({ execCommand } as never, { tag: "v1.0.0" });
+
+		const callArg = execCommand.mock.calls[0][0] as string;
+		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
+		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
+	});
+
+	it("falls back to :latest tag when getLatestImageRef fails", async () => {
+		const { getLatestImageRef } = await import("../version");
+		vi.mocked(getLatestImageRef).mockResolvedValueOnce(null);
+
+		const { execCommand } = mockSsh(() => ({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		}));
+
+		const { imageRef } = await updateGateway({ execCommand } as never);
+
+		expect(imageRef).toBe("nousresearch/hermes-agent:latest");
 	});
 
 	it("throws when the update command fails", async () => {
@@ -141,6 +224,21 @@ describe("rollbackGateway", () => {
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("nousresearch/hermes-agent:latest"),
 		);
+	});
+
+	it("sed matches digest-pinned image lines for rollback", async () => {
+		const { execCommand } = mockSsh(() => ({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		}));
+
+		await rollbackGateway({ execCommand } as never, "v1.0.0");
+
+		const callArg = execCommand.mock.calls[0][0] as string;
+		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
+		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
+		expect(callArg).toContain("image: nousresearch/hermes-agent:v1.0.0");
 	});
 });
 

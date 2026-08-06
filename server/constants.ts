@@ -2,6 +2,10 @@ export const hermesImageRepository = "nousresearch/hermes-agent";
 const hermesImageDigest =
 	"sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
 export const defaultHermesImage = `${hermesImageRepository}@${hermesImageDigest}`;
+/** Docker Hub API base for the Hermes agent image (default registry, no `docker.io/` prefix). */
+export const hermesDockerHubRepo = "nousresearch/hermes-agent";
+/** Upstream GitHub repository that publishes Hermes agent releases + changelogs. */
+export const hermesGitHubRepo = "NousResearch/hermes-agent";
 const hermesWebUiImageRepository = "ghcr.io/nesquena/hermes-webui";
 const hermesWebUiImageDigest =
 	"sha256:b5cb5a62eaa8b3b3abe501d934345c3ae8c022f0cefaf608fd34c2ff44160ae6";

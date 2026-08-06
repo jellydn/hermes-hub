@@ -26,7 +26,10 @@ export function useServerActions(
 		success: null,
 	});
 
-	async function handleAction(action: ServerActionType) {
+	async function handleAction(
+		action: ServerActionType,
+		versionTarget?: string,
+	) {
 		setActionState({
 			activeDialog: null,
 			error: null,
@@ -40,7 +43,7 @@ export function useServerActions(
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
 					action,
-					targetVersion: detail.rollbackTarget,
+					targetVersion: versionTarget ?? detail.rollbackTarget,
 				}),
 			});
 			const payload = (await response.json().catch(() => null)) as {
@@ -97,8 +100,8 @@ export function useServerActions(
 				activeDialog: null,
 			}));
 		},
-		confirmAction: (action: ServerActionType) => {
-			void handleAction(action);
+		confirmAction: (action: ServerActionType, versionTarget?: string) => {
+			void handleAction(action, versionTarget);
 		},
 		openDialog: (action: ServerActionType) => {
 			setActionState((current) => ({

@@ -183,6 +183,7 @@ export function ServerDetail({
 						activeAction={actions.actionState.activeDialog}
 						pendingAction={actions.actionState.pending}
 						rollbackTarget={detail.rollbackTarget}
+						serverId={detail.server.id}
 						onCancelDialog={actions.cancelDialog}
 						onConfirmAction={actions.confirmAction}
 						onOpenDialog={actions.openDialog}

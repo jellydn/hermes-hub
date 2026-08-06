@@ -15,6 +15,7 @@ import {
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
 } from "./diagnostics-formatting";
+import { getLatestImageRef } from "./version";
 
 // ── Container names ──────────────────────────────────────────────
 
@@ -197,14 +198,56 @@ export async function restartGateway(ssh: NodeSSH): Promise<string> {
 	return result.stdout.trim();
 }
 
-export async function updateGateway(ssh: NodeSSH): Promise<string> {
-	const result = await ssh.execCommand(
-		"cd ~/hermes && sudo docker compose pull hermes && sudo docker compose up -d --no-deps hermes",
-	);
+export async function updateGateway(
+	ssh: NodeSSH,
+	target?: { digest?: string; tag?: string },
+): Promise<{ imageRef: string; output: string }> {
+	const imageRef = await resolveUpdateImageRef(target);
+
+	const sedExpr = [
+		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
+		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
+	].join("; ");
+
+	const command = [
+		"cd ~/hermes",
+		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
+		"sudo docker compose pull hermes",
+		"sudo docker compose up -d --no-deps hermes",
+	].join(" && ");
+
+	const result = await ssh.execCommand(command);
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to update Hermes");
 	}
-	return result.stdout.trim();
+	return { imageRef, output: result.stdout.trim() };
+}
+
+/**
+ * Resolve the image reference to pull for an update:
+ * - explicit digest → `repo@sha256:...`
+ * - explicit tag → `repo:tag`
+ * - neither → resolve `latest` from Docker Hub; fall back to `:latest` tag
+ *   so we still attempt a real pull rather than re-pulling the stale pinned digest.
+ */
+async function resolveUpdateImageRef(target?: {
+	digest?: string;
+	tag?: string;
+}): Promise<string> {
+	if (target?.digest) {
+		return `${hermesImageRepository}@${target.digest}`;
+	}
+
+	if (target?.tag) {
+		return `${hermesImageRepository}:${target.tag}`;
+	}
+
+	const latest = await getLatestImageRef();
+	if (latest) {
+		return `${hermesImageRepository}@${latest.digest}`;
+	}
+
+	return `${hermesImageRepository}:latest`;
 }
 
 const DOCKER_TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
@@ -222,10 +265,16 @@ export async function rollbackGateway(
 		throw new Error(`Invalid image tag: ${tag}`);
 	}
 
+	const imageRef = `${hermesImageRepository}:${tag}`;
+	const sedExpr = [
+		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
+		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
+	].join("; ");
+
 	const command = [
 		"cd ~/hermes",
-		`sudo docker pull ${hermesImageRepository}:${tag}`,
-		`sudo sed -i.bak 's|image: ${hermesImageRepository}:.*|image: ${hermesImageRepository}:${tag}|' docker-compose.yml`,
+		`sudo docker pull ${imageRef}`,
+		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
 		"sudo docker compose up -d --no-deps hermes",
 	].join(" && ");
 

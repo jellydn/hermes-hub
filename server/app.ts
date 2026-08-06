@@ -6,6 +6,7 @@ import { getDashboardStatus } from "./dashboard";
 import { checkDatabaseConnection } from "./db/health";
 import { deployProviderToHermes } from "./deploy";
 import { runServerHealthCheck } from "./health-check";
+import { getHermesUpdateInfo } from "./hermes/update-info";
 import {
 	getLatestServerInstallLog,
 	startServerInstall,
@@ -260,6 +261,11 @@ apiApp.get(
 );
 apiApp.post("/servers/:id/actions", httpsMiddleware, runServerAction);
 apiApp.post("/servers/:id/health-check", httpsMiddleware, runServerHealthCheck);
+apiApp.get(
+	"/servers/:id/hermes-update-info",
+	httpsMiddleware,
+	getHermesUpdateInfo,
+);
 apiApp.get("/servers/:id/web-ui", httpsMiddleware, getServerWebUiStatus);
 apiApp.post("/servers/:id/web-ui/deploy", httpsMiddleware, deployServerWebUi);
 apiApp.get(

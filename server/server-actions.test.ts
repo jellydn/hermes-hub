@@ -56,6 +56,12 @@ vi.mock("./install/records", () => ({
 	getLatestInstallForServer,
 }));
 
+const getLatestImageRef = vi.fn();
+
+vi.mock("./hermes/version", () => ({
+	getLatestImageRef,
+}));
+
 vi.mock("./web-ui/records", () => ({
 	getResolvedServerWebUiRecord: vi.fn().mockResolvedValue(null),
 	getWebUiProxyPath: (serverId: string) =>
@@ -133,6 +139,13 @@ describe("server actions", () => {
 		updateInstallWhere.mockResolvedValue(undefined);
 		updateInstallSet.mockReturnValue({ where: updateInstallWhere });
 		dbUpdate.mockReturnValue({ set: updateInstallSet });
+
+		getLatestImageRef.mockResolvedValue({
+			tag: "latest",
+			digest:
+				"sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+			pushedAt: "2026-08-06T12:00:00.000Z",
+		});
 
 		mockSshExec();
 	});
@@ -295,13 +308,23 @@ describe("server actions", () => {
 		const response = await runServerAction(createContext({ action: "update" }));
 
 		expect(execCommand).toHaveBeenCalledWith(
-			"cd ~/hermes && sudo docker compose pull hermes && sudo docker compose up -d --no-deps hermes",
+			expect.stringContaining("sudo sed -i.bak"),
+		);
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining("sudo docker compose pull hermes"),
 		);
 		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({
+		const body = await response.json();
+		expect(body).toMatchObject({
 			status: "succeeded",
 			action: "update",
 		});
+		expect(body.imageRef).toBe(
+			"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+		);
+		expect(body.message).toBe(
+			"Updated Hermes to nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924 successfully.",
+		);
 		expect(insertAuditValues).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
@@ -312,8 +335,56 @@ describe("server actions", () => {
 			2,
 			expect.objectContaining({
 				action: "server.action.update.succeeded",
+				details: expect.objectContaining({
+					imageRef:
+						"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+				}),
 			}),
 		);
+	});
+
+	it("runs update with an explicit digest targetVersion", async () => {
+		const execCommand = vi.fn().mockResolvedValue({
+			code: 0,
+			stdout: "ok",
+			stderr: "",
+		});
+		withSshConnection.mockImplementation(async (_input, run) =>
+			run({ execCommand }),
+		);
+
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({
+				action: "update",
+				targetVersion:
+					"sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body.imageRef).toBe(
+			"nousresearch/hermes-agent@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		);
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"nousresearch/hermes-agent@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			),
+		);
+	});
+
+	it("rejects update with an invalid targetVersion", async () => {
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "update", targetVersion: "bad; rm -rf /" }),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: expect.stringContaining("Invalid target version"),
+		});
+		expect(withSshConnection).not.toHaveBeenCalled();
 	});
 
 	it("runs rollback with an explicit target version", async () => {
@@ -335,7 +406,7 @@ describe("server actions", () => {
 			[
 				"cd ~/hermes",
 				"sudo docker pull nousresearch/hermes-agent:v1.2.3",
-				"sudo sed -i.bak 's|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
+				"sudo sed -i.bak 's|image: nousresearch/hermes-agent@.*|image: nousresearch/hermes-agent:v1.2.3|; s|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
 				"sudo docker compose up -d --no-deps hermes",
 			].join(" && "),
 		);
