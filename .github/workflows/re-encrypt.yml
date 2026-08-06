@@ -1,0 +1,44 @@
+name: Re-encrypt
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply the re-encryption (dry-run by default)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: re-encrypt
+  cancel-in-progress: false
+
+jobs:
+  reencrypt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run re-encryption
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_KEY_V2: ${{ secrets.ENCRYPTION_KEY_V2 }}
+        run: |
+          : "${DATABASE_URL:?DATABASE_URL secret is required}"
+          : "${ENCRYPTION_KEY:?ENCRYPTION_KEY secret is required}"
+          : "${ENCRYPTION_KEY_V2:?ENCRYPTION_KEY_V2 secret is required}"
+          bun run re-encrypt ${{ inputs.apply && '--apply' || '' }}
