@@ -151,16 +151,21 @@ export function useAgentSkills(
 		const currentGeneration = ++generationRef.current;
 		setRemoteLoading(true);
 		setRemoteError(null);
-		const result = await fetchRemoteSkills(serverId);
-		// Ignore stale responses when server selection changes mid-flight
-		if (generationRef.current !== currentGeneration) return;
-		if (result.ok) {
-			setRemoteInventory(result.data);
-		} else {
-			setRemoteError(result.error);
-			setRemoteInventory(null);
+		try {
+			const result = await fetchRemoteSkills(serverId);
+			// Ignore stale responses when server selection changes mid-flight
+			if (generationRef.current !== currentGeneration) return;
+			if (result.ok) {
+				setRemoteInventory(result.data);
+			} else {
+				setRemoteError(result.error);
+				setRemoteInventory(null);
+			}
+		} finally {
+			if (generationRef.current === currentGeneration) {
+				setRemoteLoading(false);
+			}
 		}
-		setRemoteLoading(false);
 	}
 
 	useMountEffect(() => {
@@ -252,50 +257,54 @@ export function useAgentSkills(
 			: "/api/settings/agent-skills";
 		const method = editingSkill ? "PUT" : "POST";
 
-		const result = await persistAgentSkill({ method, url, body });
+		try {
+			const result = await persistAgentSkill({ method, url, body });
 
-		if (result.ok) {
-			setSkills((prev) => {
-				const withoutCurrent = prev.filter((s) => s.id !== result.skill.id);
-				return [...withoutCurrent, result.skill].sort((a, b) =>
-					a.name.localeCompare(b.name),
-				);
-			});
-			setIsAdding(false);
-			setEditingSkill(null);
-			setForm(initialFormState);
-			setMessage({
-				type: "success",
-				text: "Skill saved. Deploy settings to apply changes.",
-			});
-		} else {
-			setMessage({ type: "error", text: result.error });
+			if (result.ok) {
+				setSkills((prev) => {
+					const withoutCurrent = prev.filter((s) => s.id !== result.skill.id);
+					return [...withoutCurrent, result.skill].sort((a, b) =>
+						a.name.localeCompare(b.name),
+					);
+				});
+				setIsAdding(false);
+				setEditingSkill(null);
+				setForm(initialFormState);
+				setMessage({
+					type: "success",
+					text: "Skill saved. Deploy settings to apply changes.",
+				});
+			} else {
+				setMessage({ type: "error", text: result.error });
+			}
+		} finally {
+			setIsSaving(false);
 		}
-		setIsSaving(false);
 	}
 
 	async function handleDelete(skillId: string) {
-		if (!confirm("Are you sure you want to delete this skill?")) return;
-
 		clearMessage();
 		setIsDeleting(true);
-		const result = await deleteAgentSkill(skillId);
+		try {
+			const result = await deleteAgentSkill(skillId);
 
-		if (result.ok) {
-			setSkills((prev) => prev.filter((s) => s.id !== skillId));
-			if (editingSkill?.id === skillId) {
-				setEditingSkill(null);
-				setIsAdding(false);
-				setForm(initialFormState);
+			if (result.ok) {
+				setSkills((prev) => prev.filter((s) => s.id !== skillId));
+				if (editingSkill?.id === skillId) {
+					setEditingSkill(null);
+					setIsAdding(false);
+					setForm(initialFormState);
+				}
+				setMessage({
+					type: "success",
+					text: "Skill deleted. Deploy settings to apply changes.",
+				});
+			} else {
+				setMessage({ type: "error", text: result.error });
 			}
-			setMessage({
-				type: "success",
-				text: "Skill deleted. Deploy settings to apply changes.",
-			});
-		} else {
-			setMessage({ type: "error", text: result.error });
+		} finally {
+			setIsDeleting(false);
 		}
-		setIsDeleting(false);
 	}
 
 	return {
