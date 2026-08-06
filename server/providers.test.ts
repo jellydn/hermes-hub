@@ -295,6 +295,20 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("saves custom (non-listed) model IDs for fixed-list providers", async () => {
+		const { saveProviderConfig } = await import("./providers");
+
+		const response = await saveProviderConfig(
+			createContext("http://localhost/api/providers", {
+				provider: "openai",
+				model: "gpt-5.6-luna",
+				apiKey: "sk-test",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
 	it("saves and tests Custom / BYO provider configuration with API key and baseUrl", async () => {
 		const { saveProviderConfig, testProviderConfig } = await import(
 			"./providers"
@@ -405,7 +419,7 @@ describe("provider settings", () => {
 		const response = await saveSubscriptionConfig(
 			createContext("http://localhost/api/providers/subscriptions", {
 				subscriptionProvider: "chatgpt",
-				model: "gpt-4o",
+				model: "gpt-4o; rm -rf /",
 			}),
 		);
 
@@ -413,6 +427,20 @@ describe("provider settings", () => {
 		expect(await response.json()).toMatchObject({
 			error: "Choose a valid model for the selected subscription.",
 		});
+	});
+
+	it("saves custom (non-listed) ChatGPT subscription model IDs", async () => {
+		const { saveSubscriptionConfig } = await import("./providers");
+
+		const response = await saveSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions", {
+				subscriptionProvider: "chatgpt",
+				model: "gpt-5.6-luna",
+				authMode: "chatgpt",
+			}),
+		);
+
+		expect(response.status).toBe(200);
 	});
 
 	it("builds Hermes deploy env for ChatGPT subscription without decrypting API keys", async () => {

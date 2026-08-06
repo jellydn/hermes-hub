@@ -973,7 +973,7 @@ describe("switchModelProvider", () => {
 		expect(payload.error).toContain("Option not found");
 	});
 
-	it("returns 400 when model is not valid for the given option", async () => {
+	it("returns 400 when model is not valid for the given option (defense-in-depth)", async () => {
 		getAuthSession.mockResolvedValueOnce({ user: { id: "user_123" } });
 		resolveSwitchOptionMock.mockResolvedValueOnce({
 			ok: true,
@@ -998,6 +998,64 @@ describe("switchModelProvider", () => {
 		expect(payload.error).toContain("not valid for");
 	});
 
+	it("accepts a custom model not in the fixed list when allowsCustomModel is true", async () => {
+		getAuthSession.mockResolvedValueOnce({
+			user: { id: "user_123" },
+			session: { id: "session_1" },
+		});
+		resolveSwitchOptionMock.mockResolvedValueOnce({
+			ok: true,
+			kind: "api-provider",
+			provider: "openai",
+			hermesProviderId: "openai-api",
+			model: "gpt-4o",
+			allowsCustomModel: true,
+			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+			activeOptionIds: { providerIds: [], subscriptionIds: [] },
+		});
+		// resolveTelegramSshContext -> getLatestTelegramRecord
+		selectLimit.mockResolvedValue([
+			{
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "enc:api-server-key",
+			},
+		]);
+		getServerByIdMock.mockResolvedValue({
+			id: "server_1",
+			host: "192.168.1.1",
+			port: 22,
+			username: "root",
+			authMethod: "password",
+			encryptedCredential: null,
+			storeCredential: false,
+		});
+		resolveServerSshConfigOrError.mockReturnValue({
+			ok: true,
+			authMethod: "password",
+			credential: "test-credential",
+		});
+		withSshConnection.mockImplementation(
+			async (
+				_config: unknown,
+				callback: (ssh: unknown) => Promise<unknown>,
+			) => {
+				return callback({});
+			},
+		);
+
+		const { switchModelProvider } = await import("./telegram");
+		const response = await switchModelProvider(
+			createContext({
+				optionId: "api-provider:abc123",
+				model: "gpt-5.5",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
 	it("switches model successfully via SSH", async () => {
 		getAuthSession.mockResolvedValueOnce({
 			user: { id: "user_123" },
@@ -1009,7 +1067,7 @@ describe("switchModelProvider", () => {
 			provider: "openai",
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
 			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
 		});
@@ -1088,7 +1146,7 @@ describe("switchModelProvider", () => {
 			provider: "mimo",
 			hermesProviderId: "xiaomi",
 			model: "mimo-v2.5-pro",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["mimo-v2.5-pro", "mimo-v2.5"],
 			activeOptionIds: { providerIds: ["other-row-id"], subscriptionIds: [] },
 		});
@@ -1169,7 +1227,7 @@ describe("switchModelProvider", () => {
 			provider: "openai",
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
@@ -1220,7 +1278,7 @@ describe("switchModelProvider", () => {
 			provider: "openai",
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
@@ -1286,7 +1344,7 @@ describe("switchModelProvider", () => {
 			provider: "openai",
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});
@@ -1353,7 +1411,7 @@ describe("switchModelProvider", () => {
 			provider: "openai",
 			hermesProviderId: "openai-api",
 			model: "gpt-4o",
-			allowsCustomModel: false,
+			allowsCustomModel: true,
 			fixedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
 			activeOptionIds: { providerIds: [], subscriptionIds: [] },
 		});

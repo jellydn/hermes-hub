@@ -148,15 +148,10 @@ export function isValidAiModel(provider: ApiProviderId, model: string) {
 		return false;
 	}
 
-	if (!isValidModelString(model)) {
-		return false;
-	}
-
-	if (option.requiresCustomModel) {
-		return true;
-	}
-
-	return option.models.includes(model);
+	// All providers accept custom model IDs. The fixed `models` list is a set
+	// of quick-pick suggestions, not a strict allowlist — users can type any
+	// valid model string (e.g. a newly released model not yet in the list).
+	return isValidModelString(model);
 }
 
 export function formatAiProviderLabel(provider: ApiProviderId) {

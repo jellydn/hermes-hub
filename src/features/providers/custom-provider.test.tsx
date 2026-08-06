@@ -78,7 +78,7 @@ describe("ProviderSettings - custom provider", () => {
 
 		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
 		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 	});
 
 	it("loads saved custom config without crashing", () => {
@@ -102,7 +102,7 @@ describe("ProviderSettings - custom provider", () => {
 
 		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
 		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 		expect(within(apiSection).getByDisplayValue("deepseek-chat")).toBeTruthy();
 	});
 
@@ -127,7 +127,7 @@ describe("ProviderSettings - custom provider", () => {
 
 		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
 		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 	});
 
 	it("loads saved custom config with baseUrl undefined without crashing", () => {
@@ -150,6 +150,6 @@ describe("ProviderSettings - custom provider", () => {
 
 		expect(within(apiSection).getByLabelText(/api key/i)).toBeTruthy();
 		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 	});
 });

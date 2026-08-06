@@ -49,12 +49,6 @@ function ModelAccessForm({
 		(o) => o.optionId === selectedOptionId,
 	);
 
-	const modelsForSelected = selectedOption
-		? selectedOption.allowsCustomModel
-			? null
-			: selectedOption.fixedModels
-		: null;
-
 	return (
 		<div className="mt-4 space-y-4">
 			<div>
@@ -92,7 +86,7 @@ function ModelAccessForm({
 				) : null}
 			</div>
 
-			{selectedOption && modelsForSelected ? (
+			{selectedOption ? (
 				<div>
 					<label
 						htmlFor="model-access-model"
@@ -100,42 +94,25 @@ function ModelAccessForm({
 					>
 						Model
 					</label>
-					<select
-						id="model-access-model"
-						className={selectClassName}
-						value={selectedModel}
-						onChange={(e) => {
-							onModelChange(e.target.value);
-						}}
-					>
-						<option value="">— Select —</option>
-						{modelsForSelected.map((m) => (
-							<option key={m} value={m}>
-								{m}
-							</option>
-						))}
-					</select>
-				</div>
-			) : null}
-
-			{selectedOption?.allowsCustomModel ? (
-				<div>
-					<label
-						htmlFor="model-access-custom-model"
-						className="mb-1.5 block text-sm font-medium text-[var(--sea-ink)]"
-					>
-						Model
-					</label>
 					<input
-						id="model-access-custom-model"
+						id="model-access-model"
 						type="text"
 						className={selectClassName}
 						placeholder="Enter model name (e.g. gpt-4o)"
 						value={selectedModel}
+						list="model-access-suggestions"
 						onChange={(e) => {
 							onModelChange(e.target.value);
 						}}
 					/>
+					{selectedOption.fixedModels &&
+					selectedOption.fixedModels.length > 0 ? (
+						<datalist id="model-access-suggestions">
+							{selectedOption.fixedModels.map((m) => (
+								<option key={m} value={m} />
+							))}
+						</datalist>
+					) : null}
 				</div>
 			) : null}
 

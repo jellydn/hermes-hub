@@ -127,7 +127,7 @@ describe("ProviderSettings", () => {
 		expect(within(apiSection).getByDisplayValue("gpt-4o-mini")).toBeTruthy();
 	});
 
-	it("switches to a custom model field for OpenRouter", () => {
+	it("shows a free-text model field with suggestions for OpenRouter", () => {
 		render(<ProviderSettings initialAccess={null} />);
 		const apiSection = getApiSection();
 
@@ -135,8 +135,7 @@ describe("ProviderSettings", () => {
 			within(apiSection).getByRole("radio", { name: /openrouter/i }),
 		);
 
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
-		expect(within(apiSection).queryByRole("combobox")).toBeNull();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 		expect(
 			within(apiSection).getByDisplayValue("openai/gpt-4o-mini"),
 		).toBeTruthy();
@@ -174,7 +173,7 @@ describe("ProviderSettings", () => {
 		);
 
 		expect(within(apiSection).getByLabelText(/base url/i)).toBeTruthy();
-		expect(within(apiSection).getByLabelText(/custom model id/i)).toBeTruthy();
+		expect(within(apiSection).getByLabelText(/^model$/i)).toBeTruthy();
 		expect(
 			within(apiSection).getByDisplayValue("http://localhost:11434/v1"),
 		).toBeTruthy();

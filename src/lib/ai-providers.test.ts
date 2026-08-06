@@ -97,9 +97,9 @@ describe("api provider metadata", () => {
 		expect(providerRequiresApiKey("openai")).toBe(true);
 	});
 
-	it("accepts only whitelisted OpenAI models", () => {
+	it("accepts whitelisted and custom OpenAI models", () => {
 		expect(isValidAiModel("openai", "gpt-4o-mini")).toBe(true);
-		expect(isValidAiModel("openai", "gpt-5.5")).toBe(false);
+		expect(isValidAiModel("openai", "gpt-5.5")).toBe(true);
 	});
 
 	it("includes deepseek as a first-class API provider", () => {
@@ -107,10 +107,10 @@ describe("api provider metadata", () => {
 		expect(isApiProviderId("deepseek")).toBe(true);
 	});
 
-	it("accepts whitelisted DeepSeek models", () => {
+	it("accepts whitelisted and custom DeepSeek models", () => {
 		expect(isValidAiModel("deepseek", "deepseek-v4-flash")).toBe(true);
 		expect(isValidAiModel("deepseek", "deepseek-v4-pro")).toBe(true);
-		expect(isValidAiModel("deepseek", "deepseek-chat")).toBe(false);
+		expect(isValidAiModel("deepseek", "deepseek-chat")).toBe(true);
 	});
 
 	it("requires a base URL and API key for DeepSeek", () => {

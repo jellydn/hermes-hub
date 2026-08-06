@@ -129,21 +129,21 @@ export function SubscriptionSelectionPanel({
 				<ProviderSettingsField
 					label="Model"
 					name="model"
-					hint={`Pre-selected default for ${formatUserSubscriptionLabel(
-						form.subscriptionProvider,
-					)}.`}
+					hint="Pick a suggested model or type a custom model ID."
 				>
-					<select
+					<input
 						id="subscription-model"
+						type="text"
+						list="subscription-model-suggestions"
 						{...register("model")}
 						className={inputClassName}
-					>
+						placeholder={subscriptionOption?.defaultModel || "model-id"}
+					/>
+					<datalist id="subscription-model-suggestions">
 						{subscriptionOption?.models.map((model) => (
-							<option key={model} value={model}>
-								{model}
-							</option>
+							<option key={model} value={model} />
 						))}
-					</select>
+					</datalist>
 				</ProviderSettingsField>
 
 				{requiresCredentials ? (

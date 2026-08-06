@@ -161,41 +161,29 @@ export function ProviderSelectionPanel({
 					</ProviderSettingsField>
 				) : null}
 
-				{providerOption?.requiresCustomModel ? (
-					<ProviderSettingsField
-						label="Custom model ID"
-						name="model"
-						hint={`Enter the model ID or name for ${
-							providerOption?.label ?? ""
-						}.`}
-					>
-						<input
-							id="model"
-							type="text"
-							{...register("model")}
-							className={inputClassName}
-							placeholder={providerOption?.defaultModel || "model-id"}
-						/>
-					</ProviderSettingsField>
-				) : (
-					<ProviderSettingsField
-						label="Model"
-						name="model"
-						hint="Pre-selected default for the chosen provider."
-					>
-						<select
-							id="model"
-							{...register("model")}
-							className={inputClassName}
-						>
-							{providerOption?.models.map((model) => (
-								<option key={model} value={model}>
-									{model}
-								</option>
-							))}
-						</select>
-					</ProviderSettingsField>
-				)}
+				<ProviderSettingsField
+					label="Model"
+					name="model"
+					hint={
+						providerOption && providerOption.models.length > 0
+							? "Pick a suggested model or type a custom model ID."
+							: `Enter the model ID or name for ${providerOption?.label ?? ""}.`
+					}
+				>
+					<input
+						id="model"
+						type="text"
+						list="provider-model-suggestions"
+						{...register("model")}
+						className={inputClassName}
+						placeholder={providerOption?.defaultModel || "model-id"}
+					/>
+					<datalist id="provider-model-suggestions">
+						{providerOption?.models.map((model) => (
+							<option key={model} value={model} />
+						))}
+					</datalist>
+				</ProviderSettingsField>
 			</div>
 
 			<AccessSelectionFeedback

@@ -1,3 +1,5 @@
+import { isValidModelString } from "./ai-providers";
+
 export type UserSubscriptionId = "chatgpt" | "mimo" | "commandcode";
 
 export const FUTURE_USER_SUBSCRIPTION_IDS = ["github-copilot"] as const;
@@ -182,7 +184,10 @@ export function isValidSubscriptionModel(
 		return false;
 	}
 
-	return option.models.includes(model);
+	// All subscriptions accept custom model IDs. The fixed `models` list is a
+	// set of quick-pick suggestions, not a strict allowlist — users can type
+	// any valid model string (e.g. a newly released model not yet in the list).
+	return isValidModelString(model);
 }
 
 export function subscriptionSupportsConnectionTest(

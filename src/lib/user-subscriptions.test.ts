@@ -32,12 +32,12 @@ describe("chatgpt subscription metadata", () => {
 		});
 	});
 
-	it("accepts only whitelisted ChatGPT models", () => {
+	it("accepts whitelisted and custom ChatGPT models", () => {
 		expect(isValidSubscriptionModel("chatgpt", "gpt-5.4-mini")).toBe(true);
 		expect(isValidSubscriptionModel("chatgpt", "gpt-5.3-codex-spark")).toBe(
 			true,
 		);
-		expect(isValidSubscriptionModel("chatgpt", "gpt-4o")).toBe(false);
+		expect(isValidSubscriptionModel("chatgpt", "gpt-4o")).toBe(true);
 	});
 });
 
@@ -61,10 +61,10 @@ describe("mimo subscription metadata", () => {
 		});
 	});
 
-	it("accepts only whitelisted MiMo models", () => {
+	it("accepts whitelisted and custom MiMo models", () => {
 		expect(isValidSubscriptionModel("mimo", "mimo-v2.5-pro")).toBe(true);
 		expect(isValidSubscriptionModel("mimo", "mimo-v2.5")).toBe(true);
-		expect(isValidSubscriptionModel("mimo", "gpt-4o")).toBe(false);
+		expect(isValidSubscriptionModel("mimo", "gpt-4o")).toBe(true);
 	});
 
 	it("maps storage provider ids back to subscription options", () => {
@@ -109,7 +109,7 @@ describe("commandcode subscription metadata", () => {
 		});
 	});
 
-	it("accepts only whitelisted Command Code models", () => {
+	it("accepts whitelisted and custom Command Code models", () => {
 		expect(isValidSubscriptionModel("commandcode", "taste-1")).toBe(true);
 		expect(
 			isValidSubscriptionModel("commandcode", "deepseek/deepseek-v4-flash"),
@@ -117,7 +117,7 @@ describe("commandcode subscription metadata", () => {
 		expect(
 			isValidSubscriptionModel("commandcode", "deepseek/deepseek-v4-pro"),
 		).toBe(true);
-		expect(isValidSubscriptionModel("commandcode", "gpt-4o")).toBe(false);
+		expect(isValidSubscriptionModel("commandcode", "gpt-4o")).toBe(true);
 	});
 
 	it("maps storage provider id back to subscription option", () => {

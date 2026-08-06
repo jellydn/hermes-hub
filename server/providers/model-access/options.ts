@@ -63,7 +63,7 @@ function buildApiProviderOption(
 		label: option.label,
 		model: record.model,
 		fixedModels: option.models.length > 0 ? [...option.models] : undefined,
-		allowsCustomModel: option.requiresCustomModel || undefined,
+		allowsCustomModel: true,
 		isActive: record.isActive,
 		keyLast4: dec.keyLast4,
 		baseUrl: record.baseUrl,
@@ -89,6 +89,7 @@ function buildCredentialSubscriptionOption(
 		label: subscriptionOption.label,
 		model: record.model,
 		fixedModels: [...subscriptionOption.models],
+		allowsCustomModel: true,
 		isActive: record.isActive,
 		keyLast4: dec.keyLast4,
 		baseUrl: record.baseUrl,
@@ -108,6 +109,7 @@ function buildOAuthSubscriptionOption(
 		label: option.label,
 		model: record.model,
 		fixedModels: [...option.models],
+		allowsCustomModel: true,
 		isActive: record.isActive,
 	};
 }
@@ -268,7 +270,7 @@ async function resolveApiProviderOption(
 		provider: record.provider,
 		hermesProviderId: providerConfig.hermesProvider,
 		model: record.model,
-		allowsCustomModel: option.requiresCustomModel ?? false,
+		allowsCustomModel: true,
 		fixedModels: [...option.models],
 		activeOptionIds: await findActiveOptionIds(
 			userId,
@@ -308,7 +310,7 @@ async function resolveCredentialSubscriptionOption(
 		provider: credentialOption.id,
 		hermesProviderId: credentialOption.hermesProviderId,
 		model: record.model,
-		allowsCustomModel: false,
+		allowsCustomModel: true,
 		fixedModels: [...subOption.models],
 		activeOptionIds: await findActiveOptionIds(
 			userId,
@@ -350,7 +352,7 @@ async function resolveOAuthSubscriptionOption(
 		provider: record.subscriptionProvider,
 		hermesProviderId: option.hermesProviderId,
 		model: record.model,
-		allowsCustomModel: false,
+		allowsCustomModel: true,
 		fixedModels: [...option.models],
 		activeOptionIds: await findActiveOptionIds(
 			userId,
