@@ -17,9 +17,18 @@ const routerSpies = vi.hoisted(() => ({
 	invalidate: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-	useRouter: () => ({ invalidate: routerSpies.invalidate }),
-}));
+// Partial mock (plan 009): stub only `useRouter`, keep every other real export
+// (`Link`, `Outlet`, …) so a future consumer of another router export fails
+// with a useful diagnostic instead of a silent `undefined` TypeError.
+vi.mock("@tanstack/react-router", async () => {
+	const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
+		"@tanstack/react-router",
+	);
+	return {
+		...actual,
+		useRouter: () => ({ invalidate: routerSpies.invalidate }),
+	};
+});
 
 vi.mock("lucide-react", () => {
 	const MockIcon = (props: Record<string, unknown>) => <svg {...props} />;
@@ -61,6 +70,8 @@ vi.mock("#/components/ui/button", () => ({
 		</button>
 	),
 }));
+
+import { Link, Outlet } from "@tanstack/react-router";
 
 import { TelegramSettings } from "./telegram-settings";
 import { useModelAccessController } from "./use-model-access-controller";
@@ -559,6 +570,14 @@ describe("TelegramSettings", () => {
 			"/api/telegram/model-switch",
 			expect.objectContaining({ method: "POST" }),
 		);
+	});
+
+	it("keeps the real router exports available under the partial mock", () => {
+		// Plan 009: the partial mock (vi.importActual) must expose the real router
+		// exports — the old broad mock resolved them to `undefined`, which is the
+		// silent-break risk this plan removes.
+		expect(Link).toBeDefined();
+		expect(Outlet).toBeDefined();
 	});
 });
 
