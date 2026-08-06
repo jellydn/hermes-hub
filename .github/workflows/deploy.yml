@@ -210,6 +210,7 @@ jobs:
           ssh-keyscan "$DOKKU_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync Dokku config
+        id: sync-config
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
@@ -232,7 +233,12 @@ jobs:
           TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}"
           DB_POOL_MAX="${DB_POOL_MAX:-5}"
 
-          ssh "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" || ssh "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
+          if ssh "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" 2>/dev/null; then
+            echo "app_created=false" >> "$GITHUB_OUTPUT"
+          else
+            ssh "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
+            echo "app_created=true" >> "$GITHUB_OUTPUT"
+          fi
 
           args=(
             "NODE_ENV=production"
@@ -253,6 +259,48 @@ jobs:
           fi
 
           ssh "dokku@$DOKKU_HOST" config:set --no-restart "$DOKKU_APP" "${args[@]}"
+
+      - name: Verify TLS certificate on the Dokku app
+        env:
+          DOKKU_APP: ${{ secrets.DOKKU_APP }}
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+        run: |
+          : "${DOKKU_APP:?DOKKU_APP secret is required}"
+          : "${DOKKU_HOST:?DOKKU_HOST secret is required}"
+
+          # The first deploy of a brand-new app cannot have a certificate yet, and
+          # letsencrypt's HTTP-01 challenge requires a live app reachable on :80.
+          # Defer the TLS requirement to the next deploy so a fresh Dokku target
+          # is not deadlocked.
+          if [ "${{ steps.sync-config.outputs.app_created }}" = "true" ]; then
+            echo "App '$DOKKU_APP' was just created - skipping TLS check for this bootstrap deploy."
+            exit 0
+          fi
+
+          # Primary: certificate issued by the dokku-letsencrypt plugin.
+          if [ "$(ssh "dokku@$DOKKU_HOST" letsencrypt:active "$DOKKU_APP" 2>/dev/null || true)" = "true" ]; then
+            echo "TLS certificate found on '$DOKKU_APP' (letsencrypt)."
+            exit 0
+          fi
+
+          # Fallback: manually installed certificate (dokku certs:add).
+          CERT_EXISTS="$(ssh "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" --certs-certificate-exists 2>/dev/null || true)"
+          if [ "$CERT_EXISTS" != "true" ]; then
+            CERT_REPORT="$(ssh "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" 2>/dev/null || true)"
+            if printf '%s' "$CERT_REPORT" | grep -qi "certificate exists: true"; then
+              CERT_EXISTS="true"
+            fi
+          fi
+          if [ "$CERT_EXISTS" = "true" ]; then
+            echo "TLS certificate found on '$DOKKU_APP' (custom cert)."
+            exit 0
+          fi
+
+          echo "::error::No TLS certificate is installed on Dokku app '$DOKKU_APP'. It runs with NODE_ENV=production and the HTTPS guard (httpsMiddleware) rejects plain HTTP with 426, so credential-bearing routes (install progress, provider save/deploy, Telegram, web UI proxy) would be broken."
+          echo "::error::Enable TLS on the host, then retry:"
+          echo "::error::  - dokku letsencrypt:enable $DOKKU_APP (install the dokku-letsencrypt plugin and set an ACME email first)"
+          echo "::error::  - or install a custom certificate: dokku certs:add $DOKKU_APP < server.crt > server.key"
+          exit 1
 
       - name: Deploy to Dokku
         env:
