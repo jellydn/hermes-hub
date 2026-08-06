@@ -125,7 +125,6 @@ beforeEach(() => {
 			}),
 		);
 	});
-	vi.stubGlobal("confirm", () => true);
 });
 
 describe("AgentSkills UI Component", () => {
