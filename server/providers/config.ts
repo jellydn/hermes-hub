@@ -47,6 +47,12 @@ export const PROVIDER_ENV_CONFIGS: Record<ApiProviderId, ProviderEnvConfig> = {
 		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
 		hermesProvider: "custom",
 	},
+	commandcode: {
+		apiKeyEnvVar: "COMMANDCODE_API_KEY",
+		baseUrlEnvVar: "CUSTOM_BASE_URL",
+		extraBaseUrlEnvVars: ["OPENAI_BASE_URL"],
+		hermesProvider: "custom",
+	},
 	custom: {
 		apiKeyEnvVar: "OPENAI_API_KEY",
 		baseUrlEnvVar: "CUSTOM_BASE_URL",

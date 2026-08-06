@@ -777,10 +777,10 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 
 | Field      | Type   | Description                                                                                      |
 | ---------- | ------ | ------------------------------------------------------------------------------------------------ |
-| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"deepseek"`, or `"custom"`              |
+| `provider` | string | `"openai"`, `"anthropic"`, `"openrouter"`, `"ollama"`, `"deepseek"`, `"commandcode"`, or `"custom"`              |
 | `model`    | string | Model ID (defaults to provider's default if omitted)                                             |
-| `apiKey`   | string | API key. Required for `openai`, `anthropic`, `openrouter`, `deepseek`, and `custom` (unless re-saving existing credentials). Optional for `ollama`. |
-| `baseUrl`  | string | Required for `ollama`, `deepseek`, and `custom`. Optional for other API-key providers.          |
+| `apiKey`   | string | API key. Required for `openai`, `anthropic`, `openrouter`, `deepseek`, `commandcode`, and `custom` (unless re-saving existing credentials). Optional for `ollama`. |
+| `baseUrl`  | string | Required for `ollama`, `deepseek`, `commandcode`, and `custom`. Optional for other API-key providers.          |
 
 **Supported models:**
 
@@ -791,6 +791,7 @@ Saves an AI provider configuration. Deactivates any existing provider config fir
 | openrouter   | Any model ID (custom text input)                                             | `openai/gpt-4o-mini`       |
 | ollama       | Any model ID (custom text input)                                             | `llama3`                   |
 | deepseek     | `deepseek-v4-flash`, `deepseek-v4-pro`                                       | `deepseek-v4-flash`        |
+| commandcode  | Any model ID (custom text input)                                             | `deepseek/deepseek-v4-flash` |
 | custom       | Any model ID (custom text input)                                             | _(empty)_                  |
 **Response (200):**
 

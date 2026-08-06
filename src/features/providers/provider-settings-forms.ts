@@ -37,6 +37,7 @@ export const providerSchema = z.object({
 		"openrouter",
 		"ollama",
 		"deepseek",
+		"commandcode",
 		"custom",
 	]),
 	model: z.string(),

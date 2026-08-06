@@ -4,6 +4,7 @@ export type ApiProviderId =
 	| "openrouter"
 	| "ollama"
 	| "deepseek"
+	| "commandcode"
 	| "custom";
 
 /** @deprecated Use ApiProviderId for API-key providers. */
@@ -78,6 +79,18 @@ export const apiProviderOptions: readonly AiProviderOption[] = [
 		requiresApiKey: true,
 		requiresBaseUrl: true,
 		defaultBaseUrl: "https://api.deepseek.com/v1",
+	},
+	{
+		id: "commandcode",
+		label: "Command Code",
+		description:
+			"Every top model via the Command Code Provider API (OpenAI-compatible). Coding plans from $1/mo.",
+		models: [],
+		defaultModel: "deepseek/deepseek-v4-flash",
+		requiresCustomModel: true,
+		requiresApiKey: true,
+		requiresBaseUrl: true,
+		defaultBaseUrl: "https://api.commandcode.ai/provider/v1",
 	},
 	{
 		id: "custom",
