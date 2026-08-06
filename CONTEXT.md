@@ -28,6 +28,8 @@
 
 **HTTPS Enforcement**: Credential-bearing endpoints reject plain HTTP requests in production by checking `x-forwarded-proto` or the request URL scheme. No client-side pre-encryption — the threat model is a misconfigured proxy stripping TLS, not network interception of HTTPS traffic. Keys are already encrypted at rest via AES-256-GCM.
 
+**Legacy Plaintext API Server Key**: A `telegram_configs.api_server_key` value written before the AES-256-GCM refactor — no `iv.tag.cipher` dot structure. `decryptApiServerKey` no longer returns such plaintext verbatim: it logs a structured warning (`kind: "decrypt"`) and throws. Test-bot and provider-deploy calls therefore return HTTP 500 with "…legacy plaintext format… the operator must re-save it via /api/providers." until the provider is re-saved (which rewrites the key encrypted). Expect the failure in the meantime — silent acceptance was the bug.
+
 **Dashboard Caching**: Two-tier in-memory cache on the server. **Static data** (server info, provider, telegram, install status) cached for 60 seconds. **Live metrics** (SSH: cpu, memory, disk, uptime) cached for 15 seconds. Each tier is a module-level variable with a timestamp check. SSH only runs once per 15s expiry regardless of client count. The 30-second client poll hits cached data most of the time.
 
 **Single-Instance Boundary**: Near-term deployments are intentionally single-instance. In-memory state (install streams, session credentials, rate limiting, dashboard caches) is accepted as a temporary constraint and must be documented as non-shared across nodes.

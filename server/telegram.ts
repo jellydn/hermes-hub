@@ -333,7 +333,17 @@ export async function testTelegramBot(context: Context) {
 		);
 	}
 
-	const decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+	let decryptedApiServerKey: string;
+	try {
+		decryptedApiServerKey = decryptApiServerKey(record.apiServerKey);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to decrypt API server key.";
+		return context.json({ error: message }, 500);
+	}
+
 	let providerConfig: Awaited<ReturnType<typeof getProviderDeployConfig>> =
 		null;
 	try {

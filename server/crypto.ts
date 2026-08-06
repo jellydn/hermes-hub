@@ -5,6 +5,8 @@ import {
 	randomBytes,
 } from "node:crypto";
 
+import { logger } from "./lib/logger";
+
 const algorithm = "aes-256-gcm";
 const ivLength = 12;
 
@@ -59,11 +61,19 @@ export function decryptApiServerKey(payload: string): string {
 	}
 	try {
 		return decryptSecret(payload);
-	} catch {
-		// Legacy unencrypted keys don't have the AES-GCM iv:tag:cipher structure
+	} catch (error) {
+		// Legacy unencrypted keys don't have the AES-GCM iv:tag:cipher structure.
+		// Refuse to treat plaintext as a credential instead of silently returning
+		// it — operators must re-save the provider so the value is encrypted.
 		if (!payload.includes(".")) {
-			return payload;
+			logger.warn(
+				{ kind: "decrypt", payloadLength: payload.length },
+				"decryptApiServerKey received a legacy plaintext API server key — refusing to use as credential",
+			);
+			throw new Error(
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save it via /api/providers.",
+			);
 		}
-		throw new Error("API server key could not be decrypted.");
+		throw error;
 	}
 }

@@ -426,6 +426,38 @@ describe("telegram handlers", () => {
 		expect(capturedCommand).toContain('"model":"test\'\\\'\'s-model"');
 	});
 
+	it("testTelegramBot returns 500 when the API server key is legacy plaintext", async () => {
+		getAuthSession.mockResolvedValue({
+			user: { id: "user_123" },
+			session: { id: "session_123" },
+		});
+
+		selectLimit.mockResolvedValue([
+			{
+				botToken: "enc:123456:secret-token",
+				botUsername: "hermes_helper_bot",
+				isActive: true,
+				deployedServerId: "server_1",
+				deployedServerHost: "192.168.1.1",
+				apiServerKey: "legacy-plaintext-key",
+			},
+		]);
+
+		// Legacy plaintext (no dot structure) is refused instead of returned.
+		decryptApiServerKey.mockImplementationOnce(() => {
+			throw new Error(
+				"API server key is in legacy plaintext format and cannot be decrypted; the operator must re-save it via /api/providers.",
+			);
+		});
+
+		const { testTelegramBot } = await import("./telegram");
+		const response = await testTelegramBot(createContext({ message: "Hello" }));
+		const payload = await response.json();
+
+		expect(response.status).toBe(500);
+		expect(payload.error).toContain("legacy plaintext format");
+	});
+
 	it("does not persist deploy state when SSH deploy fails", async () => {
 		getAuthSession.mockResolvedValue({
 			user: { id: "user_123" },

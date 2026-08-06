@@ -108,7 +108,16 @@ export async function deployProviderToHermes(context: Context) {
 		deployProviderLabel = deployable.deployLabel;
 	}
 
-	const decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
+	let decryptedApiServerKey: string;
+	try {
+		decryptedApiServerKey = decryptApiServerKey(telegramInfo.apiServerKey);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to decrypt API server key.";
+		return context.json({ error: message }, 500);
+	}
 
 	try {
 		await deployManagedCompose({
