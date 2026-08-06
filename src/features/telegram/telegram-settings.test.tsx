@@ -5,6 +5,7 @@ import {
 	cleanup,
 	fireEvent,
 	render,
+	renderHook,
 	screen,
 } from "@testing-library/react";
 import type { ComponentPropsWithoutRef } from "react";
@@ -62,6 +63,7 @@ vi.mock("#/components/ui/button", () => ({
 }));
 
 import { TelegramSettings } from "./telegram-settings";
+import { useModelAccessController } from "./use-model-access-controller";
 
 const fetchMock = vi.fn();
 
@@ -454,6 +456,32 @@ describe("TelegramSettings", () => {
 		expect(
 			screen.getByText(/model access switched successfully/i),
 		).toBeTruthy();
+	});
+
+	it("fetches model-access options when isDeployed flips from false to true", async () => {
+		// Directly exercises the controller (renderHook) because the flip must
+		// happen without unmounting it: TelegramSettings holds savedConfig in
+		// useState, so re-rendering with a new initialConfig would not change
+		// isDeployed, and a key-remount would mask the bug (a fresh mount with
+		// isDeployed=true would fetch even under the old one-shot behavior).
+		const { rerender } = renderHook(
+			({ isDeployed }: { isDeployed: boolean }) =>
+				useModelAccessController({ isDeployed, onSwitched: undefined }),
+			{ initialProps: { isDeployed: false } },
+		);
+
+		// Arriving on the page without a deployed bot must NOT fetch yet.
+		expect(fetchMock).not.toHaveBeenCalledWith(
+			"/api/telegram/model-access-options",
+		);
+
+		// Connecting + deploying flips isDeployed true: the effect must refire.
+		rerender({ isDeployed: true });
+		await flushAsyncWork();
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/telegram/model-access-options",
+		);
 	});
 });
 

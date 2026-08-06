@@ -1,10 +1,10 @@
-import { useCallback, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 
 import {
 	type HostKeyErrorPayload,
 	parseHostKeyErrorPayload,
 } from "#/features/servers/host-key-recovery";
-import { useMountEffect } from "#/lib/use-mount-effect";
+
 import { useStaleRef } from "#/lib/use-stale-ref";
 import type { HostKeyErrorCode } from "#shared/contracts/host-key-error";
 import type { ModelAccessOptionsResponse } from "#shared/contracts/telegram-model-access";
@@ -160,12 +160,17 @@ export function useModelAccessController({
 		}
 	}, []);
 
-	useMountEffect(() => {
+	// Fetch the model-access options on mount AND whenever isDeployed flips to
+	// true (e.g. the operator connects + deploys after arriving on the page).
+	// fetchOptions is a stable useCallback, so including it in the deps never
+	// re-fires the effect unnecessarily. Do not replace this with useMountEffect:
+	// the one-shot hook would capture isDeployed=false at mount and never refire.
+	useEffect(() => {
 		if (!isDeployed) {
 			return;
 		}
 		void fetchOptions();
-	});
+	}, [isDeployed, fetchOptions]);
 
 	const handleSwitch = useCallback(async () => {
 		const { selectedOptionId, selectedModel } = stateRef.current;
