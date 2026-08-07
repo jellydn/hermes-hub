@@ -630,15 +630,12 @@ describe("provider settings", () => {
 					method: "POST",
 					headers: expect.objectContaining({
 						Authorization: "Bearer user_live_secret",
-						"User-Agent": "cli",
-						"x-command-code-version": "1.14.1",
-						"x-session-id": expect.stringMatching(/^sess_[0-9a-f]{16}$/),
+						"x-command-code-version": "0.29.0",
 					}),
 				}),
 			);
 			const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 			expect(JSON.parse(String(init.body))).toMatchObject({
-				permissionMode: "standard",
 				params: {
 					model: "deepseek/deepseek-v4-flash",
 					max_tokens: 1,

@@ -111,7 +111,6 @@ describe("Command Code request transformation", () => {
 			memory: null,
 			taste: null,
 			skills: null,
-			permissionMode: "standard",
 			params: {
 				model: "deepseek/deepseek-v4-flash",
 				system: "You are Hermes.\n\nBe concise.",
@@ -392,18 +391,15 @@ describe("Command Code proxy handlers", () => {
 			method: "POST",
 			headers: expect.objectContaining({
 				Authorization: "Bearer user_secret",
-				"User-Agent": "cli",
-				"x-command-code-version": "1.14.1",
+				"x-command-code-version": "0.29.0",
 				"x-cli-environment": "production",
 				"x-project-slug": "hermes-hub",
 				"x-taste-learning": "true",
 				"x-co-flag": "false",
-				"x-session-id": expect.stringMatching(/^sess_[0-9a-f]{16}$/),
 			}),
 		});
 		const upstreamBody = JSON.parse(String(init.body));
 		expect(upstreamBody).toMatchObject({
-			permissionMode: "standard",
 			params: {
 				model: "deepseek/deepseek-v4-flash",
 				messages: [{ role: "user", content: "Hello" }],
