@@ -199,15 +199,17 @@ jobs:
       - name: Configure SSH
         env:
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_SSH_PORT: ${{ secrets.DOKKU_SSH_PORT }}
           DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
         run: |
           : "${DOKKU_HOST:?DOKKU_HOST secret is required}"
           : "${DOKKU_SSH_PRIVATE_KEY:?DOKKU_SSH_PRIVATE_KEY secret is required}"
+          DOKKU_PORT="${DOKKU_SSH_PORT:-22}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$DOKKU_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan "$DOKKU_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$DOKKU_PORT" "$DOKKU_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync Dokku config
         id: sync-config
@@ -218,6 +220,7 @@ jobs:
           DB_POOL_MAX: ${{ vars.DB_POOL_MAX }}
           DOKKU_APP: ${{ secrets.DOKKU_APP }}
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_SSH_PORT: ${{ secrets.DOKKU_SSH_PORT }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RESEND_FROM: ${{ secrets.RESEND_FROM }}
@@ -230,13 +233,14 @@ jobs:
           : "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET secret is required}"
           : "${BETTER_AUTH_URL:?BETTER_AUTH_URL secret is required}"
 
+          DOKKU_PORT="${DOKKU_SSH_PORT:-22}"
           TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}"
           DB_POOL_MAX="${DB_POOL_MAX:-5}"
 
-          if ssh "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" 2>/dev/null; then
+          if ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" 2>/dev/null; then
             echo "app_created=false" >> "$GITHUB_OUTPUT"
           else
-            ssh "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
+            ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
             echo "app_created=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -258,15 +262,17 @@ jobs:
             args+=("RESEND_FROM=$RESEND_FROM")
           fi
 
-          ssh "dokku@$DOKKU_HOST" config:set --no-restart "$DOKKU_APP" "${args[@]}"
+          ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" config:set --no-restart "$DOKKU_APP" "${args[@]}"
 
       - name: Verify TLS certificate on the Dokku app
         env:
           DOKKU_APP: ${{ secrets.DOKKU_APP }}
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_SSH_PORT: ${{ secrets.DOKKU_SSH_PORT }}
         run: |
           : "${DOKKU_APP:?DOKKU_APP secret is required}"
           : "${DOKKU_HOST:?DOKKU_HOST secret is required}"
+          DOKKU_PORT="${DOKKU_SSH_PORT:-22}"
 
           # The first deploy of a brand-new app cannot have a certificate yet, and
           # letsencrypt's HTTP-01 challenge requires a live app reachable on :80.
@@ -278,15 +284,15 @@ jobs:
           fi
 
           # Primary: certificate issued by the dokku-letsencrypt plugin.
-          if [ "$(ssh "dokku@$DOKKU_HOST" letsencrypt:active "$DOKKU_APP" 2>/dev/null || true)" = "true" ]; then
+          if [ "$(ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" letsencrypt:active "$DOKKU_APP" 2>/dev/null || true)" = "true" ]; then
             echo "TLS certificate found on '$DOKKU_APP' (letsencrypt)."
             exit 0
           fi
 
           # Fallback: manually installed certificate (dokku certs:add).
-          CERT_EXISTS="$(ssh "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" --certs-certificate-exists 2>/dev/null || true)"
+          CERT_EXISTS="$(ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" --certs-certificate-exists 2>/dev/null || true)"
           if [ "$CERT_EXISTS" != "true" ]; then
-            CERT_REPORT="$(ssh "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" 2>/dev/null || true)"
+            CERT_REPORT="$(ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" certs:report "$DOKKU_APP" 2>/dev/null || true)"
             if printf '%s' "$CERT_REPORT" | grep -qi "certificate exists: true"; then
               CERT_EXISTS="true"
             fi
@@ -306,6 +312,17 @@ jobs:
         env:
           DOKKU_APP: ${{ secrets.DOKKU_APP }}
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_SSH_PORT: ${{ secrets.DOKKU_SSH_PORT }}
         run: |
+          DOKKU_PORT="${DOKKU_SSH_PORT:-22}"
+          # Git's SSH backend needs the port in the remote URL or an SSH config entry.
+          # An SSH config entry is cleaner and also covers the keyscan host key.
+          {
+            echo "Host $DOKKU_HOST"
+            echo "  Port $DOKKU_PORT"
+            echo "  IdentityFile ~/.ssh/id_ed25519"
+            echo "  StrictHostKeyChecking accept-new"
+          } >> ~/.ssh/config
+
           git remote add dokku "dokku@$DOKKU_HOST:$DOKKU_APP" 2>/dev/null || git remote set-url dokku "dokku@$DOKKU_HOST:$DOKKU_APP"
           git push dokku HEAD:master

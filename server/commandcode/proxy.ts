@@ -5,6 +5,8 @@ export const COMMAND_CODE_GENERATE_URL =
 	"https://api.commandcode.ai/alpha/generate";
 const COMMAND_CODE_MODELS_URL = "https://api.commandcode.ai/provider/v1/models";
 const COMMAND_CODE_PROXY_PATH = "/api/commandcode-proxy/v1";
+// The Go-plan gateway validates this as the Command Code CLI protocol version.
+const COMMAND_CODE_CLI_VERSION = "1.14.1";
 const GENERATION_TIMEOUT_MS = 120_000;
 const MODELS_TIMEOUT_MS = 10_000;
 
@@ -25,6 +27,7 @@ export type CommandCodeGenerateBody = {
 	memory: null;
 	taste: null;
 	skills: null;
+	permissionMode: "standard";
 	params: {
 		model: string;
 		messages: unknown[];
@@ -352,6 +355,7 @@ export function transformOpenAIToCommandCode(
 		memory: null,
 		taste: null,
 		skills: null,
+		permissionMode: "standard",
 		params: {
 			model: openaiBody.model.trim(),
 			messages: messagesToCommandCode(conversationMessages),
@@ -371,7 +375,8 @@ export function getCommandCodeRequestHeaders(authorization: string) {
 	return {
 		Authorization: authorization,
 		"Content-Type": "application/json",
-		"x-command-code-version": "0.29.0",
+		"User-Agent": "cli",
+		"x-command-code-version": COMMAND_CODE_CLI_VERSION,
 		"x-cli-environment": "production",
 		"x-project-slug": "hermes-hub",
 		"x-taste-learning": "true",
