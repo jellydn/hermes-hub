@@ -141,7 +141,7 @@ describe("ProviderSettings", () => {
 		).toBeTruthy();
 	});
 
-	it("tests the provider connection and shows the connected state", async () => {
+	it("tests the provider connection and shows the verified state", async () => {
 		render(<ProviderSettings initialAccess={null} />);
 		const apiSection = getApiSection();
 
@@ -154,7 +154,16 @@ describe("ProviderSettings", () => {
 
 		await flushAsyncWork();
 
-		expect(within(apiSection).getByText(/^provider connected$/i)).toBeTruthy();
+		// Button label changes to "Connection verified"
+		expect(
+			within(apiSection).getByRole("button", {
+				name: /connection verified/i,
+			}),
+		).toBeTruthy();
+		// Feedback alert also shows "Connection verified"
+		expect(
+			within(apiSection).getAllByText(/^connection verified$/i).length,
+		).toBeGreaterThanOrEqual(1);
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"/api/providers/test",
@@ -162,6 +171,103 @@ describe("ProviderSettings", () => {
 				method: "POST",
 			}),
 		);
+	});
+
+	it("shows a test failure error and allows retry", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ error: "Invalid API key" }), {
+				status: 400,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		render(<ProviderSettings initialAccess={null} />);
+		const apiSection = getApiSection();
+
+		fireEvent.change(within(apiSection).getByLabelText(/api key/i), {
+			target: { value: "sk-bad-key" },
+		});
+		fireEvent.click(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		);
+
+		await flushAsyncWork();
+
+		// Error alert shows the backend message
+		expect(within(apiSection).getByText(/invalid api key/i)).toBeTruthy();
+		// Button reverts to "Test Connection" for retry
+		expect(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		).toBeTruthy();
+	});
+
+	it("invalidates the verified state after changing the API key", async () => {
+		render(<ProviderSettings initialAccess={null} />);
+		const apiSection = getApiSection();
+
+		// First: test succeeds
+		fireEvent.change(within(apiSection).getByLabelText(/api key/i), {
+			target: { value: "sk-live-secret" },
+		});
+		fireEvent.click(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		);
+		await flushAsyncWork();
+
+		expect(
+			within(apiSection).getByRole("button", {
+				name: /connection verified/i,
+			}),
+		).toBeTruthy();
+
+		// Change the API key — verified state should be invalidated
+		fireEvent.change(within(apiSection).getByLabelText(/api key/i), {
+			target: { value: "sk-different-key" },
+		});
+
+		// Button reverts to "Test Connection"
+		expect(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		).toBeTruthy();
+		// No "Connection verified" text remains
+		expect(within(apiSection).queryByText(/^connection verified$/i)).toBeNull();
+	});
+
+	it("disables both buttons while testing the connection", async () => {
+		// Use a promise that we control so we can inspect the loading state
+		const pendingTest = new Promise<Response>((resolve) => {
+			setTimeout(() => {
+				resolve(
+					new Response(JSON.stringify({ status: "connected" }), {
+						status: 200,
+						headers: { "content-type": "application/json" },
+					}),
+				);
+			}, 5000);
+		});
+		fetchMock.mockReturnValueOnce(pendingTest);
+
+		render(<ProviderSettings initialAccess={null} />);
+		const apiSection = getApiSection();
+
+		fireEvent.change(within(apiSection).getByLabelText(/api key/i), {
+			target: { value: "sk-live-secret" },
+		});
+		fireEvent.click(
+			within(apiSection).getByRole("button", { name: /test connection/i }),
+		);
+
+		await flushAsyncWork();
+
+		// While testing: both buttons should be disabled
+		const saveButton = within(apiSection).getByRole("button", {
+			name: /save provider/i,
+		});
+		const testButton = within(apiSection).getByRole("button", {
+			name: /testing/i,
+		});
+		expect(saveButton).toHaveProperty("disabled", true);
+		expect(testButton).toHaveProperty("disabled", true);
 	});
 
 	it("shows Base URL and Custom Model fields when Ollama is selected", () => {

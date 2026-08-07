@@ -195,6 +195,7 @@ export function ProviderSelectionPanel({
 
 			<AccessSelectionActions
 				status={isSaving ? "saving" : isTesting ? "testing" : "idle"}
+				isConnected={isConnected}
 				onSave={onSave}
 				onTest={onTest}
 				saveLabel="Save Provider"

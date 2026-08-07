@@ -16,7 +16,7 @@ type AccessSelectionFeedbackProps = {
 };
 
 export function AccessSelectionFeedback({
-	connectedLabel = "Provider connected",
+	connectedLabel = "Connection verified",
 	isConnected,
 	saveError,
 	saveMessage,
@@ -55,24 +55,37 @@ export function AccessSelectionFeedback({
 
 type AccessSelectionActionsProps = {
 	status: "idle" | "saving" | "testing";
+	isConnected?: boolean;
 	onSave: () => void;
 	onTest: () => void;
 	saveLabel: string;
 	savingLabel: string;
+	testingLabel?: string;
+	verifiedLabel?: string;
 	showTest?: boolean;
 };
 
 export function AccessSelectionActions({
 	status,
+	isConnected = false,
 	onSave,
 	onTest,
 	saveLabel,
 	savingLabel,
+	testingLabel = "Testing…",
+	verifiedLabel = "Connection verified",
 	showTest = true,
 }: AccessSelectionActionsProps) {
+	const isBusy = status !== "idle";
+
 	return (
 		<div className="mt-8 flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-			<Button type="button" onClick={onSave} disabled={status === "saving"}>
+			<Button
+				type="button"
+				onClick={onSave}
+				disabled={isBusy}
+				aria-busy={status === "saving"}
+			>
 				{status === "saving" ? (
 					<LoaderCircle className="h-4 w-4 animate-spin" />
 				) : (
@@ -85,14 +98,28 @@ export function AccessSelectionActions({
 					type="button"
 					variant="secondary"
 					onClick={onTest}
-					disabled={status === "testing"}
+					disabled={isBusy}
+					aria-busy={status === "testing"}
+					className={
+						isConnected && !isBusy
+							? "border-[color:var(--lagoon)] text-[var(--lagoon-deep)]"
+							: undefined
+					}
 				>
 					{status === "testing" ? (
 						<LoaderCircle className="h-4 w-4 animate-spin" />
+					) : isConnected ? (
+						<CheckCircle2 className="h-4 w-4 text-[var(--lagoon-deep)]" />
 					) : (
 						<ShieldCheck className="h-4 w-4" />
 					)}
-					<span>{status === "testing" ? "Testing..." : "Test Connection"}</span>
+					<span>
+						{status === "testing"
+							? testingLabel
+							: isConnected
+								? verifiedLabel
+								: "Test Connection"}
+					</span>
 				</Button>
 			) : null}
 		</div>
