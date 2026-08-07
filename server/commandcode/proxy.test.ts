@@ -398,6 +398,7 @@ describe("Command Code proxy handlers", () => {
 				"x-project-slug": "hermes-hub",
 				"x-taste-learning": "true",
 				"x-co-flag": "false",
+				"x-session-id": expect.stringMatching(/^sess_[0-9a-f]{16}$/),
 			}),
 		});
 		const upstreamBody = JSON.parse(String(init.body));

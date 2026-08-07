@@ -10,6 +10,11 @@ const COMMAND_CODE_CLI_VERSION = "1.14.1";
 const GENERATION_TIMEOUT_MS = 120_000;
 const MODELS_TIMEOUT_MS = 10_000;
 
+// Mirrors the CLI's generateSessionId(): "sess_" + first 16 hex chars of a UUID.
+function generateCliSessionId() {
+	return `sess_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+}
+
 type JsonRecord = Record<string, unknown>;
 
 export type CommandCodeGenerateBody = {
@@ -381,6 +386,9 @@ export function getCommandCodeRequestHeaders(authorization: string) {
 		"x-project-slug": "hermes-hub",
 		"x-taste-learning": "true",
 		"x-co-flag": "false",
+		// The gateway requires a CLI-style session ID; without it the request
+		// is rejected as unauthorized (401).
+		"x-session-id": generateCliSessionId(),
 	};
 }
 

@@ -632,6 +632,7 @@ describe("provider settings", () => {
 						Authorization: "Bearer user_live_secret",
 						"User-Agent": "cli",
 						"x-command-code-version": "1.14.1",
+						"x-session-id": expect.stringMatching(/^sess_[0-9a-f]{16}$/),
 					}),
 				}),
 			);
