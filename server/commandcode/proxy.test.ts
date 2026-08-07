@@ -8,6 +8,7 @@ import {
 	handleCommandCodeProxy,
 	handleCommandCodeProxyModels,
 	mapCommandCodeFinishReason,
+	normalizeBearerToken,
 	transformCommandCodeStreamToOpenAI,
 	transformOpenAIToCommandCode,
 } from "./proxy";
@@ -198,6 +199,24 @@ describe("Command Code proxy URL", () => {
 		expect(() => getCommandCodeProxyBaseUrl()).toThrow(
 			"BETTER_AUTH_URL must be a public HTTPS URL",
 		);
+	});
+});
+
+describe("normalizeBearerToken", () => {
+	it.each([
+		["user_secret", "user_secret"],
+		["  user_secret  ", "user_secret"],
+		["Bearer user_secret", "user_secret"],
+		["bearer user_secret", "user_secret"],
+		["BEARER user_secret", "user_secret"],
+		["Bearer  user_secret", "user_secret"],
+		["  Bearer user_secret  ", "user_secret"],
+		// Nested prefix — the proxy must strip all levels, not forward "Bearer Bearer …"
+		["Bearer Bearer user_secret", "user_secret"],
+		["", ""],
+		["   ", ""],
+	])("normalizes %s → %s", (input, expected) => {
+		expect(normalizeBearerToken(input)).toBe(expected);
 	});
 });
 
@@ -468,6 +487,35 @@ describe("Command Code proxy handlers", () => {
 
 		expect(response.status).toBe(401);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("strips a nested Bearer prefix from the forwarded authorization", async () => {
+		fetchMock.mockResolvedValueOnce(
+			ndjsonResponse([
+				{ type: "text-delta", text: "Hi" },
+				{ type: "finish", finishReason: "stop" },
+			]),
+		);
+
+		await app.request("http://localhost/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				// Gateway might forward a double-prefixed token
+				Authorization: "Bearer Bearer user_secret",
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "test-model",
+				messages: [{ role: "user", content: "Hello" }],
+				stream: true,
+			}),
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(init.headers).toMatchObject({
+			// Single Bearer prefix — no doubling
+			Authorization: "Bearer user_secret",
+		});
 	});
 
 	it("proxies model discovery without forwarding authorization", async () => {

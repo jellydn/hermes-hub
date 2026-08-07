@@ -370,6 +370,21 @@ export function transformOpenAIToCommandCode(
 	};
 }
 
+/**
+ * Strips all leading "Bearer " prefixes (case-insensitive) from a raw API key
+ * so the caller cannot accidentally double- or triple-prefix it. Returns the
+ * bare token, trimmed of surrounding whitespace.
+ */
+export function normalizeBearerToken(value: string): string {
+	let token = value.trim();
+	for (;;) {
+		const match = /^Bearer\s+(.+)$/i.exec(token);
+		if (!match) break;
+		token = match[1].trim();
+	}
+	return token;
+}
+
 export function getCommandCodeRequestHeaders(authorization: string) {
 	return {
 		Authorization: authorization,
@@ -747,8 +762,8 @@ export async function collectCommandCodeCompletion(
 
 function getBearerAuthorization(context: Context) {
 	const authorization = context.req.header("authorization")?.trim() ?? "";
-	const match = /^Bearer\s+(.+)$/i.exec(authorization);
-	return match?.[1]?.trim() ? `Bearer ${match[1].trim()}` : null;
+	const token = normalizeBearerToken(authorization);
+	return token ? `Bearer ${token}` : null;
 }
 
 function isStreamingRequest(body: unknown) {

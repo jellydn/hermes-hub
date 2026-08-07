@@ -22,7 +22,7 @@ env:
 
 jobs:
   validate:
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_TARGET == 'vps' || vars.DEPLOY_TARGET == 'dokku' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -183,7 +183,7 @@ jobs:
           ssh -p "$SSH_PORT" "$VPS_USER@$VPS_HOST" "cd '$DEPLOY_PATH' && docker compose pull app && docker compose up -d postgres && until [ \"\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose ps -q postgres))\" = healthy ]; do sleep 2; done && docker compose run --rm app ./node_modules/.bin/drizzle-kit migrate && docker compose up -d app && docker compose ps"
 
   deploy-dokku:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'dokku') || (github.event_name == 'push' && vars.DEPLOY_TARGET == 'dokku') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'dokku') || (github.event_name == 'push' && vars.DEPLOY_TARGET != 'vps') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: validate

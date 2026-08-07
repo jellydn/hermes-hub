@@ -4,6 +4,7 @@ import {
 	COMMAND_CODE_GENERATE_URL,
 	collectCommandCodeCompletion,
 	getCommandCodeRequestHeaders,
+	normalizeBearerToken,
 	transformOpenAIToCommandCode,
 } from "../commandcode/proxy";
 
@@ -91,7 +92,9 @@ export async function verifyCommandCodeConnection(input: {
 	try {
 		response = await fetch(COMMAND_CODE_GENERATE_URL, {
 			method: "POST",
-			headers: getCommandCodeRequestHeaders(`Bearer ${input.apiKey}`),
+			headers: getCommandCodeRequestHeaders(
+				`Bearer ${normalizeBearerToken(input.apiKey)}`,
+			),
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(30_000),
 		});
