@@ -6,6 +6,7 @@ import {
 	collectCommandCodeCompletion,
 	getCommandCodeProxyBaseUrl,
 	handleCommandCodeProxy,
+	handleCommandCodeProxyDiagnostics,
 	handleCommandCodeProxyModels,
 	mapCommandCodeFinishReason,
 	normalizeBearerToken,
@@ -368,6 +369,7 @@ describe("Command Code response transformation", () => {
 describe("Command Code proxy handlers", () => {
 	const app = new Hono();
 	app.post("/v1/chat/completions", handleCommandCodeProxy);
+	app.get("/v1/diagnostics", handleCommandCodeProxyDiagnostics);
 	app.get("/v1/models", handleCommandCodeProxyModels);
 
 	beforeEach(() => {
@@ -538,5 +540,45 @@ describe("Command Code proxy handlers", () => {
 		);
 		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(init.headers).toBeUndefined();
+	});
+
+	it("diagnostics endpoint returns a token fingerprint without calling upstream", async () => {
+		const response = await app.request("http://localhost/v1/diagnostics", {
+			headers: { Authorization: "Bearer user_secret123" },
+		});
+
+		expect(response.status).toBe(200);
+		expect(fetchMock).not.toHaveBeenCalled();
+		const body = await response.json();
+		expect(body).toMatchObject({
+			status: "token_received",
+			tokenFingerprint: {
+				prefix: "user_sec",
+				suffix: "t123",
+				length: 14,
+				startsWithUser: true,
+			},
+		});
+	});
+
+	it("diagnostics endpoint reports no_token when Authorization is missing", async () => {
+		const response = await app.request("http://localhost/v1/diagnostics");
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toMatchObject({ status: "no_token" });
+	});
+
+	it("diagnostics endpoint strips nested Bearer prefixes", async () => {
+		const response = await app.request("http://localhost/v1/diagnostics", {
+			headers: { Authorization: "Bearer Bearer user_secret123" },
+		});
+
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body.tokenFingerprint).toMatchObject({
+			prefix: "user_sec",
+			suffix: "t123",
+			startsWithUser: true,
+		});
 	});
 });

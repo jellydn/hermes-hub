@@ -4,6 +4,7 @@ import { RateLimiterMemory } from "rate-limiter-flexible";
 import { getAuth, hasDatabaseUrl } from "./auth";
 import {
 	handleCommandCodeProxy,
+	handleCommandCodeProxyDiagnostics,
 	handleCommandCodeProxyModels,
 } from "./commandcode/proxy";
 import { getDashboardStatus } from "./dashboard";
@@ -251,6 +252,10 @@ apiApp.post(
 	"/commandcode-proxy/v1/chat/completions",
 	httpsMiddleware,
 	handleCommandCodeProxy,
+);
+apiApp.get(
+	"/commandcode-proxy/v1/diagnostics",
+	handleCommandCodeProxyDiagnostics,
 );
 apiApp.get(
 	"/commandcode-proxy/v1/models",

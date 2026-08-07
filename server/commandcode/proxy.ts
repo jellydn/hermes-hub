@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
+import { logger } from "../lib/logger";
 
 export const COMMAND_CODE_GENERATE_URL =
 	"https://api.commandcode.ai/alpha/generate";
@@ -784,8 +785,28 @@ function upstreamErrorResponse(response: Response, body: ArrayBuffer) {
 export async function handleCommandCodeProxy(context: Context) {
 	const authorization = getBearerAuthorization(context);
 	if (!authorization) {
+		logger.warn(
+			"Command Code proxy: rejected request with no Authorization header",
+		);
 		return context.json({ error: "Bearer API key is required." }, 401);
 	}
+
+	// Log a redacted fingerprint of the token so operators can verify the
+	// gateway is sending the expected Command Code key (not a stale or
+	// wrong-provider key). Only the first 8 chars and last 4 are shown.
+	const token = normalizeBearerToken(context.req.header("authorization") ?? "");
+	const tokenPrefix = token.slice(0, 8);
+	const tokenSuffix = token.slice(-4);
+	const tokenLen = token.length;
+	logger.info(
+		{
+			tokenPrefix,
+			tokenSuffix,
+			tokenLen,
+			hasBearer: /^Bearer\s/i.test(context.req.header("authorization") ?? ""),
+		},
+		"Command Code proxy: forwarding request to upstream",
+	);
 
 	let openaiBody: unknown;
 	try {
@@ -828,7 +849,18 @@ export async function handleCommandCodeProxy(context: Context) {
 	}
 
 	if (!upstream.ok) {
-		return upstreamErrorResponse(upstream, await upstream.arrayBuffer());
+		const errorBody = await upstream.arrayBuffer();
+		logger.warn(
+			{
+				upstreamStatus: upstream.status,
+				upstreamStatusText: upstream.statusText,
+				tokenPrefix,
+				tokenSuffix,
+				tokenLen,
+			},
+			"Command Code proxy: upstream returned non-OK status",
+		);
+		return upstreamErrorResponse(upstream, errorBody);
 	}
 	if (!upstream.body) {
 		return context.json(
@@ -864,6 +896,35 @@ export async function handleCommandCodeProxy(context: Context) {
 				: "Command Code generation failed.";
 		return context.json({ error: { message, type: "commandcode_error" } }, 502);
 	}
+}
+
+export async function handleCommandCodeProxyDiagnostics(context: Context) {
+	const authorization = context.req.header("authorization")?.trim() ?? "";
+	const token = normalizeBearerToken(authorization);
+
+	if (!token) {
+		return context.json(
+			{
+				status: "no_token",
+				message:
+					"No Authorization header received. The gateway is not sending a Bearer token.",
+			},
+			401,
+		);
+	}
+
+	return context.json({
+		status: "token_received",
+		tokenFingerprint: {
+			prefix: token.slice(0, 8),
+			suffix: token.slice(-4),
+			length: token.length,
+			startsWithUser: token.startsWith("user_"),
+		},
+		modelsEndpoint: COMMAND_CODE_MODELS_URL,
+		generateEndpoint: COMMAND_CODE_GENERATE_URL,
+		cliVersion: COMMAND_CODE_CLI_VERSION,
+	});
 }
 
 export async function handleCommandCodeProxyModels(context: Context) {

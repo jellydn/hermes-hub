@@ -16,6 +16,7 @@ const {
 	getLogs,
 	clearLogs,
 	handleCommandCodeProxy,
+	handleCommandCodeProxyDiagnostics,
 	handleCommandCodeProxyModels,
 	deployProviderToHermes,
 	saveProviderConfig,
@@ -56,6 +57,7 @@ const {
 	getLogs: vi.fn(),
 	clearLogs: vi.fn(),
 	handleCommandCodeProxy: vi.fn(),
+	handleCommandCodeProxyDiagnostics: vi.fn(),
 	handleCommandCodeProxyModels: vi.fn(),
 	deployProviderToHermes: vi.fn(),
 	saveProviderConfig: vi.fn(),
@@ -120,6 +122,7 @@ vi.mock("./logs", () => ({
 
 vi.mock("./commandcode/proxy", () => ({
 	handleCommandCodeProxy,
+	handleCommandCodeProxyDiagnostics,
 	handleCommandCodeProxyModels,
 }));
 
