@@ -583,16 +583,11 @@ describe("provider settings", () => {
 		);
 	});
 
-	it("tests Command Code Coding Plan credentials with a real CLI generation", async () => {
+	it("tests Command Code Coding Plan credentials through the proxy", async () => {
 		const previousAuthUrl = process.env.BETTER_AUTH_URL;
 		process.env.BETTER_AUTH_URL = "https://hub.example.com";
 		fetchMock.mockResolvedValueOnce(
-			new Response(
-				`${JSON.stringify({ type: "text-delta", text: "O" })}\n${JSON.stringify(
-					{ type: "finish", finishReason: "length" },
-				)}\n`,
-				{ status: 200 },
-			),
+			new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
 		);
 
 		try {
@@ -624,24 +619,65 @@ describe("provider settings", () => {
 				}),
 			);
 			expect(response.status).toBe(200);
+			// The test should go through the proxy (same path the gateway uses),
+			// not directly to api.commandcode.ai.
 			expect(fetchMock).toHaveBeenCalledWith(
-				"https://api.commandcode.ai/alpha/generate",
+				"https://hub.example.com/api/commandcode-proxy/v1/chat/completions",
 				expect.objectContaining({
 					method: "POST",
 					headers: expect.objectContaining({
 						Authorization: "Bearer user_live_secret",
-						"x-command-code-version": "0.29.0",
+						"Content-Type": "application/json",
 					}),
 				}),
 			);
 			const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 			expect(JSON.parse(String(init.body))).toMatchObject({
-				params: {
-					model: "deepseek/deepseek-v4-flash",
-					max_tokens: 1,
-					stream: true,
-				},
+				model: "deepseek/deepseek-v4-flash",
+				messages: [{ role: "user", content: "Reply with OK." }],
+				max_tokens: 1,
+				stream: false,
 			});
+		} finally {
+			if (previousAuthUrl === undefined) {
+				delete process.env.BETTER_AUTH_URL;
+			} else {
+				process.env.BETTER_AUTH_URL = previousAuthUrl;
+			}
+		}
+	});
+
+	it("reports invalid API key when the proxy returns 401 for Command Code", async () => {
+		const previousAuthUrl = process.env.BETTER_AUTH_URL;
+		process.env.BETTER_AUTH_URL = "https://hub.example.com";
+		fetchMock.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					success: false,
+					error: {
+						code: "UNAUTHORIZED",
+						status: 401,
+						message: "Invalid 'Authorization' header or token.",
+					},
+				}),
+				{ status: 401 },
+			),
+		);
+
+		try {
+			const { testSubscriptionConfig } = await import("./providers");
+			const response = await testSubscriptionConfig(
+				createContext("http://localhost/api/providers/subscriptions/test", {
+					subscriptionProvider: "commandcode",
+					model: "deepseek/deepseek-v4-flash",
+					apiKey: "user_bad_key",
+					baseUrl: "https://api.commandcode.ai/provider/v1",
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			const body = await response.json();
+			expect(body.error).toMatch(/invalid api key/i);
 		} finally {
 			if (previousAuthUrl === undefined) {
 				delete process.env.BETTER_AUTH_URL;

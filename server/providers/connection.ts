@@ -3,6 +3,7 @@ import { getAiProviderOption } from "#/lib/ai-providers";
 import {
 	COMMAND_CODE_GENERATE_URL,
 	collectCommandCodeCompletion,
+	getCommandCodeProxyBaseUrl,
 	getCommandCodeRequestHeaders,
 	normalizeBearerToken,
 	transformOpenAIToCommandCode,
@@ -77,12 +78,99 @@ export async function verifyOpenAiCompatibleConnection(input: {
 	throw new ProviderConnectionError("Connection failed", "connection_failed");
 }
 
+/**
+ * Verifies a Command Code Coding Plan key by sending a minimal chat
+ * completion request through the Hermes Hub proxy — the same path the
+ * deployed gateway uses. This catches proxy-level issues (HTTPS
+ * middleware, header forwarding, URL reachability) that a direct test
+ * would miss.
+ *
+ * Falls back to a direct call to api.commandcode.ai when the proxy URL
+ * is not configured (e.g. local dev without BETTER_AUTH_URL).
+ */
 export async function verifyCommandCodeConnection(input: {
 	apiKey: string;
 	model: string;
 }) {
+	const proxyBaseUrl = tryResolveProxyBaseUrl();
+	if (proxyBaseUrl) {
+		await verifyCommandCodeViaProxy(input.apiKey, input.model, proxyBaseUrl);
+		return;
+	}
+
+	await verifyCommandCodeDirect(input.apiKey, input.model);
+}
+
+function tryResolveProxyBaseUrl(): string | null {
+	try {
+		return getCommandCodeProxyBaseUrl();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Tests the full proxy path: sends an OpenAI-format chat completion to
+ * the proxy, which transforms and forwards it to api.commandcode.ai.
+ * This is the same code path the deployed gateway uses.
+ */
+async function verifyCommandCodeViaProxy(
+	apiKey: string,
+	model: string,
+	proxyBaseUrl: string,
+) {
+	const url = proxyBaseUrl.endsWith("/")
+		? `${proxyBaseUrl}chat/completions`
+		: `${proxyBaseUrl}/chat/completions`;
+
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${normalizeBearerToken(apiKey)}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages: [{ role: "user", content: "Reply with OK." }],
+				max_tokens: 1,
+				stream: false,
+			}),
+			signal: AbortSignal.timeout(30_000),
+		});
+	} catch {
+		throw new ProviderConnectionError(
+			"Could not reach the Command Code proxy. Verify BETTER_AUTH_URL is publicly accessible.",
+			"connection_failed",
+		);
+	}
+
+	if (response.ok) {
+		return;
+	}
+
+	if (response.status === 401 || response.status === 403) {
+		throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
+	}
+
+	if (response.status === 426) {
+		throw new ProviderConnectionError(
+			"Proxy requires HTTPS. Check that BETTER_AUTH_URL uses https:// and the reverse proxy sets x-forwarded-proto: https.",
+			"connection_failed",
+		);
+	}
+
+	throw new ProviderConnectionError("Connection failed", "connection_failed");
+}
+
+/**
+ * Direct test against api.commandcode.ai — used as a fallback when the
+ * proxy URL is not configured (e.g. local dev without BETTER_AUTH_URL).
+ */
+async function verifyCommandCodeDirect(apiKey: string, model: string) {
 	const body = transformOpenAIToCommandCode({
-		model: input.model,
+		model,
 		messages: [{ role: "user", content: "Reply with OK." }],
 		max_tokens: 1,
 		stream: true,
@@ -93,7 +181,7 @@ export async function verifyCommandCodeConnection(input: {
 		response = await fetch(COMMAND_CODE_GENERATE_URL, {
 			method: "POST",
 			headers: getCommandCodeRequestHeaders(
-				`Bearer ${normalizeBearerToken(input.apiKey)}`,
+				`Bearer ${normalizeBearerToken(apiKey)}`,
 			),
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(30_000),
@@ -113,7 +201,7 @@ export async function verifyCommandCodeConnection(input: {
 	}
 
 	try {
-		await collectCommandCodeCompletion(response.body, { model: input.model });
+		await collectCommandCodeCompletion(response.body, { model });
 	} catch {
 		throw new ProviderConnectionError("Connection failed", "connection_failed");
 	}
