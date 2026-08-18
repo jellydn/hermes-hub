@@ -170,6 +170,20 @@ Keep `TRUSTED_PROXY_COUNT` at its default of `1` (the app reads the rightmost `x
 
 Dokku's built-in nginx proxy already forwards `x-forwarded-proto` correctly (it sets it from `$scheme`), but TLS termination only happens once the app has a **certificate installed**. Enable Let's Encrypt on the Dokku host once — the `deploy-dokku` CI job fails the deploy when no certificate is present (except the bootstrap deploy of a newly created app, which the HTTP-01 challenge needs to exist first):
 
+Configure the deployment SSH secrets from a trusted local machine that has your key and an authenticated [GitHub CLI](https://cli.github.com/):
+
+```bash
+# Prompts for a key (or pass --key ~/.ssh/<deployment-key>)
+./scripts/setup-dokku-deploy-secrets.sh
+
+# Optionally rerun and monitor the known failed deployment after setup
+./scripts/setup-dokku-deploy-secrets.sh \
+  --key ~/.ssh/<deployment-key> \
+  --rerun 32192213112
+```
+
+The script checks `gh`, SSH key validity, and connectivity to `dokku@95.111.232.131:22` before changing secrets. SSH asks you to confirm a previously unknown host key. The script sets `DOKKU_HOST` and streams the private key directly to `gh secret set` without printing it. Because this target uses port 22, it does not store `DOKKU_SSH_PORT` and removes a stale override if one exists. The workflow cannot unlock an encrypted key, so use a dedicated, unencrypted Dokku deployment key with narrowly scoped server access.
+
 ```bash
 # On the Dokku host — one-time setup
 dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git
