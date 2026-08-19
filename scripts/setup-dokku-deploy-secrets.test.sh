@@ -36,34 +36,16 @@ case "$1 $2" in
 esac
 EOF
 
-cat >"$test_dir/bin/ssh-keygen" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [[ " $* " == *" -y "* ]]; then
-	printf 'ssh-ed25519 test-public-key\n'
-	exit 0
-fi
-
-key_path=""
-while (($# > 0)); do
-	if [[ "$1" == "-f" ]]; then
-		key_path="$2"
-		break
-	fi
-	shift
-done
-[[ -n "$key_path" ]]
-printf '%s\n' 'test-private-key-fixture' >"$key_path"
-printf '%s\n' 'ssh-ed25519 test-public-key github-actions:test' >"$key_path.pub"
-EOF
-
 cat >"$test_dir/bin/ssh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'ssh' >>"$TEST_COMMAND_LOG"
 printf ' %q' "$@" >>"$TEST_COMMAND_LOG"
 printf '\n' >>"$TEST_COMMAND_LOG"
+
+if [[ "${TEST_ADMIN_FAILURE:-false}" == true && " $* " == *" deploy-admin@dokku.example.test dokku version "* ]]; then
+	exit 1
+fi
 
 if [[ " $* " == *" dokku@dokku.example.test version "* ]]; then
 	[[ -f "$TEST_DIR/deploy-key-authorized" ]]
@@ -81,7 +63,7 @@ if [[ " $* " == *" ssh-keys:add "* ]]; then
 fi
 EOF
 
-chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh" "$test_dir/bin/ssh-keygen"
+chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh"
 export PATH="$test_dir/bin:$PATH"
 export TEST_COMMAND_LOG="$test_dir/commands.log"
 export TEST_DIR="$test_dir"
@@ -97,6 +79,10 @@ deploy_key="$test_dir/generated/deploy-key"
 	--rerun 32192213112 >"$output"
 
 [[ -f "$deploy_key" && -f "$deploy_key.pub" ]] || fail "Dedicated key pair was not generated"
+# Real OpenSSH/macOS ssh-keygen includes the stored comment in `-y` output.
+# The script must compare only key type + payload, not the optional comments.
+derived_field_count="$(ssh-keygen -y -P "" -f "$deploy_key" | awk '{print NF}')"
+[[ "$derived_field_count" -ge 3 ]] || fail "Regression setup expected ssh-keygen -y to include a comment"
 cmp -s "$deploy_key" "$test_dir/DOKKU_SSH_PRIVATE_KEY.stdin" || fail "Private key was not passed unchanged over stdin"
 cmp -s "$deploy_key.pub" "$test_dir/installed-public-key" || fail "Public key was not installed unchanged"
 [[ "$(cat "$test_dir/DOKKU_HOST.stdin")" == "dokku.example.test" ]] || fail "Unexpected DOKKU_HOST value"
@@ -105,7 +91,8 @@ assert_contains "ssh-keys:add hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 assert_contains "gh secret delete DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
 assert_contains "gh run rerun 32192213112 --failed --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
 assert_contains "gh run watch 32192213112 --exit-status --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
-if grep -Fq 'test-private-key-fixture' "$output" "$TEST_COMMAND_LOG"; then
+private_key_sample="$(sed -n '2p' "$deploy_key")"
+if [[ -n "$private_key_sample" ]] && grep -Fq "$private_key_sample" "$output" "$TEST_COMMAND_LOG"; then
 	fail "Private key material was logged"
 fi
 
@@ -131,6 +118,22 @@ if env -u DOKKU_HOST "$SCRIPT" --deploy-key "$deploy_key" >"$output" 2>&1; then
 fi
 if grep -Eq 'ssh |secret set' "$TEST_COMMAND_LOG"; then
 	fail "Missing host input caused a remote or secret mutation"
+fi
+
+# Failed administrative bootstrap stops before local key generation or mutation.
+: >"$TEST_COMMAND_LOG"
+export TEST_ADMIN_FAILURE=true
+failed_admin_key="$test_dir/admin-failure/deploy-key"
+if "$SCRIPT" \
+	--host dokku.example.test \
+	--admin-user deploy-admin \
+	--deploy-key "$failed_admin_key" >"$output" 2>&1; then
+	fail "Failed administrative SSH should stop setup"
+fi
+[[ ! -e "$failed_admin_key" ]] || fail "Deployment key was created after administrative SSH failed"
+assert_contains "Administrative SSH bootstrap failed" "$output"
+if grep -Fq 'secret set' "$TEST_COMMAND_LOG"; then
+	fail "Secrets were changed after administrative SSH failed"
 fi
 
 printf 'Dokku deploy setup script tests passed.\n'

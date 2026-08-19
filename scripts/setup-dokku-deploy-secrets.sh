@@ -143,7 +143,10 @@ if [[ -n "$admin_key" ]]; then
 fi
 
 printf 'Checking administrative SSH access to the Dokku host...\n'
-ssh "${admin_ssh_options[@]}" "$admin_user@$dokku_host" dokku version >/dev/null
+if ! ssh "${admin_ssh_options[@]}" "$admin_user@$dokku_host" dokku version >/dev/null; then
+	fail "Administrative SSH bootstrap failed. No deployment key was created or installed. Check --admin-user, --admin-key, and SSH access, then retry."
+fi
+printf 'Administrative SSH bootstrap access confirmed.\n'
 
 if [[ -e "$deploy_key" || -e "$deploy_public_key" ]]; then
 	[[ -f "$deploy_key" && -f "$deploy_public_key" ]] || fail "Both $deploy_key and $deploy_public_key must exist, or neither."
@@ -156,9 +159,10 @@ else
 fi
 
 [[ -r "$deploy_key" && -r "$deploy_public_key" ]] || fail "Generated deployment key files are not readable."
-derived_public_key="$(ssh-keygen -y -P "" -f "$deploy_key" 2>/dev/null)" || \
+derived_public_key="$(ssh-keygen -y -P "" -f "$deploy_key" 2>/dev/null | awk 'NF >= 2 { print $1 " " $2; exit }')" || \
 	fail "Deployment key is invalid or passphrase-protected."
-stored_public_key="$(awk '{print $1 " " $2}' "$deploy_public_key")"
+stored_public_key="$(awk 'NF >= 2 { print $1 " " $2; exit }' "$deploy_public_key")"
+[[ -n "$derived_public_key" && -n "$stored_public_key" ]] || fail "Deployment key pair has an invalid public-key format."
 [[ "$derived_public_key" == "$stored_public_key" ]] || fail "Deployment public key does not match its private key."
 
 deploy_ssh_options=("${ssh_options[@]}" -i "$deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes)
