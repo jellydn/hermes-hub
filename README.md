@@ -170,19 +170,26 @@ Keep `TRUSTED_PROXY_COUNT` at its default of `1` (the app reads the rightmost `x
 
 Dokku's built-in nginx proxy already forwards `x-forwarded-proto` correctly (it sets it from `$scheme`), but TLS termination only happens once the app has a **certificate installed**. Enable Let's Encrypt on the Dokku host once — the `deploy-dokku` CI job fails the deploy when no certificate is present (except the bootstrap deploy of a newly created app, which the HTTP-01 challenge needs to exist first):
 
-Configure the deployment SSH secrets from a trusted local machine that has your key and an authenticated [GitHub CLI](https://cli.github.com/):
+Run the bootstrap script from a trusted local machine with `gh`, OpenSSH, an authenticated [GitHub CLI](https://cli.github.com/), and existing administrative SSH access to the Dokku host. The administrative account must be able to run `dokku version` and `dokku ssh-keys:*` commands:
 
 ```bash
-# Prompts for a key (or pass --key ~/.ssh/<deployment-key>)
-./scripts/setup-dokku-deploy-secrets.sh
-
-# Optionally rerun and monitor the known failed deployment after setup
+# Uses your SSH agent/config for administrative access and creates
+# ~/.ssh/hermes-hub-dokku-deploy as a dedicated deployment key.
 ./scripts/setup-dokku-deploy-secrets.sh \
-  --key ~/.ssh/<deployment-key> \
-  --rerun 32192213112
+  --host <dokku-host> \
+  --admin-user root
+
+# Select an existing administrative key, a different SSH port, and optionally
+# rerun and monitor a failed deployment after setup.
+./scripts/setup-dokku-deploy-secrets.sh \
+  --host <dokku-host> \
+  --port <ssh-port> \
+  --admin-user <admin-user> \
+  --admin-key ~/.ssh/<admin-key> \
+  --rerun <actions-run-id>
 ```
 
-The script checks `gh`, SSH key validity, and connectivity to `dokku@95.111.232.131:22` before changing secrets. SSH asks you to confirm a previously unknown host key. The script sets `DOKKU_HOST` and streams the private key directly to `gh secret set` without printing it. Because this target uses port 22, it does not store `DOKKU_SSH_PORT` and removes a stale override if one exists. The workflow cannot unlock an encrypted key, so use a dedicated, unencrypted Dokku deployment key with narrowly scoped server access.
+The host can be supplied through `DOKKU_HOST` instead of `--host`; it is never stored in this repository. The script verifies administrative access, creates an unencrypted Ed25519 deployment key locally, installs only its public key through the administrative connection, and verifies `dokku` access with the dedicated key. Repeated runs reuse a valid, working key without reinstalling it. The private key is streamed directly to `gh secret set` and is never printed. Port 22 uses the workflow default and removes a stale `DOKKU_SSH_PORT`; non-default ports are stored explicitly. SSH asks you to confirm a previously unknown host key.
 
 ```bash
 # On the Dokku host — one-time setup
