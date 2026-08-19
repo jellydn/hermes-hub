@@ -325,4 +325,8 @@ jobs:
           } >> ~/.ssh/config
 
           git remote add dokku "dokku@$DOKKU_HOST:$DOKKU_APP" 2>/dev/null || git remote set-url dokku "dokku@$DOKKU_HOST:$DOKKU_APP"
-          git push dokku HEAD:master
+          # This app's deploy branch is `main` (`dokku git:set deploy-branch`).
+          # Dokku's app repo is a deploy target, not a source of truth, so
+          # earlier manual deploys leave a divergent history that rejects a
+          # fast-forward push.
+          git push --force dokku HEAD:main
