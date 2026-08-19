@@ -1,0 +1,10 @@
+title = "gitleaks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dokku setup test fixtures use fake postgres URLs and keys"
+paths = [
+  '''scripts/setup-dokku-deploy-secrets\.test\.sh''',
+]

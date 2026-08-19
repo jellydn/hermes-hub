@@ -9,6 +9,11 @@ repos:
         args: [--maxkb=500]
       - id: check-json
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/biomejs/pre-commit
     rev: v0.6.1
     hooks:

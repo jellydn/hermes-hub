@@ -37,7 +37,13 @@ case "$1 $2" in
 		} | awk 'NF && !seen[$0]++'
 		;;
 	"workflow run") ;;
-	"run list") printf '%s\n' "${TEST_DISPATCH_RUN_ID:-987654321}" ;;
+	"run list")
+		if [[ "$*" == *"dokku-setup-"* ]]; then
+			printf '%s\n' "${TEST_DISPATCH_RUN_ID:-987654321}"
+		else
+			printf '%s\n' "${TEST_COMPETING_RUN_ID:-111111111}"
+		fi
+		;;
 	"run view")
 		if [[ " $* " == *" --json workflowName,status,conclusion "* ]]; then
 			printf 'Deploy\tcompleted\tfailure\n'
@@ -70,6 +76,34 @@ fi
 if [[ " $* " == *" ssh-keys:add "* ]]; then
 	cat >"$TEST_DIR/installed-public-key"
 	touch "$TEST_DIR/deploy-key-authorized"
+	exit 0
+fi
+
+if [[ " $* " == *" plugin:list "* ]]; then
+	if [[ "${TEST_PLUGIN_LIST-acl}" == "none" ]]; then
+		exit 0
+	fi
+	printf '%s\n' "${TEST_PLUGIN_LIST-acl}"
+	exit 0
+fi
+
+if [[ " $* " == *" plugin:install "* ]]; then
+	printf 'acl\n' >"$TEST_DIR/acl-installed"
+	exit 0
+fi
+
+if [[ " $* " == *" acl:add "* ]]; then
+	printf 'hermes-hub-github-actions\n' >"$TEST_DIR/acl-users"
+	exit 0
+fi
+
+if [[ " $* " == *" acl:list "* ]]; then
+	if [[ -f "$TEST_DIR/acl-users" ]]; then
+		cat "$TEST_DIR/acl-users"
+	else
+		printf 'hermes-hub-github-actions\n'
+	fi
+	exit 0
 fi
 
 if [[ " $* " == *" dokku apps:exists "* ]]; then
@@ -91,11 +125,19 @@ if [[ " $* " == *" dokku config:get "* ]]; then
 fi
 EOF
 
-chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh"
+cat >"$test_dir/bin/ssh-keyscan" <<'EOF'
+#!/usr/bin/env bash
+host=""
+for host; do :; done
+printf '%s ssh-ed25519 AAAATESTKNOWNHOST\n' "$host"
+EOF
+
+chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh" "$test_dir/bin/ssh-keyscan"
 export PATH="$test_dir/bin:$PATH"
 export TEST_COMMAND_LOG="$test_dir/commands.log"
 export TEST_DIR="$test_dir"
 export TEST_DISPATCH_RUN_ID=987654321
+export TEST_COMPETING_RUN_ID=111111111
 export TEST_SECRET_LIST="DOKKU_SSH_PORT
 DOKKU_APP
 DATABASE_URL
@@ -113,19 +155,22 @@ deploy_key="$test_dir/generated/deploy-key"
 	--rerun 32192213112 >"$output"
 
 [[ -f "$deploy_key" && -f "$deploy_key.pub" ]] || fail "Dedicated key pair was not generated"
-# Real OpenSSH/macOS ssh-keygen includes the stored comment in `-y` output.
-# The script must compare only key type + payload, not the optional comments.
 derived_field_count="$(ssh-keygen -y -P "" -f "$deploy_key" | awk '{print NF}')"
 [[ "$derived_field_count" -ge 3 ]] || fail "Regression setup expected ssh-keygen -y to include a comment"
 cmp -s "$deploy_key" "$test_dir/DOKKU_SSH_PRIVATE_KEY.stdin" || fail "Private key was not passed unchanged over stdin"
 cmp -s "$deploy_key.pub" "$test_dir/installed-public-key" || fail "Public key was not installed unchanged"
 [[ "$(cat "$test_dir/DOKKU_HOST.stdin")" == "dokku.example.test" ]] || fail "Unexpected DOKKU_HOST value"
 [[ "$(cat "$test_dir/DOKKU_APP.stdin")" == "hermes-hub" ]] || fail "Default DOKKU_APP was not stored"
+[[ "$(cat "$test_dir/DOKKU_SSH_KNOWN_HOSTS.stdin")" == *"AAAATESTKNOWNHOST"* ]] || fail "Known hosts were not stored"
 assert_contains "deploy-admin@dokku.example.test dokku version" "$TEST_COMMAND_LOG"
 assert_contains "ssh-keys:add hermes-hub-github-actions" "$TEST_COMMAND_LOG"
+assert_contains "acl:add hermes-hub hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 assert_contains "gh secret delete DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
-assert_contains "gh workflow run Deploy --repo jellydn/hermes-hub --ref main --field target=dokku" "$TEST_COMMAND_LOG"
+assert_contains "gh workflow run Deploy --repo jellydn/hermes-hub --ref main --field target=dokku --field correlation=dokku-setup-" "$TEST_COMMAND_LOG"
 assert_contains "gh run watch 987654321 --exit-status --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+if grep -Fq 'run watch 111111111' "$TEST_COMMAND_LOG"; then
+	fail "A competing workflow_dispatch was watched"
+fi
 if grep -Fq 'run rerun' "$TEST_COMMAND_LOG"; then
 	fail "Newly written secrets must not be followed by gh run rerun"
 fi
@@ -133,6 +178,8 @@ private_key_sample="$(sed -n '2p' "$deploy_key")"
 if [[ -n "$private_key_sample" ]] && grep -Fq "$private_key_sample" "$output" "$TEST_COMMAND_LOG"; then
 	fail "Private key material was logged"
 fi
+key_mode="$(stat -f %Lp "$deploy_key" 2>/dev/null || stat -c %a "$deploy_key")"
+[[ "$key_mode" == "600" || "$key_mode" == "400" ]] || fail "Generated deploy key mode was $key_mode"
 
 # A second run reuses the local key and already-authorized remote key without reinstalling it.
 : >"$TEST_COMMAND_LOG"
@@ -142,6 +189,7 @@ if grep -Fq 'ssh-keys:add' "$TEST_COMMAND_LOG"; then
 	fail "An already-working deployment key was reinstalled"
 fi
 assert_contains "already installed; leaving remote keys unchanged" "$output"
+assert_contains "acl:add hermes-hub hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 
 # Non-default ports are stored explicitly instead of deleting the override.
 : >"$TEST_COMMAND_LOG"
@@ -172,6 +220,7 @@ assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_
 "$SCRIPT" --host dokku.example.test --app hermes-prod --deploy-key "$deploy_key" >"$output"
 [[ "$(cat "$test_dir/DOKKU_APP.stdin")" == "hermes-prod" ]] || fail "Explicit DOKKU_APP was not stored"
 assert_contains "gh secret set DOKKU_APP --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+assert_contains "acl:add hermes-prod hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 
 # Existing Dokku app config is copied into GitHub secrets and never printed.
 : >"$TEST_COMMAND_LOG"
@@ -201,16 +250,44 @@ if [[ -f "$test_dir/DATABASE_URL.stdin" ]]; then
 	fail "Ambient DATABASE_URL was stored as a GitHub secret"
 fi
 
-# Explicit --database-url is stored without printing the value.
+# Secret-valued argv flags are rejected.
+: >"$TEST_COMMAND_LOG"
+if "$SCRIPT" --host dokku.example.test --database-url 'postgres://dokku:flag-secret@10.0.0.3/hermes' --deploy-key "$deploy_key" >"$output" 2>&1; then
+	fail "Argv DATABASE_URL should be rejected"
+fi
+assert_contains "exposes secrets in process arguments" "$output"
+if grep -Fq 'flag-secret' "$TEST_COMMAND_LOG"; then
+	fail "Rejected argv secret was logged"
+fi
+
+# File-based secrets are stored without placing the value in argv.
+: >"$TEST_COMMAND_LOG"
+printf '%s' 'postgres://dokku:file-secret@10.0.0.3/hermes' >"$test_dir/database-url"
+"$SCRIPT" \
+	--host dokku.example.test \
+	--database-url-file "$test_dir/database-url" \
+	--deploy-key "$deploy_key" >"$output"
+[[ "$(cat "$test_dir/DATABASE_URL.stdin")" == 'postgres://dokku:file-secret@10.0.0.3/hermes' ]] || fail "File DATABASE_URL was not stored"
+if grep -Fq 'file-secret' "$output" "$TEST_COMMAND_LOG"; then
+	fail "File DATABASE_URL value was logged"
+fi
+
+# Admin key path uses IdentitiesOnly and BatchMode.
 : >"$TEST_COMMAND_LOG"
 "$SCRIPT" \
 	--host dokku.example.test \
-	--database-url 'postgres://dokku:flag-secret@10.0.0.3/hermes' \
+	--admin-user deploy-admin \
+	--admin-key "$deploy_key" \
 	--deploy-key "$deploy_key" >"$output"
-[[ "$(cat "$test_dir/DATABASE_URL.stdin")" == 'postgres://dokku:flag-secret@10.0.0.3/hermes' ]] || fail "Flag DATABASE_URL was not stored"
-if grep -Fq 'flag-secret' "$output" "$TEST_COMMAND_LOG"; then
-	fail "Flag DATABASE_URL value was logged"
-fi
+assert_contains "IdentitiesOnly=yes" "$TEST_COMMAND_LOG"
+assert_contains "BatchMode=yes" "$TEST_COMMAND_LOG"
+
+# Missing ACL plugin is installed before the key is restricted.
+: >"$TEST_COMMAND_LOG"
+export TEST_PLUGIN_LIST=none
+"$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" >"$output"
+assert_contains "plugin:install https://github.com/dokku-community/dokku-acl.git acl" "$TEST_COMMAND_LOG"
+unset TEST_PLUGIN_LIST
 
 # --rerun without the remaining required Deploy secrets fails before dispatch.
 : >"$TEST_COMMAND_LOG"
