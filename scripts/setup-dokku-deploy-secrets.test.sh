@@ -71,6 +71,24 @@ if [[ " $* " == *" ssh-keys:add "* ]]; then
 	cat >"$TEST_DIR/installed-public-key"
 	touch "$TEST_DIR/deploy-key-authorized"
 fi
+
+if [[ " $* " == *" dokku apps:exists "* ]]; then
+	[[ "${TEST_APP_EXISTS:-false}" == true ]]
+	exit
+fi
+
+if [[ " $* " == *" dokku config:get "* ]]; then
+	if [[ " $* " == *" DATABASE_URL "* ]]; then
+		printf '%s' "${TEST_REMOTE_DATABASE_URL:-}"
+	elif [[ " $* " == *" ENCRYPTION_KEY "* ]]; then
+		printf '%s' "${TEST_REMOTE_ENCRYPTION_KEY:-}"
+	elif [[ " $* " == *" BETTER_AUTH_SECRET "* ]]; then
+		printf '%s' "${TEST_REMOTE_BETTER_AUTH_SECRET:-}"
+	elif [[ " $* " == *" BETTER_AUTH_URL "* ]]; then
+		printf '%s' "${TEST_REMOTE_BETTER_AUTH_URL:-}"
+	fi
+	exit 0
+fi
 EOF
 
 chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh"
@@ -155,8 +173,48 @@ assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_
 [[ "$(cat "$test_dir/DOKKU_APP.stdin")" == "hermes-prod" ]] || fail "Explicit DOKKU_APP was not stored"
 assert_contains "gh secret set DOKKU_APP --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
 
+# Existing Dokku app config is copied into GitHub secrets and never printed.
+: >"$TEST_COMMAND_LOG"
+rm -f "$test_dir/DATABASE_URL.stdin"
+export TEST_APP_EXISTS=true
+export TEST_REMOTE_DATABASE_URL='postgres://dokku:remote-secret@10.0.0.2/hermes'
+export TEST_REMOTE_ENCRYPTION_KEY='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+export TEST_REMOTE_BETTER_AUTH_SECRET='auth-secret-from-dokku'
+export TEST_REMOTE_BETTER_AUTH_URL='https://dokku.example.test'
+"$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" >"$output"
+[[ "$(cat "$test_dir/DATABASE_URL.stdin")" == "$TEST_REMOTE_DATABASE_URL" ]] || fail "Remote DATABASE_URL was not stored"
+[[ "$(cat "$test_dir/ENCRYPTION_KEY.stdin")" == "$TEST_REMOTE_ENCRYPTION_KEY" ]] || fail "Remote ENCRYPTION_KEY was not stored"
+[[ "$(cat "$test_dir/BETTER_AUTH_SECRET.stdin")" == "$TEST_REMOTE_BETTER_AUTH_SECRET" ]] || fail "Remote BETTER_AUTH_SECRET was not stored"
+[[ "$(cat "$test_dir/BETTER_AUTH_URL.stdin")" == "$TEST_REMOTE_BETTER_AUTH_URL" ]] || fail "Remote BETTER_AUTH_URL was not stored"
+if grep -Fq 'remote-secret' "$output" "$TEST_COMMAND_LOG"; then
+	fail "Remote DATABASE_URL value was logged"
+fi
+assert_contains "contents hidden" "$output"
+unset TEST_APP_EXISTS TEST_REMOTE_DATABASE_URL TEST_REMOTE_ENCRYPTION_KEY TEST_REMOTE_BETTER_AUTH_SECRET TEST_REMOTE_BETTER_AUTH_URL
+
+# Ambient local DATABASE_URL is ignored so a developer .env cannot leak.
+: >"$TEST_COMMAND_LOG"
+rm -f "$test_dir/DATABASE_URL.stdin"
+DATABASE_URL='postgresql://localhost/should-not-leak' \
+	"$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" >"$output"
+if [[ -f "$test_dir/DATABASE_URL.stdin" ]]; then
+	fail "Ambient DATABASE_URL was stored as a GitHub secret"
+fi
+
+# Explicit --database-url is stored without printing the value.
+: >"$TEST_COMMAND_LOG"
+"$SCRIPT" \
+	--host dokku.example.test \
+	--database-url 'postgres://dokku:flag-secret@10.0.0.3/hermes' \
+	--deploy-key "$deploy_key" >"$output"
+[[ "$(cat "$test_dir/DATABASE_URL.stdin")" == 'postgres://dokku:flag-secret@10.0.0.3/hermes' ]] || fail "Flag DATABASE_URL was not stored"
+if grep -Fq 'flag-secret' "$output" "$TEST_COMMAND_LOG"; then
+	fail "Flag DATABASE_URL value was logged"
+fi
+
 # --rerun without the remaining required Deploy secrets fails before dispatch.
 : >"$TEST_COMMAND_LOG"
+: >"$test_dir/secret-names"
 export TEST_SECRET_LIST=""
 if "$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" --rerun 32192213112 >"$output" 2>&1; then
 	fail "Missing required Deploy secrets should fail"

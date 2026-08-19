@@ -20,6 +20,10 @@ dokku_app="${DOKKU_APP:-hermes-hub}"
 admin_user="${DOKKU_ADMIN_USER:-root}"
 admin_key="${DOKKU_ADMIN_KEY:-}"
 deploy_key="${DOKKU_DEPLOY_KEY:-$HOME/.ssh/hermes-hub-dokku-deploy}"
+database_url="${DOKKU_DATABASE_URL:-}"
+encryption_key="${DOKKU_ENCRYPTION_KEY:-}"
+better_auth_secret="${DOKKU_BETTER_AUTH_SECRET:-}"
+better_auth_url="${DOKKU_BETTER_AUTH_URL:-}"
 rerun_id=""
 watch_run=true
 
@@ -36,6 +40,12 @@ Options:
   --port PORT          SSH port (default: 22)
   --app NAME           Dokku app name written to the DOKKU_APP secret
                        (default: hermes-hub)
+  --database-url URL   DATABASE_URL secret (do not use a local .env URL)
+  --encryption-key KEY ENCRYPTION_KEY secret
+  --better-auth-secret SECRET
+                       BETTER_AUTH_SECRET secret
+  --better-auth-url URL
+                       BETTER_AUTH_URL secret (public HTTPS origin)
   --admin-user USER    Bootstrap SSH user able to run Dokku commands (default: root)
   --admin-key PATH     Existing private key for bootstrap SSH access
   --deploy-key PATH    Dedicated key path to create/reuse
@@ -47,8 +57,15 @@ Options:
   --no-watch           Do not monitor the dispatched workflow after starting it
   -h, --help           Show this help
 
+If the Dokku app already exists, missing app config secrets are copied
+from `dokku config:get` and never printed. Local DATABASE_URL /
+ENCRYPTION_KEY / BETTER_AUTH_* environment variables are ignored so a
+developer .env cannot overwrite production.
+
 Environment alternatives: DOKKU_HOST, DOKKU_SSH_PORT, DOKKU_APP,
-DOKKU_ADMIN_USER, DOKKU_ADMIN_KEY, and DOKKU_DEPLOY_KEY.
+DOKKU_DATABASE_URL, DOKKU_ENCRYPTION_KEY, DOKKU_BETTER_AUTH_SECRET,
+DOKKU_BETTER_AUTH_URL, DOKKU_ADMIN_USER, DOKKU_ADMIN_KEY, and
+DOKKU_DEPLOY_KEY.
 EOF
 }
 
@@ -79,6 +96,29 @@ require_github_secrets() {
 	fi
 }
 
+missing_github_secrets() {
+	local names name
+	names="$(github_secret_names)"
+	for name in "$@"; do
+		if ! printf '%s\n' "$names" | grep -Fxq "$name"; then
+			printf '%s\n' "$name"
+		fi
+	done
+}
+
+set_github_secret() {
+	local name="$1"
+	local value="$2"
+	[[ -n "$value" ]] || return 0
+	printf 'Setting %s for %s (contents hidden)...\n' "$name" "$REPOSITORY"
+	printf '%s' "$value" | gh secret set "$name" --repo "$REPOSITORY"
+}
+
+remote_app_config() {
+	ssh "${admin_ssh_options[@]}" "$admin_user@$dokku_host" \
+		dokku config:get "$dokku_app" "$1" 2>/dev/null | tr -d '\r\n' || true
+}
+
 expand_home() {
 	printf '%s' "${1/#\~/$HOME}"
 }
@@ -98,6 +138,26 @@ while (($# > 0)); do
 		--app)
 			(($# >= 2)) || fail "--app requires a Dokku app name."
 			dokku_app="$2"
+			shift 2
+			;;
+		--database-url)
+			(($# >= 2)) || fail "--database-url requires a value."
+			database_url="$2"
+			shift 2
+			;;
+		--encryption-key)
+			(($# >= 2)) || fail "--encryption-key requires a value."
+			encryption_key="$2"
+			shift 2
+			;;
+		--better-auth-secret)
+			(($# >= 2)) || fail "--better-auth-secret requires a value."
+			better_auth_secret="$2"
+			shift 2
+			;;
+		--better-auth-url)
+			(($# >= 2)) || fail "--better-auth-url requires a value."
+			better_auth_url="$2"
 			shift 2
 			;;
 		--admin-user)
@@ -219,6 +279,14 @@ else
 		fail "The dedicated deployment key was installed but could not connect."
 fi
 
+if ssh "${admin_ssh_options[@]}" "$admin_user@$dokku_host" dokku apps:exists "$dokku_app" >/dev/null 2>&1; then
+	printf 'Copying existing %s config into GitHub Actions secrets (values hidden)...\n' "$dokku_app"
+	[[ -n "$database_url" ]] || database_url="$(remote_app_config DATABASE_URL)"
+	[[ -n "$encryption_key" ]] || encryption_key="$(remote_app_config ENCRYPTION_KEY)"
+	[[ -n "$better_auth_secret" ]] || better_auth_secret="$(remote_app_config BETTER_AUTH_SECRET)"
+	[[ -n "$better_auth_url" ]] || better_auth_url="$(remote_app_config BETTER_AUTH_URL)"
+fi
+
 printf 'Setting DOKKU_HOST for %s...\n' "$REPOSITORY"
 printf '%s' "$dokku_host" | gh secret set DOKKU_HOST --repo "$REPOSITORY"
 
@@ -227,6 +295,11 @@ printf '%s' "$dokku_app" | gh secret set DOKKU_APP --repo "$REPOSITORY"
 
 printf 'Setting DOKKU_SSH_PRIVATE_KEY from %s (contents hidden)...\n' "$deploy_key"
 gh secret set DOKKU_SSH_PRIVATE_KEY --repo "$REPOSITORY" <"$deploy_key"
+
+set_github_secret DATABASE_URL "$database_url"
+set_github_secret ENCRYPTION_KEY "$encryption_key"
+set_github_secret BETTER_AUTH_SECRET "$better_auth_secret"
+set_github_secret BETTER_AUTH_URL "$better_auth_url"
 
 if [[ "$dokku_port" == "22" ]]; then
 	if github_secret_names | grep -Fxq DOKKU_SSH_PORT; then
@@ -240,6 +313,14 @@ fi
 
 require_github_secrets DOKKU_HOST DOKKU_APP DOKKU_SSH_PRIVATE_KEY
 printf 'Dokku deployment key and GitHub secrets configured successfully.\n'
+
+missing_deploy_secrets="$(missing_github_secrets "${REQUIRED_DEPLOY_SECRETS[@]}")"
+if [[ -n "$missing_deploy_secrets" ]]; then
+	printf 'Deploy still needs GitHub Actions secrets:\n'
+	printf '%s\n' "$missing_deploy_secrets" | sed 's/^/  /'
+	printf 'Do not re-run an old workflow from the GitHub UI; it will fail on the first missing secret.\n'
+	printf 'Copy them from the Dokku app, or pass --database-url, --encryption-key, --better-auth-secret, and --better-auth-url.\n'
+fi
 
 if [[ -z "$rerun_id" ]]; then
 	printf 'No workflow was started. Use --rerun RUN_ID when you are ready.\n'
