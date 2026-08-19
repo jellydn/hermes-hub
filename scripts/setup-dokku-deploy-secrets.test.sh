@@ -102,6 +102,7 @@ derived_field_count="$(ssh-keygen -y -P "" -f "$deploy_key" | awk '{print NF}')"
 cmp -s "$deploy_key" "$test_dir/DOKKU_SSH_PRIVATE_KEY.stdin" || fail "Private key was not passed unchanged over stdin"
 cmp -s "$deploy_key.pub" "$test_dir/installed-public-key" || fail "Public key was not installed unchanged"
 [[ "$(cat "$test_dir/DOKKU_HOST.stdin")" == "dokku.example.test" ]] || fail "Unexpected DOKKU_HOST value"
+[[ "$(cat "$test_dir/DOKKU_APP.stdin")" == "hermes-hub" ]] || fail "Default DOKKU_APP was not stored"
 assert_contains "deploy-admin@dokku.example.test dokku version" "$TEST_COMMAND_LOG"
 assert_contains "ssh-keys:add hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 assert_contains "gh secret delete DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
@@ -148,15 +149,30 @@ export TEST_SECRET_LIST=""
 assert_contains "ssh -p 8 " "$TEST_COMMAND_LOG"
 assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
 
+# Explicit app names are stored in DOKKU_APP.
+: >"$TEST_COMMAND_LOG"
+"$SCRIPT" --host dokku.example.test --app hermes-prod --deploy-key "$deploy_key" >"$output"
+[[ "$(cat "$test_dir/DOKKU_APP.stdin")" == "hermes-prod" ]] || fail "Explicit DOKKU_APP was not stored"
+assert_contains "gh secret set DOKKU_APP --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+
 # --rerun without the remaining required Deploy secrets fails before dispatch.
 : >"$TEST_COMMAND_LOG"
 export TEST_SECRET_LIST=""
 if "$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" --rerun 32192213112 >"$output" 2>&1; then
 	fail "Missing required Deploy secrets should fail"
 fi
-assert_contains "DOKKU_APP secret is required" "$output"
+assert_contains "DATABASE_URL secret is required" "$output"
 if grep -Eq 'workflow run|run rerun' "$TEST_COMMAND_LOG"; then
 	fail "Workflow was started without required Deploy secrets"
+fi
+
+# Invalid app names fail before any remote or secret mutation.
+: >"$TEST_COMMAND_LOG"
+if "$SCRIPT" --host dokku.example.test --app 'Hermes Hub' --deploy-key "$deploy_key" >"$output" 2>&1; then
+	fail "Invalid app name should fail"
+fi
+if grep -Eq 'ssh |secret set' "$TEST_COMMAND_LOG"; then
+	fail "Invalid app name caused a remote or secret mutation"
 fi
 
 # Missing host input fails before any remote or secret mutation.

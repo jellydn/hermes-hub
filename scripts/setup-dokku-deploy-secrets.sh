@@ -16,6 +16,7 @@ readonly REQUIRED_DEPLOY_SECRETS=(
 
 dokku_host="${DOKKU_HOST:-}"
 dokku_port="${DOKKU_SSH_PORT:-22}"
+dokku_app="${DOKKU_APP:-hermes-hub}"
 admin_user="${DOKKU_ADMIN_USER:-root}"
 admin_key="${DOKKU_ADMIN_KEY:-}"
 deploy_key="${DOKKU_DEPLOY_KEY:-$HOME/.ssh/hermes-hub-dokku-deploy}"
@@ -33,6 +34,8 @@ DOKKU_HOST. Private key material is never printed.
 Options:
   --host HOST          Dokku hostname or IP address (required)
   --port PORT          SSH port (default: 22)
+  --app NAME           Dokku app name written to the DOKKU_APP secret
+                       (default: hermes-hub)
   --admin-user USER    Bootstrap SSH user able to run Dokku commands (default: root)
   --admin-key PATH     Existing private key for bootstrap SSH access
   --deploy-key PATH    Dedicated key path to create/reuse
@@ -44,8 +47,8 @@ Options:
   --no-watch           Do not monitor the dispatched workflow after starting it
   -h, --help           Show this help
 
-Environment alternatives: DOKKU_HOST, DOKKU_SSH_PORT, DOKKU_ADMIN_USER,
-DOKKU_ADMIN_KEY, and DOKKU_DEPLOY_KEY.
+Environment alternatives: DOKKU_HOST, DOKKU_SSH_PORT, DOKKU_APP,
+DOKKU_ADMIN_USER, DOKKU_ADMIN_KEY, and DOKKU_DEPLOY_KEY.
 EOF
 }
 
@@ -92,6 +95,11 @@ while (($# > 0)); do
 			dokku_port="$2"
 			shift 2
 			;;
+		--app)
+			(($# >= 2)) || fail "--app requires a Dokku app name."
+			dokku_app="$2"
+			shift 2
+			;;
 		--admin-user)
 			(($# >= 2)) || fail "--admin-user requires a value."
 			admin_user="$2"
@@ -132,6 +140,7 @@ require_command ssh-keygen
 
 [[ -n "$dokku_host" ]] || fail "Dokku host is required. Pass --host HOST or set DOKKU_HOST."
 [[ "$dokku_host" =~ ^[a-zA-Z0-9._:-]+$ ]] || fail "Dokku host contains unsupported characters."
+[[ "$dokku_app" =~ ^[a-z0-9][a-z0-9-]*$ ]] || fail "Dokku app name must be lowercase letters, digits, and hyphens."
 [[ "$admin_user" =~ ^[a-zA-Z0-9._-]+$ ]] || fail "Admin user contains unsupported characters."
 [[ "$dokku_port" =~ ^[0-9]+$ ]] || fail "SSH port must contain only digits."
 (( ${#dokku_port} <= 5 )) || fail "SSH port must be between 1 and 65535."
@@ -213,6 +222,9 @@ fi
 printf 'Setting DOKKU_HOST for %s...\n' "$REPOSITORY"
 printf '%s' "$dokku_host" | gh secret set DOKKU_HOST --repo "$REPOSITORY"
 
+printf 'Setting DOKKU_APP for %s...\n' "$REPOSITORY"
+printf '%s' "$dokku_app" | gh secret set DOKKU_APP --repo "$REPOSITORY"
+
 printf 'Setting DOKKU_SSH_PRIVATE_KEY from %s (contents hidden)...\n' "$deploy_key"
 gh secret set DOKKU_SSH_PRIVATE_KEY --repo "$REPOSITORY" <"$deploy_key"
 
@@ -226,7 +238,7 @@ else
 	printf '%s' "$dokku_port" | gh secret set DOKKU_SSH_PORT --repo "$REPOSITORY"
 fi
 
-require_github_secrets DOKKU_HOST DOKKU_SSH_PRIVATE_KEY
+require_github_secrets DOKKU_HOST DOKKU_APP DOKKU_SSH_PRIVATE_KEY
 printf 'Dokku deployment key and GitHub secrets configured successfully.\n'
 
 if [[ -z "$rerun_id" ]]; then
