@@ -6,6 +6,6 @@ useDefault = true
 [[allowlists]]
 description = "Test fixtures and empty example env placeholders"
 paths = [
-  '''scripts/setup-dokku-deploy-secrets\.test\.sh''',
-  '''\.env\.example''',
+  '''(^|/).*\.test\.(ts|tsx|js|jsx|sh)$''',
+  '''(^|/)\.env\.example$''',
 ]
