@@ -111,6 +111,24 @@ assert_contains "already installed; leaving remote keys unchanged" "$output"
 [[ "$(cat "$test_dir/DOKKU_SSH_PORT.stdin")" == "2222" ]] || fail "Non-default port was not stored"
 assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
 
+# Leading-zero default ports are decimal-normalized and still remove the override.
+: >"$TEST_COMMAND_LOG"
+export TEST_SECRET_LIST="DOKKU_SSH_PORT"
+"$SCRIPT" --host dokku.example.test --port 022 --deploy-key "$deploy_key" >"$output"
+assert_contains "ssh -p 22 " "$TEST_COMMAND_LOG"
+assert_contains "gh secret delete DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+if grep -Fq 'secret set DOKKU_SSH_PORT' "$TEST_COMMAND_LOG"; then
+	fail "Normalized port 22 was stored as a non-default port"
+fi
+
+# Leading-zero non-default ports must not be parsed as octal.
+: >"$TEST_COMMAND_LOG"
+export TEST_SECRET_LIST=""
+"$SCRIPT" --host dokku.example.test --port 08 --deploy-key "$deploy_key" >"$output"
+[[ "$(cat "$test_dir/DOKKU_SSH_PORT.stdin")" == "8" ]] || fail "Leading-zero port 08 was not stored as 8"
+assert_contains "ssh -p 8 " "$TEST_COMMAND_LOG"
+assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+
 # Missing host input fails before any remote or secret mutation.
 : >"$TEST_COMMAND_LOG"
 if env -u DOKKU_HOST "$SCRIPT" --deploy-key "$deploy_key" >"$output" 2>&1; then

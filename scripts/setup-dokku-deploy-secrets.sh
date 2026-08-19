@@ -104,6 +104,8 @@ require_command ssh-keygen
 [[ "$dokku_host" =~ ^[a-zA-Z0-9._:-]+$ ]] || fail "Dokku host contains unsupported characters."
 [[ "$admin_user" =~ ^[a-zA-Z0-9._-]+$ ]] || fail "Admin user contains unsupported characters."
 [[ "$dokku_port" =~ ^[0-9]+$ ]] || fail "SSH port must contain only digits."
+(( ${#dokku_port} <= 5 )) || fail "SSH port must be between 1 and 65535."
+dokku_port=$((10#$dokku_port))
 ((dokku_port >= 1 && dokku_port <= 65535)) || fail "SSH port must be between 1 and 65535."
 
 admin_key="$(expand_home "$admin_key")"
