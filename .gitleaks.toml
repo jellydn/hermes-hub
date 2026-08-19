@@ -4,8 +4,28 @@ title = "gitleaks"
 useDefault = true
 
 [[allowlists]]
-description = "Test fixtures and empty example env placeholders"
+description = "Known fake values in the Dokku setup test fixture"
 paths = [
-  '''(^|/).*\.test\.(ts|tsx|js|jsx|sh)$''',
+  '''(^|/)scripts/setup-dokku-deploy-secrets\.test\.sh$''',
+]
+regexes = [
+  '''postgres://dokku:remote-secret@10\.0\.0\.2/hermes''',
+  '''postgres://dokku:file-secret@10\.0\.0\.3/hermes''',
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  '''auth-secret-from-dokku''',
+]
+
+[[allowlists]]
+description = "Dummy OpenSSH header in the connection wizard test"
+paths = [
+  '''(^|/)src/features/servers/connection-wizard\.test\.tsx$''',
+]
+regexes = [
+  '''-----BEGIN OPENSSH PRIVATE KEY-----''',
+]
+
+[[allowlists]]
+description = "Empty example env placeholders"
+paths = [
   '''(^|/)\.env\.example$''',
 ]

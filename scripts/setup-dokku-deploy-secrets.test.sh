@@ -136,6 +136,8 @@ chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh" "$test_dir/bin/ssh-keyscan"
 export PATH="$test_dir/bin:$PATH"
 export TEST_COMMAND_LOG="$test_dir/commands.log"
 export TEST_DIR="$test_dir"
+printf 'dokku.example.test ssh-ed25519 AAAATESTKNOWNHOST\n' >"$test_dir/known_hosts"
+export DOKKU_KNOWN_HOSTS_FILE="$test_dir/known_hosts"
 export TEST_DISPATCH_RUN_ID=987654321
 export TEST_COMPETING_RUN_ID=111111111
 export TEST_SECRET_LIST="DOKKU_SSH_PORT
@@ -304,6 +306,20 @@ assert_contains "DATABASE_URL secret is required" "$output"
 if grep -Eq 'workflow run|run rerun' "$TEST_COMMAND_LOG"; then
 	fail "Workflow was started without required Deploy secrets"
 fi
+
+# Host-key mismatch fails before the known_hosts secret is written.
+: >"$TEST_COMMAND_LOG"
+rm -f "$test_dir/DOKKU_SSH_KNOWN_HOSTS.stdin"
+printf 'dokku.example.test ssh-ed25519 AAAADIFFERENTHOSTKEY\n' >"$test_dir/bad-known-hosts"
+if DOKKU_KNOWN_HOSTS_FILE="$test_dir/bad-known-hosts" \
+	"$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" >"$output" 2>&1; then
+	fail "Mismatched host key should fail"
+fi
+assert_contains "did not match" "$output"
+if [[ -f "$test_dir/DOKKU_SSH_KNOWN_HOSTS.stdin" ]]; then
+	fail "Unverified host key was stored"
+fi
+export DOKKU_KNOWN_HOSTS_FILE="$test_dir/known_hosts"
 
 # Invalid app names fail before any remote or secret mutation.
 : >"$TEST_COMMAND_LOG"

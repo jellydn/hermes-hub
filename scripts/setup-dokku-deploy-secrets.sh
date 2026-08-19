@@ -30,6 +30,7 @@ database_url_file=""
 encryption_key_file=""
 better_auth_secret_file=""
 better_auth_url_file=""
+known_hosts_file="${DOKKU_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
 rerun_id=""
 watch_run=true
 
@@ -59,6 +60,8 @@ Options:
   --admin-key PATH     Existing private key for bootstrap SSH access
   --deploy-key PATH    Dedicated key path to create/reuse
                        (default: ~/.ssh/hermes-hub-dokku-deploy)
+  --known-hosts PATH   Trusted known_hosts used to verify ssh-keyscan
+                       (default: ~/.ssh/known_hosts)
   --rerun RUN_ID       After setup, start a new dokku Deploy workflow. RUN_ID
                        must be a completed failed Deploy run. GitHub reruns
                        reuse that run's original secret snapshot, so this
@@ -182,12 +185,45 @@ ensure_app_acl() {
 		fail "dokku-acl did not list $DOKKU_KEY_NAME for $dokku_app."
 }
 
+host_key_material() {
+	awk '
+		$1 ~ /^#/ { next }
+		{
+			for (i = 1; i <= NF; i++) {
+				if ($i ~ /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-)/ && i < NF) {
+					print $i, $(i + 1)
+					break
+				}
+			}
+		}
+	'
+}
+
+trusted_host_keys() {
+	local lines
+	[[ -f "$known_hosts_file" ]] || \
+		fail "Trusted known_hosts file is missing: $known_hosts_file. Accept the host key interactively first, or pass --known-hosts."
+	lines="$(ssh-keygen -F "$dokku_host" -f "$known_hosts_file" 2>/dev/null || true)"
+	if [[ -z "$lines" ]]; then
+		lines="$(ssh-keygen -F "[$dokku_host]:$dokku_port" -f "$known_hosts_file" 2>/dev/null || true)"
+	fi
+	[[ -n "$lines" ]] || \
+		fail "Host $dokku_host is not in $known_hosts_file. Accept the host key first, or pass --known-hosts with a matching entry."
+	printf '%s\n' "$lines" | host_key_material
+}
+
 capture_known_hosts() {
-	local scan
+	local scan scan_keys trusted_keys
 	scan="$(ssh-keyscan -p "$dokku_port" "$dokku_host" 2>/dev/null || true)"
 	[[ -n "$scan" ]] || fail "ssh-keyscan returned no host keys for $dokku_host."
-	printf '%s\n' "$scan" | grep -Eq 'ssh-(ed25519|rsa)|ecdsa-sha2-' || \
-		fail "ssh-keyscan output for $dokku_host did not contain a host key."
+	scan_keys="$(printf '%s\n' "$scan" | host_key_material)"
+	[[ -n "$scan_keys" ]] || fail "ssh-keyscan output for $dokku_host did not contain a host key."
+	trusted_keys="$(trusted_host_keys)"
+	while IFS= read -r key; do
+		[[ -z "$key" ]] && continue
+		printf '%s\n' "$trusted_keys" | grep -Fxq "$key" || \
+			fail "ssh-keyscan for $dokku_host did not match $known_hosts_file. Refusing to store an unverified host key."
+	done <<<"$scan_keys"
 	printf 'Setting DOKKU_SSH_KNOWN_HOSTS for %s (contents hidden)...\n' "$REPOSITORY"
 	printf '%s\n' "$scan" | gh secret set DOKKU_SSH_KNOWN_HOSTS --repo "$REPOSITORY"
 }
@@ -264,6 +300,11 @@ while (($# > 0)); do
 			deploy_key="$2"
 			shift 2
 			;;
+		--known-hosts)
+			(($# >= 2)) || fail "--known-hosts requires a path."
+			known_hosts_file="$2"
+			shift 2
+			;;
 		--rerun)
 			(($# >= 2)) || fail "--rerun requires a GitHub Actions run ID."
 			rerun_id="$2"
@@ -302,6 +343,7 @@ dokku_port=$((10#$dokku_port))
 [[ -z "$better_auth_secret_file" ]] || better_auth_secret="$(read_secret_file "--better-auth-secret-file" "$better_auth_secret_file")"
 [[ -z "$better_auth_url_file" ]] || better_auth_url="$(read_secret_file "--better-auth-url-file" "$better_auth_url_file")"
 
+known_hosts_file="$(expand_home "$known_hosts_file")"
 admin_key="$(expand_home "$admin_key")"
 deploy_key="$(expand_home "$deploy_key")"
 deploy_public_key="$deploy_key.pub"
