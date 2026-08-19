@@ -147,11 +147,11 @@ read_secret_file() {
 }
 
 file_mode() {
-	if stat -f %Lp "$1" >/dev/null 2>&1; then
-		stat -f %Lp "$1"
-	else
-		stat -c %a "$1"
-	fi
+	# GNU stat accepts -f as --file-system, so do not probe BSD syntax first.
+	case "$(uname -s)" in
+		Linux) stat -c %a "$1" ;;
+		*) stat -f %Lp "$1" ;;
+	esac
 }
 
 ensure_private_key_mode() {

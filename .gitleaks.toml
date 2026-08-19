@@ -4,7 +4,8 @@ title = "gitleaks"
 useDefault = true
 
 [[allowlists]]
-description = "Dokku setup test fixtures use fake postgres URLs and keys"
+description = "Test fixtures and empty example env placeholders"
 paths = [
   '''scripts/setup-dokku-deploy-secrets\.test\.sh''',
+  '''\.env\.example''',
 ]

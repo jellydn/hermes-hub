@@ -178,7 +178,11 @@ private_key_sample="$(sed -n '2p' "$deploy_key")"
 if [[ -n "$private_key_sample" ]] && grep -Fq "$private_key_sample" "$output" "$TEST_COMMAND_LOG"; then
 	fail "Private key material was logged"
 fi
-key_mode="$(stat -f %Lp "$deploy_key" 2>/dev/null || stat -c %a "$deploy_key")"
+if [[ "$(uname -s)" == "Linux" ]]; then
+	key_mode="$(stat -c %a "$deploy_key")"
+else
+	key_mode="$(stat -f %Lp "$deploy_key")"
+fi
 [[ "$key_mode" == "600" || "$key_mode" == "400" ]] || fail "Generated deploy key mode was $key_mode"
 
 # A second run reuses the local key and already-authorized remote key without reinstalling it.

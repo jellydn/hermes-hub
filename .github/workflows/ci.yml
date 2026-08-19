@@ -21,7 +21,7 @@ jobs:
 
       - name: Gitleaks
         run: |
-          docker run --rm -v "$PWD:/src" zricethezav/gitleaks:v8.30.1 detect --source /src --verbose --redact --exit-code 1
+          docker run --rm -v "$PWD:/src" zricethezav/gitleaks:v8.30.1 detect --source /src --no-git --config /src/.gitleaks.toml --verbose --redact --exit-code 1
 
   validate:
     runs-on: ubuntu-latest

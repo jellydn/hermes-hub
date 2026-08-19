@@ -85,7 +85,7 @@ The project includes a `compose.yaml` that spins up the full stack locally with 
 export APP_IMAGE=hermes-hub:local
 export BETTER_AUTH_SECRET=dev-only-better-auth-secret-for-local-development
 export BETTER_AUTH_URL=http://localhost:3000
-export ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
 
 # 2. Build the Docker image
 docker build -t hermes-hub:local .
