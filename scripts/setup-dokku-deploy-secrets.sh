@@ -4,6 +4,15 @@ set -euo pipefail
 
 readonly REPOSITORY="jellydn/hermes-hub"
 readonly DOKKU_KEY_NAME="hermes-hub-github-actions"
+readonly REQUIRED_DEPLOY_SECRETS=(
+	DOKKU_HOST
+	DOKKU_SSH_PRIVATE_KEY
+	DOKKU_APP
+	DATABASE_URL
+	ENCRYPTION_KEY
+	BETTER_AUTH_SECRET
+	BETTER_AUTH_URL
+)
 
 dokku_host="${DOKKU_HOST:-}"
 dokku_port="${DOKKU_SSH_PORT:-22}"
@@ -28,8 +37,11 @@ Options:
   --admin-key PATH     Existing private key for bootstrap SSH access
   --deploy-key PATH    Dedicated key path to create/reuse
                        (default: ~/.ssh/hermes-hub-dokku-deploy)
-  --rerun RUN_ID       Rerun failed jobs from a completed Deploy workflow run
-  --no-watch           Do not monitor the rerun after starting it
+  --rerun RUN_ID       After setup, start a new dokku Deploy workflow. RUN_ID
+                       must be a completed failed Deploy run. GitHub reruns
+                       reuse that run's original secret snapshot, so this
+                       dispatches a fresh workflow instead.
+  --no-watch           Do not monitor the dispatched workflow after starting it
   -h, --help           Show this help
 
 Environment alternatives: DOKKU_HOST, DOKKU_SSH_PORT, DOKKU_ADMIN_USER,
@@ -44,6 +56,24 @@ fail() {
 
 require_command() {
 	command -v "$1" >/dev/null 2>&1 || fail "'$1' is required but was not found in PATH."
+}
+
+github_secret_names() {
+	gh secret list --repo "$REPOSITORY" --json name --jq '.[].name'
+}
+
+require_github_secrets() {
+	local names missing name
+	names="$(github_secret_names)"
+	missing=()
+	for name in "$@"; do
+		if ! printf '%s\n' "$names" | grep -Fxq "$name"; then
+			missing+=("$name")
+		fi
+	done
+	if ((${#missing[@]} > 0)); then
+		fail "${missing[0]} secret is required. Missing GitHub Actions secrets: ${missing[*]}."
+	fi
 }
 
 expand_home() {
@@ -187,7 +217,7 @@ printf 'Setting DOKKU_SSH_PRIVATE_KEY from %s (contents hidden)...\n' "$deploy_k
 gh secret set DOKKU_SSH_PRIVATE_KEY --repo "$REPOSITORY" <"$deploy_key"
 
 if [[ "$dokku_port" == "22" ]]; then
-	if gh secret list --repo "$REPOSITORY" --json name --jq '.[].name' | grep -Fxq DOKKU_SSH_PORT; then
+	if github_secret_names | grep -Fxq DOKKU_SSH_PORT; then
 		printf 'Removing DOKKU_SSH_PORT because the target uses the default port 22...\n'
 		gh secret delete DOKKU_SSH_PORT --repo "$REPOSITORY"
 	fi
@@ -196,20 +226,43 @@ else
 	printf '%s' "$dokku_port" | gh secret set DOKKU_SSH_PORT --repo "$REPOSITORY"
 fi
 
+require_github_secrets DOKKU_HOST DOKKU_SSH_PRIVATE_KEY
 printf 'Dokku deployment key and GitHub secrets configured successfully.\n'
 
 if [[ -z "$rerun_id" ]]; then
-	printf 'No workflow was rerun. Use --rerun RUN_ID when you are ready.\n'
+	printf 'No workflow was started. Use --rerun RUN_ID when you are ready.\n'
 	exit 0
 fi
 
-printf 'Rerunning failed jobs for Deploy run %s...\n' "$rerun_id"
-gh run rerun "$rerun_id" --failed --repo "$REPOSITORY"
+require_github_secrets "${REQUIRED_DEPLOY_SECRETS[@]}"
+
+# GitHub reruns reuse the original run's secret snapshot. Newly written
+# secrets such as DOKKU_HOST are invisible to `gh run rerun`.
+printf 'Starting a new Deploy workflow (target=dokku). Rerunning %s would reuse its original secret snapshot.\n' "$rerun_id"
+gh workflow run Deploy --repo "$REPOSITORY" --ref main --field target=dokku
 
 if [[ "$watch_run" == true ]]; then
-	printf 'Monitoring run %s until it completes...\n' "$rerun_id"
-	gh run watch "$rerun_id" --exit-status --repo "$REPOSITORY"
+	printf 'Waiting for the dispatched Deploy run to appear...\n'
+	dispatched_run_id=""
+	for _ in $(seq 1 30); do
+		dispatched_run_id="$(
+			gh run list \
+				--repo "$REPOSITORY" \
+				--workflow Deploy \
+				--event workflow_dispatch \
+				--limit 1 \
+				--json databaseId \
+				--jq '.[0].databaseId // empty'
+		)"
+		if [[ -n "$dispatched_run_id" && "$dispatched_run_id" != "$rerun_id" ]]; then
+			break
+		fi
+		dispatched_run_id=""
+		sleep 1
+	done
+	[[ -n "$dispatched_run_id" ]] || fail "Timed out waiting for the dispatched Deploy run."
+	printf 'Monitoring run %s until it completes...\n' "$dispatched_run_id"
+	gh run watch "$dispatched_run_id" --exit-status --repo "$REPOSITORY"
 else
-	run_url="$(gh run view "$rerun_id" --repo "$REPOSITORY" --json url --jq .url)"
-	printf 'Rerun started: %s\n' "$run_url"
+	printf 'Deploy workflow dispatched with target=dokku.\n'
 fi

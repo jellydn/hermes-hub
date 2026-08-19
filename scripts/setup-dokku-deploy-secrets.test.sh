@@ -26,8 +26,18 @@ printf ' %q' "$@" >>"$TEST_COMMAND_LOG"
 printf '\n' >>"$TEST_COMMAND_LOG"
 
 case "$1 $2" in
-	"secret set") cat >"$TEST_DIR/$3.stdin" ;;
-	"secret list") printf '%s\n' "${TEST_SECRET_LIST:-}" ;;
+	"secret set")
+		cat >"$TEST_DIR/$3.stdin"
+		printf '%s\n' "$3" >>"$TEST_DIR/secret-names"
+		;;
+	"secret list")
+		{
+			printf '%s\n' "${TEST_SECRET_LIST:-}"
+			cat "$TEST_DIR/secret-names" 2>/dev/null || true
+		} | awk 'NF && !seen[$0]++'
+		;;
+	"workflow run") ;;
+	"run list") printf '%s\n' "${TEST_DISPATCH_RUN_ID:-987654321}" ;;
 	"run view")
 		if [[ " $* " == *" --json workflowName,status,conclusion "* ]]; then
 			printf 'Deploy\tcompleted\tfailure\n'
@@ -67,7 +77,13 @@ chmod +x "$test_dir/bin/gh" "$test_dir/bin/ssh"
 export PATH="$test_dir/bin:$PATH"
 export TEST_COMMAND_LOG="$test_dir/commands.log"
 export TEST_DIR="$test_dir"
-export TEST_SECRET_LIST="DOKKU_SSH_PORT"
+export TEST_DISPATCH_RUN_ID=987654321
+export TEST_SECRET_LIST="DOKKU_SSH_PORT
+DOKKU_APP
+DATABASE_URL
+ENCRYPTION_KEY
+BETTER_AUTH_SECRET
+BETTER_AUTH_URL"
 
 bash -n "$SCRIPT"
 output="$test_dir/output.log"
@@ -89,8 +105,11 @@ cmp -s "$deploy_key.pub" "$test_dir/installed-public-key" || fail "Public key wa
 assert_contains "deploy-admin@dokku.example.test dokku version" "$TEST_COMMAND_LOG"
 assert_contains "ssh-keys:add hermes-hub-github-actions" "$TEST_COMMAND_LOG"
 assert_contains "gh secret delete DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
-assert_contains "gh run rerun 32192213112 --failed --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
-assert_contains "gh run watch 32192213112 --exit-status --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+assert_contains "gh workflow run Deploy --repo jellydn/hermes-hub --ref main --field target=dokku" "$TEST_COMMAND_LOG"
+assert_contains "gh run watch 987654321 --exit-status --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+if grep -Fq 'run rerun' "$TEST_COMMAND_LOG"; then
+	fail "Newly written secrets must not be followed by gh run rerun"
+fi
 private_key_sample="$(sed -n '2p' "$deploy_key")"
 if [[ -n "$private_key_sample" ]] && grep -Fq "$private_key_sample" "$output" "$TEST_COMMAND_LOG"; then
 	fail "Private key material was logged"
@@ -128,6 +147,17 @@ export TEST_SECRET_LIST=""
 [[ "$(cat "$test_dir/DOKKU_SSH_PORT.stdin")" == "8" ]] || fail "Leading-zero port 08 was not stored as 8"
 assert_contains "ssh -p 8 " "$TEST_COMMAND_LOG"
 assert_contains "gh secret set DOKKU_SSH_PORT --repo jellydn/hermes-hub" "$TEST_COMMAND_LOG"
+
+# --rerun without the remaining required Deploy secrets fails before dispatch.
+: >"$TEST_COMMAND_LOG"
+export TEST_SECRET_LIST=""
+if "$SCRIPT" --host dokku.example.test --deploy-key "$deploy_key" --rerun 32192213112 >"$output" 2>&1; then
+	fail "Missing required Deploy secrets should fail"
+fi
+assert_contains "DOKKU_APP secret is required" "$output"
+if grep -Eq 'workflow run|run rerun' "$TEST_COMMAND_LOG"; then
+	fail "Workflow was started without required Deploy secrets"
+fi
 
 # Missing host input fails before any remote or secret mutation.
 : >"$TEST_COMMAND_LOG"
