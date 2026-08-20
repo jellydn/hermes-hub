@@ -133,15 +133,12 @@ export function deriveCustomProviderApiKeyEnvVar(
 		labels.shift();
 	}
 
-	if (labels.length < 2 || /^\d/.test(labels.at(-1) ?? "")) {
+	if (labels.length < 2 || /\d/.test(labels.at(-1) ?? "")) {
 		return null;
 	}
 
 	const vendor = labels.at(-2) ?? "";
-	const sanitized = vendor
-		.toUpperCase()
-		.replace(/[^A-Z0-9]/g, "_")
-		.replace(/_+/g, "_");
+	const sanitized = vendor.toUpperCase().replace(/[^A-Z0-9]/g, "_");
 	if (!/^[A-Z]/.test(sanitized)) {
 		return null;
 	}
