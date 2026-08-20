@@ -761,6 +761,7 @@ describe("provider settings", () => {
 					COMMANDCODE_API_KEY: "stored-api-key",
 					COMMANDCODE_BASE_URL:
 						"https://hub.example.com/api/commandcode-proxy/v1",
+					EXAMPLE_API_KEY: "stored-api-key",
 					OPENAI_API_KEY: "stored-api-key",
 					CUSTOM_BASE_URL: "https://hub.example.com/api/commandcode-proxy/v1",
 					OPENAI_BASE_URL: "https://hub.example.com/api/commandcode-proxy/v1",

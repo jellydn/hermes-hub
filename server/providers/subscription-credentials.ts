@@ -1,7 +1,7 @@
 import type { CredentialSubscriptionOption } from "#/lib/user-subscriptions";
 import type { UserSubscriptionConfigSummary } from "#shared/contracts/model-access";
 import { getCommandCodeProxyBaseUrl } from "../commandcode/proxy";
-import type { StoredProviderRecord } from "./config";
+import { deriveCustomProviderApiKeyEnvVar, type StoredProviderRecord } from "./config";
 import { resolveStoredCredentials } from "./credential-resolution";
 import { decryptStoredApiKey, getApiKeyLast4 } from "./records";
 
@@ -32,6 +32,10 @@ export function buildSubscriptionCredentialEnvMap(
 	if (option.hermesProviderId === "custom") {
 		if (apiKey) {
 			envVars.OPENAI_API_KEY = apiKey;
+			const customApiKeyEnvVar = deriveCustomProviderApiKeyEnvVar(deployBaseUrl);
+			if (customApiKeyEnvVar) {
+				envVars[customApiKeyEnvVar] = apiKey;
+			}
 		}
 		if (deployBaseUrl) {
 			envVars.CUSTOM_BASE_URL = deployBaseUrl;

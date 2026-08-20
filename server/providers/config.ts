@@ -104,7 +104,9 @@ export function isApiKeyRequired(provider: ApiProviderId): boolean {
 	return providerRequiresApiKey(provider);
 }
 
-function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
+export function deriveCustomProviderApiKeyEnvVar(
+	baseUrl: string | null | undefined,
+) {
 	if (!baseUrl) {
 		return null;
 	}

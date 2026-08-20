@@ -8,7 +8,7 @@ const COMMAND_CODE_MODELS_URL = "https://api.commandcode.ai/provider/v1/models";
 const COMMAND_CODE_PROXY_PATH = "/api/commandcode-proxy/v1";
 // Matches the CLI protocol version used by patlux/pi-commandcode-provider,
 // the known-working third-party implementation against the same gateway.
-const COMMAND_CODE_CLI_VERSION = "0.29.0";
+const COMMAND_CODE_CLI_VERSION = "1.15.1";
 const GENERATION_TIMEOUT_MS = 120_000;
 const MODELS_TIMEOUT_MS = 10_000;
 
