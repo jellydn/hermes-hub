@@ -542,7 +542,7 @@ describe("Command Code proxy handlers", () => {
 		expect(init.headers).toBeUndefined();
 	});
 
-	it("diagnostics endpoint returns a token fingerprint without calling upstream", async () => {
+	it("diagnostics endpoint reports token receipt without echoing credentials", async () => {
 		const response = await app.request("http://localhost/v1/diagnostics", {
 			headers: { Authorization: "Bearer user_secret123" },
 		});
@@ -550,15 +550,13 @@ describe("Command Code proxy handlers", () => {
 		expect(response.status).toBe(200);
 		expect(fetchMock).not.toHaveBeenCalled();
 		const body = await response.json();
-		expect(body).toMatchObject({
+		expect(body).toEqual({
 			status: "token_received",
-			tokenFingerprint: {
-				prefix: "user_sec",
-				suffix: "t123",
-				length: 14,
-				startsWithUser: true,
-			},
+			modelsEndpoint: "https://api.commandcode.ai/provider/v1/models",
+			generateEndpoint: COMMAND_CODE_GENERATE_URL,
+			cliVersion: "1.15.1",
 		});
+		expect(JSON.stringify(body)).not.toContain("user_secret123");
 	});
 
 	it("diagnostics endpoint reports no_token when Authorization is missing", async () => {
@@ -575,10 +573,7 @@ describe("Command Code proxy handlers", () => {
 
 		expect(response.status).toBe(200);
 		const body = await response.json();
-		expect(body.tokenFingerprint).toMatchObject({
-			prefix: "user_sec",
-			suffix: "t123",
-			startsWithUser: true,
-		});
+		expect(body.status).toBe("token_received");
+		expect(JSON.stringify(body)).not.toContain("user_secret123");
 	});
 });

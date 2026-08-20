@@ -791,22 +791,7 @@ export async function handleCommandCodeProxy(context: Context) {
 		return context.json({ error: "Bearer API key is required." }, 401);
 	}
 
-	// Log a redacted fingerprint of the token so operators can verify the
-	// gateway is sending the expected Command Code key (not a stale or
-	// wrong-provider key). Only the first 8 chars and last 4 are shown.
-	const token = normalizeBearerToken(context.req.header("authorization") ?? "");
-	const tokenPrefix = token.slice(0, 8);
-	const tokenSuffix = token.slice(-4);
-	const tokenLen = token.length;
-	logger.info(
-		{
-			tokenPrefix,
-			tokenSuffix,
-			tokenLen,
-			hasBearer: /^Bearer\s/i.test(context.req.header("authorization") ?? ""),
-		},
-		"Command Code proxy: forwarding request to upstream",
-	);
+	logger.info("Command Code proxy: forwarding request to upstream");
 
 	let openaiBody: unknown;
 	try {
@@ -854,9 +839,6 @@ export async function handleCommandCodeProxy(context: Context) {
 			{
 				upstreamStatus: upstream.status,
 				upstreamStatusText: upstream.statusText,
-				tokenPrefix,
-				tokenSuffix,
-				tokenLen,
 			},
 			"Command Code proxy: upstream returned non-OK status",
 		);
@@ -915,12 +897,6 @@ export async function handleCommandCodeProxyDiagnostics(context: Context) {
 
 	return context.json({
 		status: "token_received",
-		tokenFingerprint: {
-			prefix: token.slice(0, 8),
-			suffix: token.slice(-4),
-			length: token.length,
-			startsWithUser: token.startsWith("user_"),
-		},
 		modelsEndpoint: COMMAND_CODE_MODELS_URL,
 		generateEndpoint: COMMAND_CODE_GENERATE_URL,
 		cliVersion: COMMAND_CODE_CLI_VERSION,

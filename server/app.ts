@@ -255,6 +255,7 @@ apiApp.post(
 );
 apiApp.get(
 	"/commandcode-proxy/v1/diagnostics",
+	httpsMiddleware,
 	handleCommandCodeProxyDiagnostics,
 );
 apiApp.get(

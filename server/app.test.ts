@@ -214,6 +214,28 @@ describe("apiApp", () => {
 		expect(handleCommandCodeProxyModels).toHaveBeenCalledTimes(1);
 	});
 
+	it("rejects Command Code credential routes over plain HTTP in production", async () => {
+		const previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+
+		try {
+			const completionResponse = await apiApp.request(
+				"http://localhost/api/commandcode-proxy/v1/chat/completions",
+				{ method: "POST" },
+			);
+			const diagnosticsResponse = await apiApp.request(
+				"http://localhost/api/commandcode-proxy/v1/diagnostics",
+			);
+
+			expect(completionResponse.status).toBe(426);
+			expect(diagnosticsResponse.status).toBe(426);
+			expect(handleCommandCodeProxy).not.toHaveBeenCalled();
+			expect(handleCommandCodeProxyDiagnostics).not.toHaveBeenCalled();
+		} finally {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
+	});
+
 	it("routes send magic link requests through Better Auth", async () => {
 		authHandler.mockResolvedValueOnce(
 			new Response(JSON.stringify({ status: true }), {
