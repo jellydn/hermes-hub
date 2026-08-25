@@ -14,8 +14,9 @@
 		"db:migrate": "node scripts/db-migrate.mjs",
 		"preview": "vite preview",
 		"re-encrypt": "bun run scripts/re-encrypt.ts",
-		"test": "vitest run --passWithNoTests --reporter=dot",
-		"test:coverage": "vitest run --coverage --passWithNoTests --reporter=dot",
+		"test:dokku-setup": "bash scripts/setup-dokku-deploy-secrets.test.sh",
+		"test": "bun run test:dokku-setup && vitest run --passWithNoTests --reporter=dot",
+		"test:coverage": "bun run test:dokku-setup && vitest run --coverage --passWithNoTests --reporter=dot",
 		"typecheck": "tsc --noEmit",
 		"doctor": "react-doctor",
 		"brand:assets": "bun run scripts/generate-brand-assets.ts"

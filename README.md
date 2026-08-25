@@ -85,7 +85,7 @@ The project includes a `compose.yaml` that spins up the full stack locally with 
 export APP_IMAGE=hermes-hub:local
 export BETTER_AUTH_SECRET=dev-only-better-auth-secret-for-local-development
 export BETTER_AUTH_URL=http://localhost:3000
-export ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
 
 # 2. Build the Docker image
 docker build -t hermes-hub:local .
@@ -169,6 +169,27 @@ Keep `TRUSTED_PROXY_COUNT` at its default of `1` (the app reads the rightmost `x
 ### Dokku targets
 
 Dokku's built-in nginx proxy already forwards `x-forwarded-proto` correctly (it sets it from `$scheme`), but TLS termination only happens once the app has a **certificate installed**. Enable Let's Encrypt on the Dokku host once — the `deploy-dokku` CI job fails the deploy when no certificate is present (except the bootstrap deploy of a newly created app, which the HTTP-01 challenge needs to exist first):
+
+Run the bootstrap script from a trusted local machine with `gh`, OpenSSH, an authenticated [GitHub CLI](https://cli.github.com/), and existing administrative SSH access to the Dokku host. The administrative account must be able to run `dokku version` and `dokku ssh-keys:*` commands:
+
+```bash
+# Uses your SSH agent/config for administrative access and creates
+# ~/.ssh/hermes-hub-dokku-deploy as a dedicated deployment key.
+./scripts/setup-dokku-deploy-secrets.sh \
+  --host <dokku-host> \
+  --admin-user root
+
+# Select an existing administrative key, a different SSH port, and optionally
+# start a new dokku Deploy after setup (use a failed Deploy run ID).
+./scripts/setup-dokku-deploy-secrets.sh \
+  --host <dokku-host> \
+  --port <ssh-port> \
+  --admin-user <admin-user> \
+  --admin-key ~/.ssh/<admin-key> \
+  --rerun <actions-run-id>
+```
+
+The host can be supplied through `DOKKU_HOST` instead of `--host`; it is never stored in this repository. The script verifies administrative access, creates an unencrypted Ed25519 deployment key locally, installs only its public key through the administrative connection, and verifies `dokku` access with the dedicated key. Repeated runs reuse a valid, working key without reinstalling it. The private key is streamed directly to `gh secret set` and is never printed. After writing, the script checks that `DOKKU_HOST`, `DOKKU_APP` (default `hermes-hub`, override with `--app` or `DOKKU_APP`), `DOKKU_SSH_PRIVATE_KEY`, and `DOKKU_SSH_KNOWN_HOSTS` exist in the repository secret list. If the Dokku app already exists, it copies `DATABASE_URL`, `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` from `dokku config:get` into GitHub secrets without printing them. Do not pass production secrets on the command line. For a new app, use `--database-url-file` / `DOKKU_DATABASE_URL` (and the matching encryption/auth file or `DOKKU_*` variables). The GitHub Actions key is limited to this app with [dokku-acl](https://github.com/dokku-community/dokku-acl). `--rerun` then checks the remaining Deploy secrets and starts a **new** `workflow_dispatch` with `target=dokku` and a unique correlation id so it watches that run, not a concurrent dispatch. It does not call `gh run rerun`, because a GitHub rerun reuses the original run's secret snapshot and would still fail with `DOKKU_HOST secret is required`. Port 22 uses the workflow default and removes a stale `DOKKU_SSH_PORT`; non-default ports are stored explicitly. SSH asks you to confirm a previously unknown host key. The script then compares `ssh-keyscan` with that trusted `known_hosts` entry (or `--known-hosts`) and only then stores `DOKKU_SSH_KNOWN_HOSTS` for CI.
 
 ```bash
 # On the Dokku host — one-time setup

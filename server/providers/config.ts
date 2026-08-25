@@ -104,7 +104,9 @@ export function isApiKeyRequired(provider: ApiProviderId): boolean {
 	return providerRequiresApiKey(provider);
 }
 
-function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
+export function deriveCustomProviderApiKeyEnvVar(
+	baseUrl: string | null | undefined,
+) {
 	if (!baseUrl) {
 		return null;
 	}
@@ -131,15 +133,12 @@ function deriveCustomProviderApiKeyEnvVar(baseUrl: string | null | undefined) {
 		labels.shift();
 	}
 
-	if (labels.length < 2 || /^\d/.test(labels.at(-1) ?? "")) {
+	if (labels.length < 2 || /\d/.test(labels.at(-1) ?? "")) {
 		return null;
 	}
 
 	const vendor = labels.at(-2) ?? "";
-	const sanitized = vendor
-		.toUpperCase()
-		.replace(/[^A-Z0-9]/g, "_")
-		.replace(/_+/g, "_");
+	const sanitized = vendor.toUpperCase().replace(/[^A-Z0-9]/g, "_");
 	if (!/^[A-Z]/.test(sanitized)) {
 		return null;
 	}
