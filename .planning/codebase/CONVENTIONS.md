@@ -1,83 +1,155 @@
 # Coding Conventions
 
-## Language & TypeScript
+**Analysis Date:** 2026-08-25
 
-- **Strict mode** enabled: `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax: true`
-- **ES Modules** (`"type": "module"` in package.json)
-- **ESNext** target with `bundler` module resolution
-- **Type-only imports**: Use `import type` for type-only symbols — both Biome and `tsc` will flag plain `import` of a type-only symbol
+## Code Style
 
-## File Organization
+**Formatter:** Biome (auto-format on save)
+- Run `bunx @biomejs/biome check .` to verify
+- Run `bun run format` to auto-fix
 
-- **Tests co-located** with source files: `foo.ts` ↔ `foo.test.ts` (or `foo.test.tsx` for React components)
-- **Feature modules** live in `src/features/<domain>/` — one folder per product area
-- **Route files** are thin — push UI logic into `src/features/` and `src/lib/`
-- **Test files** use `*.test.{ts,tsx}` extension (not `*.spec.*`)
+**TypeScript Strictness:**
+- `noUnusedLocals: true`
+- `noUnusedParameters: true`
+- `verbatimModuleSyntax: true`
+- Use `import type` for type-only imports
 
-## Naming Conventions
+**Naming:**
+- `camelCase` for variables and functions
+- `PascalCase` for types, interfaces, and React components
+- `kebab-case` for file names
+- `SCREAMING_SNAKE_CASE` for constants
 
-| Context | Convention | Example |
-|---------|-----------|---------|
-| Database tables | snake_case plural | `servers`, `install_events`, `audit_logs` |
-| TypeScript variables | camelCase | `serverId`, `createdAt` |
-| TypeScript files | kebab-case | `server-actions.ts`, `use-mount-effect.ts` |
-| React components | PascalCase | `ServerList`, `AppShell` |
-| Hooks | camelCase with `use` prefix | `useMountEffect`, `useSession` |
-| Drizzle relations | camelCase | `server.installs`, `user.sessions` |
+## Import Patterns
 
-## Database Conventions
+**Path Aliases:**
+- `#/*` → `./src/*` (frontend code)
+- `#server/*` → `./server/*` (server code)
+- `#shared/*` → `./shared/*` (cross-boundary)
 
-- **Schema**: All Drizzle table definitions in `server/db/schema.ts`
-- **Better Auth tables** (`user`, `session`, `account`, `verification`) re-exported at the bottom of schema
-- **Primary keys**: `text(...).primaryKey().default(sql\`gen_random_uuid()::text\`)` for app-owned tables
-- **Migration workflow**: Edit schema → `bun run db:generate` → `bun run db:migrate`
-- **Transactions**: `db.transaction()` when multiple Drizzle statements must commit/roll back together (coupled writes like SSH action + audit log)
-- **Sequential writes** are fine when audit log is purely historical (e.g., server connect/disconnect)
+**Import Order:**
+1. External packages
+2. Internal aliases (`#/*`, `#server/*`, `#shared/*`)
+3. Relative imports
 
-## Auth Conventions
+**Examples:**
+```typescript
+import { Hono } from "hono";
+import { auth } from "#server/auth";
+import { db } from "#server/db";
+import { cn } from "#lib/utils";
+import { Button } from "../ui/button";
+```
 
-- **Lazy initialization**: `getAuth()` builds Better Auth instance on first call, not at module scope
-- **Lazy session**: `getAuthSession()` short-circuits to `null` when `DATABASE_URL` is missing
-- **Route loading**: Typically via `createServerFn` loaders; exception is `servers.$id.tsx` which uses `useMountEffect`
-- **Mutating API routes**: Must use `requireHttps()` middleware in production
-- **Path rewriting**: `/auth/send-magic-link` rewrites to `/api/auth/sign-in/magic-link` and proxies to `getAuth().handler()`
+## React Patterns
 
-## Frontend Conventions
+**Component Structure:**
+- Functional components only (no class components)
+- React 19 features allowed (hooks, server components)
+- File-based routing via TanStack Start
 
-- **CSS**: Tailwind CSS v4 with utility classes
-- **Component variants**: `class-variance-authority` (`cva`) for component variant definitions
-- **Class merging**: `cn()` utility (`tailwind-merge` + `clsx`) from `src/lib/utils.ts`
-- **Forms**: `react-hook-form` + `zod` via `@hookform/resolvers` — resolvers and validators co-located in `src/features/<domain>/`
-- **Mount-only effects**: Use `useMountEffect` from `src/lib/use-mount-effect.ts` for stable subscriptions (SSE, polling) — Biome's `useExhaustiveDependencies` is intentionally disabled for this file
-- **Label placement**: Helper/validation text lives outside `<label>` elements for accessible names
-- **UI primitives**: Use existing Shadcn UI components in `src/components/ui/`
+**Hooks:**
+- `useMountEffect` - Mount-only side effects (escape hatch)
+- `useStaleRef` - Read latest state in async handlers
+- `react-hook-form` + `zod` for forms
 
-## Backend Conventions
+**State Management:**
+- React state (`useState`, `useReducer`)
+- No global state library (Redux, Zustand, etc.)
+- Server state via TanStack Router loaders
 
-- **SSH**: `node-ssh` for all remote server operations. Connection pool managed via `server/web-ui/ssh-pool.ts`
-- **Error handling**: Empty `catch { }` blocks appear in `server/deploy.ts`, `server/servers.ts`, and `server/server-actions.ts` — intentional silencing of expected errors in some cases
-- **HTTPS guard**: Uses `globalThis.process.env.NODE_ENV` (not `process.env.NODE_ENV`) to avoid Vite constant-replacement tree-shaking the dev early return
-- **Rate limiting**: Magic-link limiter keyed by `email`, not IP (in-memory)
+**Styling:**
+- TailwindCSS utility classes
+- `cn()` helper for conditional classes
+- shadcn/ui components in `src/components/ui/`
 
-## Dependency Management
+## Server Patterns
 
-- **Bun** is the package manager — not `npm` or `pnpm`
-- **Lockfile**: `bun.lock`
-- **Install**: `bun install` (not `npm install`)
+**API Routes:**
+- Hono handlers in `server/app.ts`
+- Middleware for auth, HTTPS, rate limiting
+- Structured error responses: `{ error: "message" }`
 
-## Code Quality
+**Database:**
+- Drizzle ORM for queries
+- Schema in `server/db/schema.ts`
+- Migrations in `drizzle/` directory
 
-- **Linting/Formatting**: Biome (`bun run lint` = `@biomejs/biome check .`)
-- **Typechecking**: `bun run typecheck` = `tsc --noEmit`
-- **Testing**: `bun run test` = `vitest run --passWithNoTests --reporter=dot`
-- **Code quality scan**: `bun run doctor` = `react-doctor`
-- **Pre-commit hooks**: Biome check → typecheck → React Doctor (blocking warnings on staged changes)
+**SSH:**
+- `node-ssh` for remote execution
+- Credentials encrypted with AES-256-GCM
+- Connection pooling via `server/credentials.ts`
 
-## Path Aliases
+**Encryption:**
+- AES-256-GCM for credentials
+- Keyring with versioning (`v1`, `v2`)
+- Wire format: `v1.iv.authTag.cipher`
 
-- `#/*` → `./src/*`
-- `#server/*` → `./server/*`
-- `#shared/*` → `./shared/*`
-- Kept in sync between `tsconfig.json` (paths) and `package.json` (imports)
-- `server/` and `shared/` modules never use `#` aliases internally — use `../` relative imports
-- Aliases are only for cross-directory imports from `src/`
+## Error Handling
+
+**Frontend:**
+- Try-catch blocks for async operations
+- Error boundaries for component errors
+- User-friendly error messages
+
+**Server:**
+- Middleware error catching
+- Structured error responses
+- Pino logging for debugging
+
+**Database:**
+- Transaction rollback on errors
+- Idempotent operations where possible
+
+## Testing Patterns
+
+**Unit Tests:**
+- Vitest with node environment
+- Co-located test files (`*.test.ts`)
+- Mock external dependencies
+
+**Integration Tests:**
+- Testing Library for React components
+- Mock API responses
+- Test user interactions
+
+**Coverage:**
+- Minimum thresholds: 45% lines, 40% functions
+- Exclude generated files (`routeTree.gen.ts`)
+
+## Documentation
+
+**Code Comments:**
+- JSDoc for public APIs
+- Inline comments for complex logic
+- No unnecessary comments
+
+**README:**
+- Project overview and quick start
+- Environment variable reference
+- Architecture overview
+
+**AGENTS.md:**
+- Developer guide for AI assistants
+- Verified gotchas and conventions
+- Architecture patterns
+
+## Git Conventions
+
+**Commit Messages:**
+- Conventional commits format
+- Examples: `feat:`, `fix:`, `docs:`, `chore:`
+
+**Branch Naming:**
+- `feature/description`
+- `fix/description`
+- `docs/description`
+
+**PR Description:**
+- Summary of changes
+- Related issues
+- Verification steps
+
+---
+
+*Conventions analysis: 2026-08-25*

@@ -1,65 +1,155 @@
-# Testing
+# Testing Patterns
 
-## Framework & Configuration
+**Analysis Date:** 2026-08-25
 
-- **Runner**: Vitest ^4.1.5 (configured in `vite.config.ts`)
-- **Environment**: `node` (not DOM/browser) — configured globally in `vite.config.ts`
-- **DOM Support**: `happy-dom` ^20.10.1 (fast) and `jsdom` ^28.1.0 (comprehensive) available
-- **Command**: `bun run test` → `vitest run --passWithNoTests --reporter=dot`
-- **Just wrapper**: `just test`
+## Framework
+
+**Test Runner:** Vitest 4.1.x
+- Configuration: `vite.config.ts` (test section)
+- Environment: `node` (not DOM)
+- Command: `bun run test`
+
+**Test Utilities:**
+- Testing Library 16.x (`@testing-library/react`, `@testing-library/dom`)
+- happy-dom/jsdom for DOM simulation (server tests)
+- Vitest built-in mocking (`vi.mock`, `vi.fn`)
 
 ## Test Structure
 
-- **Co-located**: Tests sit next to their source files (`foo.ts` ↔ `foo.test.ts`, `foo.tsx` ↔ `foo.test.tsx`)
-- **Extension**: `*.test.{ts,tsx}` (neither `*.spec.*` nor `__tests__/` directories are used)
-- **Glob pattern**: `src/**` and `server/**` for `*.{test,spec}.{js,ts,jsx,tsx}` files
+**File Location:**
+- Co-located with source files (`*.test.ts`, `*.test.tsx`)
+- Same directory as implementation
+- No separate `__tests__` directories
 
-## Test Distribution
+**Test Count:** 116 test files
+- `server/` - 73 test files (backend logic)
+- `src/` - 42 test files (frontend components)
+- `shared/` - 1 test file (types/contracts)
 
-| Area | Count | Coverage Focus |
-|------|-------|---------------|
-| **server/** | 62 files | Backend logic (auth, SSH, deploy, install, telegram, providers, hermes, web-ui, health-check) |
-| **src/lib/** | ~8 files | Utility functions (session, brand-mark-graphic, ai-providers, user-subscriptions, parse-theme-css, wcag-contrast, dark-mode) |
-| **src/features/** | ~5 files | Feature component tests (dashboard/status-overview, logs/logs-viewer, install-progress, servers/connection-wizard) |
-| **shared/contracts/** | 1 file | Agent skills types |
-
-**Total**: ~87 test files across the project.
+**Naming Convention:**
+- `filename.test.ts` for TypeScript tests
+- `filename.test.tsx` for React component tests
 
 ## Testing Patterns
 
-### Mocking
+**Unit Tests:**
+- Test individual functions and modules
+- Mock external dependencies (DB, SSH, APIs)
+- Pure function testing where possible
 
-- **`vi.mock()`** is used for module-level mocking:
-  - `node-ssh` — mocked in `server/ssh/connection.test.ts` and `server/web-ui/ssh-pool.test.ts`
-  - `hono/streaming` — mocked in `server/install-idle-timeout.test.ts`
-- **Factory functions** are common for creating test fixtures
+**Integration Tests:**
+- Test API routes with mocked DB
+- Test React components with mocked API
+- Test SSH operations with mocked `node-ssh`
 
-### Vitest Globals
+**Component Tests:**
+- Render components with Testing Library
+- Test user interactions (click, type, submit)
+- Assert DOM output and state changes
 
-Vitest globals (`vi`, `describe`, `it`, `expect`) are available without explicit imports. The project convention uses these globals throughout.
+## Mocking Strategies
 
-### No DOM Assumption
+**Database:**
+- Mock `getDb()` function
+- Use in-memory test data
+- Mock Drizzle query builder
 
-Tests run with `environment: "node"`. Do not assume a DOM is available unless a specific test file configures a DOM environment.
+**SSH:**
+- Mock `node-ssh` module
+- Simulate command execution
+- Mock connection and authentication
 
-## Coverage Gaps (per `docs/test-coverage-review.md`)
+**APIs:**
+- Mock fetch/axios for external calls
+- Mock Resend for email sending
+- Mock AI provider APIs
 
-- **`server/db/schema.ts`** — 397 lines, untested (schema definition, low risk)
-- **`server/web-ui/proxy.ts`** — 464 lines, complex SSH proxy, limited test coverage
-- **`src/routes/`** — No tests for route components
-- **`src/features/`** — Growing coverage but many feature components lack tests
-- **SSR rendering** — Not tested in Vitest (requires integration/E2E testing)
+**File System:**
+- Mock `fs` module for file operations
+- Use `tmp` directory for test files
 
-## Recommended Test Improvements
+## Coverage
 
-1. Add tests for uncovered API handlers (`server/` modules)
-2. Add component tests for main routes (`src/routes/`)
-3. Expand `src/features/` test coverage
-4. Consider integration/E2E tests for critical flows (install, deploy, SSH proxy)
-5. Snapshot tests for complex Drizzle queries (one snapshot file exists for `compose.test.ts`)
+**Thresholds:**
+- Lines: 45%
+- Functions: 40%
+- Branches: 35%
+- Statements: 45%
 
-## CI Integration
+**Configuration:**
+- Provider: V8
+- Reporters: text, lcov, html
+- Include: `src/**/*.ts`, `src/**/*.tsx`, `server/**/*.ts`
+- Exclude: Generated files, test files, scripts
 
-- **CI workflow**: `bun run test` runs as part of every push/PR (after Biome check, before build)
-- **Pre-commit**: React Doctor runs on staged changes to catch regressions before commit
-- **No test coverage threshold** enforced in CI at this time
+**Commands:**
+- `bun run test` - Run tests
+- `bun run test:coverage` - Run with coverage report
+
+## Test Examples
+
+**Server Test:**
+```typescript
+import { describe, it, expect, vi } from "vitest";
+import { handler } from "./app";
+
+describe("API handler", () => {
+  it("returns 200 on success", async () => {
+    const result = await handler.request("/api/health");
+    expect(result.status).toBe(200);
+  });
+});
+```
+
+**Component Test:**
+```typescript
+import { render, screen, fireEvent } from "@testing-library/react";
+import { Button } from "./Button";
+
+describe("Button", () => {
+  it("calls onClick when clicked", () => {
+    const onClick = vi.fn();
+    render(<Button onClick={onClick}>Click me</Button>);
+    fireEvent.click(screen.getByText("Click me"));
+    expect(onClick).toHaveBeenCalled();
+  });
+});
+```
+
+## Running Tests
+
+**Commands:**
+```bash
+# Run all tests
+bun run test
+
+# Run with coverage
+bun run test:coverage
+
+# Run specific file
+bun vitest run path/to/test.test.ts
+
+# Run in watch mode
+bun vitest --watch
+```
+
+**CI Integration:**
+- Tests run in GitHub Actions CI pipeline
+- Coverage uploaded as artifact
+- Fail build if thresholds not met
+
+## Test Data
+
+**Fixtures:**
+- `server/__snapshots__/` - Snapshot outputs
+- `server/*/fixtures/` - Test data files
+- Mock data defined inline in tests
+
+**Database:**
+- Use in-memory SQLite for unit tests
+- Mock DB connection for integration tests
+- No shared test database
+
+---
+
+*Testing analysis: 2026-08-25*

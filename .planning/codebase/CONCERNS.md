@@ -1,105 +1,144 @@
-# Concerns & Technical Debt
+# Technical Concerns
 
-## Active Issues
+**Analysis Date:** 2026-08-25
 
-### 1. Large Files (Complexity Hotspots)
-Several files exceed healthy size thresholds, indicating they may benefit from refactoring:
+## Critical Issues
 
-| File | Lines | Concern |
-|------|-------|---------|
-| `server/hermes/runtime.test.ts` | 768 | Largest test file — may indicate untested production code or over-testing |
-| `server/web-ui/proxy.ts` | 464 | SSH proxy logic — complex, hard to test |
-| `server/telegram/model-access.ts` | 448 | Model access logic — feature creeping |
-| `server/settings/mcp.test.ts` | 399 | Large test file |
-| `server/hermes/runtime.ts` | 398 | Runtime management — core logic |
-| `server/db/schema.ts` | 397 | Schema definitions — low cognitive complexity, file is mainly table definitions |
-| `server/web-ui/handlers.test.ts` | 393 | Large test file |
-| `server/settings/agent-skills.ts` | 331 | Settings logic |
-| `server/settings/mcp.ts` | 300 | MCP server manager |
+### 1. Single-Instance Boundary (ADR 0009)
+**Severity:** High (architectural constraint)
+**Location:** `server/credentials.ts`, `server/app.ts`, `server/install/sse-stream.ts`, `server/dashboard/metrics.ts`
 
-### 2. In-Memory State (Single-Instance Boundary)
-The following are module-level in-memory state and are **not shared** across nodes:
-- Install SSE event streams (`server/install/sse-stream.ts`)
-- Session credentials (`server/credentials.ts`)
-- Magic-link rate limiter (`server/app.ts`)
-- Dashboard metric caches (`server/dashboard/metrics.ts`)
+**Issue:** Several critical components use in-memory module-level state that cannot be shared across multiple app instances:
+- Session credentials cache
+- Magic-link rate limiter (3 requests/5 min, keyed by email)
+- Install SSE streams
+- Dashboard metrics cache
 
-This means horizontal scaling would break critical functionality (install progress streaming, rate limiting, credential storage). Documented in ADR 0009.
+**Impact:**
+- Cannot scale horizontally without losing state
+- Rolling deploys terminate active install streams
+- Rate limiter resets on restart
 
-### 3. Test Coverage Gaps
-- **`src/features/`**: Growing but many feature components untested
-- **`server/web-ui/proxy.ts`**: Complex proxy logic with limited test coverage
-- **SSR rendering**: Not tested (requires integration/E2E setup)
-- **No coverage threshold** enforced in CI
+**Status:** Accepted temporary constraint per ADR 0009
 
-### 4. TanStack Framework Mock Complexity
-Testing route-level orchestration (``createFileRoute``, ``createServerFn`` handlers, ``beforeLoad``) requires extensive mocking of TanStack Router and TanStack Start internals:
-- `@tanstack/react-router` must provide `createFileRoute`, `getRouteApi`, `Link`, `useNavigate`, and `redirect`
-- `@tanstack/react-start` must unwrap `createServerFn` to return raw handlers (since Vitest's `happy-dom` environment lacks SSR context)
-- `@tanstack/react-start/server` must provide `getRequestHeaders`
-- These mocks are fragile and may break when TanStack releases API changes
+### 2. Database Migration Broken from Scratch
+**Severity:** High (development blocker)
+**Location:** `drizzle/0009_same_jackal.sql`
 
-### 5. `node-ssh` Native Dependencies
-- `node-ssh` pulls in `ssh2` and `cpu-features` which bundle native `.node` binaries
-- Requires special handling in `vite.config.ts` (excluded from `optimizeDeps`)
-- Adds complexity to the dev build pipeline
+**Issue:** Migration `0009` runs `DROP INDEX "server_web_ui_server_id_idx"` but no prior migration creates that index. Fresh database migrations fail and roll back the entire chain.
 
-## Security Considerations
+**Impact:**
+- Cannot set up fresh database with `bun run db:migrate`
+- Must use `bunx drizzle-kit push` instead
+- CI never runs migrations from scratch
 
-### Addressed
-- ✅ **HTTPS enforcement** via `requireHttps()` middleware on mutating routes in production
-- ✅ **AES-256-GCM encryption** for all stored SSH credentials (`server/crypto.ts`)
-- ✅ **Rate limiting** on magic-link authentication (3/5min per email)
-- ✅ **Host key trust** management for SSH connections
+**Workaround:** Use `bunx drizzle-kit push` for local development
 
-### Watch Items
-- ⚠️ `ENCRYPTION_KEY` rotation invalidates all stored SSH credentials — no re-encryption mechanism
-- ⚠️ Magic-link rate limiter is in-memory (reset on restart)
-- ⚠️ No audit trail for credential access (only for server actions)
-- ⚠️ SSRF risk potential in SSH proxy and web UI features — data flows to arbitrary hosts
+## Security Concerns
 
-## Performance Considerations
+### 1. In-Memory Rate Limiter
+**Severity:** Medium
+**Location:** `server/app.ts` (`magicLinkRateLimiter`)
 
-- **Dashboard metrics** are cached in-memory (module-level state)
-- **SSH connections** use a managed pool in `server/web-ui/ssh-pool.ts`
-- **SSE streaming** for install progress — single-instance limitation
-- No apparent caching layer for database queries beyond Drizzle query optimization
-- No CDN or edge caching configured
+**Issue:** Rate limiter is in-memory and keyed by email, not IP. A second app instance would have separate rate limits.
 
-## Closed Items
+**Impact:**
+- Users could bypass rate limits by hitting different instances
+- Not a security risk if single-instance deployment is maintained
 
-### ✅ Empty Catch Blocks in `server/deploy.ts`
-The two truly silent catch blocks (audit log insert failures after deploy success/failure) were fixed in June 2026. Both now log via `console.error` with the original error message, preserving the existing behavior (audit failure does not block the main operation).
+### 2. SSH Credential Storage
+**Severity:** Low (mitigated)
+**Location:** `server/db/schema.ts` (`servers.encrypted_credential`)
 
-Note: `server/servers.ts` and `server/server-actions.ts` were flagged in the original scan but their `catch { }` blocks are **not empty** — they return error responses to the client for JSON parse failures. No change was needed.
+**Issue:** SSH credentials are encrypted with AES-256-GCM but stored in the database. If the `ENCRYPTION_KEY` is compromised, all credentials are exposed.
 
-### ✅ Route Test Coverage
-Added 7 route-level test files covering the main authenticated pages:
-- `src/routes/dashboard.test.tsx`
-- `src/routes/servers.index.test.tsx`
-- `src/routes/settings.test.tsx`
-- `src/routes/logs.test.tsx`
-- `src/routes/telegram.test.tsx`
-- `src/routes/ai-provider.test.tsx`
-- `src/routes/servers.$id.test.tsx`
+**Mitigation:**
+- Encryption key is not stored in the database
+- Key rotation support via `ENCRYPTION_KEY_V2`
+- Re-encryption runner available
 
-Each tests route configuration (component, `beforeLoad`), data loading orchestration, and unauthenticated edge cases. 27 tests total.
+## Technical Debt
 
-## Technical Debt Summary
+### 1. Path Alias Consolidation
+**Status:** Partially complete
+**Location:** `tsconfig.json`, `package.json`
 
-| Area | Severity | Impact |
-|------|----------|--------|
-| Large files (400+ lines) | Low-Medium | Maintainability, readability |
-| Single-instance boundaries | Medium | No horizontal scaling |
-| Test coverage gaps (features/proxy) | Medium | Regression risk |
-| TanStack mock fragility | Low | Route tests break on TanStack version bumps |
-| Proxy complexity (464 lines) | Medium | Bug-prone, hard to test |
-| No CI coverage threshold | Low | Coverage can regress unnoticed |
+**Issue:** Earlier `@/*` alias was consolidated into `#/*` per ADR 0012. Some internal `server/` and `shared/` modules still use relative imports (`../`) instead of aliases.
+
+**Impact:** Inconsistent import patterns
+
+### 2. Test Coverage Gaps
+**Status:** Below thresholds
+**Location:** `vite.config.ts` (coverage config)
+
+**Issue:** Current coverage thresholds (45% lines, 40% functions) are relatively low. Many areas lack comprehensive tests:
+- `src/routes/` - No route-level tests
+- `src/features/` - Partial coverage
+- `scripts/` - No test coverage
+
+### 3. Missing Documentation
+**Status:** Incomplete
+**Location:** `docs/api-reference.md`
+
+**Issue:** API reference documentation exists but may not reflect all recent changes (e.g., Command Code proxy, ENCRYPTION_KEY_V2).
+
+## Performance Concerns
+
+### 1. In-Memory Caching
+**Location:** `server/dashboard/metrics.ts`
+
+**Issue:** Dashboard metrics are cached in memory without TTL or invalidation strategy.
+
+**Impact:**
+- Stale data possible
+- Memory growth over time
+
+### 2. SSE Stream Memory
+**Location:** `server/install/sse-stream.ts`
+
+**Issue:** Active install streams are held in memory. Long-running installs could accumulate memory.
+
+**Mitigation:** Streams are cleaned up on completion or timeout
+
+## Fragile Areas
+
+### 1. Install Progress Dual-Source
+**Location:** `server/install/workflow.ts`, `server/install/records.ts`
+
+**Issue:** Install progress lives in two places: persisted `install_events` rows (source of truth) and in-memory SSE stream. Keeping both in sync requires careful coordination.
+
+### 2. Provider Credential Deployment
+**Location:** `server/hermes/deploy.ts`, `server/hermes/telegram-deploy.ts`
+
+**Issue:** Provider credentials are deployed to Hermes via SSH. If the remote Hermes config is corrupted, deployment fails with vague errors.
+
+### 3. Telegram Pairing State
+**Location:** `server/telegram.ts`
+
+**Issue:** Telegram pairing relies on remote file ownership and Hermes container user context. Edge cases with `root` vs `hermes` user ownership can cause pairing failures.
+
+## Dependency Risks
+
+### 1. Router-Core Version Pin
+**Location:** `package.json` (`@tanstack/router-core: 1.171.9`)
+
+**Issue:** Router-core is pinned to 1.171.9 because newer versions break hydration (removed `matchesId` store). Must bump entire `@tanstack/react-start` family together.
+
+**Risk:** Renovate may attempt to bump this independently
+
+### 2. SSH Native Dependencies
+**Location:** `vite.config.ts` (`optimizeDeps.exclude`)
+
+**Issue:** `node-ssh`, `ssh2`, and `cpu-features` have native `.node` binaries that break Vite dev prebundling.
+
+**Mitigation:** Excluded from `optimizeDeps`
 
 ## Recommendations
 
-1. **Refactor large files** — split `server/web-ui/proxy.ts` and `server/hermes/runtime.ts` by concern
-2. **Implement re-encryption** for credential rotation (rotate `ENCRYPTION_KEY` without data loss)
-3. **Add CI coverage threshold** — start with a reasonable floor (e.g., 40-50%) and trend upward
-4. **Consider externalizing SSE/rate-limiter state** for future horizontal scaling
-5. **Add remaining route tests** — `servers.$id.install`, `servers.new`, `__root`, `index`, `login`
+1. **Short-term:** Document workarounds for broken migrations more prominently
+2. **Medium-term:** Add integration tests for SSH operations and provider deployment
+3. **Long-term:** Evaluate externalizing in-memory state (Redis) for horizontal scaling
+
+---
+
+*Concerns analysis: 2026-08-25*
