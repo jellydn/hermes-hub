@@ -1,257 +1,134 @@
 # Directory Structure
 
-## Root Layout
+**Analysis Date:** 2026-08-25
+
+## Top-Level Layout
 
 ```
-.
-├── src/                    # Frontend source (TanStack Start)
-├── server/                 # Backend source (Hono API)
-├── shared/                 # Cross-boundary types
-├── drizzle/                # Database migrations
-├── docs/                   # Documentation
-├── scripts/                # Utility scripts
-├── .github/workflows/      # CI/CD pipelines
-└── .planning/              # Codebase mapping
+hermes-hub/
+├── src/                  # Frontend (React/TypeScript)
+├── server/               # Backend (Hono/Node.js)
+├── shared/               # Cross-boundary types
+├── scripts/              # CLI tools and utilities
+├── drizzle/              # Database migrations
+├── docs/                 # Documentation (ADRs, API reference)
+├── plans/                # Implementation plans (archived)
+├── .github/              # CI/CD workflows
+├── .freebuff/            # Local tooling (preview, run docs)
+└── [config files]        # package.json, vite.config.ts, etc.
 ```
 
-## `server/` — Backend
+## Source Code (398 TypeScript files)
 
-```
-server/
-├── app.ts                  # Hono API app — all route mounting
-├── auth.ts                 # Better Auth setup (lazy)
-├── constants.ts            # Shared constants
-├── crypto.ts               # AES-256-GCM encryption
-├── credentials.ts          # Session credential management
-├── compose.ts              # Docker Compose operations
-├── deploy.ts               # General deploy orchestration
-├── managed-compose-deploy.ts  # Managed VPS deploy
-├── compose-deploy-ssh.ts   # SSH-based Compose deploy
-├── dashboard.ts            # Dashboard API handler
-├── install.ts              # Server install API handler
-├── logs.ts                 # Log viewing API handler
-├── providers.ts            # AI provider management
-├── servers.ts              # Server CRUD operations
-├── server-actions.ts       # Server action execution
-├── server-records.ts       # Server record queries
-├── server-detail-snapshot.ts  # Server detail queries
-├── settings.ts             # Settings management
-├── telegram.ts             # Telegram integration
-├── ssh.ts                  # SSH connection management
-├── request-guards.ts       # HTTPS enforcement middleware
-├── web-ui.ts               # Web UI proxy API handlers
-├── health-check.ts         # Health check API handlers
-├── db/
-│   ├── index.ts            # Database connection (lazy)
-│   ├── schema.ts           # All Drizzle table definitions
-│   └── health.ts           # Database health check
-├── ssh/
-│   ├── connection.ts       # SSH connection logic
-│   ├── connection.test.ts  # Connection tests
-│   ├── key.ts              # SSH key management
-│   ├── metrics.ts          # Server metrics collection
-│   ├── os.ts               # OS detection
-│   └── quoting.ts          # Shell quoting utilities
-├── install/
-│   ├── workflow.ts         # Install orchestration
-│   ├── records.ts          # Install event persistence
-│   ├── sse-stream.ts       # SSE event streaming
-│   └── sse-stream.test.ts  # SSE stream tests
-├── telegram/
-│   ├── pairings.ts         # Telegram-server pairings
-│   ├── records.ts          # Telegram config persistence
-│   ├── model-access.ts     # Model access management
-│   └── model-switch.ts     # Model/provider switching
-├── providers/
-│   ├── records.ts          # Provider persistence
-│   ├── model-access-persistence.ts  # Model access DB layer
-│   ├── subscription-records.ts  # Subscription persistence
-│   └── codex-auth/
-│       └── handler.ts      # OpenAI Codex OAuth flow
-├── hermes/
-│   ├── auth-json.ts        # Auth JSON generation
-│   ├── deploy.ts           # Hermes deploy orchestration
-│   ├── deploy-context.ts   # Deploy context building
-│   ├── deploy-targets.ts   # Deploy target resolution
-│   ├── diagnostics-formatting.ts  # Diagnostics formatting
-│   ├── mcp-config.ts       # MCP configuration
-│   ├── persona.ts          # Persona (SOUL.md) management
-│   ├── runtime.ts          # Runtime status/management
-│   ├── skills-list.ts      # Skills listing
-│   ├── telegram-deploy.ts  # Telegram deploy orchestration
-│   ├── telegram-deploy-context.ts  # Telegram deploy context
-│   └── with-server-ssh.ts  # SSH context helper
-├── web-ui/
-│   ├── proxy.ts            # SSH TCP proxy (464 lines)
-│   ├── deploy.ts           # Web UI deploy orchestration
-│   ├── records.ts          # Web UI record persistence
-│   ├── ssh-pool.ts         # SSH connection pool
-│   ├── handlers.ts         # Web UI API handlers
-│   └── handlers.test.ts    # Handler tests (393 lines)
-├── settings/
-│   ├── records.ts          # Settings persistence
-│   ├── mcp.ts              # MCP server manager
-│   ├── agent-skills.ts     # Agent skills manager
-│   ├── mcp/
-│   │   └── records.ts      # MCP records persistence
-│   └── agent-skills/
-│       ├── records.ts      # Agent skill persistence
-│       ├── deploy.ts       # Agent skill deploy
-│       └── remote.ts       # Remote agent skill ops
-├── dashboard/
-│   ├── records.ts          # Dashboard record queries
-│   ├── metrics.ts          # Metrics aggregation+caching
-│   └── handlers.ts         # Dashboard API handlers
-├── health-check/
-│   ├── handler.ts          # Health check orchestrator
-│   ├── commands.ts         # Check command definitions
-│   └── run.ts              # SSH-based check execution
-├── lib/
-│   ├── get-client-ip.ts    # IP extraction utility
-│   ├── host-key-error-response.ts  # Error response helpers
-│   └── send-magic-link-email.ts    # Magic link email via Resend
-└── audit-log-actions.ts    # Audit log action types
-```
+### `src/` (188 files) - Frontend
 
-## `src/` — Frontend
+**Routes (`src/routes/`):**
+- `__root.tsx` - Root layout (theme, devtools, header/footer)
+- `index.tsx` - Landing page
+- `login.tsx` - Magic link authentication
+- `dashboard.tsx` - Authenticated shell + status
+- `servers.tsx` - VPS connection wizard
+- `servers.$id.tsx` - Server detail, actions, Web UI
+- `servers.$id.install.tsx` - Live install progress (SSE)
+- `ai-provider.tsx` - AI provider configuration
+- `telegram.tsx` - Telegram bot setup
+- `settings.tsx` - Persona editor, MCP manager
+- `logs.tsx` - Install/action log viewer
+- `about.tsx` - About page
 
-```
-src/
-├── server.ts               # Unified server entrypoint
-├── router.tsx              # TanStack Router setup
-├── routeTree.gen.ts        # Auto-generated route tree
-├── styles.css              # Global Tailwind CSS
-├── components/
-│   ├── brand-mark.tsx      # Brand logo component
-│   ├── Footer.tsx          # Site footer
-│   ├── Header.tsx          # Site header
-│   ├── root-document.tsx   # Root HTML document
-│   ├── ThemeToggle.tsx     # Dark/light theme toggle
-│   └── ui/
-│       ├── alert-panel.tsx
-│       ├── alert-panel-class.ts
-│       ├── button.tsx
-│       ├── button-variants.ts
-│       ├── form-feedback.tsx
-│       ├── host-key-trust-panel.tsx
-│       ├── input-class.ts
-│       └── status-icon.tsx
-├── routes/
-│   ├── __root.tsx          # Root layout route
-│   ├── index.tsx           # Landing page
-│   ├── login.tsx           # Login page
-│   ├── dashboard.tsx       # Dashboard (with AppShell)
-│   ├── servers.index.tsx   # Servers list
-│   ├── servers.$id.tsx     # Server detail (uses useMountEffect)
-│   ├── servers.$id.install.tsx  # Server install flow
-│   ├── servers.new.tsx     # New server form
-│   ├── settings.tsx        # Settings page
-│   ├── telegram.tsx        # Telegram page
-│   ├── logs.tsx            # Logs page
-│   ├── ai-provider.tsx     # AI provider settings
-│   └── about.tsx           # About page
-├── features/
-│   ├── auth/login-page.tsx
-│   ├── landing/
-│   │   ├── landing-page.tsx
-│   │   ├── landing-card.tsx
-│   │   ├── landing-content.ts
-│   │   └── landing-ctas.tsx
-│   ├── dashboard/
-│   │   ├── app-shell.tsx
-│   │   ├── dashboard-page.tsx
-│   │   ├── status-overview.tsx
-│   │   └── status-overview.test.tsx
-│   ├── servers/ (43 files)
-│   ├── telegram/ (13 files)
-│   ├── providers/ (19 files)
-│   ├── settings/ (26 files)
-│   ├── logs/
-│   │   ├── logs-page.tsx
-│   │   ├── logs-viewer.tsx
-│   │   └── logs-viewer.test.tsx
-│   └── about/about-page.tsx
-├── lib/
-│   ├── auth-client.ts      # Better Auth client
-│   ├── session.ts          # Session management
-│   ├── session.test.ts
-│   ├── server.ts           # Server API helpers
-│   ├── servers.ts          # Server data helpers
-│   ├── logs.ts             # Log data helpers
-│   ├── utils.ts            # cn() utility
-│   ├── dashboard-status.ts # Dashboard status helpers
-│   ├── ai-providers.ts     # AI provider helpers
-│   ├── provider-labels.ts  # Provider label constants
-│   ├── user-subscriptions.ts  # Subscription helpers
-│   ├── user-subscriptions.test.ts
-│   ├── status-pill.ts      # Status display helpers
-│   ├── server-detail.ts    # Server detail helpers
-│   ├── brand-mark-graphic.ts    # Brand graphic generation
-│   ├── brand-mark-graphic.test.ts
-│   ├── parse-theme-css.ts       # Theme CSS parsing
-│   ├── parse-theme-css.test.ts
-│   ├── wcag-contrast.ts         # WCAG contrast utilities
-│   ├── wcag-contrast.test.ts
-│   ├── dark-mode-contrast.test.ts
-│   ├── dark-theme-tokens-sync.test.ts
-│   ├── use-mount-effect.ts      # Mount-only effect hook
-│   ├── hermes-community.ts      # Hermes community helpers
-│   └── load-hermes-deployment-targets.ts  # Deploy target loader
-└── scripts/
-    └── theme-init.js       # Theme initialization script
-```
+**Features (`src/features/`):**
+- `servers/` - VPS management UI (22 files)
+- `providers/` - AI provider UI (21 files)
+- `settings/` - Settings UI (26 files)
+- `telegram/` - Telegram UI (13 files)
+- `dashboard/` - Dashboard UI (5 files)
+- `logs/` - Log viewer UI (5 files)
+- `landing/` - Landing page UI (5 files)
+- `auth/` - Auth UI (3 files)
+- `about/` - About page UI (3 files)
 
-## `shared/contracts/` — Cross-Boundary Types
+**Shared (`src/lib/`):**
+- `utils.ts` - `cn()` helper for class names
+- `auth-client.ts` - Better Auth client
+- `use-mount-effect.ts` - Mount-only escape hatch
+- `use-stale-ref.ts` - Stale ref helper
 
-```
-shared/contracts/
-├── agent-skills.ts
-├── agent-skills.test.ts
-├── codex-auth.ts
-├── host-key-error.ts
-├── model-access.ts
-├── server-health-check.ts
-├── server-web-ui.ts
-└── telegram-model-access.ts
-```
+**Components (`src/components/`):**
+- `ui/` - shadcn/ui components (button, card, dialog, etc.)
+- `AppShell.tsx` - Authenticated layout wrapper
 
-## `drizzle/` — Database Migrations
+### `server/` (198 files) - Backend
 
-```
-drizzle/
-├── 0000_swift_luckman.sql  through  0018_*.sql
-└── meta/
-    ├── _journal.json
-    └── 0000_snapshot.json  through  0017_snapshot.json
-```
+**Core:**
+- `app.ts` - Hono router with all API routes
+- `auth.ts` - Better Auth instance (lazy, DB-optional)
+- `crypto.ts` - AES-256-GCM encryption with keyring
+- `credentials.ts` - In-memory credential cache
+- `ssh.ts` - node-ssh wrapper
+- `servers.ts` - VPS connection logic
+- `install.ts` - Hermes install pipeline
+- `server-actions.ts` - Restart/update/rollback
 
-## `docs/` — Documentation
+**Modules:**
+- `providers/` - AI provider logic (config, test, validation)
+- `telegram/` - Telegram bot integration
+- `settings/` - Persona and MCP config
+- `hermes/` - Hermes deploy orchestration
+- `web-ui/` - Hermes Web UI proxy
+- `dashboard/` - Status aggregation
+- `commandcode/` - Command Code translation proxy
+- `db/` - Drizzle schema, connection, migrations
+- `lib/` - Shared utilities (logger, etc.)
 
-```
-docs/
-├── api-reference.md        # Full HTTP API reference
-├── test-coverage-review.md # Test coverage gap analysis
-└── adr/
-    ├── 0001-tanstack-start-with-hono-api.md
-    ├── 0002-postgresql-with-drizzle-orm.md
-    ├── 0003-better-auth-with-magic-link.md
-    ├── 0004-docker-multi-stage-build.md
-    ├── 0005-aes-256-gcm-credential-encryption.md
-    ├── 0006-file-based-routing-with-tanstack-router.md
-    ├── 0007-tailwind-css-v4-with-island-components.md
-    ├── 0008-react-hook-form-with-zod.md
-    ├── 0009-single-instance-boundary-for-operational-state.md
-    ├── 0010-hermes-runtime-management-from-telegram-page.md
-    ├── 0011-hermes-web-ui-with-ssh-tcp-proxy.md
-    └── 0012-cross-directory-path-aliases.md
-```
+### `shared/` (8 files) - Cross-Boundary
 
-## Key Naming Conventions
+**Contracts (`shared/contracts/`):**
+- `server-actions.ts` - Server action types
+- `server-detail-snapshot.ts` - Server detail types
+- Provider/Telegram/Settings types
 
-| Convention | Example |
-|------------|---------|
-| **Co-located tests** | `server/foo.ts` + `server/foo.test.ts` |
-| **Feature modules** | `src/features/<domain>/` |
-| **DB table names** | snake_case plural (`servers`, `install_events`, `audit_logs`) |
-| **Route files** | `src/routes/<name>.tsx` (TanStack file-based) |
-| **Config files** | Root-level: `vite.config.ts`, `tsconfig.json`, `drizzle.config.ts`, `compose.yaml` |
+### `scripts/` (2 files) - CLI Tools
+
+- `db-migrate.mjs` - Database migration wrapper
+- `re-encrypt.ts` - Key rotation re-encryption
+- `start-production.mjs` - Production server startup
+- `setup-dokku-deploy-secrets.sh` - Dokku secret configuration
+- `generate-brand-assets.ts` - Brand asset generation
+
+## Configuration Files
+
+**Build:**
+- `vite.config.ts` - Vite/TanStack Start/Vitest
+- `tsconfig.json` - TypeScript compiler
+- `biome.json` - Linting/formatting
+- `drizzle.config.ts` - Database migrations
+
+**Deployment:**
+- `Dockerfile` - Container build
+- `compose.yaml` - Local development stack
+- `.github/workflows/` - CI/CD pipelines
+
+**Documentation:**
+- `README.md` - Project overview
+- `AGENTS.md` - Developer guide
+- `CONTEXT.md` - Codebase context
+- `docs/api-reference.md` - API documentation
+
+## Naming Conventions
+
+**Files:**
+- `kebab-case` for files: `server-actions.ts`, `crypto.ts`
+- `PascalCase` for React components: `AppShell.tsx`
+- `*.test.ts` / `*.test.tsx` for tests
+
+**Directories:**
+- `kebab-case` for feature dirs: `ai-provider/`, `commandcode/`
+- `PascalCase` for component dirs: `ui/`
+
+**Exports:**
+- Named exports for functions/types
+- Default exports for React components
+
+---
+
+*Structure analysis: 2026-08-25*

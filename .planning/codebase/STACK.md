@@ -1,97 +1,95 @@
 # Technology Stack
 
-## Language & Runtime
+**Analysis Date:** 2026-08-25
 
-- **TypeScript** v6.0.2 — strict mode enabled (`noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`)
-- **Bun** v1.1.26 — package manager and local dev runtime
-- **Node.js** 22-alpine — production runtime (via Docker multi-stage build)
+## Languages
+
+**Primary:**
+- TypeScript 7.0 - Full-stack application (frontend routes, server API, database layer)
+- React 19.2 - UI components and pages
+
+**Secondary:**
+- Node.js - Server runtime, scripts, and CLI tools
+- Bash - Deployment scripts (`scripts/setup-dokku-deploy-secrets.sh`, `scripts/db-migrate.mjs`)
+
+## Runtime
+
+**Environment:**
+- Node.js >= 20 (required per README)
+- Bun 1.3.14 - Preferred package manager and runtime
+
+**Package Manager:**
+- Bun 1.3.14 - `bun install` for dependencies
+- Lockfile: `bun.lock` (present)
 
 ## Frameworks
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| **SSR Framework** | TanStack Start | ^1.168.20 | Full-stack React framework with SSR |
-| **Router** | TanStack React Router | ^1.170.11 | File-based routing |
-| **API Server** | Hono | ^4.12.23 | HTTP API framework for `/api/*` endpoints |
-| **UI** | React | ^19.2.0 | Component library |
-| **Styling** | Tailwind CSS | ^4.1.18 | Utility-first CSS |
-| **UI Components** | Shadcn UI (new-york style) | — | Primitive components via Radix UI |
-| **Icons** | Lucide React | ^1.16.0 | Icon library |
+**Core:**
+- TanStack Start 1.168.x - File-based routing, SSR, and dev server
+- TanStack Router 1.171.9 - Client-side routing (pinned for hydration compatibility)
+- Hono 4.12.x - Lightweight REST API framework for `/api/*` endpoints
 
-## Database & ORM
+**UI:**
+- TailwindCSS 4.1.x - Utility-first CSS framework
+- Radix UI 1.2.x - Accessible component primitives (`@radix-ui/react-slot`)
+- shadcn/ui pattern - Pre-built UI components in `src/components/ui/`
 
-- **PostgreSQL** 17-alpine (dev via Docker Compose, production on VPS/Dokku)
-- **Drizzle ORM** ^0.45.2 — type-safe SQL query builder
-- **Drizzle Kit** ^0.31.10 — migration generation
-- **postgres** ^3.4.9 — PostgreSQL JS client (used by Drizzle)
+**Testing:**
+- Vitest 4.1.x - Unit and integration test runner
+- Testing Library 16.x - React component testing utilities
+- happy-dom/jsdom - DOM simulation for tests
 
-## Authentication
+**Build/Dev:**
+- Vite 8.0.x - Build tool and dev server
+- TypeScript 7.0 - Type checking (`tsc --noEmit`)
+- Biome - Linting and formatting (via `@biomejs/biome check`)
 
-- **Better Auth** ^1.6.11 — authentication library with magic link support
-- **@better-auth/drizzle-adapter** ^1.6.11 — Drizzle ORM adapter
-- **Plugins:** `magicLink`, `tanstackStartCookies`
+## Key Dependencies
 
-## Infrastructure & SSH
+**Critical:**
+- `better-auth` 1.6.x - Magic-link authentication (session management, token verification)
+- `drizzle-orm` 0.45.x + `drizzle-kit` 0.31.x - PostgreSQL ORM and migrations
+- `node-ssh` 13.x - SSH client for VPS connection and remote execution
+- `hono` 4.12.x - API routing, middleware, SSE streaming
 
-- **node-ssh** ^13.2.1 — SSH client for remote server management
-- **docker** — Multi-stage builds, Compose orchestration
-- **Dokku** — PaaS deployment target
+**Infrastructure:**
+- `postgres` 3.4.x - PostgreSQL driver (server-only)
+- `pino` 10.x - Structured logging
+- `rate-limiter-flexible` 11.x - In-memory rate limiting (magic-link endpoint)
 
-## Form Handling
+**Security:**
+- Node.js `crypto` - AES-256-GCM encryption for credentials
+- `@better-auth/drizzle-adapter` - Auth database integration
 
-- **react-hook-form** ^7.76.1 — form state management
-- **@hookform/resolvers** ^5.4.0 — Zod resolver integration
-- **Zod** ^4.4.3 — schema validation
+## Configuration
 
-## Styling Utilities
+**Environment:**
+- `.env.local` (not committed) - Local development secrets
+- `.env.example` - Template for required variables
+- Required vars: `DATABASE_URL`, `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`
+- Optional: `ENCRYPTION_KEY_V2` (key rotation), `RESEND_API_KEY`, `RESEND_FROM`
 
-- **class-variance-authority** ^0.7.1 — component variant management
-- **tailwind-merge** ^3.6.0 — Tailwind class deduplication
-- **clsx** ^2.1.1 — conditional class names
+**Build:**
+- `vite.config.ts` - Vite/TanStack Start/Vitest configuration
+- `drizzle.config.ts` - Database migration configuration
+- `tsconfig.json` - TypeScript compiler options
+- `biome.json` - Linting and formatting rules
+- Path aliases: `#/*` → `./src/*`, `#server/*` → `./server/*`, `#shared/*` → `./shared/*`
 
-## Build & Dev Tooling
+## Platform Requirements
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Vite | ^8.0.0 | Bundler and dev server |
-| @vitejs/plugin-react | ^6.0.1 | React fast-refresh |
-| @tailwindcss/vite | ^4.1.18 | Tailwind CSS Vite plugin |
-| @tanstack/react-router-devtools | ^1.167.0 | Router dev tools |
-| TypeScript | ^6.0.2 | Type checking (`tsc --noEmit`) |
+**Development:**
+- Node.js >= 20
+- Bun (preferred)
+- PostgreSQL (local or Docker)
+- Docker & Docker Compose (for full-stack testing with Mailpit)
 
-## Testing
+**Production:**
+- Docker container (built via `Dockerfile`)
+- PostgreSQL (managed or self-hosted)
+- TLS-terminating reverse proxy (Caddy/nginx) or Dokku with Let's Encrypt
+- SSH access to target VPS for deployment
 
-- **Vitest** ^4.1.5 — test runner
-- **@testing-library/react** ^16.3.0 — React component testing
-- **@testing-library/dom** ^10.4.1 — DOM testing utilities
-- **happy-dom** ^20.10.1 — DOM environment (fast)
-- **jsdom** ^28.1.0 — DOM environment (comprehensive)
+---
 
-## Code Quality
-
-- **Biome** — linting and formatting (`@biomejs/biome`)
-- **React Doctor** ^0.4.0 — code quality scanning (security, performance, architecture)
-- **Pre-commit** — hooks for Biome, typechecking, React Doctor
-
-## Scripts
-
-| Command | Script |
-|---------|--------|
-| `dev` | `vite dev --port 3000` |
-| `build` | `vite build` |
-| `test` | `vitest run --passWithNoTests --reporter=dot` |
-| `typecheck` | `tsc --noEmit` |
-| `db:generate` | `drizzle-kit generate` |
-| `db:migrate` | `node scripts/db-migrate.mjs` |
-| `doctor` | `react-doctor` |
-| `brand:assets` | `bun run scripts/generate-brand-assets.ts` |
-
-## Path Aliases
-
-| Alias | Target |
-|-------|--------|
-| `#/*` | `./src/*` |
-| `#server/*` | `./server/*` |
-| `#shared/*` | `./shared/*` |
-
-Configured in both `tsconfig.json` (`paths`) and `package.json` (`imports`). Vite uses `resolve.tsconfigPaths: true`.
+*Stack analysis: 2026-08-25*
