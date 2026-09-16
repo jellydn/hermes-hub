@@ -6,6 +6,7 @@ import {
 	hermesCommunitySiteUrl,
 	hermexAppStoreUrl,
 	hermexGithubUrl,
+	ohMyHermesGithubUrl,
 } from "#/lib/hermes-community";
 
 export function AboutPage() {
@@ -60,6 +61,19 @@ export function AboutPage() {
 					</a>
 					.
 				</p>
+				<p className="mt-4 max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
+					Want to extend Hermes with stronger coding and project workflows?{" "}
+					<a
+						href={ohMyHermesGithubUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-semibold text-[var(--sea-ink)] underline decoration-[var(--chip-line)] underline-offset-4"
+					>
+						Oh My Hermes
+					</a>{" "}
+					is a community plugin that adds coding intelligence, long-term memory,
+					and model-optimized workflow packages to Hermes Agent.
+				</p>
 
 				<div className="mt-8 flex flex-wrap gap-3">
 					<Button asChild>
@@ -81,6 +95,16 @@ export function AboutPage() {
 					<Button asChild variant="secondary">
 						<a href={hermexGithubUrl} target="_blank" rel="noopener noreferrer">
 							Hermex iOS app
+							<ExternalLink />
+						</a>
+					</Button>
+					<Button asChild variant="secondary">
+						<a
+							href={ohMyHermesGithubUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							Oh My Hermes plugin
 							<ExternalLink />
 						</a>
 					</Button>
