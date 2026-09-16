@@ -23,6 +23,8 @@ After setup, the **Hermes Web UI** is the browser interface for using Hermes day
 
 For iPhone users, **[Hermex](https://github.com/uzairansaruzi/hermex)** is a free, native SwiftUI iOS app built by the community that connects to your self-hosted Hermes Web UI — chat with your agent, browse sessions, manage tasks, and more. Available on the [App Store](https://apps.apple.com/app/hermex/id6767006319).
 
+For extended coding and project workflows, **[Oh My Hermes](https://github.com/rlaope/oh-my-hermes)** is a community plugin that adds coding intelligence, long-term memory, and model-optimized workflow packages to Hermes Agent.
+
 HermesHub is a separate product and is not affiliated with [get-hermes.ai](https://get-hermes.ai/).
 
 ## ✨ Features
