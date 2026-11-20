@@ -24,7 +24,7 @@ services:
       - "${APP_PORT:-3000}:3000"
 
   postgres:
-    image: postgres:18-alpine
+    image: postgres:19-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hermes_hub}
