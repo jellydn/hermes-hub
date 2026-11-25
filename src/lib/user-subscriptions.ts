@@ -36,6 +36,7 @@ export type OAuthSubscriptionOption = BaseSubscriptionOption & {
 export type CredentialSubscriptionOption = BaseSubscriptionOption & {
 	credentialKind: "api-key";
 	storageProviderId: string;
+	apiKeyPlaceholder: string;
 	defaultBaseUrl: string;
 	deployEnv: SubscriptionDeployEnvConfig;
 };
@@ -77,6 +78,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "api-key",
 		supportsConnectionTest: true,
 		storageProviderId: "mimo",
+		apiKeyPlaceholder: "tp-...",
 		defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
 		deployEnv: {
 			apiKeyEnvVar: "XIAOMI_API_KEY",
@@ -95,6 +97,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "api-key",
 		supportsConnectionTest: true,
 		storageProviderId: "commandcode",
+		apiKeyPlaceholder: "user_...",
 		defaultBaseUrl: "https://api.commandcode.ai/provider/v1",
 		deployEnv: {
 			apiKeyEnvVar: "COMMANDCODE_API_KEY",
@@ -120,6 +123,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "api-key",
 		supportsConnectionTest: true,
 		storageProviderId: "opencode-go",
+		apiKeyPlaceholder: "oc_sk_...",
 		// Used only for the Hub's key check. Hermes picks the relay and API
 		// format per model itself, so no base URL is deployed.
 		defaultBaseUrl: "https://opencode.ai/inference/go",

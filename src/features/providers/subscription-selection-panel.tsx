@@ -167,11 +167,7 @@ export function SubscriptionSelectionPanel({
 								placeholder={
 									existingKeyLast4
 										? "••••••••••••"
-										: credentialOption?.id === "commandcode"
-											? "user_..."
-											: credentialOption?.id === "opencode-go"
-												? "oc_sk_..."
-												: "tp-..."
+										: credentialOption?.apiKeyPlaceholder
 								}
 								{...register("apiKey")}
 								className={inputClassName}
