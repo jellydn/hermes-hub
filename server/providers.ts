@@ -29,6 +29,7 @@ import {
 	ProviderConnectionError,
 	verifyCommandCodeConnection,
 	verifyOpenAiCompatibleConnection,
+	verifyOpenCodeGoConnection,
 	verifyProviderConnection,
 } from "./providers/connection";
 import { resolveStoredCredentials } from "./providers/credential-resolution";
@@ -320,6 +321,8 @@ export async function testSubscriptionConfig(context: Context) {
 				apiKey: credentialContext.credentials.apiKey,
 				model: parsed.model,
 			});
+		} else if (credentialContext.option.id === "opencode-go") {
+			await verifyOpenCodeGoConnection(credentialContext.credentials);
 		} else {
 			await verifyOpenAiCompatibleConnection({
 				apiKey: credentialContext.credentials.apiKey,

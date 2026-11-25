@@ -4,6 +4,7 @@ import type { UserSubscriptionId } from "#/lib/user-subscriptions";
 import { getDb } from "../db";
 import { aiProviders, aiUserSubscriptions } from "../db/schema";
 import {
+	assertHermesSupportsProvider,
 	composeUp,
 	setProviderInferenceProvider,
 	setProviderModel,
@@ -108,6 +109,7 @@ export async function executeModelSwitch(
 	const providerConfigOverride = buildDeployConfig(activeBackend);
 
 	await withSshConnection(sshConfig, async (ssh) => {
+		await assertHermesSupportsProvider(ssh, resolved.hermesProviderId);
 		await setProviderInferenceProvider(ssh, resolved.hermesProviderId);
 		await setProviderModel(ssh, model);
 

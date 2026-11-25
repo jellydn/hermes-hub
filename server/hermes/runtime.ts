@@ -2,20 +2,27 @@ import { randomUUID } from "node:crypto";
 import type { NodeSSH } from "node-ssh";
 
 import {
+	defaultHermesImage,
 	hermesAgentSourcePathInContainer,
 	hermesContainerName,
 	hermesImageRepository,
 	hermesWebUiAgentHostDir,
 	hermesWebUiContainerGid,
 	hermesWebUiContainerUid,
+	legacyDefaultHermesImages,
 	managedComposeVolumeHome,
+	minHermesVersionByProvider,
 } from "../constants";
 import { shellQuote } from "../ssh";
 import {
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
 } from "./diagnostics-formatting";
-import { getLatestImageRef } from "./version";
+import {
+	getLatestImageRef,
+	getRunningHermesVersion,
+	isHermesVersionAtLeast,
+} from "./version";
 
 // ── Container names ──────────────────────────────────────────────
 
@@ -198,29 +205,78 @@ export async function restartGateway(ssh: NodeSSH): Promise<string> {
 	return result.stdout.trim();
 }
 
-export async function updateGateway(
-	ssh: NodeSSH,
-	target?: { digest?: string; tag?: string },
-): Promise<{ imageRef: string; output: string }> {
-	const imageRef = await resolveUpdateImageRef(target);
+type ImageSwapResult = {
+	imageRef: string;
+	previousImageRef: string | null;
+	output: string;
+};
 
-	const sedExpr = [
-		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
-		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
-	].join("; ");
+/**
+ * Pulls `imageRef`, points the compose `hermes` service at it, and restarts
+ * the service. Pulls first so a failed pull leaves the compose file
+ * unchanged; if the restart fails, restores the compose file and the old
+ * container. Returns the image the server ran before, so the caller can
+ * record a rollback target.
+ */
+async function swapHermesImage(
+	ssh: NodeSSH,
+	imageRef: string,
+	failureMessage: string,
+): Promise<ImageSwapResult> {
+	const previousImageRef = await readRunningHermesImage(ssh);
+	const startHermes = "sudo docker compose up -d --no-deps hermes";
+	// Restore by digest when known: a pull can move a tag such as `:latest`,
+	// so the backup file alone could start the attempted image again.
+	const restoreCompose =
+		previousImageRef && HERMES_DIGEST_REF_PATTERN.test(previousImageRef)
+			? pointComposeAt(previousImageRef, "")
+			: "sudo mv -f docker-compose.yml.bak docker-compose.yml";
 
 	const command = [
 		"cd ~/hermes",
-		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		"sudo docker compose pull hermes",
-		"sudo docker compose up -d --no-deps hermes",
+		`sudo docker pull ${imageRef}`,
+		pointComposeAt(imageRef, ".bak"),
+		`{ ${startHermes} || { ${restoreCompose}; ${startHermes}; exit 1; }; }`,
 	].join(" && ");
 
 	const result = await ssh.execCommand(command);
 	if (result.code !== 0) {
-		throw new Error(result.stderr || "Failed to update Hermes");
+		throw new Error(result.stderr || failureMessage);
 	}
-	return { imageRef, output: result.stdout.trim() };
+	return { imageRef, previousImageRef, output: result.stdout.trim() };
+}
+
+function pointComposeAt(imageRef: string, backupSuffix: string) {
+	const sedExpr = [
+		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
+		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
+	].join("; ");
+	return `sudo sed -i${backupSuffix} '${sedExpr}' docker-compose.yml`;
+}
+
+/**
+ * Reads the image the compose file runs. A tag such as `:latest` can move,
+ * so a tag is replaced with the repo digest of the running container when
+ * Docker reports one. Then a rollback restores the exact image.
+ */
+async function readRunningHermesImage(ssh: NodeSSH): Promise<string | null> {
+	const composeImage = await readComposeHermesImage(ssh);
+	if (!composeImage?.startsWith(`${hermesImageRepository}:`)) {
+		return composeImage;
+	}
+	const result = await ssh.execCommand(
+		`sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null | grep '^${hermesImageRepository}@sha256:' | head -n 1`,
+	);
+	const digestRef = result.stdout?.trim() ?? "";
+	return HERMES_DIGEST_REF_PATTERN.test(digestRef) ? digestRef : composeImage;
+}
+
+export async function updateGateway(
+	ssh: NodeSSH,
+	target?: { digest?: string; tag?: string },
+): Promise<ImageSwapResult> {
+	const imageRef = await resolveUpdateImageRef(target);
+	return swapHermesImage(ssh, imageRef, "Failed to update Hermes");
 }
 
 /**
@@ -256,33 +312,34 @@ export function isValidDockerTag(tag: string): boolean {
 	return DOCKER_TAG_PATTERN.test(tag);
 }
 
+/**
+ * Turns a rollback target into a Hermes image ref. Accepts a tag (`v0.21.6`),
+ * a digest (`sha256:…`), or a full ref as recorded by Update Hermes
+ * (`nousresearch/hermes-agent@sha256:…`). Returns `null` for anything else.
+ */
+export function toHermesImageRef(target: string): string | null {
+	const value = target.trim() || "latest";
+	if (HERMES_COMPOSE_IMAGE_PATTERN.test(value)) {
+		return value;
+	}
+	if (/^sha256:[a-f0-9]{64}$/.test(value)) {
+		return `${hermesImageRepository}@${value}`;
+	}
+	if (isValidDockerTag(value)) {
+		return `${hermesImageRepository}:${value}`;
+	}
+	return null;
+}
+
 export async function rollbackGateway(
 	ssh: NodeSSH,
-	imageTag: string,
-): Promise<string> {
-	const tag = imageTag.trim() || "latest";
-	if (!isValidDockerTag(tag)) {
-		throw new Error(`Invalid image tag: ${tag}`);
+	target: string,
+): Promise<ImageSwapResult> {
+	const imageRef = toHermesImageRef(target);
+	if (!imageRef) {
+		throw new Error(`Invalid image tag: ${target.trim()}`);
 	}
-
-	const imageRef = `${hermesImageRepository}:${tag}`;
-	const sedExpr = [
-		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
-		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
-	].join("; ");
-
-	const command = [
-		"cd ~/hermes",
-		`sudo docker pull ${imageRef}`,
-		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		"sudo docker compose up -d --no-deps hermes",
-	].join(" && ");
-
-	const result = await ssh.execCommand(command);
-	if (result.code !== 0) {
-		throw new Error(result.stderr || "Failed to roll back Hermes");
-	}
-	return result.stdout.trim();
+	return swapHermesImage(ssh, imageRef, "Failed to roll back Hermes");
 }
 
 // ── Provider config ──────────────────────────────────────────────
@@ -294,7 +351,9 @@ export async function setProviderModel(
 	await ssh.execCommand("sleep 2");
 
 	const result = await ssh.execCommand(
-		`sudo docker exec hermes hermes config set model ${shellQuote(model)}`,
+		// `config set model X` replaces the whole `model:` map with a string and
+		// drops `model.provider`; set the nested key instead.
+		`sudo docker exec hermes hermes config set model.default ${shellQuote(model)}`,
 	);
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to set model inside Hermes");
@@ -313,6 +372,27 @@ export async function setProviderInferenceProvider(
 	if (result.code !== 0) {
 		throw new Error(
 			result.stderr || "Failed to set model.provider inside Hermes",
+		);
+	}
+}
+
+/**
+ * Fails when the running Hermes is older than the release `providerHermesId`
+ * needs, such as OpenCode Go without the x-opencode-session header. An unknown
+ * version does not block the deploy.
+ */
+export async function assertHermesSupportsProvider(
+	ssh: NodeSSH,
+	providerHermesId: string,
+): Promise<void> {
+	const minimum = minHermesVersionByProvider[providerHermesId];
+	if (!minimum) {
+		return;
+	}
+	const version = await getRunningHermesVersion(ssh);
+	if (version && !isHermesVersionAtLeast(version, minimum)) {
+		throw new Error(
+			`Hermes v${version} on this server is too old for ${providerHermesId}, which needs v${minimum} or later. Use Update Hermes on the server page, then deploy again.`,
 		);
 	}
 }
@@ -372,12 +452,48 @@ export function assertValidComposeServiceNames(serviceNames: string[]): void {
 	}
 }
 
+const HERMES_DIGEST_REF_PATTERN = new RegExp(
+	`^${hermesImageRepository}@sha256:[a-f0-9]{64}$`,
+);
+
+const HERMES_COMPOSE_IMAGE_PATTERN = new RegExp(
+	`^${hermesImageRepository}(@sha256:[a-f0-9]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$`,
+);
+
+/**
+ * Picks the Hermes image a managed deploy writes. A server keeps the image it
+ * already runs (chosen by Update Hermes or Rollback); only a missing image or an
+ * earlier Hub default moves to the current `defaultHermesImage`.
+ */
+export function resolveHermesComposeImage(currentImage: string | null) {
+	if (
+		!currentImage ||
+		!HERMES_COMPOSE_IMAGE_PATTERN.test(currentImage) ||
+		legacyDefaultHermesImages.includes(currentImage)
+	) {
+		return defaultHermesImage;
+	}
+	return currentImage;
+}
+
+async function readComposeHermesImage(ssh: NodeSSH): Promise<string | null> {
+	const result = await ssh.execCommand(
+		`sed -n 's|^ *image: \\(${hermesImageRepository}[@:][^ ]*\\)$|\\1|p' ~/hermes/docker-compose.yml 2>/dev/null | head -n 1`,
+	);
+	return result.stdout?.trim() || null;
+}
+
 export async function writeComposeFile(
 	ssh: NodeSSH,
 	content: string,
 ): Promise<void> {
+	const image = resolveHermesComposeImage(await readComposeHermesImage(ssh));
+	const finalContent = content.replace(
+		`image: ${defaultHermesImage}`,
+		`image: ${image}`,
+	);
 	const delimiter = `HERMES_COMPOSE_${randomUUID()}`;
-	const writeCmd = `cat > ~/hermes/docker-compose.yml << '${delimiter}'\n${content}\n${delimiter}`;
+	const writeCmd = `cat > ~/hermes/docker-compose.yml << '${delimiter}'\n${finalContent}\n${delimiter}`;
 
 	const result = await ssh.execCommand(writeCmd);
 	if (result.code !== 0) {
