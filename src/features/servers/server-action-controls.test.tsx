@@ -173,6 +173,32 @@ describe("ServerActionControls", () => {
 		).toBe("");
 	});
 
+	it("warns when the compose file names an image the container does not run", async () => {
+		fetchMock.mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					...updateInfoResponse,
+					composeImage:
+						"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ServerActionControls {...defaultProps({ activeAction: "update" })} />,
+		);
+
+		await flushAsyncWork();
+
+		expect(
+			screen.getByText(/running container was not recreated on it/i),
+		).toBeTruthy();
+	});
+
 	it("sends versionTarget (latest digest) on confirm", async () => {
 		const onConfirmAction = vi.fn();
 

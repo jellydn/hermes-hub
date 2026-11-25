@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockDockerHost } from "./hermes/runtime/test-helpers";
 
 const getAuthSession = vi.fn();
 const getSessionCredential = vi.fn();
@@ -68,20 +69,27 @@ vi.mock("./web-ui/records", () => ({
 		`/api/servers/${serverId}/web-ui/proxy/`,
 }));
 
+const RUNNING_IMAGE =
+	"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+
+/** A host whose hermes container is recreated by every image swap. */
+function dockerHost() {
+	return mockDockerHost({
+		composeImage: RUNNING_IMAGE,
+		containerImage: RUNNING_IMAGE,
+	});
+}
+
 function mockSshExec(
 	implementation?: (
 		command: string,
 	) => Promise<{ code: number; stdout: string; stderr: string }>,
 ) {
 	withSshConnection.mockImplementation(async (_input, run) => {
-		const execCommand = vi.fn(async (command: string) => {
-			if (implementation) {
-				return implementation(command);
-			}
-
-			return { code: 0, stdout: "ok", stderr: "" };
-		});
-		return run({ execCommand });
+		if (!implementation) {
+			return run(dockerHost());
+		}
+		return run({ execCommand: vi.fn(implementation) });
 	});
 }
 
@@ -151,11 +159,7 @@ describe("server actions", () => {
 	});
 
 	it("runs restart actions over SSH and records audit history", async () => {
-		const execCommand = vi.fn().mockResolvedValue({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		});
+		const { execCommand } = dockerHost();
 		withSshConnection.mockImplementation(async (_input, run) =>
 			run({ execCommand }),
 		);
@@ -296,11 +300,7 @@ describe("server actions", () => {
 	});
 
 	it("runs update actions over SSH and records audit history", async () => {
-		const execCommand = vi.fn().mockResolvedValue({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		});
+		const { execCommand } = dockerHost();
 		withSshConnection.mockImplementation(async (_input, run) =>
 			run({ execCommand }),
 		);
@@ -345,11 +345,7 @@ describe("server actions", () => {
 	});
 
 	it("runs update with an explicit digest targetVersion", async () => {
-		const execCommand = vi.fn().mockResolvedValue({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		});
+		const { execCommand } = dockerHost();
 		withSshConnection.mockImplementation(async (_input, run) =>
 			run({ execCommand }),
 		);
@@ -389,11 +385,7 @@ describe("server actions", () => {
 	});
 
 	it("runs rollback with an explicit target version", async () => {
-		const execCommand = vi.fn().mockResolvedValue({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		});
+		const { execCommand } = dockerHost();
 		withSshConnection.mockImplementation(async (_input, run) =>
 			run({ execCommand }),
 		);
@@ -408,7 +400,7 @@ describe("server actions", () => {
 				"cd ~/hermes",
 				"sudo docker pull nousresearch/hermes-agent:v1.2.3",
 				"sudo sed -i.bak 's|image: nousresearch/hermes-agent@.*|image: nousresearch/hermes-agent:v1.2.3|; s|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
-				"{ sudo docker compose up -d --no-deps hermes || { sudo mv -f docker-compose.yml.bak docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }; }",
+				`{ sudo docker compose up -d --no-deps hermes || { sudo sed -i 's|image: nousresearch/hermes-agent@.*|image: ${RUNNING_IMAGE}|; s|image: nousresearch/hermes-agent:.*|image: ${RUNNING_IMAGE}|' docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }; }`,
 			].join(" && "),
 		);
 		expect(response.status).toBe(200);

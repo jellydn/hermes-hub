@@ -166,6 +166,8 @@ type UpdateInfo = {
 		htmlUrl: string;
 	} | null;
 	currentVersion?: string | null;
+	/** Hermes image in docker-compose.yml; differs from `current.image` after drift. */
+	composeImage?: string | null;
 	updateAvailable: boolean;
 };
 
@@ -287,8 +289,18 @@ function UpdateConfirmationCard({
 		);
 	}
 
-	const { current, currentVersion, latest, release, updateAvailable } =
-		state.data;
+	const {
+		current,
+		currentVersion,
+		composeImage,
+		latest,
+		release,
+		updateAvailable,
+	} = state.data;
+	const composeDrift =
+		composeImage && current?.image && composeImage !== current.image
+			? composeImage
+			: null;
 	const currentDigest = extractDigest(current?.image);
 	const latestDigest = latest?.digest;
 
@@ -313,6 +325,17 @@ function UpdateConfirmationCard({
 							? "An update is available."
 							: "Hermes is up to date."}
 					</div>
+
+					{composeDrift ? (
+						<div className={alertPanelClass("warning", "px-3 py-2 text-sm")}>
+							The compose file names{" "}
+							<span title={composeDrift}>
+								{truncateDigest(extractDigest(composeDrift) ?? composeDrift)}
+							</span>
+							, but the running container was not recreated on it. Update Hermes
+							recreates the container.
+						</div>
+					) : null}
 
 					<div className="grid gap-2 text-sm sm:grid-cols-2">
 						<div>

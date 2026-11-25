@@ -243,6 +243,14 @@ async function swapHermesImage(
 	if (result.code !== 0) {
 		throw new Error(result.stderr || failureMessage);
 	}
+	// `compose up` can exit 0 and keep the old container. Only a container
+	// created from `imageRef` has it as its configured image.
+	const running = await readHermesContainerImage(ssh);
+	if (running !== imageRef) {
+		throw new Error(
+			`${failureMessage}: the hermes container runs ${running ?? "no image"}, not ${imageRef}.`,
+		);
+	}
 	return { imageRef, previousImageRef, output: result.stdout.trim() };
 }
 
@@ -255,20 +263,39 @@ function pointComposeAt(imageRef: string, backupSuffix: string) {
 }
 
 /**
- * Reads the image the compose file runs. A tag such as `:latest` can move,
- * so a tag is replaced with the repo digest of the running container when
- * Docker reports one. Then a rollback restores the exact image.
+ * Reads the image the hermes container runs, which can differ from the
+ * compose file. Prefers a digest ref, because a tag such as `:latest` can
+ * move; then a rollback restores the exact image. Falls back to the compose
+ * file when there is no container.
  */
 async function readRunningHermesImage(ssh: NodeSSH): Promise<string | null> {
-	const composeImage = await readComposeHermesImage(ssh);
-	if (!composeImage?.startsWith(`${hermesImageRepository}:`)) {
-		return composeImage;
-	}
 	const result = await ssh.execCommand(
-		`sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null | grep '^${hermesImageRepository}@sha256:' | head -n 1`,
+		`sudo docker inspect --format '{{.Config.Image}}' hermes 2>/dev/null && sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null`,
 	);
-	const digestRef = result.stdout?.trim() ?? "";
-	return HERMES_DIGEST_REF_PATTERN.test(digestRef) ? digestRef : composeImage;
+	const [configImage = "", ...repoDigests] = (result.stdout ?? "")
+		.split("\n")
+		.map((line) => line.trim());
+	if (HERMES_DIGEST_REF_PATTERN.test(configImage)) {
+		return configImage;
+	}
+	const digestRef = repoDigests.find((line) =>
+		HERMES_DIGEST_REF_PATTERN.test(line),
+	);
+	if (digestRef) {
+		return digestRef;
+	}
+	if (HERMES_COMPOSE_IMAGE_PATTERN.test(configImage)) {
+		return configImage;
+	}
+	return readComposeHermesImage(ssh);
+}
+
+/** The image string the hermes container was created from (`Config.Image`). */
+async function readHermesContainerImage(ssh: NodeSSH): Promise<string | null> {
+	const result = await ssh.execCommand(
+		"sudo docker inspect --format '{{.Config.Image}}' hermes 2>/dev/null",
+	);
+	return (result.code === 0 && result.stdout?.trim()) || null;
 }
 
 export async function updateGateway(
@@ -476,18 +503,29 @@ export function resolveHermesComposeImage(currentImage: string | null) {
 	return currentImage;
 }
 
-async function readComposeHermesImage(ssh: NodeSSH): Promise<string | null> {
+export async function readComposeHermesImage(
+	ssh: NodeSSH,
+): Promise<string | null> {
 	const result = await ssh.execCommand(
 		`sed -n 's|^ *image: \\(${hermesImageRepository}[@:][^ ]*\\)$|\\1|p' ~/hermes/docker-compose.yml 2>/dev/null | head -n 1`,
 	);
 	return result.stdout?.trim() || null;
 }
 
+/**
+ * Writes the compose file. Returns `hermesImageChanged: true` when the hermes
+ * container does not run the image the file now names, so the caller must
+ * recreate `hermes` even when it only deploys another service.
+ */
 export async function writeComposeFile(
 	ssh: NodeSSH,
 	content: string,
-): Promise<void> {
-	const image = resolveHermesComposeImage(await readComposeHermesImage(ssh));
+): Promise<{ hermesImageChanged: boolean }> {
+	const [composeImage, containerImage] = await Promise.all([
+		readComposeHermesImage(ssh),
+		readHermesContainerImage(ssh),
+	]);
+	const image = resolveHermesComposeImage(composeImage);
 	const finalContent = content.replace(
 		`image: ${defaultHermesImage}`,
 		`image: ${image}`,
@@ -499,6 +537,7 @@ export async function writeComposeFile(
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to write docker-compose.yml");
 	}
+	return { hermesImageChanged: containerImage !== image };
 }
 
 export function buildComposeUpCommand(options?: {
