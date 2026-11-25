@@ -269,25 +269,26 @@ function pointComposeAt(imageRef: string, backupSuffix: string) {
  * file when there is no container.
  */
 async function readRunningHermesImage(ssh: NodeSSH): Promise<string | null> {
-	const result = await ssh.execCommand(
-		`sudo docker inspect --format '{{.Config.Image}}' hermes 2>/dev/null && sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null`,
-	);
-	const [configImage = "", ...repoDigests] = (result.stdout ?? "")
-		.split("\n")
-		.map((line) => line.trim());
+	const configImage = await readHermesContainerImage(ssh);
+	if (!configImage) {
+		return readComposeHermesImage(ssh);
+	}
 	if (HERMES_DIGEST_REF_PATTERN.test(configImage)) {
 		return configImage;
 	}
-	const digestRef = repoDigests.find((line) =>
-		HERMES_DIGEST_REF_PATTERN.test(line),
+	const result = await ssh.execCommand(
+		`sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null`,
 	);
+	const digestRef = (result.stdout ?? "")
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => HERMES_DIGEST_REF_PATTERN.test(line));
 	if (digestRef) {
 		return digestRef;
 	}
-	if (HERMES_COMPOSE_IMAGE_PATTERN.test(configImage)) {
-		return configImage;
-	}
-	return readComposeHermesImage(ssh);
+	return HERMES_COMPOSE_IMAGE_PATTERN.test(configImage)
+		? configImage
+		: readComposeHermesImage(ssh);
 }
 
 /** The image string the hermes container was created from (`Config.Image`). */

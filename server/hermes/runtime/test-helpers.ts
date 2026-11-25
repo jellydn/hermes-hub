@@ -40,15 +40,14 @@ export function mockDockerHost(state: {
 			return { code: 0, stdout: `${state.composeImage ?? ""}\n`, stderr: "" };
 		}
 		if (cmd.startsWith("sudo docker inspect --format '{{.Config.Image}}'")) {
-			if (!state.containerImage) {
-				return { code: 1, stdout: "", stderr: "No such object: hermes" };
-			}
-			const digests = cmd.includes("docker image inspect")
-				? (state.repoDigests ?? []).map((line) => `\n${line}`).join("")
-				: "";
+			return state.containerImage
+				? { code: 0, stdout: `${state.containerImage}\n`, stderr: "" }
+				: { code: 1, stdout: "", stderr: "No such object: hermes" };
+		}
+		if (cmd.startsWith("sudo docker image inspect")) {
 			return {
 				code: 0,
-				stdout: `${state.containerImage}${digests}\n`,
+				stdout: (state.repoDigests ?? []).map((line) => `${line}\n`).join(""),
 				stderr: "",
 			};
 		}
