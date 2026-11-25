@@ -694,6 +694,7 @@ function createDetail(overrides?: {
 				createdAt: "2026-05-26T03:10:00.000Z",
 				message: "Updated Hermes to the latest image successfully.",
 				imageRef: null,
+				previousImageRef: null,
 			},
 			{
 				id: "audit_1",
@@ -702,6 +703,7 @@ function createDetail(overrides?: {
 				createdAt: "2026-05-26T03:05:00.000Z",
 				message: "Action failed: host unreachable",
 				imageRef: null,
+				previousImageRef: null,
 			},
 		],
 		rollbackTarget: "latest",

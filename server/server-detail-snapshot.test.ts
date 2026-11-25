@@ -101,6 +101,7 @@ describe("rollback target resolution", () => {
 						createdAt: "2026-05-29T00:00:00.000Z",
 						message: "Rolled back.",
 						imageRef: "v2.0.0",
+						previousImageRef: null,
 					},
 				],
 				installVersion: "v1.0.0",

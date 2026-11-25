@@ -1,7 +1,20 @@
 export const hermesImageRepository = "nousresearch/hermes-agent";
+/** Hermes v0.23.4 (Docker Hub `latest`/`stable` on 2026-11-24). */
 const hermesImageDigest =
-	"sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+	"sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
 export const defaultHermesImage = `${hermesImageRepository}@${hermesImageDigest}`;
+/**
+ * Earlier `defaultHermesImage` pins. A server still on one of these never chose
+ * its image, so the next managed deploy moves it to the current default.
+ */
+export const legacyDefaultHermesImages = [
+	`${hermesImageRepository}@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9`,
+];
+/** Oldest Hermes release each inference provider works with. */
+export const minHermesVersionByProvider: Record<string, string> = {
+	// v0.21.6 is the first release that sends the x-opencode-session header.
+	"opencode-go": "0.21.6",
+};
 /** Docker Hub API base for the Hermes agent image (default registry, no `docker.io/` prefix). */
 export const hermesDockerHubRepo = "nousresearch/hermes-agent";
 /** Upstream GitHub repository that publishes Hermes agent releases + changelogs. */

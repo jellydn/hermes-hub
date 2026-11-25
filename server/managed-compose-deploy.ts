@@ -1,6 +1,7 @@
 import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
 import {
+	assertHermesSupportsProvider,
 	assertWebUiReachable,
 	setProviderInferenceProvider,
 	setProviderModel,
@@ -59,6 +60,9 @@ export function resolveManagedComposeDeployPolicy(
 
 			return {
 				intent,
+				// Check the running Hermes before compose rewrites its env.
+				preSshCommands: (ssh) =>
+					assertHermesSupportsProvider(ssh, providerHermesId),
 				extraSshCommands: async (ssh) => {
 					await setProviderInferenceProvider(ssh, providerHermesId);
 					await setProviderModel(ssh, providerModel);

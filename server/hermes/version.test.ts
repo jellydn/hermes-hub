@@ -5,7 +5,9 @@ import {
 	getLatestImageRef,
 	getLatestRelease,
 	getRunningImageRef,
+	isHermesVersionAtLeast,
 	isUpdateAvailable,
+	parseHermesVersion,
 } from "./version";
 
 const fetchMock = vi.fn();
@@ -236,5 +238,26 @@ describe("extractDigest", () => {
 
 	it("returns undefined for empty input", () => {
 		expect(extractDigest(undefined)).toBeUndefined();
+	});
+});
+
+describe("parseHermesVersion", () => {
+	it("reads the release from hermes --version output", () => {
+		expect(parseHermesVersion("Hermes Agent v0.23.4 (2026.11.24)\n")).toBe(
+			"0.23.4",
+		);
+		expect(parseHermesVersion("Hermes Agent v0.16.0 (2026.6.5)")).toBe(
+			"0.16.0",
+		);
+		expect(parseHermesVersion("command not found")).toBeNull();
+	});
+});
+
+describe("isHermesVersionAtLeast", () => {
+	it("compares numerically, not as strings", () => {
+		expect(isHermesVersionAtLeast("0.21.10", "0.21.6")).toBe(true);
+		expect(isHermesVersionAtLeast("0.21.5", "0.21.6")).toBe(false);
+		expect(isHermesVersionAtLeast("0.21.6", "0.21.6")).toBe(true);
+		expect(isHermesVersionAtLeast("1.0.0", "0.21.6")).toBe(true);
 	});
 });

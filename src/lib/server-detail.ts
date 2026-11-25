@@ -16,6 +16,8 @@ export type ServerActionHistoryItem = {
 	createdAt: string;
 	message: string;
 	imageRef: string | null;
+	/** Image the action replaced; the next rollback returns to it. */
+	previousImageRef: string | null;
 };
 
 import type {

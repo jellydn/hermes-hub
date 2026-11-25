@@ -48,7 +48,7 @@ describe("restartGateway", () => {
 });
 
 describe("updateGateway", () => {
-	it("rewrites compose to the latest digest, pulls, and recreates", async () => {
+	it("pulls the latest digest before it rewrites compose, then recreates", async () => {
 		const { execCommand } = mockSsh(() => ({
 			code: 0,
 			stdout: "Updated\n",
@@ -57,15 +57,13 @@ describe("updateGateway", () => {
 
 		const { imageRef, output } = await updateGateway({ execCommand } as never);
 
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo sed -i.bak"),
+		const command = String(execCommand.mock.calls.at(-1)?.[0]);
+		// A failed pull must leave docker-compose.yml unchanged.
+		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeGreaterThan(-1);
+		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeLessThan(
+			command.indexOf("sudo sed -i.bak"),
 		);
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo docker compose pull hermes"),
-		);
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("--no-deps hermes"),
-		);
+		expect(command).toContain("--no-deps hermes");
 		expect(imageRef).toBe(
 			"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
 		);
@@ -120,7 +118,7 @@ describe("updateGateway", () => {
 
 		await updateGateway({ execCommand } as never, { tag: "v1.0.0" });
 
-		const callArg = execCommand.mock.calls[0][0] as string;
+		const callArg = execCommand.mock.calls[1][0] as string;
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 	});
@@ -181,7 +179,10 @@ describe("rollbackGateway", () => {
 			stderr: "",
 		}));
 
-		const output = await rollbackGateway({ execCommand } as never, "v1.2.3");
+		const { output } = await rollbackGateway(
+			{ execCommand } as never,
+			"v1.2.3",
+		);
 
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("sudo docker pull"),
@@ -235,10 +236,55 @@ describe("rollbackGateway", () => {
 
 		await rollbackGateway({ execCommand } as never, "v1.0.0");
 
-		const callArg = execCommand.mock.calls[0][0] as string;
+		const callArg = execCommand.mock.calls[1][0] as string;
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 		expect(callArg).toContain("image: nousresearch/hermes-agent:v1.0.0");
+	});
+
+	it("accepts the full digest ref that Update Hermes records", async () => {
+		const ref =
+			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+		const { execCommand } = mockSsh((cmd: string) =>
+			cmd.startsWith("sed -n")
+				? { code: 0, stdout: "nousresearch/hermes-agent:v0.23.4\n", stderr: "" }
+				: { code: 0, stdout: "ok", stderr: "" },
+		);
+
+		const result = await rollbackGateway({ execCommand } as never, ref);
+
+		expect(result.imageRef).toBe(ref);
+		expect(result.previousImageRef).toBe("nousresearch/hermes-agent:v0.23.4");
+		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
+			`sudo docker pull ${ref}`,
+		);
+	});
+
+	it("records the running digest when compose uses a movable tag", async () => {
+		const running =
+			"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
+		const { execCommand } = mockSsh((cmd: string) => {
+			if (cmd.startsWith("sed -n")) {
+				return {
+					code: 0,
+					stdout: "nousresearch/hermes-agent:latest\n",
+					stderr: "",
+				};
+			}
+			if (cmd.startsWith("sudo docker image inspect")) {
+				return { code: 0, stdout: `${running}\n`, stderr: "" };
+			}
+			return { code: 0, stdout: "ok", stderr: "" };
+		});
+
+		const result = await rollbackGateway({ execCommand } as never, "v0.21.6");
+
+		expect(result.previousImageRef).toBe(running);
+		// If the new image fails to start, compose goes back to the old digest,
+		// not to `:latest`, which the pull may have moved.
+		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
+			`|| { sudo sed -i 's|image: nousresearch/hermes-agent@.*|image: ${running}|; s|image: nousresearch/hermes-agent:.*|image: ${running}|' docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }`,
+		);
 	});
 });
 
@@ -255,7 +301,7 @@ describe("setProviderModel", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(1, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
 			2,
-			"sudo docker exec hermes hermes config set model 'gpt-4o'",
+			"sudo docker exec hermes hermes config set model.default 'gpt-4o'",
 		);
 	});
 

@@ -165,6 +165,7 @@ type UpdateInfo = {
 		body: string;
 		htmlUrl: string;
 	} | null;
+	currentVersion?: string | null;
 	updateAvailable: boolean;
 };
 
@@ -286,7 +287,8 @@ function UpdateConfirmationCard({
 		);
 	}
 
-	const { current, latest, release, updateAvailable } = state.data;
+	const { current, currentVersion, latest, release, updateAvailable } =
+		state.data;
 	const currentDigest = extractDigest(current?.image);
 	const latestDigest = latest?.digest;
 
@@ -323,6 +325,11 @@ function UpdateConfirmationCard({
 									? truncateDigest(currentDigest)
 									: (current?.image ?? "Unknown")}
 							</p>
+							{currentVersion ? (
+								<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
+									Hermes v{currentVersion}
+								</p>
+							) : null}
 						</div>
 						<div>
 							<p className="m-0 font-semibold">Latest</p>

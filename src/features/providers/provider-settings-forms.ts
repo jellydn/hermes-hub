@@ -46,7 +46,12 @@ export const providerSchema = z.object({
 });
 
 export const subscriptionSchema = z.object({
-	subscriptionProvider: z.enum(["chatgpt", "mimo", "commandcode"]),
+	subscriptionProvider: z.enum([
+		"chatgpt",
+		"mimo",
+		"commandcode",
+		"opencode-go",
+	]),
 	model: z.string(),
 	apiKey: z.string(),
 	baseUrl: z.string(),

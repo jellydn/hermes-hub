@@ -23,7 +23,7 @@ export function buildSubscriptionCredentialEnvMap(
 		envVars[option.deployEnv.apiKeyEnvVar] = apiKey;
 	}
 
-	if (deployBaseUrl) {
+	if (option.deployEnv.baseUrlEnvVar && deployBaseUrl) {
 		envVars[option.deployEnv.baseUrlEnvVar] = deployBaseUrl;
 	}
 
