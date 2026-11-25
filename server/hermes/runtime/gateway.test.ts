@@ -7,7 +7,7 @@ import {
 	setProviderModel,
 	updateGateway,
 } from "../runtime";
-import { mockSsh } from "./test-helpers";
+import { mockDockerHost, mockSsh } from "./test-helpers";
 
 vi.mock("../version", () => ({
 	getLatestImageRef: vi.fn().mockResolvedValue({
@@ -17,6 +17,9 @@ vi.mock("../version", () => ({
 		pushedAt: "2026-08-06T12:00:00.000Z",
 	}),
 }));
+
+const OLD_IMAGE =
+	"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
 
 describe("restartGateway", () => {
 	it("restarts the Hermes container via docker compose", async () => {
@@ -49,15 +52,17 @@ describe("restartGateway", () => {
 
 describe("updateGateway", () => {
 	it("pulls the latest digest before it rewrites compose, then recreates", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "Updated\n",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "Updated\n",
+		});
 
 		const { imageRef, output } = await updateGateway({ execCommand } as never);
 
-		const command = String(execCommand.mock.calls.at(-1)?.[0]);
+		const command = String(
+			execCommand.mock.calls.find(([cmd]) => cmd.includes("docker pull"))?.[0],
+		);
 		// A failed pull must leave docker-compose.yml unchanged.
 		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeGreaterThan(-1);
 		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeLessThan(
@@ -71,11 +76,11 @@ describe("updateGateway", () => {
 	});
 
 	it("uses an explicit digest target when provided", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		const { imageRef } = await updateGateway({ execCommand } as never, {
 			digest:
@@ -93,11 +98,11 @@ describe("updateGateway", () => {
 	});
 
 	it("uses an explicit tag target when provided", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		const { imageRef } = await updateGateway({ execCommand } as never, {
 			tag: "v2026.8.3",
@@ -110,11 +115,11 @@ describe("updateGateway", () => {
 	});
 
 	it("sed matches both @sha256 and :tag forms", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		await updateGateway({ execCommand } as never, { tag: "v1.0.0" });
 
@@ -127,11 +132,11 @@ describe("updateGateway", () => {
 		const { getLatestImageRef } = await import("../version");
 		vi.mocked(getLatestImageRef).mockResolvedValueOnce(null);
 
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		const { imageRef } = await updateGateway({ execCommand } as never);
 
@@ -173,11 +178,11 @@ describe("isValidDockerTag", () => {
 
 describe("rollbackGateway", () => {
 	it("pulls a specific tag, updates compose file, and recreates", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "Rolled back\n",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "Rolled back\n",
+		});
 
 		const { output } = await rollbackGateway(
 			{ execCommand } as never,
@@ -214,11 +219,11 @@ describe("rollbackGateway", () => {
 	});
 
 	it("defaults to latest when tag is whitespace", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		await rollbackGateway({ execCommand } as never, "   ");
 
@@ -228,11 +233,11 @@ describe("rollbackGateway", () => {
 	});
 
 	it("sed matches digest-pinned image lines for rollback", async () => {
-		const { execCommand } = mockSsh(() => ({
-			code: 0,
-			stdout: "ok",
-			stderr: "",
-		}));
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			swapStdout: "ok",
+		});
 
 		await rollbackGateway({ execCommand } as never, "v1.0.0");
 
@@ -244,37 +249,28 @@ describe("rollbackGateway", () => {
 
 	it("accepts the full digest ref that Update Hermes records", async () => {
 		const ref =
-			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
-		const { execCommand } = mockSsh((cmd: string) =>
-			cmd.startsWith("sed -n")
-				? { code: 0, stdout: "nousresearch/hermes-agent:v0.23.4\n", stderr: "" }
-				: { code: 0, stdout: "ok", stderr: "" },
-		);
+			"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
+		const { execCommand } = mockDockerHost({
+			composeImage: "nousresearch/hermes-agent:v0.23.4",
+			containerImage: "nousresearch/hermes-agent:v0.23.4",
+		});
 
 		const result = await rollbackGateway({ execCommand } as never, ref);
 
 		expect(result.imageRef).toBe(ref);
 		expect(result.previousImageRef).toBe("nousresearch/hermes-agent:v0.23.4");
-		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
-			`sudo docker pull ${ref}`,
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining(`sudo docker pull ${ref}`),
 		);
 	});
 
 	it("records the running digest when compose uses a movable tag", async () => {
 		const running =
 			"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
-		const { execCommand } = mockSsh((cmd: string) => {
-			if (cmd.startsWith("sed -n")) {
-				return {
-					code: 0,
-					stdout: "nousresearch/hermes-agent:latest\n",
-					stderr: "",
-				};
-			}
-			if (cmd.startsWith("sudo docker image inspect")) {
-				return { code: 0, stdout: `${running}\n`, stderr: "" };
-			}
-			return { code: 0, stdout: "ok", stderr: "" };
+		const { execCommand } = mockDockerHost({
+			composeImage: "nousresearch/hermes-agent:latest",
+			containerImage: "nousresearch/hermes-agent:latest",
+			repoDigests: [running],
 		});
 
 		const result = await rollbackGateway({ execCommand } as never, "v0.21.6");
@@ -282,8 +278,39 @@ describe("rollbackGateway", () => {
 		expect(result.previousImageRef).toBe(running);
 		// If the new image fails to start, compose goes back to the old digest,
 		// not to `:latest`, which the pull may have moved.
-		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
-			`|| { sudo sed -i 's|image: nousresearch/hermes-agent@.*|image: ${running}|; s|image: nousresearch/hermes-agent:.*|image: ${running}|' docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }`,
+		expect(execCommand).toHaveBeenCalledWith(
+			expect.stringContaining(
+				`|| { sudo sed -i 's|image: nousresearch/hermes-agent@.*|image: ${running}|; s|image: nousresearch/hermes-agent:.*|image: ${running}|' docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }`,
+			),
+		);
+	});
+});
+
+describe("image swap against the running container", () => {
+	const NEW_IMAGE =
+		"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924";
+
+	it("records the image the container runs when compose already names another", async () => {
+		const { execCommand } = mockDockerHost({
+			composeImage: NEW_IMAGE,
+			containerImage: OLD_IMAGE,
+		});
+
+		const result = await updateGateway({ execCommand } as never);
+
+		expect(result.imageRef).toBe(NEW_IMAGE);
+		expect(result.previousImageRef).toBe(OLD_IMAGE);
+	});
+
+	it("fails when compose up exits 0 but the container keeps the old image", async () => {
+		const { execCommand } = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+			onSwap: "keep",
+		});
+
+		await expect(updateGateway({ execCommand } as never)).rejects.toThrow(
+			`Failed to update Hermes: the hermes container runs ${OLD_IMAGE}, not ${NEW_IMAGE}.`,
 		);
 	});
 });

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 
 import { requireOwnedServerSsh } from "../request-guards";
 import { withSshConnection } from "../ssh";
+import { readComposeHermesImage } from "./runtime";
 import {
 	extractDigest,
 	getLatestImageRef,
@@ -18,6 +19,8 @@ export type HermesUpdateInfo = {
 	current: RunningImageRef | null;
 	/** Running Hermes release, such as `0.23.4`. */
 	currentVersion: string | null;
+	/** Hermes image in docker-compose.yml, which can differ from `current.image`. */
+	composeImage: string | null;
 	latest: LatestImageRef | null;
 	release: LatestRelease | null;
 	updateAvailable: boolean;
@@ -56,16 +59,25 @@ async function collectUpdateInfo(
 	// Run the remote inspect and the two HTTP lookups concurrently. Each
 	// degrades to null independently so a single failure doesn't break the
 	// whole response.
-	const [current, currentVersion, latest, release] = await Promise.all([
-		getRunningImageRef(ssh).catch(() => null),
-		getRunningHermesVersion(ssh).catch(() => null),
-		getLatestImageRef(),
-		getLatestRelease(),
-	]);
+	const [current, currentVersion, composeImage, latest, release] =
+		await Promise.all([
+			getRunningImageRef(ssh).catch(() => null),
+			getRunningHermesVersion(ssh).catch(() => null),
+			readComposeHermesImage(ssh).catch(() => null),
+			getLatestImageRef(),
+			getLatestRelease(),
+		]);
 
 	const currentDigest =
 		extractDigest(current?.image) ?? extractDigest(current?.repoDigests?.[0]);
 	const updateAvailable = isUpdateAvailable(currentDigest, latest?.digest);
 
-	return { current, currentVersion, latest, release, updateAvailable };
+	return {
+		current,
+		currentVersion,
+		composeImage,
+		latest,
+		release,
+		updateAvailable,
+	};
 }

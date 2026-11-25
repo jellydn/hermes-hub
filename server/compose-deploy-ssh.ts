@@ -31,10 +31,19 @@ export async function deployComposeViaSsh(input: DeployComposeInput) {
 			await preSshCommands(ssh);
 		}
 
-		await writeComposeFile(ssh, composeContent);
+		const { hermesImageChanged } = await writeComposeFile(ssh, composeContent);
+		// A deploy that targets other services must still move hermes to the
+		// image the compose file now names; otherwise the file and the running
+		// container disagree until the next full deploy.
+		const services =
+			composeServices &&
+			hermesImageChanged &&
+			!composeServices.includes("hermes")
+				? [...composeServices, "hermes"]
+				: composeServices;
 
 		await composeUp(ssh, {
-			services: composeServices,
+			services,
 			pull: pullImages,
 			forceRecreate: forceRecreate,
 		});
