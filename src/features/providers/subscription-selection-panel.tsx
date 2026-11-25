@@ -77,8 +77,9 @@ export function SubscriptionSelectionPanel({
 					Use your subscription access
 				</h3>
 				<p className="m-0 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-					Choose ChatGPT device-code login, MiMo Token Plan, or Command Code
-					Coding Plan credentials to power Hermes on your deployed server.
+					Choose ChatGPT device-code login, MiMo Token Plan, Command Code Coding
+					Plan, or OpenCode Go credentials to power Hermes on your deployed
+					server.
 				</p>
 			</div>
 
@@ -168,7 +169,9 @@ export function SubscriptionSelectionPanel({
 										? "••••••••••••"
 										: credentialOption?.id === "commandcode"
 											? "user_..."
-											: "tp-..."
+											: credentialOption?.id === "opencode-go"
+												? "oc_sk_..."
+												: "tp-..."
 								}
 								{...register("apiKey")}
 								className={inputClassName}
@@ -178,7 +181,11 @@ export function SubscriptionSelectionPanel({
 						<ProviderSettingsField
 							label="Base URL"
 							name="subscription-base-url"
-							hint={`${formatUserSubscriptionLabel(form.subscriptionProvider)} uses a dedicated OpenAI-compatible endpoint.`}
+							hint={
+								credentialOption?.deployEnv.baseUrlEnvVar
+									? `${formatUserSubscriptionLabel(form.subscriptionProvider)} uses a dedicated OpenAI-compatible endpoint.`
+									: `Used to check your key. Hermes picks the ${formatUserSubscriptionLabel(form.subscriptionProvider)} endpoint for each model.`
+							}
 						>
 							<input
 								id="subscription-base-url"
