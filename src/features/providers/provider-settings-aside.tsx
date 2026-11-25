@@ -125,6 +125,10 @@ export function ProviderSettingsAside({
 						<strong className="text-[var(--sea-ink)]">MiMo</strong> —
 						mimo-v2.5-pro and mimo-v2.5 via tp-* API key
 					</li>
+					<li>
+						<strong className="text-[var(--sea-ink)]">OpenCode Go</strong> —
+						Kimi, GLM, DeepSeek, Qwen, and more via an oc_sk_* API key
+					</li>
 				</ul>
 			</section>
 		</aside>

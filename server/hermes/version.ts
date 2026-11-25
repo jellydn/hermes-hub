@@ -78,6 +78,38 @@ export async function getRunningImageRef(
 }
 
 /**
+ * Read the running Hermes release (`hermes --version` prints
+ * `Hermes Agent v0.23.4 (<date>)`). Returns `null` when it cannot be read.
+ */
+export async function getRunningHermesVersion(
+	ssh: NodeSSH,
+): Promise<string | null> {
+	const result = await ssh.execCommand(
+		`sudo docker exec ${hermesContainerName} hermes --version 2>/dev/null`,
+	);
+	if (result.code !== 0) {
+		return null;
+	}
+	return parseHermesVersion(result.stdout);
+}
+
+export function parseHermesVersion(output: string | undefined) {
+	const match = output?.match(/\bv?(\d+)\.(\d+)\.(\d+)\b/);
+	return match ? `${match[1]}.${match[2]}.${match[3]}` : null;
+}
+
+export function isHermesVersionAtLeast(version: string, minimum: string) {
+	const a = version.split(".").map(Number);
+	const b = minimum.split(".").map(Number);
+	for (let i = 0; i < 3; i++) {
+		if ((a[i] ?? 0) !== (b[i] ?? 0)) {
+			return (a[i] ?? 0) > (b[i] ?? 0);
+		}
+	}
+	return true;
+}
+
+/**
  * Fetch the `latest` tag info from Docker Hub. Returns `null` on any failure
  * (network error, non-200, malformed body) so callers can degrade gracefully.
  */

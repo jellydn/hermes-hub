@@ -103,6 +103,7 @@ describe("ServerDetailAside", () => {
 							createdAt: "2026-05-26T03:10:00.000Z",
 							message: longFailureOutput,
 							imageRef: null,
+							previousImageRef: null,
 						},
 						{
 							id: "audit_ok",
@@ -111,6 +112,7 @@ describe("ServerDetailAside", () => {
 							createdAt: "2026-05-26T03:05:00.000Z",
 							message: "Restarted Hermes successfully.",
 							imageRef: null,
+							previousImageRef: null,
 						},
 					],
 				})}

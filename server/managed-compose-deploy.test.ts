@@ -59,6 +59,21 @@ describe("resolveManagedComposeDeployPolicy", () => {
 		expect(policy.extraSshCommands).toBeTypeOf("function");
 	});
 
+	it("refuses OpenCode Go on old Hermes before compose rewrites the env", async () => {
+		const execCommand = vi.fn().mockResolvedValue({
+			code: 0,
+			stdout: "Hermes Agent v0.16.0 (2026.6.5)",
+		});
+		const policy = resolveManagedComposeDeployPolicy("provider", {
+			providerModel: "kimi-k3",
+			providerHermesId: "opencode-go",
+		});
+
+		await expect(
+			policy.preSshCommands?.({ execCommand } as never),
+		).rejects.toThrow(/too old for opencode-go/);
+	});
+
 	it("scopes web-ui deploys to hermes-webui with workspace prep and reachability checks", () => {
 		const policy = resolveManagedComposeDeployPolicy("web-ui", {
 			webUiPort: 8787,
@@ -241,7 +256,7 @@ describe("deployManagedCompose", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(2, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
 			3,
-			"sudo docker exec hermes hermes config set model 'gpt-4o'",
+			"sudo docker exec hermes hermes config set model.default 'gpt-4o'",
 		);
 	});
 });
