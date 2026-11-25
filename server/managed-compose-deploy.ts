@@ -60,8 +60,10 @@ export function resolveManagedComposeDeployPolicy(
 
 			return {
 				intent,
+				// Check the running Hermes before compose rewrites its env.
+				preSshCommands: (ssh) =>
+					assertHermesSupportsProvider(ssh, providerHermesId),
 				extraSshCommands: async (ssh) => {
-					await assertHermesSupportsProvider(ssh, providerHermesId);
 					await setProviderInferenceProvider(ssh, providerHermesId);
 					await setProviderModel(ssh, providerModel);
 				},
