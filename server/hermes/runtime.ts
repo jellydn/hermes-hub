@@ -223,6 +223,7 @@ async function swapHermesImage(
 	imageRef: string,
 	failureMessage: string,
 ): Promise<ImageSwapResult> {
+	await removeStaleHermesContainers(ssh);
 	const previousImageRef = await readRunningHermesImage(ssh);
 	const startHermes = "sudo docker compose up -d --no-deps hermes";
 	// Restore by digest when known: a pull can move a tag such as `:latest`,
@@ -241,7 +242,7 @@ async function swapHermesImage(
 
 	const result = await ssh.execCommand(command);
 	if (result.code !== 0) {
-		throw new Error(result.stderr || failureMessage);
+		throw new Error(describeComposeError(result.stderr, failureMessage));
 	}
 	// `compose up` can exit 0 and keep the old container. Only a container
 	// created from `imageRef` has it as its configured image.
@@ -577,10 +578,16 @@ export async function composeUp(
 		forceRecreate?: boolean;
 	},
 ): Promise<void> {
+	const services = options?.services ?? [];
+	if (services.length === 0 || services.includes("hermes")) {
+		await removeStaleHermesContainers(ssh);
+	}
 	const command = buildComposeUpCommand(options);
 	const result = await ssh.execCommand(command);
 	if (result.code !== 0) {
-		throw new Error(result.stderr || "docker compose up failed");
+		throw new Error(
+			describeComposeError(result.stderr, "docker compose up failed"),
+		);
 	}
 }
 
@@ -594,10 +601,67 @@ export async function composePull(ssh: NodeSSH): Promise<void> {
 }
 
 export async function composeUpAll(ssh: NodeSSH): Promise<void> {
+	await removeStaleHermesContainers(ssh);
 	const result = await ssh.execCommand(
 		"cd ~/hermes && sudo docker compose up -d",
 	);
 	if (result.code !== 0) {
-		throw new Error(result.stderr || "docker compose up failed");
+		throw new Error(
+			describeComposeError(result.stderr, "docker compose up failed"),
+		);
 	}
+}
+
+// ── Leftovers from interrupted recreates ─────────────────────────
+
+/**
+ * During a recreate, compose renames the old container to `<12 hex>_hermes`
+ * and removes it once the new one runs. An interrupted recreate leaves it
+ * behind, and every later recreate of `hermes` fails with a name conflict.
+ */
+const STALE_HERMES_CONTAINER = /^[0-9a-f]{12}_hermes$/;
+
+/**
+ * Removes stopped leftover containers. A running leftover may be the one
+ * that serves Telegram, so it is not touched; Hub fails with the command
+ * that removes it instead.
+ */
+export async function removeStaleHermesContainers(ssh: NodeSSH): Promise<void> {
+	const result = await ssh.execCommand(
+		"sudo docker ps -a --filter name=_hermes --format '{{.ID}} {{.Names}} {{.State}}'",
+	);
+	const leftovers = (result.code === 0 ? (result.stdout ?? "") : "")
+		.split("\n")
+		.map((line) => line.trim().split(/\s+/))
+		.filter(
+			(fields): fields is [string, string, string] =>
+				fields.length === 3 &&
+				/^[0-9a-f]{12,64}$/.test(fields[0]) &&
+				STALE_HERMES_CONTAINER.test(fields[1]),
+		);
+
+	for (const [id, name, state] of leftovers) {
+		if (state === "running") {
+			throw new Error(staleContainerMessage(name, id));
+		}
+		const removed = await ssh.execCommand(`sudo docker rm ${id}`);
+		if (removed.code !== 0) {
+			throw new Error(staleContainerMessage(name, id));
+		}
+	}
+}
+
+function staleContainerMessage(name: string, id: string) {
+	return `A leftover Hermes container ${name} (${id}) from an interrupted update blocks the restart. Remove it on the server with: sudo docker rm -f ${id}`;
+}
+
+/** Turns compose's name-conflict error into the leftover-container message. */
+function describeComposeError(stderr: string | undefined, fallback: string) {
+	const conflict = stderr?.match(
+		/container name "\/?([0-9a-f]{12}_hermes)" is already in use by container "([0-9a-f]{12,64})/,
+	);
+	if (conflict?.[1] && conflict[2]) {
+		return staleContainerMessage(conflict[1], conflict[2].slice(0, 12));
+	}
+	return stderr || fallback;
 }

@@ -236,6 +236,35 @@ describe("ServerActionControls", () => {
 		).toBe(false);
 	});
 
+	it("keeps Update enabled when the running image cannot be read", async () => {
+		fetchMock.mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					...updateInfoResponse,
+					current: null,
+					updateAvailable: true,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ServerActionControls {...defaultProps({ activeAction: "update" })} />,
+		);
+
+		await flushAsyncWork();
+
+		expect(screen.getByText(/could not read the running image/i)).toBeTruthy();
+		expect(
+			screen
+				.getByRole("button", { name: /confirm update/i })
+				.hasAttribute("disabled"),
+		).toBe(false);
+	});
+
 	it("sends versionTarget (latest digest) on confirm", async () => {
 		const onConfirmAction = vi.fn();
 

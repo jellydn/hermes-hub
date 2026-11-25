@@ -9,10 +9,10 @@ import {
 	getLatestRelease,
 	getRunningHermesVersion,
 	getRunningImageRef,
-	isUpdateAvailable,
 	type LatestImageRef,
 	type LatestRelease,
 	type RunningImageRef,
+	shouldOfferUpdate,
 } from "./version";
 
 export type HermesUpdateInfo = {
@@ -70,7 +70,12 @@ async function collectUpdateInfo(
 
 	const currentDigest =
 		extractDigest(current?.image) ?? extractDigest(current?.repoDigests?.[0]);
-	const updateAvailable = isUpdateAvailable(currentDigest, latest?.digest);
+	const updateAvailable = shouldOfferUpdate({
+		currentDigest,
+		latestDigest: latest?.digest,
+		currentVersion,
+		releaseTag: release?.tagName,
+	});
 
 	return {
 		current,

@@ -20,20 +20,12 @@ const {
 vi.mock("../request-guards", () => ({ requireOwnedServerSsh }));
 vi.mock("../ssh", () => ({ withSshConnection }));
 
-vi.mock("./version", () => ({
+vi.mock("./version", async (importActual) => ({
+	...(await importActual<typeof import("./version")>()),
 	getRunningImageRef,
 	getRunningHermesVersion,
 	getLatestImageRef,
 	getLatestRelease,
-	isUpdateAvailable: (
-		current: string | undefined,
-		latest: string | undefined,
-	) => !!current && !!latest && current !== latest,
-	extractDigest: (value: string | undefined) => {
-		if (!value) return undefined;
-		const match = value.match(/sha256:[a-f0-9]{64}/i);
-		return match?.[0];
-	},
 }));
 
 import { getHermesUpdateInfo } from "./update-info";
@@ -126,7 +118,8 @@ describe("getHermesUpdateInfo", () => {
 		expect(body.currentVersion).toBeNull();
 		expect(body.latest).toBeNull();
 		expect(body.release).toBeNull();
-		expect(body.updateAvailable).toBe(false);
+		// Hub cannot prove the server is up to date, so it offers the update.
+		expect(body.updateAvailable).toBe(true);
 	});
 
 	it("returns 401 when not authenticated", async () => {

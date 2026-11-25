@@ -350,7 +350,7 @@ function UpdateConfirmationCard({
 							>
 								{currentDigest
 									? truncateDigest(currentDigest)
-									: (current?.image ?? "Unknown")}
+									: (current?.image ?? "Could not read the running image")}
 							</p>
 							{currentVersion ? (
 								<p className="m-0 text-xs text-[var(--sea-ink-soft)]">
