@@ -6,6 +6,7 @@ import {
 	extractDigest,
 	getLatestImageRef,
 	getLatestRelease,
+	getRunningHermesVersion,
 	getRunningImageRef,
 	isUpdateAvailable,
 	type LatestImageRef,
@@ -15,6 +16,8 @@ import {
 
 export type HermesUpdateInfo = {
 	current: RunningImageRef | null;
+	/** Running Hermes release, such as `0.23.4`. */
+	currentVersion: string | null;
 	latest: LatestImageRef | null;
 	release: LatestRelease | null;
 	updateAvailable: boolean;
@@ -53,8 +56,9 @@ async function collectUpdateInfo(
 	// Run the remote inspect and the two HTTP lookups concurrently. Each
 	// degrades to null independently so a single failure doesn't break the
 	// whole response.
-	const [current, latest, release] = await Promise.all([
+	const [current, currentVersion, latest, release] = await Promise.all([
 		getRunningImageRef(ssh).catch(() => null),
+		getRunningHermesVersion(ssh).catch(() => null),
 		getLatestImageRef(),
 		getLatestRelease(),
 	]);
@@ -63,5 +67,5 @@ async function collectUpdateInfo(
 		extractDigest(current?.image) ?? extractDigest(current?.repoDigests?.[0]);
 	const updateAvailable = isUpdateAvailable(currentDigest, latest?.digest);
 
-	return { current, latest, release, updateAvailable };
+	return { current, currentVersion, latest, release, updateAvailable };
 }

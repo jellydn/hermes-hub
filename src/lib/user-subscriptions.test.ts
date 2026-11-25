@@ -147,11 +147,12 @@ describe("commandcode subscription metadata", () => {
 });
 
 describe("user subscription options", () => {
-	it("lists ChatGPT, MiMo, and Command Code in user subscription options", () => {
+	it("lists ChatGPT, MiMo, Command Code, and OpenCode Go in user subscription options", () => {
 		expect(userSubscriptionOptions.map((option) => option.id)).toEqual([
 			"chatgpt",
 			"mimo",
 			"commandcode",
+			"opencode-go",
 		]);
 	});
 });
