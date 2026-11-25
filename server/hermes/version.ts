@@ -38,41 +38,36 @@ const HTTP_TIMEOUT_MS = 10_000;
 /**
  * Inspect the running Hermes container and return its image reference, image ID,
  * and repo digests. Returns `null` when the container does not exist.
+ *
+ * `RepoDigests` belongs to the image, not the container: asking a container
+ * inspect for it makes Docker fail the whole template, so it is read with
+ * `docker image inspect`.
  */
 export async function getRunningImageRef(
 	ssh: NodeSSH,
 ): Promise<RunningImageRef | null> {
 	const result = await ssh.execCommand(
-		`sudo docker inspect ${hermesContainerName} --format '{{.Config.Image}}|{{.Image}}|{{json .RepoDigests}}' 2>/dev/null`,
+		`sudo docker inspect ${hermesContainerName} --format '{{.Config.Image}}|{{.Image}}' 2>/dev/null`,
 	);
-
 	if (result.code !== 0) {
 		return null;
 	}
 
-	const raw = result.stdout?.trim();
-	if (!raw) {
+	const [image, imageId] = (result.stdout ?? "").trim().split("|");
+	if (!image || !imageId || !/^sha256:[a-f0-9]{64}$/.test(imageId)) {
 		return null;
 	}
 
-	const [image, imageId, repoDigestsRaw] = raw.split("|");
-	if (!image || !imageId) {
-		return null;
-	}
-
-	let repoDigests: string[] = [];
-	if (repoDigestsRaw) {
-		try {
-			const parsed = JSON.parse(repoDigestsRaw) as unknown;
-			if (Array.isArray(parsed)) {
-				repoDigests = parsed.filter(
-					(value): value is string => typeof value === "string",
-				);
-			}
-		} catch {
-			// Malformed RepoDigests JSON — leave empty.
-		}
-	}
+	const digests = await ssh.execCommand(
+		`sudo docker image inspect ${imageId} --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null`,
+	);
+	const repoDigests =
+		digests.code === 0
+			? (digests.stdout ?? "")
+					.split("\n")
+					.map((line) => line.trim())
+					.filter(Boolean)
+			: [];
 
 	return { image, imageId, repoDigests };
 }
@@ -202,6 +197,32 @@ export function isUpdateAvailable(
 	}
 
 	return normalizeDigest(currentDigest) !== normalizeDigest(latestDigest);
+}
+
+/**
+ * Decides whether the Update dialog offers an update. A running release older
+ * than the latest release always needs one. Otherwise compare digests; when
+ * the running digest is unknown, Hub cannot prove the server is up to date,
+ * so it offers the update.
+ */
+export function shouldOfferUpdate(input: {
+	currentDigest: string | undefined;
+	latestDigest: string | undefined;
+	currentVersion: string | null;
+	releaseTag: string | undefined;
+}): boolean {
+	const releaseVersion = parseHermesVersion(input.releaseTag);
+	if (
+		input.currentVersion &&
+		releaseVersion &&
+		!isHermesVersionAtLeast(input.currentVersion, releaseVersion)
+	) {
+		return true;
+	}
+	if (!input.currentDigest) {
+		return true;
+	}
+	return isUpdateAvailable(input.currentDigest, input.latestDigest);
 }
 
 /** Extract the `sha256:...` digest from a repo digest string like `nousresearch/hermes-agent@sha256:abc`. */

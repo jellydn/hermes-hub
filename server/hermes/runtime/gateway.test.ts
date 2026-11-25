@@ -123,7 +123,9 @@ describe("updateGateway", () => {
 
 		await updateGateway({ execCommand } as never, { tag: "v1.0.0" });
 
-		const callArg = execCommand.mock.calls[1][0] as string;
+		const callArg = String(
+			execCommand.mock.calls.find(([cmd]) => cmd.includes("docker pull"))?.[0],
+		);
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 	});
@@ -241,7 +243,9 @@ describe("rollbackGateway", () => {
 
 		await rollbackGateway({ execCommand } as never, "v1.0.0");
 
-		const callArg = execCommand.mock.calls[1][0] as string;
+		const callArg = String(
+			execCommand.mock.calls.find(([cmd]) => cmd.includes("docker pull"))?.[0],
+		);
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 		expect(callArg).toContain("image: nousresearch/hermes-agent:v1.0.0");
@@ -343,5 +347,70 @@ describe("setProviderModel", () => {
 		await expect(
 			setProviderModel({ execCommand } as never, "gpt-4o"),
 		).rejects.toThrow("Hermes not running");
+	});
+});
+
+describe("leftover containers from an interrupted recreate", () => {
+	const NEW_IMAGE =
+		"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924";
+
+	function hostWithLeftover(state: "exited" | "running") {
+		const docker = mockDockerHost({
+			composeImage: OLD_IMAGE,
+			containerImage: OLD_IMAGE,
+		});
+		const fallback = docker.execCommand.getMockImplementation();
+		docker.execCommand.mockImplementation(
+			async (cmd: string, opts?: unknown) => {
+				if (cmd.startsWith("sudo docker ps -a --filter name=_hermes")) {
+					return {
+						code: 0,
+						stdout: `8f26475d9445 2c7ddcc4a2c1_hermes ${state}\nabcdef123456 hermes-webui running\n`,
+						stderr: "",
+					};
+				}
+				return fallback
+					? fallback(cmd, opts)
+					: { code: 0, stdout: "", stderr: "" };
+			},
+		);
+		return docker;
+	}
+
+	it("removes a stopped leftover, then updates", async () => {
+		const { execCommand } = hostWithLeftover("exited");
+
+		const result = await updateGateway({ execCommand } as never);
+
+		expect(execCommand).toHaveBeenCalledWith("sudo docker rm 8f26475d9445");
+		expect(result.imageRef).toBe(NEW_IMAGE);
+	});
+
+	it("fails with the removal command when the leftover is running", async () => {
+		const { execCommand } = hostWithLeftover("running");
+
+		await expect(updateGateway({ execCommand } as never)).rejects.toThrow(
+			"A leftover Hermes container 2c7ddcc4a2c1_hermes (8f26475d9445) from an interrupted update blocks the restart. Remove it on the server with: sudo docker rm -f 8f26475d9445",
+		);
+		expect(execCommand).not.toHaveBeenCalledWith(
+			expect.stringContaining("docker pull"),
+		);
+	});
+
+	it("turns compose's name conflict into the same message", async () => {
+		const { execCommand } = mockSsh((cmd: string) =>
+			cmd.includes("docker pull")
+				? {
+						code: 1,
+						stdout: "",
+						stderr:
+							'Error response from daemon: Conflict. The container name "/2c7ddcc4a2c1_hermes" is already in use by container "8f26475d9445aa11bb22cc33dd44ee55ff6677889900aabbccddeeff00112233". You have to remove (or rename) that container to be able to reuse that name.',
+					}
+				: { code: 0, stdout: "", stderr: "" },
+		);
+
+		await expect(updateGateway({ execCommand } as never)).rejects.toThrow(
+			"sudo docker rm -f 8f26475d9445",
+		);
 	});
 });

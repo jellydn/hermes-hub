@@ -8,6 +8,7 @@ import {
 	isHermesVersionAtLeast,
 	isUpdateAvailable,
 	parseHermesVersion,
+	shouldOfferUpdate,
 } from "./version";
 
 const fetchMock = vi.fn();
@@ -23,61 +24,52 @@ afterEach(() => {
 });
 
 describe("getRunningImageRef", () => {
-	it("parses docker inspect output into image, imageId, and repoDigests", async () => {
-		const execCommand = vi.fn(async () => ({
-			code: 0,
-			stdout:
-				'nousresearch/hermes-agent@sha256:abc|sha256:def|["nousresearch/hermes-agent@sha256:abc"]',
-			stderr: "",
-		}));
+	const imageId =
+		"sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf";
+
+	/** Answers like Docker: a container has no RepoDigests field. */
+	function dockerHost(container: string | null) {
+		return vi.fn(async (cmd: string) => {
+			if (cmd.startsWith("sudo docker inspect hermes")) {
+				if (cmd.includes("RepoDigests")) {
+					return {
+						code: 1,
+						stdout: "",
+						stderr:
+							'template parsing error: map has no entry for key "RepoDigests"',
+					};
+				}
+				return container
+					? { code: 0, stdout: `${container}|${imageId}\n`, stderr: "" }
+					: { code: 1, stdout: "", stderr: "No such object: hermes" };
+			}
+			if (cmd.startsWith(`sudo docker image inspect ${imageId}`)) {
+				return {
+					code: 0,
+					stdout: "nousresearch/hermes-agent@sha256:abc\n",
+					stderr: "",
+				};
+			}
+			return { code: 1, stdout: "", stderr: "unexpected command" };
+		});
+	}
+
+	it("reads the container image and the image's repo digests", async () => {
+		const execCommand = dockerHost("nousresearch/hermes-agent:latest");
 
 		const result = await getRunningImageRef({ execCommand } as never);
 
 		expect(result).toEqual({
-			image: "nousresearch/hermes-agent@sha256:abc",
-			imageId: "sha256:def",
+			image: "nousresearch/hermes-agent:latest",
+			imageId,
 			repoDigests: ["nousresearch/hermes-agent@sha256:abc"],
 		});
 	});
 
 	it("returns null when the container does not exist", async () => {
-		const execCommand = vi.fn(async () => ({
-			code: 1,
-			stdout: "",
-			stderr: "No such container",
-		}));
+		const execCommand = dockerHost(null);
 
-		const result = await getRunningImageRef({ execCommand } as never);
-
-		expect(result).toBeNull();
-	});
-
-	it("returns null when output is empty", async () => {
-		const execCommand = vi.fn(async () => ({
-			code: 0,
-			stdout: "",
-			stderr: "",
-		}));
-
-		const result = await getRunningImageRef({ execCommand } as never);
-
-		expect(result).toBeNull();
-	});
-
-	it("handles malformed repoDigests json gracefully", async () => {
-		const execCommand = vi.fn(async () => ({
-			code: 0,
-			stdout: "image|imageId|not-valid-json",
-			stderr: "",
-		}));
-
-		const result = await getRunningImageRef({ execCommand } as never);
-
-		expect(result).toEqual({
-			image: "image",
-			imageId: "imageId",
-			repoDigests: [],
-		});
+		expect(await getRunningImageRef({ execCommand } as never)).toBeNull();
 	});
 });
 
@@ -192,6 +184,44 @@ describe("getLatestRelease", () => {
 		const result = await getLatestRelease();
 
 		expect(result).toBeNull();
+	});
+});
+
+describe("shouldOfferUpdate", () => {
+	const digest =
+		"sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
+
+	it("offers the update when the running release is older, even with equal digests", () => {
+		expect(
+			shouldOfferUpdate({
+				currentDigest: digest,
+				latestDigest: digest,
+				currentVersion: "0.16.0",
+				releaseTag: "v0.23.4",
+			}),
+		).toBe(true);
+	});
+
+	it("offers the update when the running digest is unknown", () => {
+		expect(
+			shouldOfferUpdate({
+				currentDigest: undefined,
+				latestDigest: digest,
+				currentVersion: "0.23.4",
+				releaseTag: "v0.23.4",
+			}),
+		).toBe(true);
+	});
+
+	it("is up to date only when the digest is known and matches", () => {
+		expect(
+			shouldOfferUpdate({
+				currentDigest: digest,
+				latestDigest: digest,
+				currentVersion: "0.23.4",
+				releaseTag: "v0.23.4",
+			}),
+		).toBe(false);
 	});
 });
 
