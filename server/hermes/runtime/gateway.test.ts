@@ -280,6 +280,11 @@ describe("rollbackGateway", () => {
 		const result = await rollbackGateway({ execCommand } as never, "v0.21.6");
 
 		expect(result.previousImageRef).toBe(running);
+		// If the new image fails to start, compose goes back to the old digest,
+		// not to `:latest`, which the pull may have moved.
+		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
+			`|| { sudo sed -i 's|image: nousresearch/hermes-agent@.*|image: ${running}|; s|image: nousresearch/hermes-agent:.*|image: ${running}|' docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }`,
+		);
 	});
 });
 

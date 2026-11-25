@@ -224,17 +224,19 @@ async function swapHermesImage(
 	failureMessage: string,
 ): Promise<ImageSwapResult> {
 	const previousImageRef = await readRunningHermesImage(ssh);
-	const sedExpr = [
-		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
-		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
-	].join("; ");
 	const startHermes = "sudo docker compose up -d --no-deps hermes";
+	// Restore by digest when known: a pull can move a tag such as `:latest`,
+	// so the backup file alone could start the attempted image again.
+	const restoreCompose =
+		previousImageRef && HERMES_DIGEST_REF_PATTERN.test(previousImageRef)
+			? pointComposeAt(previousImageRef, "")
+			: "sudo mv -f docker-compose.yml.bak docker-compose.yml";
 
 	const command = [
 		"cd ~/hermes",
 		`sudo docker pull ${imageRef}`,
-		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		`{ ${startHermes} || { sudo mv -f docker-compose.yml.bak docker-compose.yml; ${startHermes}; exit 1; }; }`,
+		pointComposeAt(imageRef, ".bak"),
+		`{ ${startHermes} || { ${restoreCompose}; ${startHermes}; exit 1; }; }`,
 	].join(" && ");
 
 	const result = await ssh.execCommand(command);
@@ -242,6 +244,14 @@ async function swapHermesImage(
 		throw new Error(result.stderr || failureMessage);
 	}
 	return { imageRef, previousImageRef, output: result.stdout.trim() };
+}
+
+function pointComposeAt(imageRef: string, backupSuffix: string) {
+	const sedExpr = [
+		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
+		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
+	].join("; ");
+	return `sudo sed -i${backupSuffix} '${sedExpr}' docker-compose.yml`;
 }
 
 /**
