@@ -199,6 +199,43 @@ describe("ServerActionControls", () => {
 		).toBeTruthy();
 	});
 
+	it("enables the update when only the container drifted from compose", async () => {
+		const latest =
+			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+		fetchMock.mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					...updateInfoResponse,
+					composeImage:
+						"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
+					latest: {
+						tag: "latest",
+						digest: latest.split("@")[1],
+						pushedAt: "2026-08-06T12:00:00.000Z",
+					},
+					updateAvailable: false,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		render(
+			<ServerActionControls {...defaultProps({ activeAction: "update" })} />,
+		);
+
+		await flushAsyncWork();
+
+		expect(screen.getByText(/running container is out of date/i)).toBeTruthy();
+		expect(
+			screen
+				.getByRole("button", { name: /confirm update/i })
+				.hasAttribute("disabled"),
+		).toBe(false);
+	});
+
 	it("sends versionTarget (latest digest) on confirm", async () => {
 		const onConfirmAction = vi.fn();
 
