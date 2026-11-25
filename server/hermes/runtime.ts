@@ -2,20 +2,27 @@ import { randomUUID } from "node:crypto";
 import type { NodeSSH } from "node-ssh";
 
 import {
+	defaultHermesImage,
 	hermesAgentSourcePathInContainer,
 	hermesContainerName,
 	hermesImageRepository,
 	hermesWebUiAgentHostDir,
 	hermesWebUiContainerGid,
 	hermesWebUiContainerUid,
+	legacyDefaultHermesImages,
 	managedComposeVolumeHome,
+	minHermesVersionByProvider,
 } from "../constants";
 import { shellQuote } from "../ssh";
 import {
 	formatHermesCliImportFailure,
 	formatWebUiContainerFailureDetails,
 } from "./diagnostics-formatting";
-import { getLatestImageRef } from "./version";
+import {
+	getLatestImageRef,
+	getRunningHermesVersion,
+	isHermesVersionAtLeast,
+} from "./version";
 
 // ── Container names ──────────────────────────────────────────────
 
@@ -317,6 +324,27 @@ export async function setProviderInferenceProvider(
 	}
 }
 
+/**
+ * Fails when the running Hermes is older than the release `providerHermesId`
+ * needs, such as OpenCode Go without the x-opencode-session header. An unknown
+ * version does not block the deploy.
+ */
+export async function assertHermesSupportsProvider(
+	ssh: NodeSSH,
+	providerHermesId: string,
+): Promise<void> {
+	const minimum = minHermesVersionByProvider[providerHermesId];
+	if (!minimum) {
+		return;
+	}
+	const version = await getRunningHermesVersion(ssh);
+	if (version && !isHermesVersionAtLeast(version, minimum)) {
+		throw new Error(
+			`Hermes v${version} on this server is too old for ${providerHermesId}, which needs v${minimum} or later. Use Update Hermes on the server page, then deploy again.`,
+		);
+	}
+}
+
 // ── Telegram pairing ─────────────────────────────────────────────
 
 export async function runPairingCommand(
@@ -372,12 +400,44 @@ export function assertValidComposeServiceNames(serviceNames: string[]): void {
 	}
 }
 
+const HERMES_COMPOSE_IMAGE_PATTERN = new RegExp(
+	`^${hermesImageRepository}(@sha256:[a-f0-9]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$`,
+);
+
+/**
+ * Picks the Hermes image a managed deploy writes. A server keeps the image it
+ * already runs (chosen by Update Hermes or Rollback); only a missing image or an
+ * earlier Hub default moves to the current `defaultHermesImage`.
+ */
+export function resolveHermesComposeImage(currentImage: string | null) {
+	if (
+		!currentImage ||
+		!HERMES_COMPOSE_IMAGE_PATTERN.test(currentImage) ||
+		legacyDefaultHermesImages.includes(currentImage)
+	) {
+		return defaultHermesImage;
+	}
+	return currentImage;
+}
+
+async function readComposeHermesImage(ssh: NodeSSH): Promise<string | null> {
+	const result = await ssh.execCommand(
+		`sed -n 's|^ *image: \\(${hermesImageRepository}[@:][^ ]*\\)$|\\1|p' ~/hermes/docker-compose.yml 2>/dev/null | head -n 1`,
+	);
+	return result.stdout?.trim() || null;
+}
+
 export async function writeComposeFile(
 	ssh: NodeSSH,
 	content: string,
 ): Promise<void> {
+	const image = resolveHermesComposeImage(await readComposeHermesImage(ssh));
+	const finalContent = content.replace(
+		`image: ${defaultHermesImage}`,
+		`image: ${image}`,
+	);
 	const delimiter = `HERMES_COMPOSE_${randomUUID()}`;
-	const writeCmd = `cat > ~/hermes/docker-compose.yml << '${delimiter}'\n${content}\n${delimiter}`;
+	const writeCmd = `cat > ~/hermes/docker-compose.yml << '${delimiter}'\n${finalContent}\n${delimiter}`;
 
 	const result = await ssh.execCommand(writeCmd);
 	if (result.code !== 0) {

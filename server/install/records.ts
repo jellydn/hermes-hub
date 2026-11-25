@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 
+import { defaultHermesImage } from "../constants";
 import { getDb } from "../db";
 import { installEvents, installs, servers } from "../db/schema";
 import { installSteps } from "./workflow";
@@ -20,7 +21,7 @@ export async function upsertInstallRecord(serverId: string) {
 				serverId,
 				status: "pending",
 				step: installSteps[0]?.id ?? "pending",
-				version: "latest",
+				version: defaultHermesImage,
 			})
 			.returning({ id: installs.id });
 
@@ -39,7 +40,8 @@ export async function upsertInstallRecord(serverId: string) {
 			.set({
 				status: "pending",
 				step: installSteps[0]?.id ?? "pending",
-				version: existingInstall.version ?? "latest",
+				// The install writes a fresh compose with the default image.
+				version: defaultHermesImage,
 				updatedAt: new Date(),
 			})
 			.where(eq(installs.id, existingInstall.id))

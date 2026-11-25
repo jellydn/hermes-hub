@@ -1,6 +1,7 @@
 import type { NodeSSH } from "node-ssh";
 import { deployComposeViaSsh } from "./compose-deploy-ssh";
 import {
+	assertHermesSupportsProvider,
 	assertWebUiReachable,
 	setProviderInferenceProvider,
 	setProviderModel,
@@ -60,6 +61,7 @@ export function resolveManagedComposeDeployPolicy(
 			return {
 				intent,
 				extraSshCommands: async (ssh) => {
+					await assertHermesSupportsProvider(ssh, providerHermesId);
 					await setProviderInferenceProvider(ssh, providerHermesId);
 					await setProviderModel(ssh, providerModel);
 				},

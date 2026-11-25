@@ -117,7 +117,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		id: "opencode-go",
 		label: "OpenCode Go",
 		description:
-			"Use an OpenCode Go plan API key with Hermes' built-in opencode-go provider, which sends the session header Go requires.",
+			"Use an OpenCode Go plan API key with Hermes' built-in opencode-go provider. Needs Hermes v0.21.6 or later on the server; use Update Hermes if it is older.",
 		hermesProviderId: "opencode-go",
 		authMode: "go-plan",
 		credentialKind: "api-key",
