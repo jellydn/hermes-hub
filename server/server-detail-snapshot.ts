@@ -40,13 +40,15 @@ export async function getServerDetailSnapshot(input: {
 		return null;
 	}
 
-	const [installRecord, actionHistory, webUiRecord] = await Promise.all([
-		getLatestInstallForServer(input.serverId),
-		getServerActionHistory(input.serverId),
-		getResolvedServerWebUiRecord(input.serverId),
-	]);
+	const [installRecord, actionHistory, latestImageChange, webUiRecord] =
+		await Promise.all([
+			getLatestInstallForServer(input.serverId),
+			getServerActionHistory(input.serverId),
+			getLatestImageChange(input.serverId),
+			getResolvedServerWebUiRecord(input.serverId),
+		]);
 	const rollbackTarget = getDisplayRollbackTarget({
-		actionHistory,
+		actionHistory: latestImageChange,
 		installVersion: installRecord?.version,
 	});
 
@@ -70,7 +72,7 @@ export async function resolveRollbackTarget(input: {
 	requestedVersion?: string;
 }): Promise<string> {
 	const [actionHistory, installRecord] = await Promise.all([
-		getServerActionHistory(input.serverId),
+		getLatestImageChange(input.serverId),
 		getLatestInstallForServer(input.serverId),
 	]);
 
@@ -118,14 +120,20 @@ export function getDisplayRollbackTarget(input: {
 export function getRollbackTargetFromHistory(
 	history: ServerActionHistoryItem[],
 ) {
+	// Roll back to the image the most recent update or rollback replaced.
+	// Older audit rows have no previousImageRef; for those a rollback row's
+	// own imageRef is the best known target.
 	for (const item of history) {
-		if (
-			item.action === "rollback" &&
-			item.result === "succeeded" &&
-			item.imageRef
-		) {
+		if (item.result !== "succeeded" || item.action === "restart") {
+			continue;
+		}
+		if (item.previousImageRef) {
+			return item.previousImageRef;
+		}
+		if (item.action === "rollback" && item.imageRef) {
 			return item.imageRef;
 		}
+		return null;
 	}
 
 	return null;
@@ -171,6 +179,34 @@ async function getServerActionHistory(serverId: string) {
 	return records.map((record) => toActionHistoryItem(record as AuditRecord));
 }
 
+/**
+ * The latest successful Update or Rollback, read apart from the five-row
+ * display history so later Restarts cannot push it out.
+ */
+async function getLatestImageChange(serverId: string) {
+	const records = await getDb()
+		.select({
+			id: auditLogs.id,
+			action: auditLogs.action,
+			details: auditLogs.details,
+			createdAt: auditLogs.createdAt,
+		})
+		.from(auditLogs)
+		.where(
+			and(
+				inArray(auditLogs.action, [
+					"server.action.update.succeeded",
+					"server.action.rollback.succeeded",
+				]),
+				eq(auditLogs.serverId, serverId),
+			),
+		)
+		.orderBy(desc(auditLogs.createdAt))
+		.limit(1);
+
+	return records.map((record) => toActionHistoryItem(record as AuditRecord));
+}
+
 function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 	const action = readActionType(record.action);
 	const result = record.action.endsWith(".failed") ? "failed" : "succeeded";
@@ -183,6 +219,7 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		createdAt: record.createdAt.toISOString(),
 		message: readActionMessage(details, action, result),
 		imageRef: getNonEmptyString(details.imageRef),
+		previousImageRef: getNonEmptyString(details.previousImageRef),
 	};
 }
 

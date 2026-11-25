@@ -1,6 +1,10 @@
 import { isValidModelString } from "./ai-providers";
 
-export type UserSubscriptionId = "chatgpt" | "mimo" | "commandcode";
+export type UserSubscriptionId =
+	| "chatgpt"
+	| "mimo"
+	| "commandcode"
+	| "opencode-go";
 
 export const FUTURE_USER_SUBSCRIPTION_IDS = ["github-copilot"] as const;
 export type FutureUserSubscriptionId =
@@ -10,7 +14,8 @@ export const LEGACY_CODEX_PROVIDER_ID = "openai-codex" as const;
 
 export type SubscriptionDeployEnvConfig = {
 	apiKeyEnvVar: string;
-	baseUrlEnvVar: string;
+	/** Omitted when the Hermes provider must choose its own endpoint. */
+	baseUrlEnvVar?: string;
 };
 
 type BaseSubscriptionOption = {
@@ -31,6 +36,7 @@ export type OAuthSubscriptionOption = BaseSubscriptionOption & {
 export type CredentialSubscriptionOption = BaseSubscriptionOption & {
 	credentialKind: "api-key";
 	storageProviderId: string;
+	apiKeyPlaceholder: string;
 	defaultBaseUrl: string;
 	deployEnv: SubscriptionDeployEnvConfig;
 };
@@ -72,6 +78,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "api-key",
 		supportsConnectionTest: true,
 		storageProviderId: "mimo",
+		apiKeyPlaceholder: "tp-...",
 		defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
 		deployEnv: {
 			apiKeyEnvVar: "XIAOMI_API_KEY",
@@ -90,6 +97,7 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 		credentialKind: "api-key",
 		supportsConnectionTest: true,
 		storageProviderId: "commandcode",
+		apiKeyPlaceholder: "user_...",
 		defaultBaseUrl: "https://api.commandcode.ai/provider/v1",
 		deployEnv: {
 			apiKeyEnvVar: "COMMANDCODE_API_KEY",
@@ -104,6 +112,38 @@ export const userSubscriptionOptions: readonly UserSubscriptionOption[] = [
 			"mimo/mimo-v2.5",
 		],
 		defaultModel: "deepseek/deepseek-v4-flash",
+	},
+	{
+		id: "opencode-go",
+		label: "OpenCode Go",
+		description:
+			"Use an OpenCode Go plan API key with Hermes' built-in opencode-go provider. Needs Hermes v0.21.6 or later on the server; use Update Hermes if it is older.",
+		hermesProviderId: "opencode-go",
+		authMode: "go-plan",
+		credentialKind: "api-key",
+		supportsConnectionTest: true,
+		storageProviderId: "opencode-go",
+		apiKeyPlaceholder: "oc_sk_...",
+		// Used only for the Hub's key check. Hermes picks the relay and API
+		// format per model itself, so no base URL is deployed.
+		defaultBaseUrl: "https://opencode.ai/inference/go",
+		deployEnv: {
+			apiKeyEnvVar: "OPENCODE_GO_API_KEY",
+		},
+		models: [
+			"kimi-k3",
+			"kimi-k3.1-pro",
+			"kimi-k2.7-code",
+			"glm-5.3",
+			"glm-5.3-flash",
+			"deepseek-v4.1-flash",
+			"deepseek-v4-pro",
+			"qwen4-max",
+			"qwen3.8-max",
+			"minimax-m3",
+			"mimo-v2.6-pro",
+		],
+		defaultModel: "kimi-k3",
 	},
 ] as const;
 

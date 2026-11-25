@@ -5,12 +5,14 @@ const {
 	requireOwnedServerSsh,
 	withSshConnection,
 	getRunningImageRef,
+	getRunningHermesVersion,
 	getLatestImageRef,
 	getLatestRelease,
 } = vi.hoisted(() => ({
 	requireOwnedServerSsh: vi.fn(),
 	withSshConnection: vi.fn(),
 	getRunningImageRef: vi.fn(),
+	getRunningHermesVersion: vi.fn(),
 	getLatestImageRef: vi.fn(),
 	getLatestRelease: vi.fn(),
 }));
@@ -20,6 +22,7 @@ vi.mock("../ssh", () => ({ withSshConnection }));
 
 vi.mock("./version", () => ({
 	getRunningImageRef,
+	getRunningHermesVersion,
 	getLatestImageRef,
 	getLatestRelease,
 	isUpdateAvailable: (
@@ -82,6 +85,7 @@ describe("getHermesUpdateInfo", () => {
 			imageId: "sha256:old",
 			repoDigests: [],
 		});
+		getRunningHermesVersion.mockResolvedValue("0.16.0");
 		getLatestImageRef.mockResolvedValue({
 			tag: "latest",
 			digest:
@@ -103,12 +107,14 @@ describe("getHermesUpdateInfo", () => {
 		expect(response.status).toBe(200);
 		expect(body.updateAvailable).toBe(true);
 		expect(body.current.image).toContain("sha256:0df64d3f");
+		expect(body.currentVersion).toBe("0.16.0");
 		expect(body.latest.digest).toContain("sha256:4c8aceb");
 		expect(body.release.tagName).toBe("v2026.8.3");
 	});
 
 	it("degrades sub-fields to null on failure", async () => {
 		getRunningImageRef.mockResolvedValue(null);
+		getRunningHermesVersion.mockRejectedValue(new Error("no container"));
 		getLatestImageRef.mockResolvedValue(null);
 		getLatestRelease.mockResolvedValue(null);
 
@@ -117,6 +123,7 @@ describe("getHermesUpdateInfo", () => {
 
 		expect(response.status).toBe(200);
 		expect(body.current).toBeNull();
+		expect(body.currentVersion).toBeNull();
 		expect(body.latest).toBeNull();
 		expect(body.release).toBeNull();
 		expect(body.updateAvailable).toBe(false);
