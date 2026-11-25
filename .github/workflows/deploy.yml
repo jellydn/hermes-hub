@@ -222,6 +222,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$DOKKU_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+          # Fail fast on an unreachable host and keep long git pushes alive.
+          {
+            echo "Host *"
+            echo "  ConnectTimeout 15"
+            echo "  ServerAliveInterval 15"
+            echo "  ServerAliveCountMax 4"
+          } >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Sync Dokku config
         id: sync-config
@@ -249,7 +257,26 @@ jobs:
           TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}"
           DB_POOL_MAX="${DB_POOL_MAX:-5}"
 
-          if ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" 2>/dev/null; then
+          # ssh exits 255 on a connection error (for example, the host resets the
+          # handshake). Retry only that, and never read it as "app missing", so a
+          # transient network error cannot trigger apps:create on a live app.
+          for attempt in 1 2 3; do
+            status=0
+            ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" apps:exists "$DOKKU_APP" || status=$?
+            if [ "$status" -ne 255 ]; then
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SSH to the Dokku host failed (attempt $attempt/3). Retrying in $((attempt * 15))s."
+              sleep $((attempt * 15))
+            fi
+          done
+          if [ "$status" -eq 255 ]; then
+            echo "::error::Cannot reach the Dokku host over SSH after 3 attempts. Check sshd, firewall or fail2ban rules, and the DOKKU_HOST and DOKKU_SSH_PORT secrets."
+            exit 255
+          fi
+
+          if [ "$status" -eq 0 ]; then
             echo "app_created=false" >> "$GITHUB_OUTPUT"
           else
             ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" apps:create "$DOKKU_APP"
@@ -342,4 +369,23 @@ jobs:
           # Dokku's app repo is a deploy target, not a source of truth, so
           # earlier manual deploys leave a divergent history that rejects a
           # fast-forward push.
-          git push --force dokku HEAD:main
+          set -o pipefail
+          push_log="$(mktemp)"
+          if git push --force dokku HEAD:main 2>&1 | tee "$push_log"; then
+            exit 0
+          fi
+          if ! grep -qi 'no space left on device' "$push_log"; then
+            exit 1
+          fi
+
+          # The dokku SSH user cannot run `docker builder prune`, so free what
+          # Dokku itself can (build containers, cache volume, unused app images,
+          # dangling images) and retry once.
+          echo "::warning::The Dokku host ran out of disk space during the build. Running Dokku cleanup, then retrying the push once."
+          ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" repo:purge-cache "$DOKKU_APP" || true
+          ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" cleanup "$DOKKU_APP" || true
+          ssh -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" cleanup || true
+          if ! git push --force dokku HEAD:main; then
+            echo "::error::The deploy still fails after Dokku cleanup. Free disk on the host as root, for example: docker system df, docker builder prune -af, docker image prune -af."
+            exit 1
+          fi
