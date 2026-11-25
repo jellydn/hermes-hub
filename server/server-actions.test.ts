@@ -262,7 +262,8 @@ describe("server actions", () => {
 					},
 					createdAt: new Date("2026-05-26T03:05:00.000Z"),
 				},
-			]);
+			])
+			.mockResolvedValueOnce([]);
 
 		const { getServerDetailSnapshot } = await import("./server-actions");
 		const detail = await getServerDetailSnapshot({
@@ -311,7 +312,7 @@ describe("server actions", () => {
 			expect.stringContaining("sudo sed -i.bak"),
 		);
 		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo docker compose pull hermes"),
+			expect.stringContaining("sudo docker pull nousresearch/hermes-agent@"),
 		);
 		expect(response.status).toBe(200);
 		const body = await response.json();
@@ -407,14 +408,14 @@ describe("server actions", () => {
 				"cd ~/hermes",
 				"sudo docker pull nousresearch/hermes-agent:v1.2.3",
 				"sudo sed -i.bak 's|image: nousresearch/hermes-agent@.*|image: nousresearch/hermes-agent:v1.2.3|; s|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
-				"sudo docker compose up -d --no-deps hermes",
+				"{ sudo docker compose up -d --no-deps hermes || { sudo mv -f docker-compose.yml.bak docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }; }",
 			].join(" && "),
 		);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v1.2.3",
+			imageRef: "nousresearch/hermes-agent:v1.2.3",
 		});
 		expect(insertAuditValues).toHaveBeenNthCalledWith(
 			1,
@@ -460,7 +461,7 @@ describe("server actions", () => {
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v1.0.0",
+			imageRef: "nousresearch/hermes-agent:v1.0.0",
 		});
 	});
 
@@ -506,7 +507,59 @@ describe("server actions", () => {
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v2.0.0",
+			imageRef: "nousresearch/hermes-agent:v2.0.0",
+		});
+	});
+
+	it("rollback after Update Hermes returns to the image the update replaced", async () => {
+		const previous =
+			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version:
+				"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f",
+			updatedAt: new Date("2026-11-25T00:00:00.000Z"),
+		});
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Prod VPS",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+					status: "connected",
+					osInfo: {},
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					id: "audit_1",
+					action: "server.action.update.succeeded",
+					details: {
+						imageRef:
+							"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f",
+						previousImageRef: previous,
+					},
+					createdAt: new Date("2026-11-25T00:00:00.000Z"),
+				},
+			])
+			.mockResolvedValueOnce([{ id: "install_123" }]);
+
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "rollback" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "rollback",
+			imageRef: previous,
 		});
 	});
 
@@ -584,6 +637,7 @@ describe("server actions", () => {
 					osInfo: { name: "Ubuntu" },
 				},
 			])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 
 		const { getServerDetail } = await import("./server-actions");
@@ -608,6 +662,7 @@ it("getRollbackTargetFromHistory returns first successful rollback imageRef or n
 				action: "rollback",
 				result: "succeeded",
 				imageRef: "v1",
+				previousImageRef: null,
 				message: "Rolled back to v1",
 				createdAt: "2026-05-29T00:00:00.000Z",
 			},
@@ -616,6 +671,7 @@ it("getRollbackTargetFromHistory returns first successful rollback imageRef or n
 				action: "rollback",
 				result: "succeeded",
 				imageRef: "v2",
+				previousImageRef: null,
 				message: "Rolled back to v2",
 				createdAt: "2026-05-28T00:00:00.000Z",
 			},
