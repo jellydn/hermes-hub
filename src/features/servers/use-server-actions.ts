@@ -43,12 +43,15 @@ export function useServerActions(
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
 					action,
-					targetVersion: versionTarget ?? detail.rollbackTarget,
+					targetVersion:
+						versionTarget ??
+						(action === "rollback" ? detail.rollbackTarget : undefined),
 				}),
 			});
 			const payload = (await response.json().catch(() => null)) as {
 				error?: string;
 				imageRef?: string;
+				previousImageRef?: string;
 				message?: string;
 			} | null;
 
@@ -71,10 +74,11 @@ export function useServerActions(
 						result: "succeeded",
 						message: successMessage,
 						imageRef: payload.imageRef ?? null,
+						previousImageRef: payload.previousImageRef ?? null,
 					}),
 					...current.actionHistory,
 				].slice(0, 5),
-				rollbackTarget: payload.imageRef ?? current.rollbackTarget,
+				rollbackTarget: payload.previousImageRef ?? current.rollbackTarget,
 			}));
 			setActionState({
 				activeDialog: null,

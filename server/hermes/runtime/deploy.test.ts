@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultHermesImage, legacyDefaultHermesImages } from "../../constants";
 import {
+	assertHermesSupportsProvider,
 	assertValidComposeServiceNames,
 	buildComposeUpCommand,
 	composePull,
@@ -111,6 +113,41 @@ describe("writeComposeFile", () => {
 		expect(capturedCmd).toContain("cat > ~/hermes/docker-compose.yml <<");
 		expect(capturedCmd).toContain("HERMES_COMPOSE_");
 		expect(capturedCmd).toContain("services:\n  hermes: {}");
+	});
+
+	const updatedImage =
+		"nousresearch/hermes-agent@sha256:1111111111111111111111111111111111111111111111111111111111111111";
+	const compose = `services:\n  hermes:\n    image: ${defaultHermesImage}\n`;
+
+	async function writeOver(existingImage: string) {
+		let written = "";
+		const { execCommand } = mockSsh((cmd: string) => {
+			if (cmd.startsWith("sed -n")) {
+				return { code: 0, stdout: `${existingImage}\n`, stderr: "" };
+			}
+			written = cmd;
+			return { code: 0, stdout: "", stderr: "" };
+		});
+		await writeComposeFile({ execCommand } as never, compose);
+		return written;
+	}
+
+	it("keeps the image a server got from Update Hermes", async () => {
+		const written = await writeOver(updatedImage);
+		expect(written).toContain(`image: ${updatedImage}`);
+		expect(written).not.toContain(defaultHermesImage);
+	});
+
+	it("moves a server off an earlier Hub default image", async () => {
+		const written = await writeOver(legacyDefaultHermesImages[0] ?? "");
+		expect(written).toContain(`image: ${defaultHermesImage}`);
+	});
+
+	it("ignores an image line that is not a Hermes ref", async () => {
+		const written = await writeOver(
+			"nousresearch/hermes-agent:latest; rm -rf /",
+		);
+		expect(written).toContain(`image: ${defaultHermesImage}`);
 	});
 
 	it("throws when the write fails", async () => {
@@ -244,5 +281,35 @@ describe("composeUpAll", () => {
 		await expect(composeUpAll({ execCommand } as never)).rejects.toThrow(
 			"Startup error",
 		);
+	});
+});
+
+describe("assertHermesSupportsProvider", () => {
+	function sshWithVersion(stdout: string, code = 0) {
+		return mockSsh(() => ({ code, stdout, stderr: "" })) as never;
+	}
+
+	it("rejects OpenCode Go on Hermes older than v0.21.6", async () => {
+		await expect(
+			assertHermesSupportsProvider(
+				sshWithVersion("Hermes Agent v0.21.5 (2026.10.1)"),
+				"opencode-go",
+			),
+		).rejects.toThrow(/v0\.21\.5.*v0\.21\.6/);
+	});
+
+	it("allows OpenCode Go on v0.21.6 and later", async () => {
+		await expect(
+			assertHermesSupportsProvider(
+				sshWithVersion("Hermes Agent v0.21.6 (2026.10.8)"),
+				"opencode-go",
+			),
+		).resolves.toBeUndefined();
+	});
+
+	it("does not block when the version cannot be read", async () => {
+		await expect(
+			assertHermesSupportsProvider(sshWithVersion("", 1), "opencode-go"),
+		).resolves.toBeUndefined();
 	});
 });

@@ -79,6 +79,53 @@ export async function verifyOpenAiCompatibleConnection(input: {
 }
 
 /**
+ * Verifies an OpenCode Go key against the usage endpoint. `/v1/models` is
+ * public on Go, so it cannot tell a bad key from a good one. `/v1/usage`
+ * returns 401 for an invalid key and 403 (with a reason) for a key that
+ * Go does not cover, such as one without an active subscription.
+ */
+export async function verifyOpenCodeGoConnection(input: {
+	apiKey: string;
+	baseUrl: string;
+}) {
+	const url = `${input.baseUrl.replace(/\/+$/, "")}/v1/usage`;
+
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			method: "GET",
+			headers: { Authorization: `Bearer ${input.apiKey}` },
+			signal: AbortSignal.timeout(5000),
+		});
+	} catch {
+		throw new ProviderConnectionError("Connection failed", "connection_failed");
+	}
+
+	if (response.ok) {
+		return;
+	}
+
+	if (response.status === 401) {
+		throw new ProviderConnectionError("Invalid API key", "invalid_api_key");
+	}
+
+	if (response.status === 403) {
+		const body = (await response.json().catch(() => null)) as {
+			error?: { message?: unknown };
+		} | null;
+		const message = body?.error?.message;
+		throw new ProviderConnectionError(
+			typeof message === "string" && message
+				? message
+				: "OpenCode Go subscription required.",
+			"invalid_api_key",
+		);
+	}
+
+	throw new ProviderConnectionError("Connection failed", "connection_failed");
+}
+
+/**
  * Verifies a Command Code Coding Plan key by sending a minimal chat
  * completion request through the Hermes Hub proxy — the same path the
  * deployed gateway uses. This catches proxy-level issues (HTTPS
