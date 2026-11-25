@@ -208,8 +208,13 @@ export async function restartGateway(ssh: NodeSSH): Promise<string> {
 export async function updateGateway(
 	ssh: NodeSSH,
 	target?: { digest?: string; tag?: string },
-): Promise<{ imageRef: string; output: string }> {
+): Promise<{
+	imageRef: string;
+	previousImageRef: string | null;
+	output: string;
+}> {
 	const imageRef = await resolveUpdateImageRef(target);
+	const previousImageRef = await readComposeHermesImage(ssh);
 
 	const sedExpr = [
 		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
@@ -227,7 +232,7 @@ export async function updateGateway(
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to update Hermes");
 	}
-	return { imageRef, output: result.stdout.trim() };
+	return { imageRef, previousImageRef, output: result.stdout.trim() };
 }
 
 /**
@@ -263,16 +268,38 @@ export function isValidDockerTag(tag: string): boolean {
 	return DOCKER_TAG_PATTERN.test(tag);
 }
 
+/**
+ * Turns a rollback target into a Hermes image ref. Accepts a tag (`v0.21.6`),
+ * a digest (`sha256:…`), or a full ref as recorded by Update Hermes
+ * (`nousresearch/hermes-agent@sha256:…`). Returns `null` for anything else.
+ */
+export function toHermesImageRef(target: string): string | null {
+	const value = target.trim() || "latest";
+	if (HERMES_COMPOSE_IMAGE_PATTERN.test(value)) {
+		return value;
+	}
+	if (/^sha256:[a-f0-9]{64}$/.test(value)) {
+		return `${hermesImageRepository}@${value}`;
+	}
+	if (isValidDockerTag(value)) {
+		return `${hermesImageRepository}:${value}`;
+	}
+	return null;
+}
+
 export async function rollbackGateway(
 	ssh: NodeSSH,
-	imageTag: string,
-): Promise<string> {
-	const tag = imageTag.trim() || "latest";
-	if (!isValidDockerTag(tag)) {
-		throw new Error(`Invalid image tag: ${tag}`);
+	target: string,
+): Promise<{
+	imageRef: string;
+	previousImageRef: string | null;
+	output: string;
+}> {
+	const imageRef = toHermesImageRef(target);
+	if (!imageRef) {
+		throw new Error(`Invalid image tag: ${target.trim()}`);
 	}
-
-	const imageRef = `${hermesImageRepository}:${tag}`;
+	const previousImageRef = await readComposeHermesImage(ssh);
 	const sedExpr = [
 		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
 		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
@@ -289,7 +316,7 @@ export async function rollbackGateway(
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to roll back Hermes");
 	}
-	return result.stdout.trim();
+	return { imageRef, previousImageRef, output: result.stdout.trim() };
 }
 
 // ── Provider config ──────────────────────────────────────────────
@@ -301,7 +328,9 @@ export async function setProviderModel(
 	await ssh.execCommand("sleep 2");
 
 	const result = await ssh.execCommand(
-		`sudo docker exec hermes hermes config set model ${shellQuote(model)}`,
+		// `config set model X` replaces the whole `model:` map with a string and
+		// drops `model.provider`; set the nested key instead.
+		`sudo docker exec hermes hermes config set model.default ${shellQuote(model)}`,
 	);
 	if (result.code !== 0) {
 		throw new Error(result.stderr || "Failed to set model inside Hermes");

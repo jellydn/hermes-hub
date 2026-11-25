@@ -414,7 +414,7 @@ describe("server actions", () => {
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v1.2.3",
+			imageRef: "nousresearch/hermes-agent:v1.2.3",
 		});
 		expect(insertAuditValues).toHaveBeenNthCalledWith(
 			1,
@@ -460,7 +460,7 @@ describe("server actions", () => {
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v1.0.0",
+			imageRef: "nousresearch/hermes-agent:v1.0.0",
 		});
 	});
 
@@ -506,7 +506,59 @@ describe("server actions", () => {
 		expect(await response.json()).toMatchObject({
 			status: "succeeded",
 			action: "rollback",
-			imageRef: "v2.0.0",
+			imageRef: "nousresearch/hermes-agent:v2.0.0",
+		});
+	});
+
+	it("rollback after Update Hermes returns to the image the update replaced", async () => {
+		const previous =
+			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+		selectLimit.mockReset();
+		getLatestInstallForServer.mockResolvedValueOnce({
+			status: "succeeded",
+			version:
+				"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f",
+			updatedAt: new Date("2026-11-25T00:00:00.000Z"),
+		});
+		selectLimit
+			.mockResolvedValueOnce([
+				{
+					id: "server_123",
+					label: "Prod VPS",
+					host: "203.0.113.10",
+					port: 22,
+					username: "root",
+					authMethod: "password",
+					encryptedCredential: "encrypted-secret",
+					storeCredential: true,
+					status: "connected",
+					osInfo: {},
+				},
+			])
+			.mockResolvedValueOnce([
+				{
+					id: "audit_1",
+					action: "server.action.update.succeeded",
+					details: {
+						imageRef:
+							"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f",
+						previousImageRef: previous,
+					},
+					createdAt: new Date("2026-11-25T00:00:00.000Z"),
+				},
+			])
+			.mockResolvedValueOnce([{ id: "install_123" }]);
+
+		const { runServerAction } = await import("./server-actions");
+		const response = await runServerAction(
+			createContext({ action: "rollback" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: "succeeded",
+			action: "rollback",
+			imageRef: previous,
 		});
 	});
 

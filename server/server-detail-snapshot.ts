@@ -118,14 +118,20 @@ export function getDisplayRollbackTarget(input: {
 export function getRollbackTargetFromHistory(
 	history: ServerActionHistoryItem[],
 ) {
+	// Roll back to the image the most recent update or rollback replaced.
+	// Older audit rows have no previousImageRef; for those a rollback row's
+	// own imageRef is the best known target.
 	for (const item of history) {
-		if (
-			item.action === "rollback" &&
-			item.result === "succeeded" &&
-			item.imageRef
-		) {
+		if (item.result !== "succeeded" || item.action === "restart") {
+			continue;
+		}
+		if (item.previousImageRef) {
+			return item.previousImageRef;
+		}
+		if (item.action === "rollback" && item.imageRef) {
 			return item.imageRef;
 		}
+		return null;
 	}
 
 	return null;
@@ -183,6 +189,7 @@ function toActionHistoryItem(record: AuditRecord): ServerActionHistoryItem {
 		createdAt: record.createdAt.toISOString(),
 		message: readActionMessage(details, action, result),
 		imageRef: getNonEmptyString(details.imageRef),
+		previousImageRef: getNonEmptyString(details.previousImageRef),
 	};
 }
 

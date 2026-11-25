@@ -120,7 +120,7 @@ describe("updateGateway", () => {
 
 		await updateGateway({ execCommand } as never, { tag: "v1.0.0" });
 
-		const callArg = execCommand.mock.calls[0][0] as string;
+		const callArg = execCommand.mock.calls[1][0] as string;
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 	});
@@ -181,7 +181,10 @@ describe("rollbackGateway", () => {
 			stderr: "",
 		}));
 
-		const output = await rollbackGateway({ execCommand } as never, "v1.2.3");
+		const { output } = await rollbackGateway(
+			{ execCommand } as never,
+			"v1.2.3",
+		);
 
 		expect(execCommand).toHaveBeenCalledWith(
 			expect.stringContaining("sudo docker pull"),
@@ -235,10 +238,26 @@ describe("rollbackGateway", () => {
 
 		await rollbackGateway({ execCommand } as never, "v1.0.0");
 
-		const callArg = execCommand.mock.calls[0][0] as string;
+		const callArg = execCommand.mock.calls[1][0] as string;
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent@.*|");
 		expect(callArg).toContain("s|image: nousresearch/hermes-agent:.*|");
 		expect(callArg).toContain("image: nousresearch/hermes-agent:v1.0.0");
+	});
+
+	it("accepts the full digest ref that Update Hermes records", async () => {
+		const ref =
+			"nousresearch/hermes-agent@sha256:0df64d3f063ed22f9a0287d0f7a4c314ed9a504cbdefe55d6803b0d40761dcb9";
+		const { execCommand } = mockSsh((cmd: string) =>
+			cmd.startsWith("sed -n")
+				? { code: 0, stdout: "nousresearch/hermes-agent:v0.23.4\n", stderr: "" }
+				: { code: 0, stdout: "ok", stderr: "" },
+		);
+
+		const result = await rollbackGateway({ execCommand } as never, ref);
+
+		expect(result.imageRef).toBe(ref);
+		expect(result.previousImageRef).toBe("nousresearch/hermes-agent:v0.23.4");
+		expect(execCommand.mock.calls[1][0]).toContain(`sudo docker pull ${ref}`);
 	});
 });
 
@@ -255,7 +274,7 @@ describe("setProviderModel", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(1, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
 			2,
-			"sudo docker exec hermes hermes config set model 'gpt-4o'",
+			"sudo docker exec hermes hermes config set model.default 'gpt-4o'",
 		);
 	});
 

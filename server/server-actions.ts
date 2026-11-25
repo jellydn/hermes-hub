@@ -10,6 +10,7 @@ import {
 	isValidDockerTag,
 	restartGateway,
 	rollbackGateway,
+	toHermesImageRef,
 	updateGateway,
 } from "./hermes/runtime";
 import { getClientIp } from "./lib/get-client-ip";
@@ -88,12 +89,12 @@ export async function runServerAction(context: Context) {
 	}
 
 	if (action === "rollback") {
-		const requestedTag = payload.targetVersion?.trim();
-		if (requestedTag && !isValidDockerTag(requestedTag)) {
+		const requestedTarget = payload.targetVersion?.trim();
+		if (requestedTarget && !toHermesImageRef(requestedTarget)) {
 			return context.json(
 				{
 					error:
-						"Invalid target version. Use a Docker image tag of up to 128 alphanumeric, '.', '_' or '-' characters.",
+						"Invalid target version. Use a sha256 digest, a Hermes image ref, or a Docker image tag of up to 128 alphanumeric, '.', '_' or '-' characters.",
 				},
 				400,
 			);
@@ -154,21 +155,22 @@ export async function runServerAction(context: Context) {
 	});
 
 	try {
-		const { output: commandOutput, imageRef: resultImageRef } =
-			await executeServerAction({
-				server: serverRecord,
-				authMethod,
-				credential,
-				action,
-				versionTarget: versionTarget ?? undefined,
-				updateTarget: updateTarget ?? undefined,
-			});
+		const {
+			output: commandOutput,
+			imageRef: resultImageRef,
+			previousImageRef,
+		} = await executeServerAction({
+			server: serverRecord,
+			authMethod,
+			credential,
+			action,
+			versionTarget: versionTarget ?? undefined,
+			updateTarget: updateTarget ?? undefined,
+		});
 
-		// For update, record the actual image ref returned by updateGateway
-		// (digest or tag) rather than the literal "latest". For rollback, the
-		// versionTarget tag is the recorded ref.
-		const recordedImageRef =
-			action === "update" ? resultImageRef : versionTarget;
+		// Record the image ref the server now runs, and the one it replaced so
+		// the next rollback can return to it.
+		const recordedImageRef = resultImageRef;
 
 		// Persist success audit log and (for update/rollback) install version in
 		// a single transaction so both writes commit atomically. If the version
@@ -185,6 +187,7 @@ export async function runServerAction(context: Context) {
 					message: actionSuccessMessage(action, recordedImageRef),
 					output: commandOutput || null,
 					...(recordedImageRef ? { imageRef: recordedImageRef } : {}),
+					...(previousImageRef ? { previousImageRef } : {}),
 				},
 				ipAddress,
 			});
@@ -216,6 +219,7 @@ export async function runServerAction(context: Context) {
 			action,
 			message: actionSuccessMessage(action, recordedImageRef),
 			...(recordedImageRef ? { imageRef: recordedImageRef } : {}),
+			...(previousImageRef ? { previousImageRef } : {}),
 		});
 	} catch (error) {
 		const message = normalizeServerActionError(error);
@@ -267,7 +271,11 @@ async function executeServerAction(input: {
 	action: ServerActionType;
 	versionTarget?: string;
 	updateTarget?: { digest?: string; tag?: string };
-}): Promise<{ output: string; imageRef: string | null }> {
+}): Promise<{
+	output: string;
+	imageRef: string | null;
+	previousImageRef?: string | null;
+}> {
 	return withSshConnection(
 		{
 			host: input.server.host,
@@ -281,18 +289,10 @@ async function executeServerAction(input: {
 			switch (input.action) {
 				case "restart":
 					return { output: await restartGateway(ssh), imageRef: null };
-				case "update": {
-					const { imageRef, output } = await updateGateway(
-						ssh,
-						input.updateTarget,
-					);
-					return { output, imageRef };
-				}
+				case "update":
+					return updateGateway(ssh, input.updateTarget);
 				case "rollback":
-					return {
-						output: await rollbackGateway(ssh, input.versionTarget ?? "latest"),
-						imageRef: input.versionTarget ?? "latest",
-					};
+					return rollbackGateway(ssh, input.versionTarget ?? "latest");
 			}
 		},
 	);
