@@ -723,6 +723,80 @@ describe("provider settings", () => {
 		});
 	});
 
+	it("builds Hermes deploy env for OpenCode Go without a base URL override", async () => {
+		const backend = {
+			subscriptionProvider: "opencode-go",
+			model: "kimi-k3",
+			authMode: "go-plan",
+			hermesProviderId: "opencode-go",
+			storageProviderId: "opencode-go",
+			encryptedApiKey: "encrypted-existing-key",
+			baseUrl: "https://opencode.ai/inference/go",
+		};
+		loadModelAccessRecords.mockResolvedValueOnce({
+			apiRecord: null,
+			subscriptionRecord: backend,
+			activeBackend: { kind: "subscription", access: "credential", ...backend },
+		});
+
+		const { getProviderDeployConfig } = await import("./providers");
+		const config = await getProviderDeployConfig("user_123");
+
+		// Hermes' built-in opencode-go provider picks the relay and API format
+		// per model, so the stored base URL must not be deployed.
+		expect(config).toEqual({
+			model: "kimi-k3",
+			envVars: {
+				HERMES_INFERENCE_PROVIDER: "opencode-go",
+				OPENCODE_GO_API_KEY: "stored-api-key",
+			},
+		});
+	});
+
+	it.each([
+		[200, { usage: {} }, 200, undefined],
+		[401, { error: { message: "Unauthorized" } }, 400, "Invalid API key"],
+		[
+			403,
+			{
+				type: "error",
+				error: {
+					type: "EntitlementError",
+					message: "OpenCode Go subscription required.",
+				},
+			},
+			400,
+			"OpenCode Go subscription required.",
+		],
+		[500, {}, 502, "Connection failed"],
+	])("tests OpenCode Go keys against the usage endpoint (upstream %i)", async (upstreamStatus, upstreamBody, expectedStatus, expectedError) => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify(upstreamBody), { status: upstreamStatus }),
+		);
+
+		const { testSubscriptionConfig } = await import("./providers");
+		const response = await testSubscriptionConfig(
+			createContext("http://localhost/api/providers/subscriptions/test", {
+				subscriptionProvider: "opencode-go",
+				model: "kimi-k3",
+				apiKey: "oc_sk_live_secret",
+				baseUrl: "https://opencode.ai/inference/go/",
+			}),
+		);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://opencode.ai/inference/go/v1/usage",
+			expect.objectContaining({
+				method: "GET",
+				headers: { Authorization: "Bearer oc_sk_live_secret" },
+			}),
+		);
+		expect(response.status).toBe(expectedStatus);
+		if (expectedError) {
+			expect((await response.json()).error).toBe(expectedError);
+		}
+	});
+
 	it("builds Hermes deploy env for Command Code Coding Plan", async () => {
 		const previousAuthUrl = process.env.BETTER_AUTH_URL;
 		process.env.BETTER_AUTH_URL = "https://hub.example.com";
