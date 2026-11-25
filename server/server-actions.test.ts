@@ -311,7 +311,7 @@ describe("server actions", () => {
 			expect.stringContaining("sudo sed -i.bak"),
 		);
 		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo docker compose pull hermes"),
+			expect.stringContaining("sudo docker pull nousresearch/hermes-agent@"),
 		);
 		expect(response.status).toBe(200);
 		const body = await response.json();
@@ -660,6 +660,7 @@ it("getRollbackTargetFromHistory returns first successful rollback imageRef or n
 				action: "rollback",
 				result: "succeeded",
 				imageRef: "v1",
+				previousImageRef: null,
 				message: "Rolled back to v1",
 				createdAt: "2026-05-29T00:00:00.000Z",
 			},
@@ -668,6 +669,7 @@ it("getRollbackTargetFromHistory returns first successful rollback imageRef or n
 				action: "rollback",
 				result: "succeeded",
 				imageRef: "v2",
+				previousImageRef: null,
 				message: "Rolled back to v2",
 				createdAt: "2026-05-28T00:00:00.000Z",
 			},

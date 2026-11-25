@@ -48,7 +48,7 @@ describe("restartGateway", () => {
 });
 
 describe("updateGateway", () => {
-	it("rewrites compose to the latest digest, pulls, and recreates", async () => {
+	it("pulls the latest digest before it rewrites compose, then recreates", async () => {
 		const { execCommand } = mockSsh(() => ({
 			code: 0,
 			stdout: "Updated\n",
@@ -57,15 +57,13 @@ describe("updateGateway", () => {
 
 		const { imageRef, output } = await updateGateway({ execCommand } as never);
 
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo sed -i.bak"),
+		const command = String(execCommand.mock.calls.at(-1)?.[0]);
+		// A failed pull must leave docker-compose.yml unchanged.
+		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeGreaterThan(-1);
+		expect(command.indexOf(`sudo docker pull ${imageRef}`)).toBeLessThan(
+			command.indexOf("sudo sed -i.bak"),
 		);
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("sudo docker compose pull hermes"),
-		);
-		expect(execCommand).toHaveBeenCalledWith(
-			expect.stringContaining("--no-deps hermes"),
-		);
+		expect(command).toContain("--no-deps hermes");
 		expect(imageRef).toBe(
 			"nousresearch/hermes-agent@sha256:4c8aceb35c5b309ebeb0c3bafed52544aff3ff78005cbcfb744ddbaa8829d924",
 		);

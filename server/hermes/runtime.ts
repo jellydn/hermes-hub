@@ -205,17 +205,24 @@ export async function restartGateway(ssh: NodeSSH): Promise<string> {
 	return result.stdout.trim();
 }
 
-export async function updateGateway(
-	ssh: NodeSSH,
-	target?: { digest?: string; tag?: string },
-): Promise<{
+type ImageSwapResult = {
 	imageRef: string;
 	previousImageRef: string | null;
 	output: string;
-}> {
-	const imageRef = await resolveUpdateImageRef(target);
-	const previousImageRef = await readComposeHermesImage(ssh);
+};
 
+/**
+ * Pulls `imageRef`, points the compose `hermes` service at it, and restarts
+ * the service. Pulls first so a failed pull leaves the compose file
+ * unchanged. Returns the image the compose file had before, so the caller
+ * can record a rollback target.
+ */
+async function swapHermesImage(
+	ssh: NodeSSH,
+	imageRef: string,
+	failureMessage: string,
+): Promise<ImageSwapResult> {
+	const previousImageRef = await readComposeHermesImage(ssh);
 	const sedExpr = [
 		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
 		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
@@ -223,16 +230,24 @@ export async function updateGateway(
 
 	const command = [
 		"cd ~/hermes",
+		`sudo docker pull ${imageRef}`,
 		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		"sudo docker compose pull hermes",
 		"sudo docker compose up -d --no-deps hermes",
 	].join(" && ");
 
 	const result = await ssh.execCommand(command);
 	if (result.code !== 0) {
-		throw new Error(result.stderr || "Failed to update Hermes");
+		throw new Error(result.stderr || failureMessage);
 	}
 	return { imageRef, previousImageRef, output: result.stdout.trim() };
+}
+
+export async function updateGateway(
+	ssh: NodeSSH,
+	target?: { digest?: string; tag?: string },
+): Promise<ImageSwapResult> {
+	const imageRef = await resolveUpdateImageRef(target);
+	return swapHermesImage(ssh, imageRef, "Failed to update Hermes");
 }
 
 /**
@@ -290,33 +305,12 @@ export function toHermesImageRef(target: string): string | null {
 export async function rollbackGateway(
 	ssh: NodeSSH,
 	target: string,
-): Promise<{
-	imageRef: string;
-	previousImageRef: string | null;
-	output: string;
-}> {
+): Promise<ImageSwapResult> {
 	const imageRef = toHermesImageRef(target);
 	if (!imageRef) {
 		throw new Error(`Invalid image tag: ${target.trim()}`);
 	}
-	const previousImageRef = await readComposeHermesImage(ssh);
-	const sedExpr = [
-		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
-		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
-	].join("; ");
-
-	const command = [
-		"cd ~/hermes",
-		`sudo docker pull ${imageRef}`,
-		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		"sudo docker compose up -d --no-deps hermes",
-	].join(" && ");
-
-	const result = await ssh.execCommand(command);
-	if (result.code !== 0) {
-		throw new Error(result.stderr || "Failed to roll back Hermes");
-	}
-	return { imageRef, previousImageRef, output: result.stdout.trim() };
+	return swapHermesImage(ssh, imageRef, "Failed to roll back Hermes");
 }
 
 // ── Provider config ──────────────────────────────────────────────

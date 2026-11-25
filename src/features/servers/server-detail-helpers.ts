@@ -147,7 +147,7 @@ export function createHistoryEntry(input: {
 	result: ServerActionResult;
 	message: string;
 	imageRef: string | null;
-	previousImageRef?: string | null;
+	previousImageRef: string | null;
 }): ServerActionHistoryItem {
 	return {
 		id: `${input.action}-${Date.now()}`,
@@ -156,7 +156,7 @@ export function createHistoryEntry(input: {
 		createdAt: new Date().toISOString(),
 		message: input.message,
 		imageRef: input.imageRef,
-		previousImageRef: input.previousImageRef ?? null,
+		previousImageRef: input.previousImageRef,
 	};
 }
 

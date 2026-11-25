@@ -157,7 +157,7 @@ export async function runServerAction(context: Context) {
 	try {
 		const {
 			output: commandOutput,
-			imageRef: resultImageRef,
+			imageRef: recordedImageRef,
 			previousImageRef,
 		} = await executeServerAction({
 			server: serverRecord,
@@ -167,10 +167,6 @@ export async function runServerAction(context: Context) {
 			versionTarget: versionTarget ?? undefined,
 			updateTarget: updateTarget ?? undefined,
 		});
-
-		// Record the image ref the server now runs, and the one it replaced so
-		// the next rollback can return to it.
-		const recordedImageRef = resultImageRef;
 
 		// Persist success audit log and (for update/rollback) install version in
 		// a single transaction so both writes commit atomically. If the version
@@ -274,7 +270,7 @@ async function executeServerAction(input: {
 }): Promise<{
 	output: string;
 	imageRef: string | null;
-	previousImageRef?: string | null;
+	previousImageRef: string | null;
 }> {
 	return withSshConnection(
 		{
@@ -288,7 +284,11 @@ async function executeServerAction(input: {
 		async (ssh) => {
 			switch (input.action) {
 				case "restart":
-					return { output: await restartGateway(ssh), imageRef: null };
+					return {
+						output: await restartGateway(ssh),
+						imageRef: null,
+						previousImageRef: null,
+					};
 				case "update":
 					return updateGateway(ssh, input.updateTarget);
 				case "rollback":
