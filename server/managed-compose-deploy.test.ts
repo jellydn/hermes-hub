@@ -256,7 +256,7 @@ describe("deployManagedCompose", () => {
 		expect(execCommand).toHaveBeenNthCalledWith(2, "sleep 2");
 		expect(execCommand).toHaveBeenNthCalledWith(
 			3,
-			"sudo docker exec hermes hermes config set model 'gpt-4o'",
+			"sudo docker exec hermes hermes config set model.default 'gpt-4o'",
 		);
 	});
 });
