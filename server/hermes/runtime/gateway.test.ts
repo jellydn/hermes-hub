@@ -255,7 +255,31 @@ describe("rollbackGateway", () => {
 
 		expect(result.imageRef).toBe(ref);
 		expect(result.previousImageRef).toBe("nousresearch/hermes-agent:v0.23.4");
-		expect(execCommand.mock.calls[1][0]).toContain(`sudo docker pull ${ref}`);
+		expect(execCommand.mock.calls.at(-1)?.[0]).toContain(
+			`sudo docker pull ${ref}`,
+		);
+	});
+
+	it("records the running digest when compose uses a movable tag", async () => {
+		const running =
+			"nousresearch/hermes-agent@sha256:ef0650d523ee1b5ab32c779acabc446d9936869a9932591553688a62bcf0c42f";
+		const { execCommand } = mockSsh((cmd: string) => {
+			if (cmd.startsWith("sed -n")) {
+				return {
+					code: 0,
+					stdout: "nousresearch/hermes-agent:latest\n",
+					stderr: "",
+				};
+			}
+			if (cmd.startsWith("sudo docker image inspect")) {
+				return { code: 0, stdout: `${running}\n`, stderr: "" };
+			}
+			return { code: 0, stdout: "ok", stderr: "" };
+		});
+
+		const result = await rollbackGateway({ execCommand } as never, "v0.21.6");
+
+		expect(result.previousImageRef).toBe(running);
 	});
 });
 

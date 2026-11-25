@@ -262,7 +262,8 @@ describe("server actions", () => {
 					},
 					createdAt: new Date("2026-05-26T03:05:00.000Z"),
 				},
-			]);
+			])
+			.mockResolvedValueOnce([]);
 
 		const { getServerDetailSnapshot } = await import("./server-actions");
 		const detail = await getServerDetailSnapshot({
@@ -407,7 +408,7 @@ describe("server actions", () => {
 				"cd ~/hermes",
 				"sudo docker pull nousresearch/hermes-agent:v1.2.3",
 				"sudo sed -i.bak 's|image: nousresearch/hermes-agent@.*|image: nousresearch/hermes-agent:v1.2.3|; s|image: nousresearch/hermes-agent:.*|image: nousresearch/hermes-agent:v1.2.3|' docker-compose.yml",
-				"sudo docker compose up -d --no-deps hermes",
+				"{ sudo docker compose up -d --no-deps hermes || { sudo mv -f docker-compose.yml.bak docker-compose.yml; sudo docker compose up -d --no-deps hermes; exit 1; }; }",
 			].join(" && "),
 		);
 		expect(response.status).toBe(200);
@@ -636,6 +637,7 @@ describe("server actions", () => {
 					osInfo: { name: "Ubuntu" },
 				},
 			])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 
 		const { getServerDetail } = await import("./server-actions");

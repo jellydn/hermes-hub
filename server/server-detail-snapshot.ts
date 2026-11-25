@@ -40,13 +40,15 @@ export async function getServerDetailSnapshot(input: {
 		return null;
 	}
 
-	const [installRecord, actionHistory, webUiRecord] = await Promise.all([
-		getLatestInstallForServer(input.serverId),
-		getServerActionHistory(input.serverId),
-		getResolvedServerWebUiRecord(input.serverId),
-	]);
+	const [installRecord, actionHistory, latestImageChange, webUiRecord] =
+		await Promise.all([
+			getLatestInstallForServer(input.serverId),
+			getServerActionHistory(input.serverId),
+			getLatestImageChange(input.serverId),
+			getResolvedServerWebUiRecord(input.serverId),
+		]);
 	const rollbackTarget = getDisplayRollbackTarget({
-		actionHistory,
+		actionHistory: latestImageChange,
 		installVersion: installRecord?.version,
 	});
 
@@ -70,7 +72,7 @@ export async function resolveRollbackTarget(input: {
 	requestedVersion?: string;
 }): Promise<string> {
 	const [actionHistory, installRecord] = await Promise.all([
-		getServerActionHistory(input.serverId),
+		getLatestImageChange(input.serverId),
 		getLatestInstallForServer(input.serverId),
 	]);
 
@@ -173,6 +175,34 @@ async function getServerActionHistory(serverId: string) {
 		)
 		.orderBy(desc(auditLogs.createdAt))
 		.limit(5);
+
+	return records.map((record) => toActionHistoryItem(record as AuditRecord));
+}
+
+/**
+ * The latest successful Update or Rollback, read apart from the five-row
+ * display history so later Restarts cannot push it out.
+ */
+async function getLatestImageChange(serverId: string) {
+	const records = await getDb()
+		.select({
+			id: auditLogs.id,
+			action: auditLogs.action,
+			details: auditLogs.details,
+			createdAt: auditLogs.createdAt,
+		})
+		.from(auditLogs)
+		.where(
+			and(
+				inArray(auditLogs.action, [
+					"server.action.update.succeeded",
+					"server.action.rollback.succeeded",
+				]),
+				eq(auditLogs.serverId, serverId),
+			),
+		)
+		.orderBy(desc(auditLogs.createdAt))
+		.limit(1);
 
 	return records.map((record) => toActionHistoryItem(record as AuditRecord));
 }

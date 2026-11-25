@@ -214,25 +214,27 @@ type ImageSwapResult = {
 /**
  * Pulls `imageRef`, points the compose `hermes` service at it, and restarts
  * the service. Pulls first so a failed pull leaves the compose file
- * unchanged. Returns the image the compose file had before, so the caller
- * can record a rollback target.
+ * unchanged; if the restart fails, restores the compose file and the old
+ * container. Returns the image the server ran before, so the caller can
+ * record a rollback target.
  */
 async function swapHermesImage(
 	ssh: NodeSSH,
 	imageRef: string,
 	failureMessage: string,
 ): Promise<ImageSwapResult> {
-	const previousImageRef = await readComposeHermesImage(ssh);
+	const previousImageRef = await readRunningHermesImage(ssh);
 	const sedExpr = [
 		`s|image: ${hermesImageRepository}@.*|image: ${imageRef}|`,
 		`s|image: ${hermesImageRepository}:.*|image: ${imageRef}|`,
 	].join("; ");
+	const startHermes = "sudo docker compose up -d --no-deps hermes";
 
 	const command = [
 		"cd ~/hermes",
 		`sudo docker pull ${imageRef}`,
 		`sudo sed -i.bak '${sedExpr}' docker-compose.yml`,
-		"sudo docker compose up -d --no-deps hermes",
+		`{ ${startHermes} || { sudo mv -f docker-compose.yml.bak docker-compose.yml; ${startHermes}; exit 1; }; }`,
 	].join(" && ");
 
 	const result = await ssh.execCommand(command);
@@ -240,6 +242,23 @@ async function swapHermesImage(
 		throw new Error(result.stderr || failureMessage);
 	}
 	return { imageRef, previousImageRef, output: result.stdout.trim() };
+}
+
+/**
+ * Reads the image the compose file runs. A tag such as `:latest` can move,
+ * so a tag is replaced with the repo digest of the running container when
+ * Docker reports one. Then a rollback restores the exact image.
+ */
+async function readRunningHermesImage(ssh: NodeSSH): Promise<string | null> {
+	const composeImage = await readComposeHermesImage(ssh);
+	if (!composeImage?.startsWith(`${hermesImageRepository}:`)) {
+		return composeImage;
+	}
+	const result = await ssh.execCommand(
+		`sudo docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$(sudo docker inspect --format '{{.Image}}' hermes)" 2>/dev/null | grep '^${hermesImageRepository}@sha256:' | head -n 1`,
+	);
+	const digestRef = result.stdout?.trim() ?? "";
+	return HERMES_DIGEST_REF_PATTERN.test(digestRef) ? digestRef : composeImage;
 }
 
 export async function updateGateway(
@@ -422,6 +441,10 @@ export function assertValidComposeServiceNames(serviceNames: string[]): void {
 		}
 	}
 }
+
+const HERMES_DIGEST_REF_PATTERN = new RegExp(
+	`^${hermesImageRepository}@sha256:[a-f0-9]{64}$`,
+);
 
 const HERMES_COMPOSE_IMAGE_PATTERN = new RegExp(
 	`^${hermesImageRepository}(@sha256:[a-f0-9]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$`,
